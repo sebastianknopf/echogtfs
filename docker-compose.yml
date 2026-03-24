@@ -1,0 +1,50 @@
+services:
+
+  database:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-echogtfs}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-echogtfs}
+      POSTGRES_DB: ${POSTGRES_DB:-echogtfs}
+    volumes:
+      - database_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-echogtfs}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-echogtfs}:${POSTGRES_PASSWORD:-echogtfs}@database:5432/${POSTGRES_DB:-echogtfs}
+      HOST: 0.0.0.0
+      PORT: 8000
+      DEBUG: ${DEBUG:-false}
+      SECRET_KEY: ${SECRET_KEY}
+      ALGORITHM: ${ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      DOCS_ENABLED: ${DOCS_ENABLED:-false}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      LOGIN_RATE_LIMIT: ${LOGIN_RATE_LIMIT:-10/minute}
+      FIRST_SUPERUSER: ${FIRST_SUPERUSER:-admin}
+      FIRST_SUPERUSER_EMAIL: ${FIRST_SUPERUSER_EMAIL:-admin@localhost}
+      FIRST_SUPERUSER_PASSWORD: ${FIRST_SUPERUSER_PASSWORD:-admin}
+    depends_on:
+      database:
+        condition: service_healthy
+    expose:
+      - "8000"
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      - backend
+
+volumes:
+  database_data:

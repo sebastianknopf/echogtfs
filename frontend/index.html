@@ -1,0 +1,360 @@
+﻿<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>echogtfs</title>
+  <link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+
+  <!-- -- Loading screen -------------------------------------------------- -->
+  <div id="loading-screen" class="loading-screen" aria-live="polite" aria-label="Wird geladen">
+    <div class="spinner"></div>
+    <span>Wird geladen …</span>
+  </div>
+
+  <!-- -- Snackbar --------------------------------------------------------- -->
+  <div id="snackbar" class="snackbar" role="status" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- ====================================================================
+       VIEW: LOGIN
+       ==================================================================== -->
+  <div class="view login-view" data-view="login">
+    <div class="login-card" role="main">
+
+      <div class="login-card__header">
+        <h1 class="login-card__title" id="app-title-login">echogtfs</h1>
+        <p class="login-card__subtitle">Bitte melden Sie sich an</p>
+      </div>
+
+      <form id="login-form" novalidate autocomplete="on" class="login-card__body">
+
+        <p id="login-error" class="login-card__error" role="alert"></p>
+
+        <div class="md-field" id="field-username">
+          <input
+            class="md-field__input"
+            type="text"
+            id="username"
+            name="username"
+            placeholder=" "
+            autocomplete="username"
+            required
+            aria-required="true"
+            aria-describedby="field-username-helper"
+          />
+          <label class="md-field__label" for="username">Benutzername</label>
+        </div>
+
+        <div class="md-field" id="field-password">
+          <input
+            class="md-field__input"
+            type="password"
+            id="password"
+            name="password"
+            placeholder=" "
+            autocomplete="current-password"
+            required
+            aria-required="true"
+          />
+          <label class="md-field__label" for="password">Passwort</label>
+        </div>
+
+        <div class="login-card__actions">
+          <button
+            id="login-btn"
+            type="submit"
+            class="md-btn md-btn--filled md-btn--full"
+            data-ripple
+          >
+            <span id="login-btn-spinner" class="btn-spinner" hidden aria-hidden="true"></span>
+            <span id="login-btn-label">Anmelden</span>
+          </button>
+        </div>
+
+      </form>
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       VIEW: APP (authenticated)
+       ==================================================================== -->
+  <div class="view" data-view="app">
+
+    <!-- Top App Bar -->
+    <header class="top-app-bar" role="banner">
+      <span class="top-app-bar__title" id="app-title-topbar">echogtfs</span>
+      <div class="top-app-bar__section">
+        <span id="topbar-username" class="top-app-bar__username" aria-live="polite"></span>
+      </div>
+      <button
+        id="logout-btn"
+        class="md-icon-btn"
+        data-ripple
+        title="Abmelden"
+        aria-label="Abmelden"
+      >&#x23FB;</button>
+    </header>
+
+    <!-- App shell: sidebar + content area -->
+    <div class="app-shell">
+
+      <!-- Sidebar navigation -->
+      <nav class="sidebar" role="navigation" aria-label="Hauptnavigation">
+        <div class="sidebar__main">
+          <button class="nav-item" data-panel="alerts" data-ripple>
+            <span class="nav-item__icon">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
+            </span>
+            <span class="nav-item__label">Meldungen</span>
+          </button>
+          <button class="nav-item" data-panel="sources" data-ripple>
+            <span class="nav-item__icon">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3C7.58 3 4 4.79 4 7s3.58 4 8 4 8-1.79 8-4-3.58-4-8-4zM4 9v3c0 2.21 3.58 4 8 4s8-1.79 8-4V9c0 2.21-3.58 4-8 4S4 11.21 4 9zm0 5v3c0 2.21 3.58 4 8 4s8-1.79 8-4v-3c0 2.21-3.58 4-8 4s-8-1.79-8-4z"/></svg>
+            </span>
+            <span class="nav-item__label">Datenquellen</span>
+          </button>
+        </div>
+
+        <div class="sidebar__bottom">
+          <button class="nav-item" data-panel="accounts" data-admin-only data-ripple>
+            <span class="nav-item__icon">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+            </span>
+            <span class="nav-item__label">Accounts</span>
+          </button>
+          <button class="nav-item" data-panel="settings" data-admin-only data-ripple>
+            <span class="nav-item__icon">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39 1c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-1a.49.49 0 0 0-.59.22L2.74 8.87a.49.49 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-1c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39 1c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z"/></svg>
+            </span>
+            <span class="nav-item__label">Einstellungen</span>
+          </button>
+        </div>
+      </nav>
+
+      <!-- Main content area with panels -->
+      <main class="main-content" role="main">
+
+        <!-- Panel: Alerts (default) -->
+        <div class="panel" data-panel="alerts">
+          <section class="md-card user-card" aria-label="Benutzerprofil">
+            <div id="user-avatar" class="user-avatar" aria-hidden="true"></div>
+            <div class="user-info">
+              <div id="user-name"  class="user-info__name"></div>
+              <div id="user-email" class="user-info__email"></div>
+              <div id="user-chips" class="user-info__chips"></div>
+            </div>
+            <button
+              id="logout-card-btn"
+              class="md-btn md-btn--outlined"
+              data-ripple
+              aria-label="Abmelden"
+            >Abmelden</button>
+          </section>
+
+          <section class="md-card" aria-label="Konto-Details">
+            <div class="md-card__header">
+              <h2 class="md-card__title">Konto-Details</h2>
+            </div>
+            <div class="md-card__content">
+              <div class="info-grid">
+                <div class="info-cell">
+                  <div class="info-cell__label">Benutzername</div>
+                  <div class="info-cell__value" id="detail-username">-</div>
+                </div>
+                <div class="info-cell">
+                  <div class="info-cell__label">E-Mail</div>
+                  <div class="info-cell__value" id="detail-email">-</div>
+                </div>
+                <div class="info-cell">
+                  <div class="info-cell__label">Mitglied seit</div>
+                  <div class="info-cell__value" id="detail-created">-</div>
+                </div>
+                <div class="info-cell">
+                  <div class="info-cell__label">Rolle</div>
+                  <div class="info-cell__value" id="detail-role">-</div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- Panel: Data sources -->
+        <div class="panel" data-panel="sources">
+          <section class="md-card" aria-label="Datenquellen">
+            <div class="md-card__header">
+              <h2 class="md-card__title">Datenquellen</h2>
+            </div>
+            <div class="md-card__content panel__placeholder">
+              Noch keine Datenquellen konfiguriert.
+            </div>
+          </section>
+        </div>
+
+        <!-- Panel: Accounts -->
+        <div class="panel" data-panel="accounts">
+          <section class="md-card" aria-label="Accounts">
+            <div class="md-card__header user-list-header">
+              <h2 class="md-card__title">Accounts</h2>
+              <button id="add-account-btn" class="md-btn md-btn--filled" data-admin-only data-ripple>
+                + Neuer Account
+              </button>
+            </div>
+            <div class="md-card__content" id="accounts-content">
+              <div class="panel__loading">Wird geladen ...</div>
+            </div>
+          </section>
+        </div>
+
+        <!-- Panel: Settings -->
+        <div class="panel" data-panel="settings">
+          <section class="md-card" aria-label="Einstellungen">
+            <div class="md-card__header">
+              <h2 class="md-card__title">Einstellungen</h2>
+            </div>
+            <div class="md-card__content">
+
+              <form id="settings-form" novalidate>
+                <p class="settings-section-label">Allgemein</p>
+
+                <div class="md-field">
+                  <input type="text" id="settings-app-title" class="md-field__input" placeholder=" " maxlength="80" />
+                  <label class="md-field__label" for="settings-app-title">App-Titel</label>
+                </div>
+
+                <p class="settings-section-label">Erscheinungsbild</p>
+
+                <div class="color-picker-row">
+                  <div class="color-picker-field">
+                    <label class="color-picker-label" for="settings-color-primary">Primärfarbe</label>
+                    <div class="color-picker-control">
+                      <input type="color" id="settings-color-primary" name="color_primary" class="color-swatch-input" />
+                      <input type="text"  id="settings-color-primary-hex" class="color-hex-input md-field__input" maxlength="7" placeholder="#008c99" aria-label="Primärfarbe (Hex)" />
+                    </div>
+                  </div>
+
+                  <div class="color-picker-field">
+                    <label class="color-picker-label" for="settings-color-secondary">Sekundärfarbe</label>
+                    <div class="color-picker-control">
+                      <input type="color" id="settings-color-secondary" name="color_secondary" class="color-swatch-input" />
+                      <input type="text"  id="settings-color-secondary-hex" class="color-hex-input md-field__input" maxlength="7" placeholder="#99cc04" aria-label="Sekundärfarbe (Hex)" />
+                    </div>
+                  </div>
+                </div>
+
+                <p id="settings-error" class="login-card__error" role="alert"></p>
+
+                <div class="settings-actions">
+                  <button type="button" id="settings-reset-btn" class="md-btn md-btn--outlined" data-ripple>Zurücksetzen</button>
+                  <button type="submit" id="settings-save-btn" class="md-btn md-btn--filled" data-ripple>
+                    <span id="settings-save-spinner" class="btn-spinner" hidden aria-hidden="true"></span>
+                    <span id="settings-save-label">Speichern</span>
+                  </button>
+                </div>
+              </form>
+
+              <!-- GTFS-Feed section (independent from theme form) -->
+              <div id="settings-gtfs-section">
+                <p class="settings-section-label">GTFS-Feed</p>
+
+                <div class="md-field" id="field-gtfs-url">
+                  <input
+                    type="url"
+                    id="settings-gtfs-url"
+                    class="md-field__input"
+                    placeholder=" "
+                    autocomplete="off"
+                    maxlength="2048"
+                    aria-describedby="settings-gtfs-status"
+                  />
+                  <label class="md-field__label" for="settings-gtfs-url">Feed-URL (GTFS Static ZIP)</label>
+                </div>
+
+                <div id="settings-gtfs-status" class="gtfs-status" aria-live="polite" aria-atomic="true"></div>
+
+                <p id="settings-gtfs-error" class="login-card__error" role="alert"></p>
+
+                <div class="settings-actions">
+                  <button type="button" id="settings-gtfs-save-btn" class="md-btn md-btn--outlined" data-ripple>URL speichern</button>
+                  <button type="button" id="settings-gtfs-import-btn" class="md-btn md-btn--filled" data-ripple>
+                    <span id="settings-gtfs-import-spinner" class="btn-spinner" hidden aria-hidden="true"></span>
+                    <span id="settings-gtfs-import-label">Import starten</span>
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </section>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- Modal: Create / Edit account -->
+  <div id="account-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
+    <div class="modal__backdrop"></div>
+    <div class="modal__panel">
+      <div class="modal__header">
+        <h2 class="modal__title" id="modal-title">Account erstellen</h2>
+      </div>
+      <form id="account-form" class="modal__body" novalidate>
+        <div class="md-field" id="modal-field-username">
+          <input class="md-field__input" type="text" id="modal-username" name="username" placeholder=" " autocomplete="off" />
+          <label class="md-field__label" for="modal-username">Benutzername</label>
+        </div>
+        <div class="md-field" id="modal-field-email">
+          <input class="md-field__input" type="email" id="modal-email" name="email" placeholder=" " autocomplete="off" />
+          <label class="md-field__label" for="modal-email">E-Mail</label>
+        </div>
+        <div class="md-field" id="modal-field-password">
+          <input class="md-field__input" type="password" id="modal-password" name="password" placeholder=" " autocomplete="new-password" />
+          <label class="md-field__label" for="modal-password">Passwort</label>
+          <div class="md-field__helper" id="modal-password-hint"></div>
+        </div>
+        <div class="modal__switches">
+          <label class="md-switch">
+            <input type="checkbox" id="modal-is-active" name="is_active" />
+            <span class="md-switch__track"></span>
+            <span class="md-switch__label">Aktiv</span>
+          </label>
+          <label class="md-switch">
+            <input type="checkbox" id="modal-is-superuser" name="is_superuser" />
+            <span class="md-switch__track"></span>
+            <span class="md-switch__label">Administrator</span>
+          </label>
+        </div>
+        <p id="modal-error" class="login-card__error" role="alert"></p>
+      </form>
+      <div class="modal__actions">
+        <button type="button" id="modal-cancel-btn" class="md-btn md-btn--text" data-ripple>Abbrechen</button>
+        <button type="submit" form="account-form" id="modal-submit-btn" class="md-btn md-btn--filled" data-ripple>
+          <span id="modal-submit-spinner" class="btn-spinner" hidden aria-hidden="true"></span>
+          <span id="modal-submit-label">Speichern</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm dialog: delete account -->
+  <div id="confirm-modal" class="modal" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" hidden>
+    <div class="modal__backdrop"></div>
+    <div class="modal__panel modal__panel--sm">
+      <div class="modal__header">
+        <h2 class="modal__title" id="confirm-title">Account löschen</h2>
+      </div>
+      <div class="modal__body">
+        <p id="confirm-message"></p>
+      </div>
+      <div class="modal__actions">
+        <button type="button" id="confirm-cancel-btn" class="md-btn md-btn--text" data-ripple>Abbrechen</button>
+        <button type="button" id="confirm-ok-btn" class="md-btn md-btn--danger" data-ripple>Löschen</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
+
