@@ -30,9 +30,11 @@ from echogtfs.services.gtfs_import import (
     KEY_MSG,
     KEY_STATUS,
     KEY_TIME,
+    KEY_CRON,
     STATUS_IDLE,
     STATUS_RUNNING,
     run_import_task,
+    schedule_import_from_cron,
 )
 
 router = APIRouter()
@@ -44,50 +46,28 @@ _DB = Annotated[AsyncSession, Depends(get_db)]
 # Status
 # ---------------------------------------------------------------------------
 
+
 @router.get("/status", response_model=GtfsStatusRead)
 async def get_status(_: CurrentSuperuser, db: _DB) -> GtfsStatusRead:
-    """Return current feed URL and last import state."""
+    """Return current feed URL, cron, and last import state."""
     rows: dict[str, str] = {}
     result = await db.execute(
         select(AppSetting).where(
-            AppSetting.key.in_([KEY_FEED_URL, KEY_STATUS, KEY_TIME, KEY_MSG])
+            AppSetting.key.in_([KEY_FEED_URL, KEY_STATUS, KEY_TIME, KEY_MSG, KEY_CRON])
         )
     )
     for row in result.scalars():
         rows[row.key] = row.value
 
+    cron_val = rows.get(KEY_CRON)
     return GtfsStatusRead(
         feed_url=rows.get(KEY_FEED_URL, ""),
+        cron=cron_val if cron_val not in (None, "") else None,
         status=rows.get(KEY_STATUS, STATUS_IDLE),
         imported_at=rows.get(KEY_TIME),
         message=rows.get(KEY_MSG),
     )
 
-
-# ---------------------------------------------------------------------------
-# Feed-URL
-# ---------------------------------------------------------------------------
-
-@router.put("/feed-url", response_model=GtfsFeedConfig)
-async def update_feed_url(
-    payload: GtfsFeedConfig,
-    _: CurrentSuperuser,
-    db: _DB,
-) -> GtfsFeedConfig:
-    """Persist the GTFS feed URL."""
-    url = payload.feed_url.strip()
-    if not url.startswith(("http://", "https://")):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Feed-URL muss mit http:// oder https:// beginnen.",
-        )
-    row = await db.get(AppSetting, KEY_FEED_URL)
-    if row is None:
-        db.add(AppSetting(key=KEY_FEED_URL, value=url))
-    else:
-        row.value = url
-    await db.commit()
-    return GtfsFeedConfig(feed_url=url)
 
 
 # ---------------------------------------------------------------------------
@@ -114,6 +94,33 @@ async def trigger_import(
 
     background_tasks.add_task(run_import_task)
     return {"status": STATUS_RUNNING}
+
+
+# ---------------------------------------------------------------------------
+# Feed URL & Cron config
+# ---------------------------------------------------------------------------
+
+from pydantic import BaseModel
+
+class GtfsConfigUpdate(BaseModel):
+    feed_url: str | None = None
+    cron: str | None = None
+
+@router.put("/feed-url", status_code=200)
+async def update_feed_url(
+    _: CurrentSuperuser,
+    db: _DB,
+    data: GtfsConfigUpdate,
+) -> dict[str, str]:
+    """Update GTFS feed URL and/or cron expression."""
+    if data.feed_url:
+        await db.merge(AppSetting(key=KEY_FEED_URL, value=data.feed_url))
+    if data.cron is not None:
+        await db.merge(AppSetting(key=KEY_CRON, value=data.cron))
+    await db.commit()
+    if data.cron is not None:
+        await schedule_import_from_cron(db)
+    return {"feed_url": data.feed_url or "", "cron": data.cron or ""}
 
 
 # ---------------------------------------------------------------------------

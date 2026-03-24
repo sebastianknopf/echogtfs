@@ -68,12 +68,16 @@ class ThemeSettings(BaseModel):
 # GTFS
 # ---------------------------------------------------------------------------
 
+
 class GtfsFeedConfig(BaseModel):
     feed_url: str
+    cron: str | None = None
+
 
 
 class GtfsStatusRead(BaseModel):
     feed_url:    str
+    cron:        str | None = None
     status:      str        # idle | running | success | error
     imported_at: str | None
     message:     str | None

@@ -14,6 +14,7 @@ from echogtfs.extensions import limiter
 from echogtfs.models import GtfsAgency, GtfsRoute, GtfsStop, User  # noqa: F401
 from echogtfs.routers.auth import router as auth_router
 from echogtfs.routers.gtfs import router as gtfs_router
+from echogtfs.services.gtfs_import import schedule_import_from_cron
 from echogtfs.routers.settings import router as settings_router
 from echogtfs.routers.users import router as users_router
 from echogtfs.security import hash_password
@@ -40,6 +41,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             )
             await db.commit()
 
+
+    # Schedule GTFS import cron on startup
+    await schedule_import_from_cron()
     yield
 
 

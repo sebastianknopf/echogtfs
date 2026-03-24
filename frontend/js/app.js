@@ -157,15 +157,16 @@ const api = (() => {
       });
     },
 
+
     getGtfsStatus() {
       return request('/gtfs/status');
     },
 
-    saveGtfsFeedUrl(feed_url) {
+    saveGtfsConfig({ feed_url, cron }) {
       return request('/gtfs/feed-url', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ feed_url }),
+        body: JSON.stringify({ feed_url, cron }),
       });
     },
 
@@ -256,15 +257,15 @@ const ui = (() => {
     el('loading-screen').classList.toggle('is-hidden', !visible);
   }
 
-  // -- Snackbar ------------------------------------------------------------
-  let _snackTimer = null;
-  function snackbar(message, type = 'default') {
+  // -- Toast (Snackbar) ----------------------------------------------------
+  let _toastTimer = null;
+  function toast(message, type = 'default') {
     const node = el('snackbar');
     node.textContent = message;
-    node.className = 'snackbar is-visible';
+    node.className = 'toast is-visible';
     if (type !== 'default') node.classList.add(`is-${type}`);
-    clearTimeout(_snackTimer);
-    _snackTimer = setTimeout(() => {
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => {
       node.classList.remove('is-visible');
     }, type === 'error' ? 5000 : 3000);
   }
@@ -297,36 +298,53 @@ const ui = (() => {
   // -- Render authenticated user -------------------------------------------
   function renderUser(user) {
     // Avatar initial
-    el('user-avatar').textContent     = user.username.charAt(0).toUpperCase();
-    el('topbar-username').textContent = user.username;
+    const userAvatar = el('user-avatar');
+    if (userAvatar) userAvatar.textContent = user.username.charAt(0).toUpperCase();
+    
+    const topbarUsername = el('topbar-username');
+    if (topbarUsername) topbarUsername.textContent = user.username;
 
     // Profile card
-    el('user-name').textContent  = user.username;
-    el('user-email').textContent = user.email;
+    const userName = el('user-name');
+    if (userName) userName.textContent = user.username;
+    
+    const userEmail = el('user-email');
+    if (userEmail) userEmail.textContent = user.email;
 
     // Status chips
     const chipsEl = el('user-chips');
-    chipsEl.innerHTML = '';
-    if (user.is_active) {
-      const c = document.createElement('span');
-      c.className = 'md-chip md-chip--primary';
-      c.textContent = 'Aktiv';
-      chipsEl.appendChild(c);
-    }
-    if (user.is_superuser) {
-      const c = document.createElement('span');
-      c.className = 'md-chip md-chip--secondary';
-      c.textContent = 'Administrator';
-      chipsEl.appendChild(c);
+    if (chipsEl) {
+      chipsEl.innerHTML = '';
+      if (user.is_active) {
+        const c = document.createElement('span');
+        c.className = 'md-chip md-chip--primary';
+        c.textContent = 'Aktiv';
+        chipsEl.appendChild(c);
+      }
+      if (user.is_superuser) {
+        const c = document.createElement('span');
+        c.className = 'md-chip md-chip--secondary';
+        c.textContent = 'Administrator';
+        chipsEl.appendChild(c);
+      }
     }
 
     // Detail cells
-    el('detail-username').textContent = user.username;
-    el('detail-email').textContent    = user.email;
-    el('detail-created').textContent  = new Date(user.created_at).toLocaleDateString('de-DE', {
-      year: 'numeric', month: 'long', day: 'numeric',
-    });
-    el('detail-role').textContent = user.is_superuser ? 'Administrator' : 'Standard';
+    const detailUsername = el('detail-username');
+    if (detailUsername) detailUsername.textContent = user.username;
+    
+    const detailEmail = el('detail-email');
+    if (detailEmail) detailEmail.textContent = user.email;
+    
+    const detailCreated = el('detail-created');
+    if (detailCreated) {
+      detailCreated.textContent = new Date(user.created_at).toLocaleDateString('de-DE', {
+        year: 'numeric', month: 'long', day: 'numeric',
+      });
+    }
+    
+    const detailRole = el('detail-role');
+    if (detailRole) detailRole.textContent = user.is_superuser ? 'Administrator' : 'Standard';
 
     // Show/hide admin-only sidebar items
     document.querySelectorAll('.nav-item[data-admin-only]').forEach(item => {
@@ -337,7 +355,10 @@ const ui = (() => {
   function clearUser() {
     ['user-avatar', 'topbar-username', 'user-name', 'user-email',
      'user-chips', 'detail-username', 'detail-email', 'detail-created', 'detail-role']
-      .forEach(id => { el(id).textContent = ''; });
+      .forEach(id => { 
+        const elem = el(id);
+        if (elem) elem.textContent = ''; 
+      });
     // Restore all admin-only elements so the next login re-evaluates them
     document.querySelectorAll('[data-admin-only]').forEach(item => { item.hidden = false; });
   }
@@ -459,7 +480,7 @@ const ui = (() => {
   }
 
   return {
-    showView, setLoading, snackbar, setApiStatus,
+    showView, setLoading, toast, setApiStatus,
     setLoginError, setLoginBusy,
     renderUser, clearUser,
     setPanel, renderAccountsList,
@@ -539,7 +560,7 @@ const settingsPanel = (() => {
       const saved = await api.saveSettings({ app_title: appTitle, color_primary: p, color_secondary: s });
       _current = { ...saved };
       theme.apply(saved);
-      ui.snackbar('Einstellungen gespeichert.', 'success');
+      ui.toast('Einstellungen gespeichert.', 'success');
     } catch (err) {
       errEl.textContent = err.message;
       errEl.classList.add('is-visible');
@@ -617,7 +638,7 @@ const gtfsPanel = (() => {
   function _setBusy(busy) {
     _el('settings-gtfs-import-btn').disabled    = busy;
     _el('settings-gtfs-import-spinner').hidden  = !busy;
-    _el('settings-gtfs-import-label').textContent = busy ? 'Wird importiert …' : 'Import starten';
+    _el('settings-gtfs-import-label').textContent = busy ? 'Wird importiert …' : 'Importieren';
   }
 
   async function _poll() {
@@ -644,11 +665,13 @@ const gtfsPanel = (() => {
   }
 
   // -- Public API -----------------------------------------------------------
+
   async function load() {
     _el('settings-gtfs-error').classList.remove('is-visible');
     try {
       const s = await api.getGtfsStatus();
       _el('settings-gtfs-url').value = s.feed_url ?? '';
+      _el('settings-gtfs-cron').value = s.cron ?? '';
       _renderStatus(s);
       if (s.status === 'running') {
         _setBusy(true);
@@ -658,8 +681,11 @@ const gtfsPanel = (() => {
     } catch { /* non-admin users won't reach this section */ }
   }
 
+
   async function handleSaveUrl() {
     const url   = _el('settings-gtfs-url').value.trim();
+    let cron  = _el('settings-gtfs-cron').value.trim();
+    if (!cron) cron = null;
     const errEl = _el('settings-gtfs-error');
     errEl.classList.remove('is-visible');
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
@@ -670,8 +696,8 @@ const gtfsPanel = (() => {
     const btn = _el('settings-gtfs-save-btn');
     btn.disabled = true;
     try {
-      await api.saveGtfsFeedUrl(url);
-      ui.snackbar('Feed-URL gespeichert.', 'success');
+      await api.saveGtfsConfig({ feed_url: url, cron });
+      ui.toast('Feed-URL und Cron gespeichert.', 'success');
     } catch (err) {
       errEl.textContent = err.message;
       errEl.classList.add('is-visible');
@@ -680,11 +706,14 @@ const gtfsPanel = (() => {
     }
   }
 
+
   async function handleImport() {
     const errEl = _el('settings-gtfs-error');
     errEl.classList.remove('is-visible');
-    // Save URL first so the backend is up-to-date
-    const url = _el('settings-gtfs-url').value.trim();
+    // Save URL and cron first so the backend is up-to-date
+    const url  = _el('settings-gtfs-url').value.trim();
+    let cron = _el('settings-gtfs-cron').value.trim();
+    if (!cron) cron = null;
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       errEl.textContent = 'Bitte zuerst eine gültige Feed-URL eingeben.';
       errEl.classList.add('is-visible');
@@ -693,7 +722,7 @@ const gtfsPanel = (() => {
     _setBusy(true);
     _showStatus('Import läuft …', 'running');
     try {
-      await api.saveGtfsFeedUrl(url);
+      await api.saveGtfsConfig({ feed_url: url, cron });
       await api.triggerGtfsImport();
       _stopPoll();
       _pollTimer = setTimeout(_poll, POLL_INTERVAL_MS);
@@ -774,7 +803,7 @@ const app = (() => {
           // Unexpected error: clear and show login with a message
           state.clearAuth();
           ui.showView('login');
-          ui.snackbar('Sitzung konnte nicht wiederhergestellt werden.', 'error');
+          ui.toast('Sitzung konnte nicht wiederhergestellt werden.', 'error');
         }
         // SESSION_EXPIRED already handled by api layer
       }
@@ -815,7 +844,7 @@ const app = (() => {
       ui.showView('app');
       ui.setPanel('alerts');
       form.reset();
-      ui.snackbar(`Willkommen, ${user.username}!`, 'success');
+      // No login toast
     } catch (err) {
       // Undo partial token set if getMe() failed after login
       if (!state.user) state.clearAuth();
@@ -833,7 +862,7 @@ const app = (() => {
     state.clearAuth();
     ui.clearUser();
     ui.showView('login');
-    if (username) ui.snackbar(`${username} wurde abgemeldet.`);
+    // No logout toast
   }
 
   // -- Navigation ------------------------------------------------------------
@@ -877,7 +906,7 @@ const app = (() => {
   // -- Accounts: edit --------------------------------------------------------
   function _openEditModal(userId) {
     const user = _accounts.find(u => u.id === userId);
-    if (!user) { ui.snackbar('Account nicht gefunden.', 'error'); return; }
+    if (!user) { ui.toast('Account nicht gefunden.', 'error'); return; }
     ui.openAccountModal({
       title:       'Account bearbeiten',
       username:    user.username,
@@ -919,7 +948,7 @@ const app = (() => {
       }
       ui.closeAccountModal();
       await _loadAccounts();
-      ui.snackbar(userId ? 'Account aktualisiert.' : 'Account erstellt.', 'success');
+      ui.toast(userId ? 'Account aktualisiert.' : 'Account erstellt.', 'success');
     } catch (err) {
       ui.setModalError(err.message);
     } finally {
@@ -938,9 +967,9 @@ const app = (() => {
     try {
       await api.deleteUser(userId);
       await _loadAccounts();
-      ui.snackbar(`Account „${user.username}“ wurde gelöscht.`);
+      ui.toast(`Account „${user.username}“ wurde gelöscht.`);
     } catch (err) {
-      ui.snackbar(err.message, 'error');
+      ui.toast(err.message, 'error');
     }
   }
 
@@ -961,24 +990,28 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Logout
-  document.getElementById('logout-btn').addEventListener('click', app.handleLogout);
-  document.getElementById('logout-card-btn').addEventListener('click', app.handleLogout);
+
+  document.getElementById('logout-btn')?.addEventListener('click', app.handleLogout);
+  document.getElementById('logout-card-btn')?.addEventListener('click', app.handleLogout);
 
   // Sidebar navigation
   document.querySelector('.sidebar').addEventListener('click', app.handleNavClick);
 
   // Accounts panel
-  document.getElementById('add-account-btn').addEventListener('click', app.handleAddAccount);
-  document.getElementById('accounts-content').addEventListener('click', app.handleAccountsContentClick);
+
+  document.getElementById('add-account-btn')?.addEventListener('click', app.handleAddAccount);
+  document.getElementById('accounts-content')?.addEventListener('click', app.handleAccountsContentClick);
 
   // Account modal
-  document.getElementById('modal-cancel-btn').addEventListener('click', () => ui.closeAccountModal());
-  document.getElementById('account-modal').querySelector('.modal__backdrop')
-    .addEventListener('click', () => ui.closeAccountModal());
+
+  document.getElementById('modal-cancel-btn')?.addEventListener('click', () => ui.closeAccountModal());
+  document.getElementById('account-modal')?.querySelector('.modal__backdrop')
+    ?.addEventListener('click', () => ui.closeAccountModal());
 
   // Confirm modal backdrop
-  document.getElementById('confirm-modal').querySelector('.modal__backdrop')
-    .addEventListener('click', () => document.getElementById('confirm-cancel-btn').click());
+
+  document.getElementById('confirm-modal')?.querySelector('.modal__backdrop')
+    ?.addEventListener('click', () => document.getElementById('confirm-cancel-btn')?.click());
 
   // Escape closes open modals
   document.addEventListener('keydown', e => {

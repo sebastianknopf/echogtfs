@@ -27,18 +27,65 @@ from echogtfs.models import AppSetting, GtfsAgency, GtfsRoute, GtfsStop
 
 
 # ---------------------------------------------------------------------------
-# AppSetting keys
-# ---------------------------------------------------------------------------
 
+# AppSetting keys
 KEY_FEED_URL = "gtfs_feed_url"
 KEY_STATUS   = "gtfs_import_status"
 KEY_TIME     = "gtfs_import_time"
 KEY_MSG      = "gtfs_import_message"
+KEY_CRON     = "gtfs_cron"
 
 STATUS_IDLE    = "idle"
 STATUS_RUNNING = "running"
 STATUS_SUCCESS = "success"
 STATUS_ERROR   = "error"
+
+# APScheduler integration (to be initialized in main.py)
+
+import asyncio
+import logging
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+
+logger = logging.getLogger("uvicorn")
+
+_scheduler = None
+
+def get_scheduler():
+    global _scheduler
+    if _scheduler is None:
+        _scheduler = AsyncIOScheduler()
+        _scheduler.start()
+    return _scheduler
+
+async def schedule_import_from_cron(db=None):
+    """Read cron from AppSetting and (re)schedule import job."""
+    from echogtfs.database import AsyncSessionLocal
+    close_db = False
+    if db is None:
+        db = await AsyncSessionLocal().__aenter__()
+        close_db = True
+    row = await db.get(AppSetting, KEY_CRON)
+    cron_expr = row.value if row else None
+    scheduler = get_scheduler()
+    logger.info(f"[GTFS] Scheduler: remove_all_jobs() called.")
+    scheduler.remove_all_jobs()
+    if cron_expr:
+        try:
+            logger.info(f"[GTFS] Scheduler: Setting new cron job: {cron_expr}")
+            scheduler.add_job(
+                run_import_task,
+                CronTrigger.from_crontab(cron_expr),
+                id="gtfs_import_cron",
+                replace_existing=True,
+            )
+            logger.info(f"[GTFS] Scheduler: Cron job set successfully.")
+        except Exception as e:
+            logger.error(f"[GTFS] Invalid cron expression: {cron_expr} ({e})")
+    else:
+        logger.info("[GTFS] Scheduler: No cron expression set, no job scheduled.")
+    if close_db:
+        await db.__aexit__(None, None, None)
 
 
 # ---------------------------------------------------------------------------
@@ -188,6 +235,7 @@ async def run_import_task() -> None:
     Opens a dedicated DB session so the request session can be released first.
     Updates import status keys throughout.
     """
+    logger.info("[GTFS] Import task started (run_import_task)")
     async with AsyncSessionLocal() as db:
         await _upsert_setting(db, KEY_STATUS, STATUS_RUNNING)
         await _upsert_setting(db, KEY_TIME,   _now_iso())
@@ -198,10 +246,12 @@ async def run_import_task() -> None:
                 f"{result.stops} Haltestellen, "
                 f"{result.routes} Linien importiert"
             )
+            logger.info(f"[GTFS] Import successful: {msg}")
             await _upsert_setting(db, KEY_STATUS, STATUS_SUCCESS)
             await _upsert_setting(db, KEY_MSG,    msg)
             await _upsert_setting(db, KEY_TIME,   _now_iso())
         except Exception as exc:  # noqa: BLE001
+            logger.error(f"[GTFS] Import error: {exc}")
             await _upsert_setting(db, KEY_STATUS, STATUS_ERROR)
             await _upsert_setting(db, KEY_MSG,    str(exc))
             await _upsert_setting(db, KEY_TIME,   _now_iso())

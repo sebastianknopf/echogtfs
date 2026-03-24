@@ -351,34 +351,36 @@ body {
 .md-card__subtitle{ font-size: .875rem;  color: var(--md-on-surface-medium); }
 
 /* -- Snackbar ---------------------------------------------------------------- */
-.snackbar {
+
+/* --- Generic Toast (Snackbar) --- */
+.toast {
   position: fixed;
-  bottom: 24px;
+  bottom: 32px;
   left: 50%;
   transform: translateX(-50%) translateY(120px);
   min-width: 240px;
-  max-width: 520px;
-  background: #323232;
+  max-width: 90vw;
+  background: #23272b;
   color: #fff;
-  border-radius: var(--md-shape-xs);
-  padding: 12px 20px;
-  font-size: .875rem;
-  box-shadow: var(--md-elev-3);
+  border-radius: 8px;
+  padding: 16px 24px;
+  font-size: 1rem;
+  box-shadow: 0 6px 24px 0 rgba(0,0,0,0.32);
   z-index: 9998;
   opacity: 0;
-  transition: transform .3s var(--md-easing), opacity .3s var(--md-easing);
+  transition: transform .4s cubic-bezier(.4,0,.2,1), opacity .4s cubic-bezier(.4,0,.2,1);
   pointer-events: none;
-  white-space: nowrap;
+  white-space: pre-line;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.snackbar.is-visible {
+.toast.is-visible {
   transform: translateX(-50%) translateY(0);
   opacity: 1;
   pointer-events: auto;
 }
-.snackbar.is-error   { background: var(--md-error); }
-.snackbar.is-success { background: #1c6b35;          }
+.toast.is-error   { background: var(--md-error); }
+.toast.is-success { background: #1c6b35; }
 
 /* -- Chips ------------------------------------------------------------------- */
 .md-chip {

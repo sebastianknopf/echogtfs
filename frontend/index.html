@@ -15,7 +15,7 @@
   </div>
 
   <!-- -- Snackbar --------------------------------------------------------- -->
-  <div id="snackbar" class="snackbar" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div id="snackbar" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <!-- ====================================================================
        VIEW: LOGIN
@@ -136,46 +136,17 @@
       <!-- Main content area with panels -->
       <main class="main-content" role="main">
 
-        <!-- Panel: Alerts (default) -->
+        <!-- Panel: Alerts (Meldungen) -->
         <div class="panel" data-panel="alerts">
-          <section class="md-card user-card" aria-label="Benutzerprofil">
-            <div id="user-avatar" class="user-avatar" aria-hidden="true"></div>
-            <div class="user-info">
-              <div id="user-name"  class="user-info__name"></div>
-              <div id="user-email" class="user-info__email"></div>
-              <div id="user-chips" class="user-info__chips"></div>
+          <section class="md-card" aria-label="Meldungen">
+            <div class="md-card__header user-list-header">
+              <h2 class="md-card__title">Meldungen</h2>
+              <button id="add-alert-btn" class="md-btn md-btn--filled" data-ripple>
+                + Erfassen
+              </button>
             </div>
-            <button
-              id="logout-card-btn"
-              class="md-btn md-btn--outlined"
-              data-ripple
-              aria-label="Abmelden"
-            >Abmelden</button>
-          </section>
-
-          <section class="md-card" aria-label="Konto-Details">
-            <div class="md-card__header">
-              <h2 class="md-card__title">Konto-Details</h2>
-            </div>
-            <div class="md-card__content">
-              <div class="info-grid">
-                <div class="info-cell">
-                  <div class="info-cell__label">Benutzername</div>
-                  <div class="info-cell__value" id="detail-username">-</div>
-                </div>
-                <div class="info-cell">
-                  <div class="info-cell__label">E-Mail</div>
-                  <div class="info-cell__value" id="detail-email">-</div>
-                </div>
-                <div class="info-cell">
-                  <div class="info-cell__label">Mitglied seit</div>
-                  <div class="info-cell__value" id="detail-created">-</div>
-                </div>
-                <div class="info-cell">
-                  <div class="info-cell__label">Rolle</div>
-                  <div class="info-cell__value" id="detail-role">-</div>
-                </div>
-              </div>
+            <div class="md-card__content panel__placeholder">
+              Aktuell sind noch keine Meldungen verfügbar.
             </div>
           </section>
         </div>
@@ -183,11 +154,14 @@
         <!-- Panel: Data sources -->
         <div class="panel" data-panel="sources">
           <section class="md-card" aria-label="Datenquellen">
-            <div class="md-card__header">
+            <div class="md-card__header user-list-header">
               <h2 class="md-card__title">Datenquellen</h2>
+              <button id="add-source-btn" class="md-btn md-btn--filled" data-ripple>
+                + Hinzufügen
+              </button>
             </div>
             <div class="md-card__content panel__placeholder">
-              Noch keine Datenquellen konfiguriert.
+              Aktuell sind noch keine Datenquellen verfügbar.
             </div>
           </section>
         </div>
@@ -246,7 +220,7 @@
                 <p id="settings-error" class="login-card__error" role="alert"></p>
 
                 <div class="settings-actions">
-                  <button type="button" id="settings-reset-btn" class="md-btn md-btn--outlined" data-ripple>Zurücksetzen</button>
+                  <button type="button" id="settings-reset-btn" class="md-btn md-btn--text" data-ripple>Zurücksetzen</button>
                   <button type="submit" id="settings-save-btn" class="md-btn md-btn--filled" data-ripple>
                     <span id="settings-save-spinner" class="btn-spinner" hidden aria-hidden="true"></span>
                     <span id="settings-save-label">Speichern</span>
@@ -257,6 +231,7 @@
               <!-- GTFS-Feed section (independent from theme form) -->
               <div id="settings-gtfs-section">
                 <p class="settings-section-label">GTFS-Feed</p>
+
 
                 <div class="md-field" id="field-gtfs-url">
                   <input
@@ -271,16 +246,29 @@
                   <label class="md-field__label" for="settings-gtfs-url">Feed-URL (GTFS Static ZIP)</label>
                 </div>
 
+                <div class="md-field" id="field-gtfs-cron">
+                  <input
+                    type="text"
+                    id="settings-gtfs-cron"
+                    class="md-field__input"
+                    placeholder="* * * * *"
+                    maxlength="64"
+                    autocomplete="off"
+                  />
+                  <label class="md-field__label" for="settings-gtfs-cron">Cron-Ausdruck für automatischen Import</label>
+                  <div class="md-field__helper">z.B. <code>0 3 * * *</code> für täglich um 3 Uhr</div>
+                </div>
+
                 <div id="settings-gtfs-status" class="gtfs-status" aria-live="polite" aria-atomic="true"></div>
 
                 <p id="settings-gtfs-error" class="login-card__error" role="alert"></p>
 
                 <div class="settings-actions">
-                  <button type="button" id="settings-gtfs-save-btn" class="md-btn md-btn--outlined" data-ripple>URL speichern</button>
-                  <button type="button" id="settings-gtfs-import-btn" class="md-btn md-btn--filled" data-ripple>
+                  <button type="button" id="settings-gtfs-import-btn" class="md-btn md-btn--text" data-ripple>
                     <span id="settings-gtfs-import-spinner" class="btn-spinner" hidden aria-hidden="true"></span>
-                    <span id="settings-gtfs-import-label">Import starten</span>
+                    <span id="settings-gtfs-import-label">Importieren</span>
                   </button>
+                  <button type="button" id="settings-gtfs-save-btn" class="md-btn md-btn--filled" data-ripple>Speichern</button>
                 </div>
               </div>
 
