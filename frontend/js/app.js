@@ -1398,6 +1398,9 @@ const settingsPanel = (() => {
     }
   }
 
+  let _hasExistingPassword = false;
+  const PASSWORD_PLACEHOLDER = '••••••••';
+
   function _syncHexFromSwatch(prefix) {
     _el(`settings-color-${prefix}-hex`).value = _el(`settings-color-${prefix}`).value;
   }
@@ -1411,7 +1414,25 @@ const settingsPanel = (() => {
     _el('settings-color-secondary-hex').value   = _current.color_secondary;
     _el('settings-gtfs-rt-path').value          = _current.gtfs_rt_path ?? 'realtime/service-alerts.pbf';
     _el('settings-gtfs-rt-username').value      = _current.gtfs_rt_username ?? '';
-    _el('settings-gtfs-rt-password').value      = _current.gtfs_rt_password ?? '';
+    
+    // Check if password exists and show placeholder instead of actual value
+    _hasExistingPassword = !!_current.gtfs_rt_password;
+    const passwordField = _el('settings-gtfs-rt-password');
+    const passwordHelper = document.getElementById('settings-gtfs-rt-password-helper');
+    
+    if (_hasExistingPassword) {
+      passwordField.value = '';
+      passwordField.placeholder = PASSWORD_PLACEHOLDER;
+      if (passwordHelper) {
+        passwordHelper.textContent = 'Leer lassen, um bestehendes Passwort zu behalten, oder neues eingeben';
+      }
+    } else {
+      passwordField.value = '';
+      passwordField.placeholder = ' ';
+      if (passwordHelper) {
+        passwordHelper.textContent = 'Leer lassen für neues Passwort oder altes Passwort behalten';
+      }
+    }
   }
 
   function init() {
@@ -1433,7 +1454,7 @@ const settingsPanel = (() => {
     const s = _el('settings-color-secondary').value;
     const gtfsRtPath = _el('settings-gtfs-rt-path').value.trim();
     const gtfsRtUsername = _el('settings-gtfs-rt-username').value.trim();
-    const gtfsRtPassword = _el('settings-gtfs-rt-password').value;
+    const gtfsRtPasswordRaw = _el('settings-gtfs-rt-password').value;
     const errEl = _el('settings-error');
     errEl.classList.remove('is-visible');
 
@@ -1453,23 +1474,52 @@ const settingsPanel = (() => {
       return;
     }
 
+    // Password handling:
+    // - Both username AND password empty → send both as empty (disable Basic Auth)
+    // - Password field empty but existing password → send null (keep existing)
+    // - New password entered → send new password
+    let gtfsRtPassword;
+    
+    if (!gtfsRtUsername && !gtfsRtPasswordRaw) {
+      // Both empty → disable Basic Auth completely
+      gtfsRtPassword = '';
+    } else if (!gtfsRtPasswordRaw && _hasExistingPassword) {
+      // Empty password field but existing password → keep existing (send null to indicate no change)
+      gtfsRtPassword = null;
+    } else if (!gtfsRtPasswordRaw && !_hasExistingPassword) {
+      // Empty password field and no existing password → keep empty (send null)
+      gtfsRtPassword = null;
+    } else {
+      // New password provided
+      gtfsRtPassword = gtfsRtPasswordRaw;
+    }
+
     const btn = _el('settings-save-btn');
     btn.disabled = true;
     _el('settings-save-spinner').hidden = false;
     _el('settings-save-label').textContent = 'Wird gespeichert ...';
 
     try {
-      const saved = await api.saveSettings({
+      const payload = {
         app_title: appTitle,
         color_primary: p,
         color_secondary: s,
         gtfs_rt_path: gtfsRtPath,
         gtfs_rt_username: gtfsRtUsername,
-        gtfs_rt_password: gtfsRtPassword,
-      });
+      };
+      
+      // Only include password if it's not null (null means "keep existing")
+      if (gtfsRtPassword !== null) {
+        payload.gtfs_rt_password = gtfsRtPassword;
+      }
+      
+      const saved = await api.saveSettings(payload);
       _current = { ...saved };
       theme.apply(saved);
       ui.toast('Einstellungen gespeichert.', 'success');
+      
+      // Reload to update password placeholder
+      load(saved);
     } catch (err) {
       errEl.textContent = err.message;
       errEl.classList.add('is-visible');

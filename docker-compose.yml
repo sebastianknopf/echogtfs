@@ -4,13 +4,13 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-echogtfs}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-echogtfs}
-      POSTGRES_DB: ${POSTGRES_DB:-echogtfs}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - database_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-echogtfs}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -19,7 +19,7 @@ services:
     build: ./backend
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-echogtfs}:${POSTGRES_PASSWORD:-echogtfs}@database:5432/${POSTGRES_DB:-echogtfs}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@database:5432/${POSTGRES_DB}
       HOST: 0.0.0.0
       PORT: 8000
       DEBUG: ${DEBUG:-false}
@@ -29,9 +29,9 @@ services:
       DOCS_ENABLED: ${DOCS_ENABLED:-false}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
       LOGIN_RATE_LIMIT: ${LOGIN_RATE_LIMIT:-10/minute}
-      FIRST_SUPERUSER: ${FIRST_SUPERUSER:-admin}
-      FIRST_SUPERUSER_EMAIL: ${FIRST_SUPERUSER_EMAIL:-admin@localhost}
-      FIRST_SUPERUSER_PASSWORD: ${FIRST_SUPERUSER_PASSWORD:-admin}
+      FIRST_SUPERUSER: ${FIRST_SUPERUSER}
+      FIRST_SUPERUSER_EMAIL: ${FIRST_SUPERUSER_EMAIL}
+      FIRST_SUPERUSER_PASSWORD: ${FIRST_SUPERUSER_PASSWORD}
     depends_on:
       database:
         condition: service_healthy

@@ -45,9 +45,11 @@ A lightweight CMS for creating and managing GTFS-RT ServiceAlerts based on exist
 
 3. **Edit the `.env` file and configure:**
    - `SECRET_KEY` – Generate a secure key (e.g., `openssl rand -hex 32`)
-   - `POSTGRES_PASSWORD` – Set a strong database password
-   - `FIRST_SUPERUSER_PASSWORD` – Admin password for initial login
+   - `POSTGRES_PASSWORD` – Set a strong database password (required)
+   - `FIRST_SUPERUSER_PASSWORD` – Admin password for initial login (required)
    - `FRONTEND_PORT` – Port for web interface (default: 80)
+   
+   **Important:** All password fields are required and have no defaults for security reasons.
 
 4. **Start the application:**
    ```bash
@@ -65,10 +67,10 @@ Key settings in `.env`:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `SECRET_KEY` | JWT secret key (required) | - |
-| `POSTGRES_PASSWORD` | Database password | `change_me_in_production` |
+| `SECRET_KEY` | JWT secret key (required) | none |
+| `POSTGRES_PASSWORD` | Database password (required) | none |
 | `FIRST_SUPERUSER` | Initial admin username | `admin` |
-| `FIRST_SUPERUSER_PASSWORD` | Initial admin password | `change_me_in_production` |
+| `FIRST_SUPERUSER_PASSWORD` | Initial admin password (required) | none |
 | `DOCS_ENABLED` | Enable API documentation | `false` |
 | `FRONTEND_PORT` | Web interface port | `80` |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | JWT token lifetime | `30` |
