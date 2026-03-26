@@ -24,7 +24,7 @@ from echogtfs.schemas import (
     RouteRead,
     StopRead,
 )
-from echogtfs.security import CurrentSuperuser, CurrentUser
+from echogtfs.security import CurrentSuperuser, CurrentUser, CurrentPoweruser
 from echogtfs.services.gtfs_import import (
     KEY_FEED_URL,
     KEY_MSG,
@@ -48,7 +48,7 @@ _DB = Annotated[AsyncSession, Depends(get_db)]
 
 
 @router.get("/status", response_model=GtfsStatusRead)
-async def get_status(_: CurrentSuperuser, db: _DB) -> GtfsStatusRead:
+async def get_status(_: CurrentPoweruser, db: _DB) -> GtfsStatusRead:
     """Return current feed URL, cron, and last import state."""
     rows: dict[str, str] = {}
     result = await db.execute(
@@ -76,7 +76,7 @@ async def get_status(_: CurrentSuperuser, db: _DB) -> GtfsStatusRead:
 
 @router.post("/import", status_code=status.HTTP_202_ACCEPTED)
 async def trigger_import(
-    _: CurrentSuperuser,
+    _: CurrentPoweruser,
     db: _DB,
     background_tasks: BackgroundTasks,
 ) -> dict[str, str]:
@@ -108,7 +108,7 @@ class GtfsConfigUpdate(BaseModel):
 
 @router.put("/feed-url", status_code=200)
 async def update_feed_url(
-    _: CurrentSuperuser,
+    _: CurrentPoweruser,
     db: _DB,
     data: GtfsConfigUpdate,
 ) -> dict[str, str]:

@@ -22,6 +22,7 @@ class UserUpdate(BaseModel):
     password: str | None = None
     is_active: bool | None = None
     is_superuser: bool | None = None
+    is_technical_contact: bool | None = None
 
 
 class UserRead(BaseModel):
@@ -30,6 +31,7 @@ class UserRead(BaseModel):
     email: str
     is_active: bool
     is_superuser: bool
+    is_technical_contact: bool
     created_at: datetime
 
     model_config = {"from_attributes": True}

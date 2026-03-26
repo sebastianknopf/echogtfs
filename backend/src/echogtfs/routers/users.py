@@ -99,6 +99,13 @@ async def update_user(
                 detail="Cannot remove your own admin privileges",
             )
         user.is_superuser = payload.is_superuser
+    if payload.is_technical_contact is not None:
+        if user_id == current_superuser.id and not payload.is_technical_contact:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot remove your own technical contact status",
+            )
+        user.is_technical_contact = payload.is_technical_contact
     await db.commit()
     await db.refresh(user)
     return user

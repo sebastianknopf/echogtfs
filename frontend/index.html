@@ -109,7 +109,7 @@
             </span>
             <span class="nav-item__label">Meldungen</span>
           </button>
-          <button class="nav-item" data-panel="sources" data-ripple>
+          <button class="nav-item" data-panel="sources" data-poweruser-only data-ripple>
             <span class="nav-item__icon">
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3C7.58 3 4 4.79 4 7s3.58 4 8 4 8-1.79 8-4-3.58-4-8-4zM4 9v3c0 2.21 3.58 4 8 4s8-1.79 8-4V9c0 2.21-3.58 4-8 4S4 11.21 4 9zm0 5v3c0 2.21 3.58 4 8 4s8-1.79 8-4v-3c0 2.21-3.58 4-8 4s-8-1.79-8-4z"/></svg>
             </span>
@@ -252,7 +252,6 @@
               <div id="settings-gtfs-section">
                 <p class="settings-section-label">GTFS-Feed</p>
 
-
                 <div class="md-field" id="field-gtfs-url">
                   <input
                     type="url"
@@ -330,7 +329,12 @@
           <label class="md-switch">
             <input type="checkbox" id="modal-is-superuser" name="is_superuser" />
             <span class="md-switch__track"></span>
-            <span class="md-switch__label">Administrator</span>
+            <span class="md-switch__label">Admin</span>
+          </label>
+          <label class="md-switch">
+            <input type="checkbox" id="modal-is-technical-contact" name="is_technical_contact" />
+            <span class="md-switch__track"></span>
+            <span class="md-switch__label">Poweruser</span>
           </label>
         </div>
         <p id="modal-error" class="login-card__error" role="alert"></p>

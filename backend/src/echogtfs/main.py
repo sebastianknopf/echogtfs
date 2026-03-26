@@ -11,6 +11,7 @@ from sqlalchemy import select
 from echogtfs.config import settings
 from echogtfs.database import AsyncSessionLocal, Base, engine
 from echogtfs.extensions import limiter
+from echogtfs.migrations import run_migrations
 from echogtfs.models import GtfsAgency, GtfsRoute, GtfsStop, User  # noqa: F401
 from echogtfs.models import ServiceAlert, ServiceAlertTranslation, ServiceAlertActivePeriod, ServiceAlertInformedEntity  # noqa: F401
 from echogtfs.routers.alerts import router as alerts_router
@@ -25,6 +26,9 @@ from echogtfs.security import hash_password
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    # Run migrations first before creating tables
+    await run_migrations(engine)
+    
     # Create tables on startup (use Alembic for production migrations)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

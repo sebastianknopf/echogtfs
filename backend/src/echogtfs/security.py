@@ -82,7 +82,19 @@ async def get_current_superuser(
     return current_user
 
 
+async def get_current_poweruser_or_admin(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+) -> User:
+    """Require user to be either a technical contact (poweruser) or admin."""
+    if not (current_user.is_technical_contact or current_user.is_superuser):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions"
+        )
+    return current_user
+
+
 # -- Convenient type aliases for routers --------------------------------------
 
 CurrentUser = Annotated[User, Depends(get_current_active_user)]
 CurrentSuperuser = Annotated[User, Depends(get_current_superuser)]
+CurrentPoweruser = Annotated[User, Depends(get_current_poweruser_or_admin)]

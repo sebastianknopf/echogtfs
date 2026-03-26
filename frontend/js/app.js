@@ -50,7 +50,8 @@ const api = (() => {
       'Not enough permissions': 'Keine ausreichenden Berechtigungen.',
       'Could not validate credentials': 'Anmeldedaten konnten nicht verifiziert werden.',
       'Username or email already taken': 'Benutzername oder E-Mail bereits vergeben.',
-      'Cannot remove your own admin privileges': 'Eigene Administrator-Rechte können nicht entzogen werden.',
+      'Cannot remove your own admin privileges': 'Eigene Admin-Rechte können nicht entzogen werden.',
+      'Cannot remove your own technical contact status': 'Eigene Poweruser-Rolle kann nicht entzogen werden.',
       'Cannot deactivate yourself': 'Der eigene Account kann nicht deaktiviert werden.',
       'Cannot delete yourself': 'Der eigene Account kann nicht gelöscht werden.',
       'Alert not found': 'Meldung nicht gefunden.',
@@ -364,7 +365,13 @@ const ui = (() => {
       if (user.is_superuser) {
         const c = document.createElement('span');
         c.className = 'md-chip md-chip--secondary';
-        c.textContent = 'Administrator';
+        c.textContent = 'Admin';
+        chipsEl.appendChild(c);
+      }
+      if (user.is_technical_contact) {
+        const c = document.createElement('span');
+        c.className = 'md-chip md-chip--secondary';
+        c.textContent = 'Poweruser';
         chipsEl.appendChild(c);
       }
     }
@@ -384,8 +391,13 @@ const ui = (() => {
     }
     
     const detailRole = el('detail-role');
-    if (detailRole) detailRole.textContent = user.is_superuser ? 'Administrator' : 'Standard';
+    if (detailRole) detailRole.textContent = user.is_superuser ? 'Admin' : (user.is_technical_contact ? 'Poweruser' : 'Standard');
 
+    // Show/hide poweruser-only sidebar items (for powerusers and admins)
+    document.querySelectorAll('.nav-item[data-poweruser-only]').forEach(item => {
+      item.hidden = !(user.is_technical_contact || user.is_superuser);
+    });
+    
     // Show/hide admin-only sidebar items
     document.querySelectorAll('.nav-item[data-admin-only]').forEach(item => {
       item.hidden = !user.is_superuser;
@@ -399,7 +411,8 @@ const ui = (() => {
         const elem = el(id);
         if (elem) elem.textContent = ''; 
       });
-    // Restore all admin-only elements so the next login re-evaluates them
+    // Restore all poweruser-only and admin-only elements so the next login re-evaluates them
+    document.querySelectorAll('[data-poweruser-only]').forEach(item => { item.hidden = false; });
     document.querySelectorAll('[data-admin-only]').forEach(item => { item.hidden = false; });
   }
 
@@ -446,8 +459,10 @@ const ui = (() => {
         <td>${_esc(user.username)}</td>
         <td>${_esc(user.email)}</td>
         <td>${user.is_superuser
-          ? '<span class="badge badge--system">Administrator</span>'
-          : '<span class="badge badge--system">Standard</span>'}</td>
+          ? '<span class="badge badge--system">Admin</span>'
+          : (user.is_technical_contact
+            ? '<span class="badge badge--system">Poweruser</span>'
+            : '<span class="badge badge--system">Standard</span>')}</td>
         <td>${user.is_active
           ? '<span class="badge badge--system">Aktiv</span>'
           : '<span class="badge badge--system">Inaktiv</span>'}</td>
@@ -469,7 +484,7 @@ const ui = (() => {
   }
 
   // -- Account modal ----------------------------------------------------------
-  function openAccountModal({ title, username = '', email = '', isActive = true, isSuperuser = false, editMode = false } = {}) {
+  function openAccountModal({ title, username = '', email = '', isActive = true, isSuperuser = false, isTechnicalContact = false, editMode = false } = {}) {
     el('modal-title').textContent         = title;
     el('modal-username').value            = username;
     el('modal-username').readOnly         = editMode;
@@ -477,6 +492,7 @@ const ui = (() => {
     el('modal-password').value            = '';
     el('modal-is-active').checked         = isActive;
     el('modal-is-superuser').checked      = isSuperuser;
+    el('modal-is-technical-contact').checked = isTechnicalContact;
     el('modal-password-hint').textContent = editMode ? 'Leer lassen, um das Passwort nicht zu ändern.' : '';
     el('modal-error').textContent         = '';
     el('modal-error').classList.remove('is-visible');
@@ -1826,8 +1842,30 @@ const app = (() => {
     const btn = e.target.closest('.nav-item[data-panel]');
     if (!btn) return;
     const panel = btn.dataset.panel;
+    
+    // Check permissions
+    const user = state.user;
+    if (!user) return;
+    
+    // Poweruser-only panels
+    if (btn.hasAttribute('data-poweruser-only')) {
+      if (!(user.is_technical_contact || user.is_superuser)) {
+        ui.toast('Keine Berechtigung für diesen Bereich.', 'error');
+        return;
+      }
+    }
+    
+    // Admin-only panels
+    if (btn.hasAttribute('data-admin-only')) {
+      if (!user.is_superuser) {
+        ui.toast('Keine Berechtigung für diesen Bereich.', 'error');
+        return;
+      }
+    }
+    
     ui.setPanel(panel);
     if (panel === 'alerts') _loadAlerts();
+    if (panel === 'sources') { /* Future implementation */ }
     if (panel === 'accounts') _loadAccounts();
     if (panel === 'settings') { settingsPanel.refresh(); gtfsPanel.load(); }
   }
@@ -1870,6 +1908,7 @@ const app = (() => {
       email:       user.email,
       isActive:    user.is_active,
       isSuperuser: user.is_superuser,
+      isTechnicalContact: user.is_technical_contact,
       editMode:    true,
     });
     document.getElementById('account-form').onsubmit = e => _saveAccount(e, userId);
@@ -1884,6 +1923,7 @@ const app = (() => {
     const password  = form.elements['password'].value;
     const isActive  = form.elements['is_active'].checked;
     const isSuperuser = form.elements['is_superuser'].checked;
+    const isTechnicalContact = form.elements['is_technical_contact'].checked;
 
     ui.setModalError(null);
     if (!email)               { ui.setModalError('Bitte E-Mail eingeben.'); return; }
@@ -1895,11 +1935,11 @@ const app = (() => {
       if (!userId) {
         // Create: use register endpoint, then patch flags if non-default
         const created = await api.createUser({ username, email, password });
-        if (!isActive || isSuperuser) {
-          await api.updateUser(created.id, { is_active: isActive, is_superuser: isSuperuser });
+        if (!isActive || isSuperuser || isTechnicalContact) {
+          await api.updateUser(created.id, { is_active: isActive, is_superuser: isSuperuser, is_technical_contact: isTechnicalContact });
         }
       } else {
-        const patch = { email, is_active: isActive, is_superuser: isSuperuser };
+        const patch = { email, is_active: isActive, is_superuser: isSuperuser, is_technical_contact: isTechnicalContact };
         if (password) patch.password = password;
         await api.updateUser(userId, patch);
       }
