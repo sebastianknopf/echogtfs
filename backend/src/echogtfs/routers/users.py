@@ -86,6 +86,11 @@ async def update_user(
     if payload.password is not None:
         user.hashed_password = hash_password(payload.password)
     if payload.is_active is not None:
+        if user_id == current_superuser.id and not payload.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot deactivate yourself",
+            )
         user.is_active = payload.is_active
     if payload.is_superuser is not None:
         if user_id == current_superuser.id and not payload.is_superuser:

@@ -12,8 +12,11 @@ from echogtfs.config import settings
 from echogtfs.database import AsyncSessionLocal, Base, engine
 from echogtfs.extensions import limiter
 from echogtfs.models import GtfsAgency, GtfsRoute, GtfsStop, User  # noqa: F401
+from echogtfs.models import ServiceAlert, ServiceAlertTranslation, ServiceAlertActivePeriod, ServiceAlertInformedEntity  # noqa: F401
+from echogtfs.routers.alerts import router as alerts_router
 from echogtfs.routers.auth import router as auth_router
 from echogtfs.routers.gtfs import router as gtfs_router
+from echogtfs.routers.realtime import router as realtime_router
 from echogtfs.services.gtfs_import import schedule_import_from_cron
 from echogtfs.routers.settings import router as settings_router
 from echogtfs.routers.users import router as users_router
@@ -81,6 +84,8 @@ app.include_router(auth_router,     prefix="/api/auth",     tags=["auth"])
 app.include_router(users_router,    prefix="/api/users",    tags=["users"])
 app.include_router(settings_router, prefix="/api/settings", tags=["settings"])
 app.include_router(gtfs_router,     prefix="/api/gtfs",     tags=["gtfs"])
+app.include_router(alerts_router,   prefix="/api/alerts",   tags=["alerts"])
+app.include_router(realtime_router, prefix="/api",          tags=["realtime"])
 
 
 @app.get("/api/health", tags=["health"])

@@ -144,7 +144,9 @@ async def list_stops(
 ) -> list[GtfsStop]:
     stmt = select(GtfsStop).order_by(GtfsStop.name)
     if q:
-        stmt = stmt.where(GtfsStop.name.ilike(f"%{q}%"))
+        stmt = stmt.where(
+            GtfsStop.gtfs_id.ilike(f"%{q}%") | GtfsStop.name.ilike(f"%{q}%")
+        )
     stmt = stmt.limit(limit)
     result = await db.execute(stmt)
     return list(result.scalars())
@@ -160,7 +162,8 @@ async def list_routes(
     stmt = select(GtfsRoute).order_by(GtfsRoute.short_name, GtfsRoute.long_name)
     if q:
         stmt = stmt.where(
-            GtfsRoute.short_name.ilike(f"%{q}%")
+            GtfsRoute.gtfs_id.ilike(f"%{q}%")
+            | GtfsRoute.short_name.ilike(f"%{q}%")
             | GtfsRoute.long_name.ilike(f"%{q}%")
         )
     stmt = stmt.limit(limit)

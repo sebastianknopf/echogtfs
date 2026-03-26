@@ -6,28 +6,60 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from echogtfs.database import get_db
 from echogtfs.models import AppSetting
-from echogtfs.schemas import ThemeSettings
-from echogtfs.security import CurrentSuperuser
+from echogtfs.schemas import AppSettings, ThemeSettings
+from echogtfs.security import CurrentSuperuser, hash_password
 
 router = APIRouter()
 
 _DB = Annotated[AsyncSession, Depends(get_db)]
 
 # Keys stored in the database
-_KEY_PRIMARY   = "color_primary"
-_KEY_SECONDARY = "color_secondary"
-_KEY_TITLE     = "app_title"
+_KEY_PRIMARY       = "color_primary"
+_KEY_SECONDARY     = "color_secondary"
+_KEY_TITLE         = "app_title"
+_KEY_GTFS_RT_PATH  = "gtfs_rt_path"
+_KEY_GTFS_RT_USER  = "gtfs_rt_username"
+_KEY_GTFS_RT_PASS  = "gtfs_rt_password"
 
-DEFAULTS = ThemeSettings(color_primary="#008c99", color_secondary="#99cc04", app_title="echogtfs")
+DEFAULTS = AppSettings(
+    color_primary="#008c99",
+    color_secondary="#99cc04",
+    app_title="echogtfs",
+    gtfs_rt_path="realtime/service-alerts.pbf",
+    gtfs_rt_username="",
+    gtfs_rt_password="",
+)
 
 
-async def _load(db: AsyncSession) -> ThemeSettings:
+async def _load(db: AsyncSession) -> AppSettings:
     result = await db.execute(select(AppSetting))
     rows = {row.key: row.value for row in result.scalars()}
-    return ThemeSettings(
-        color_primary  =rows.get(_KEY_PRIMARY,   DEFAULTS.color_primary),
-        color_secondary=rows.get(_KEY_SECONDARY, DEFAULTS.color_secondary),
-        app_title      =rows.get(_KEY_TITLE,     DEFAULTS.app_title),
+    
+    # Initialize defaults in database if not present
+    needs_commit = False
+    if _KEY_GTFS_RT_PATH not in rows:
+        await _upsert(db, _KEY_GTFS_RT_PATH, DEFAULTS.gtfs_rt_path)
+        rows[_KEY_GTFS_RT_PATH] = DEFAULTS.gtfs_rt_path
+        needs_commit = True
+    if _KEY_GTFS_RT_USER not in rows:
+        await _upsert(db, _KEY_GTFS_RT_USER, DEFAULTS.gtfs_rt_username)
+        rows[_KEY_GTFS_RT_USER] = DEFAULTS.gtfs_rt_username
+        needs_commit = True
+    if _KEY_GTFS_RT_PASS not in rows:
+        await _upsert(db, _KEY_GTFS_RT_PASS, DEFAULTS.gtfs_rt_password)
+        rows[_KEY_GTFS_RT_PASS] = DEFAULTS.gtfs_rt_password
+        needs_commit = True
+    
+    if needs_commit:
+        await db.commit()
+    
+    return AppSettings(
+        color_primary    = rows.get(_KEY_PRIMARY,      DEFAULTS.color_primary),
+        color_secondary  = rows.get(_KEY_SECONDARY,    DEFAULTS.color_secondary),
+        app_title        = rows.get(_KEY_TITLE,        DEFAULTS.app_title),
+        gtfs_rt_path     = rows.get(_KEY_GTFS_RT_PATH, DEFAULTS.gtfs_rt_path),
+        gtfs_rt_username = rows.get(_KEY_GTFS_RT_USER, DEFAULTS.gtfs_rt_username),
+        gtfs_rt_password = rows.get(_KEY_GTFS_RT_PASS, DEFAULTS.gtfs_rt_password),
     )
 
 
@@ -39,19 +71,26 @@ async def _upsert(db: AsyncSession, key: str, value: str) -> None:
         row.value = value
 
 
-@router.get("/", response_model=ThemeSettings)
-async def get_settings(db: _DB) -> ThemeSettings:
-    """Public: returns the current theme colours."""
+@router.get("/", response_model=AppSettings)
+async def get_settings(db: _DB) -> AppSettings:
+    """Public: returns the current app settings (theme + GTFS-RT config)."""
     return await _load(db)
 
 
-@router.put("/", response_model=ThemeSettings)
+@router.put("/", response_model=AppSettings)
 async def update_settings(
-    payload: ThemeSettings, _: CurrentSuperuser, db: _DB
-) -> ThemeSettings:
-    """Admin only: persists theme colours."""
-    await _upsert(db, _KEY_PRIMARY,   payload.color_primary)
-    await _upsert(db, _KEY_SECONDARY, payload.color_secondary)
-    await _upsert(db, _KEY_TITLE,     payload.app_title)
+    payload: AppSettings, _: CurrentSuperuser, db: _DB
+) -> AppSettings:
+    """Admin only: persists app settings."""
+    await _upsert(db, _KEY_PRIMARY,      payload.color_primary)
+    await _upsert(db, _KEY_SECONDARY,    payload.color_secondary)
+    await _upsert(db, _KEY_TITLE,        payload.app_title)
+    await _upsert(db, _KEY_GTFS_RT_PATH, payload.gtfs_rt_path)
+    await _upsert(db, _KEY_GTFS_RT_USER, payload.gtfs_rt_username)
+    # Hash password if provided, otherwise store empty string
+    if payload.gtfs_rt_password:
+        await _upsert(db, _KEY_GTFS_RT_PASS, hash_password(payload.gtfs_rt_password))
+    else:
+        await _upsert(db, _KEY_GTFS_RT_PASS, "")
     await db.commit()
     return payload

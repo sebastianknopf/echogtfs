@@ -1,7 +1,9 @@
 ﻿from datetime import datetime
+from enum import Enum
+import uuid
 
-from sqlalchemy import Boolean, DateTime, String, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, Uuid, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from echogtfs.database import Base
 
@@ -59,3 +61,174 @@ class AppSetting(Base):
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(String(2048))  # wider for URLs + messages
+
+
+# ---------------------------------------------------------------------------
+# GTFS-RT ServiceAlert enums
+# ---------------------------------------------------------------------------
+
+class AlertCause(str, Enum):
+    """GTFS-RT Alert cause enum."""
+    UNKNOWN_CAUSE = "UNKNOWN_CAUSE"
+    OTHER_CAUSE = "OTHER_CAUSE"
+    TECHNICAL_PROBLEM = "TECHNICAL_PROBLEM"
+    STRIKE = "STRIKE"
+    DEMONSTRATION = "DEMONSTRATION"
+    ACCIDENT = "ACCIDENT"
+    HOLIDAY = "HOLIDAY"
+    WEATHER = "WEATHER"
+    MAINTENANCE = "MAINTENANCE"
+    CONSTRUCTION = "CONSTRUCTION"
+    POLICE_ACTIVITY = "POLICE_ACTIVITY"
+    MEDICAL_EMERGENCY = "MEDICAL_EMERGENCY"
+
+
+class AlertEffect(str, Enum):
+    """GTFS-RT Alert effect enum."""
+    NO_SERVICE = "NO_SERVICE"
+    REDUCED_SERVICE = "REDUCED_SERVICE"
+    SIGNIFICANT_DELAYS = "SIGNIFICANT_DELAYS"
+    DETOUR = "DETOUR"
+    ADDITIONAL_SERVICE = "ADDITIONAL_SERVICE"
+    MODIFIED_SERVICE = "MODIFIED_SERVICE"
+    OTHER_EFFECT = "OTHER_EFFECT"
+    UNKNOWN_EFFECT = "UNKNOWN_EFFECT"
+    STOP_MOVED = "STOP_MOVED"
+    NO_EFFECT = "NO_EFFECT"
+    ACCESSIBILITY_ISSUE = "ACCESSIBILITY_ISSUE"
+
+
+class AlertSeverityLevel(str, Enum):
+    """GTFS-RT Alert severity level enum (SeverityLevel)."""
+    UNKNOWN_SEVERITY = "UNKNOWN_SEVERITY"
+    INFO = "INFO"
+    WARNING = "WARNING"
+    SEVERE = "SEVERE"
+
+
+# ---------------------------------------------------------------------------
+# GTFS-RT ServiceAlert tables
+# ---------------------------------------------------------------------------
+
+class ServiceAlert(Base):
+    """
+    GTFS-RT Service Alert.
+    
+    Main table for service alerts. Translations and affected entities
+    are stored in separate tables with foreign keys.
+    
+    No foreign keys to GTFS static data - entity references are stored
+    as strings only for search purposes.
+    """
+    __tablename__ = "service_alerts"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    
+    # Alert metadata
+    cause: Mapped[AlertCause] = mapped_column(String(32), default=AlertCause.UNKNOWN_CAUSE)
+    effect: Mapped[AlertEffect] = mapped_column(String(32), default=AlertEffect.UNKNOWN_EFFECT)
+    severity_level: Mapped[AlertSeverityLevel] = mapped_column(
+        String(32), default=AlertSeverityLevel.UNKNOWN_SEVERITY
+    )
+    source: Mapped[str] = mapped_column(String(128), default="echogtfs", index=True)
+    
+    # Status flags
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    
+    # Relationships (with cascade delete)
+    translations: Mapped[list["ServiceAlertTranslation"]] = relationship(
+        back_populates="alert", cascade="all, delete-orphan"
+    )
+    active_periods: Mapped[list["ServiceAlertActivePeriod"]] = relationship(
+        back_populates="alert", cascade="all, delete-orphan"
+    )
+    informed_entities: Mapped[list["ServiceAlertInformedEntity"]] = relationship(
+        back_populates="alert", cascade="all, delete-orphan"
+    )
+
+
+class ServiceAlertTranslation(Base):
+    """
+    Translations for service alert text content.
+    
+    Stores header, description, and URL in multiple languages.
+    One alert can have multiple translations.
+    """
+    __tablename__ = "service_alert_translations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    alert_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("service_alerts.id"), index=True)
+    
+    # Language code (ISO 639-1: 'de', 'en', 'fr', etc.)
+    language: Mapped[str] = mapped_column(String(8), index=True)
+    
+    # Alert content in this language
+    header_text: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    description_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    
+    # Relationship
+    alert: Mapped["ServiceAlert"] = relationship(back_populates="translations")
+
+
+class ServiceAlertActivePeriod(Base):
+    """
+    Time period during which an alert is active.
+    
+    An alert can have multiple active periods (e.g., same disruption
+    on multiple days). If no periods are defined, the alert is always active.
+    """
+    __tablename__ = "service_alert_active_periods"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    alert_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("service_alerts.id"), index=True)
+    
+    # Unix timestamps (seconds since epoch)
+    # If start is None, active from beginning of time
+    # If end is None, active until end of time
+    start_time: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    end_time: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    
+    # Relationship
+    alert: Mapped["ServiceAlert"] = relationship(back_populates="active_periods")
+
+
+class ServiceAlertInformedEntity(Base):
+    """
+    Entity (route, stop, trip, etc.) that is affected by an alert.
+    
+    References GTFS entities by their IDs (strings), but does NOT use
+    foreign keys to GTFS static tables. This allows alerts to reference
+    entities that may not be in the database or may change over time.
+    
+    Multiple fields can be set to narrow down the affected entity:
+    - route_id only: entire route affected
+    - route_id + stop_id: specific stop on a route
+    - trip_id: specific trip affected
+    - stop_id only: entire stop affected
+    """
+    __tablename__ = "service_alert_informed_entities"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    alert_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("service_alerts.id"), index=True)
+    
+    # GTFS entity references (NO FOREIGN KEYS - just string IDs for search)
+    agency_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    route_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    route_type: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    stop_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    trip_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    
+    # Optional direction filter (0 or 1)
+    direction_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    
+    # Relationship
+    alert: Mapped["ServiceAlert"] = relationship(back_populates="informed_entities")

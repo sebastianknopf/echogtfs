@@ -145,8 +145,8 @@
                 + Erfassen
               </button>
             </div>
-            <div class="md-card__content panel__placeholder">
-              Aktuell sind noch keine Meldungen verfügbar.
+            <div class="md-card__content" id="alerts-content">
+              <div class="panel__loading">Wird geladen ...</div>
             </div>
           </section>
         </div>
@@ -215,6 +215,26 @@
                       <input type="text"  id="settings-color-secondary-hex" class="color-hex-input md-field__input" maxlength="7" placeholder="#99cc04" aria-label="Sekundärfarbe (Hex)" />
                     </div>
                   </div>
+                </div>
+
+                <p class="settings-section-label">GTFS-Realtime</p>
+
+                <div class="md-field">
+                  <input type="text" id="settings-gtfs-rt-path" class="md-field__input" placeholder=" " maxlength="255" />
+                  <label class="md-field__label" for="settings-gtfs-rt-path">GTFS-RT Endpunkt-Pfad</label>
+                  <div class="md-field__helper">Pfad ohne /api/ Präfix, z.B. <code>realtime/service-alerts.pbf</code></div>
+                </div>
+
+                <div class="md-field">
+                  <input type="text" id="settings-gtfs-rt-username" class="md-field__input" placeholder=" " maxlength="64" autocomplete="off" />
+                  <label class="md-field__label" for="settings-gtfs-rt-username">Basic Auth Benutzername (optional)</label>
+                  <div class="md-field__helper">Leer lassen, falls keine Authentifizierung gewünscht ist</div>
+                </div>
+
+                <div class="md-field">
+                  <input type="password" id="settings-gtfs-rt-password" class="md-field__input" placeholder=" " maxlength="128" autocomplete="new-password" />
+                  <label class="md-field__label" for="settings-gtfs-rt-password">Basic Auth Passwort (optional)</label>
+                  <div class="md-field__helper">Leer lassen, falls keine Authentifizierung gewünscht ist</div>
                 </div>
 
                 <p id="settings-error" class="login-card__error" role="alert"></p>
@@ -325,12 +345,163 @@
     </div>
   </div>
 
+  <!-- Modal: Create / Edit alert -->
+  <div id="alert-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="alert-modal-title" hidden>
+    <div class="modal__backdrop"></div>
+    <div class="modal__panel modal__panel--lg">
+      <div class="modal__header">
+        <h2 class="modal__title" id="alert-modal-title">Meldung erfassen</h2>
+      </div>
+      
+      <!-- Tabs Navigation -->
+      <div class="modal__tabs" role="tablist">
+        <button type="button" class="modal__tab modal__tab--active" role="tab" data-tab="basics" aria-selected="true">
+          Grunddaten
+        </button>
+        <button type="button" class="modal__tab" role="tab" data-tab="validity" aria-selected="false">
+          Gültigkeit
+        </button>
+        <button type="button" class="modal__tab" role="tab" data-tab="references" aria-selected="false">
+          Bezug
+        </button>
+        <button type="button" class="modal__tab" role="tab" data-tab="text" aria-selected="false">
+          Text
+        </button>
+      </div>
+
+      <form id="alert-form" class="modal__body" novalidate>
+        
+        <!-- Tab Panel: Grunddaten -->
+        <div id="alert-tab-basics" class="modal__tab-panel" role="tabpanel" data-tab="basics">
+          <div class="modal-form-row">
+            <div class="md-field">
+              <select class="md-field__input" id="alert-cause">
+                <option value="UNKNOWN_CAUSE">Unbekannte Ursache</option>
+                <option value="OTHER_CAUSE">Sonstige Ursache</option>
+                <option value="TECHNICAL_PROBLEM">Technisches Problem</option>
+                <option value="STRIKE">Streik</option>
+                <option value="DEMONSTRATION">Demonstration</option>
+                <option value="ACCIDENT">Unfall</option>
+                <option value="HOLIDAY">Feiertag</option>
+                <option value="WEATHER">Wetter</option>
+                <option value="MAINTENANCE">Wartung</option>
+                <option value="CONSTRUCTION">Bauarbeiten</option>
+                <option value="POLICE_ACTIVITY">Polizeieinsatz</option>
+                <option value="MEDICAL_EMERGENCY">Medizinischer Notfall</option>
+              </select>
+              <label class="md-field__label" for="alert-cause">Ursache</label>
+            </div>
+
+            <div class="md-field">
+              <select class="md-field__input" id="alert-effect">
+                <option value="UNKNOWN_EFFECT">Unbekannte Auswirkung</option>
+                <option value="NO_SERVICE">Kein Service</option>
+                <option value="REDUCED_SERVICE">Eingeschränkter Service</option>
+                <option value="SIGNIFICANT_DELAYS">Erhebliche Verspätungen</option>
+                <option value="DETOUR">Umleitung</option>
+                <option value="ADDITIONAL_SERVICE">Zusätzlicher Service</option>
+                <option value="MODIFIED_SERVICE">Geänderter Service</option>
+                <option value="OTHER_EFFECT">Sonstige Auswirkung</option>
+                <option value="STOP_MOVED">Haltestelle verlegt</option>
+                <option value="NO_EFFECT">Keine Auswirkung</option>
+                <option value="ACCESSIBILITY_ISSUE">Barrierefreiheitsproblem</option>
+              </select>
+              <label class="md-field__label" for="alert-effect">Auswirkung</label>
+            </div>
+          </div>
+
+          <div class="md-field" style="margin-top: 16px;">
+            <select class="md-field__input" id="alert-severity">
+              <option value="UNKNOWN_SEVERITY">Unbekannt</option>
+              <option value="INFO">Info</option>
+              <option value="WARNING">Warnung</option>
+              <option value="SEVERE">Schwerwiegend</option>
+            </select>
+            <label class="md-field__label" for="alert-severity">Schweregrad</label>
+          </div>
+
+          <div class="modal__switches" style="margin-top: 24px;">
+            <label class="md-switch">
+              <input type="checkbox" id="alert-is-active" checked />
+              <span class="md-switch__track"></span>
+              <span class="md-switch__label">Aktiv</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Tab Panel: Gültigkeit -->
+        <div id="alert-tab-validity" class="modal__tab-panel" role="tabpanel" data-tab="validity" hidden>
+          <div class="tab-panel-header">
+            <button type="button" id="alert-add-period-btn" class="md-btn md-btn--text md-btn--compact" data-ripple>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+              Zeitraum hinzufügen
+            </button>
+          </div>
+          <div id="alert-periods-container"></div>
+        </div>
+
+        <!-- Tab Panel: Bezug -->
+        <div id="alert-tab-references" class="modal__tab-panel" role="tabpanel" data-tab="references" hidden>
+          <div class="tab-panel-header">
+            <button type="button" id="alert-add-entity-btn" class="md-btn md-btn--text md-btn--compact" data-ripple>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+              Bezug hinzufügen
+            </button>
+          </div>
+          <div id="alert-entities-container"></div>
+        </div>
+
+        <!-- Tab Panel: Text -->
+        <div id="alert-tab-text" class="modal__tab-panel" role="tabpanel" data-tab="text" hidden>
+          <div class="tab-panel-header">
+            <button type="button" id="alert-add-translation-btn" class="md-btn md-btn--text md-btn--compact" data-ripple>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+              Übersetzung hinzufügen
+            </button>
+          </div>
+          <div id="alert-translations-container"></div>
+        </div>
+
+      </form>
+
+      <!-- Error display (below tabs, always visible) -->
+      <div class="modal__error-container">
+        <p id="alert-modal-error" class="login-card__error" role="alert"></p>
+      </div>
+
+      <div class="modal__actions">
+        <button type="button" id="alert-modal-cancel-btn" class="md-btn md-btn--text" data-ripple>Abbrechen</button>
+        <button type="submit" form="alert-form" id="alert-modal-submit-btn" class="md-btn md-btn--filled" data-ripple>
+          <span id="alert-modal-submit-spinner" class="btn-spinner" hidden aria-hidden="true"></span>
+          <span id="alert-modal-submit-label">Speichern</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Confirm dialog: delete account -->
+  <!-- Modal: View alert (read-only) -->
+  <div id="view-alert-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="view-alert-title" hidden>
+    <div class="modal__backdrop"></div>
+    <div class="modal__panel modal__panel--lg">
+      <div class="modal__header">
+        <h2 class="modal__title" id="view-alert-title">Meldung anzeigen</h2>
+      </div>
+      <div class="modal__body" style="max-height: calc(100vh - 200px);">
+        <div id="view-alert-content" class="view-alert-content"></div>
+      </div>
+      <div class="modal__actions">
+        <button type="button" id="view-alert-close-btn" class="md-btn md-btn--text" data-ripple>Schließen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Confirm delete -->
   <div id="confirm-modal" class="modal" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" hidden>
     <div class="modal__backdrop"></div>
     <div class="modal__panel modal__panel--sm">
       <div class="modal__header">
-        <h2 class="modal__title" id="confirm-title">Account löschen</h2>
+        <h2 class="modal__title" id="confirm-title">Bestätigung erforderlich</h2>
       </div>
       <div class="modal__body">
         <p id="confirm-message"></p>
