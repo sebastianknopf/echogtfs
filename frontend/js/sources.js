@@ -1,5 +1,5 @@
 /* ==========================================================================
-   SOURCES MODULE - Datenquellen-Management
+   SOURCES MODULE - Data sources management
 ========================================================================== */
 
 const sources = (() => {
@@ -7,9 +7,9 @@ const sources = (() => {
   let _adapterTypes = [];
   let _editingSourceId = null;
 
-  // -- Source Mapping Management ------------------------------------------
+  // Source mapping management
   let _allMappings = [];
-  let _currentDisplayedEntityType = 'agency'; // Track which entity type is currently displayed
+  let _currentDisplayedEntityType = 'agency';
   
   const _entityTypeNames = {
     'agency': 'Unternehmen',
@@ -17,7 +17,7 @@ const sources = (() => {
     'stop': 'Haltestellen'
   };
   
-  // Helper to check if user has poweruser or admin rights
+  // Helper to check poweruser/admin rights
   function _isPoweruser() {
     const user = window.appState?.currentUser;
     return user && (user.is_technical_contact || user.is_superuser);
@@ -25,71 +25,57 @@ const sources = (() => {
   
   function _initializeMappings(mappings) {
     _allMappings = mappings || [];
-    console.log('Initialized mappings:', _allMappings);
-    console.log('Mappings details:', _allMappings.map(m => `${m.entity_type}: ${m.key} -> ${m.value}`).join(', '));
   }
   
   function _saveCurrentMappings() {
-    // Use the currently DISPLAYED entity type, not the one from the select
-    // (because when this is called on change, the select has the NEW value but UI shows OLD rows)
+    // Use currently displayed entity type
     const entityTypeToSave = _currentDisplayedEntityType;
     if (!entityTypeToSave) return;
-    
-    console.log(`Saving current mappings for displayed entity type: ${entityTypeToSave}`)
     
     // Get existing mappings for this entity type (to preserve IDs)
     const existingMappings = _allMappings.filter(m => m.entity_type === entityTypeToSave);
     
-    // Remove existing mappings for this entity type
+    // Remove existing mappings for this type
     _allMappings = _allMappings.filter(m => m.entity_type !== entityTypeToSave);
     
-    // Add current UI mappings for this entity type (only from mappings-container)
+    // Add current UI mappings for this type
     const container = ui.el('mappings-container');
     if (!container) return;
     
     const rows = container.querySelectorAll('.mapping-row');
-    console.log(`Found ${rows.length} mapping rows in UI for entity type: ${entityTypeToSave}`);
     
     rows.forEach((row, index) => {
       const key = row.querySelector('[name="mapping-key"]')?.value?.trim();
       const value = row.querySelector('[name="mapping-value"]')?.value?.trim();
       if (key && value) {
-        // Try to find existing mapping with same key to preserve ID
+        // Try to preserve ID if mapping already existed
         const existingMapping = existingMappings.find(m => m.key === key);
         const mapping = {
           entity_type: entityTypeToSave,
           key,
           value
         };
-        // Preserve ID if this mapping existed before
+        // Preserve ID if it existed
         if (existingMapping && existingMapping.id) {
           mapping.id = existingMapping.id;
         }
         _allMappings.push(mapping);
       }
     });
-    
-    console.log('All mappings after save:', _allMappings);
   }
   
   function _renderMappingsForEntityType(entityType) {
-    console.log(`Rendering mappings for entity type: ${entityType}`);
-    console.log('All mappings:', _allMappings);
     const filteredMappings = _allMappings.filter(m => m.entity_type === entityType);
-    console.log('Filtered mappings:', filteredMappings);
-    console.log('Filtered mappings details:', filteredMappings.map(m => `${m.key} -> ${m.value}`).join(', '));
     const container = ui.el('mappings-container');
     
     if (!filteredMappings.length) {
       const entityTypeName = _entityTypeNames[entityType] || 'diesen Typ';
-      console.log(`No mappings for ${entityType}, showing placeholder`);
       container.innerHTML = `<p class="panel__placeholder">Keine Mappings für ${entityTypeName} vorhanden.</p>`;
-      // Update the currently displayed entity type after rendering
+      // Update tracking
       _currentDisplayedEntityType = entityType;
       return;
     }
     
-    console.log(`Creating table with ${filteredMappings.length} rows`);
     const table = document.createElement('table');
     table.className = 'mapping-table';
     table.innerHTML = `
@@ -102,26 +88,21 @@ const sources = (() => {
     
     const tbody = table.querySelector('tbody');
     filteredMappings.forEach(mapping => {
-      console.log(`Creating row for mapping: ${mapping.key} -> ${mapping.value}`);
       const row = _createMappingRow(mapping);
       tbody.appendChild(row);
     });
     
-    console.log('Clearing container and adding new table');
     container.innerHTML = '';
     container.appendChild(table);
-    console.log('Table appended, rows in tbody:', tbody.children.length);
     
     // Re-initialize ripples for new buttons
     initRipples(container);
     
-    // Update the currently displayed entity type after rendering
+    // Update tracking
     _currentDisplayedEntityType = entityType;
-    console.log('Rendering complete for entity type:', entityType);
   }
   
   function _createMappingRow(mapping = {}) {
-    console.log('Creating mapping row with data:', mapping);
     const tr = document.createElement('tr');
     tr.className = 'mapping-row';
     
@@ -130,7 +111,6 @@ const sources = (() => {
     
     const keyValue = ui.esc(mapping.key || '');
     const valueValue = ui.esc(mapping.value || '');
-    console.log(`Row values: key="${keyValue}", value="${valueValue}"`);
     
     tr.innerHTML = `
       <td><input type="text" name="mapping-key" class="md-field__input" value="${keyValue}" placeholder="z.B. externer Key" /></td>
@@ -190,19 +170,141 @@ const sources = (() => {
   }
   
   function _getAllMappings() {
-    _saveCurrentMappings(); // Save current state first
-    return [..._allMappings]; // Return copy
+    _saveCurrentMappings();
+    return [..._allMappings];
   }
 
-  // -- Internal State Management -------------------------------------------
+  // Export mappings to CSV via API
+  // Exports only the mappings for the currently selected entity type of the current source
+  async function _exportMappingsToCSV() {
+    if (!_editingSourceId) {
+      ui.toast('Bitte speichern Sie die Datenquelle zuerst.', 'error');
+      return;
+    }
+
+    const entityType = _currentDisplayedEntityType;
+    const entityTypeName = _entityTypeNames[entityType] || entityType;
+
+    try {
+      // Make API call to get CSV file
+      const token = localStorage.getItem('auth-token');
+      const response = await fetch(`/api/sources/${_editingSourceId}/mappings/${entityType}/export`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Export fehlgeschlagen');
+      }
+
+      // Get filename from Content-Disposition header or use default
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = `mappings-${_editingSourceId}-${entityType}.csv`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename=([^;]+)/);
+        if (filenameMatch) {
+          filename = filenameMatch[1].replace(/['"]/g, '');
+        }
+      }
+
+      // Create blob and download
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      ui.toast(`${entityTypeName}-Mappings erfolgreich exportiert.`, 'success');
+    } catch (err) {
+      ui.toast(err.message, 'error');
+    }
+  }
+
+  // Import mappings from CSV via API
+  // Imports only mappings for the currently selected entity type of the current source
+  async function _importMappingsFromCSV() {
+    if (!_editingSourceId) {
+      ui.toast('Bitte speichern Sie die Datenquelle zuerst.', 'error');
+      return;
+    }
+
+    const entityType = _currentDisplayedEntityType;
+    const entityTypeName = _entityTypeNames[entityType] || entityType;
+
+    // Create file input for CSV upload
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.csv,text/csv';
+    fileInput.style.display = 'none';
+    
+    fileInput.addEventListener('change', async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      
+      // Validate file size on client side (10 MB max)
+      const maxSize = 10 * 1024 * 1024; // 10 MB
+      if (file.size > maxSize) {
+        ui.toast('Die Datei ist zu groß. Maximal 10 MB erlaubt.', 'error');
+        return;
+      }
+      
+      // Validate file extension
+      if (!file.name.toLowerCase().endsWith('.csv')) {
+        ui.toast('Bitte nur CSV-Dateien hochladen.', 'error');
+        return;
+      }
+      
+      try {
+        const token = localStorage.getItem('auth-token');
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const response = await fetch(`/api/sources/${_editingSourceId}/mappings/${entityType}/import`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          body: formData
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.detail || 'Import fehlgeschlagen');
+        }
+        
+        const result = await response.json();
+        
+        // Reload the source to get updated mappings from server
+        const source = await api.getSource(_editingSourceId);
+        _initializeMappings(source.mappings || []);
+        
+        // Re-render current entity type
+        _renderMappingsForEntityType(entityType);
+        
+        ui.toast(`${result.count} ${entityTypeName}-Mappings erfolgreich importiert.`, 'success');
+      } catch (err) {
+        ui.toast(err.message, 'error');
+      }
+    });
+    
+    document.body.appendChild(fileInput);
+    fileInput.click();
+    document.body.removeChild(fileInput);
+  }
+
+  // Internal state management
   async function _loadSources() {
-    console.log('Loading sources via API...');
     try {
       _sources = await api.getSources();
-      console.log('Sources loaded:', _sources.length);
       _renderSourcesList();
     } catch (err) {
-      console.error('Error loading sources:', err);
       ui.toast(err.message, 'error');
       // Show error in UI
       const container = ui.el('sources-content');
@@ -267,26 +369,22 @@ const sources = (() => {
   }
 
   async function _loadAdapterTypes() {
-    // Check if user has permission to load adapter types
+    // Check permissions before loading adapter types
     if (!_isPoweruser()) {
-      console.log('Skipping adapter types load: user does not have poweruser rights');
       _adapterTypes = [];
       return;
     }
     
-    console.log('Loading adapter types via API...');
     try {
       const response = await api.getAdapterTypes();
       _adapterTypes = response.adapter_types || [];
-      console.log('Adapter types loaded:', _adapterTypes.length, _adapterTypes);
     } catch (err) {
-      console.error('Error loading adapter types:', err);
       ui.toast(err.message, 'error');
       _adapterTypes = [];
     }
   }
 
-  // -- Source Modal Management ---------------------------------------------
+  // Source modal management
   function _openSourceModal({ title, name = '', type = '', config = {}, cron = '', mappings = [] } = {}) {
     ui.el('source-modal-title').textContent = title;
     ui.el('source-name').value = name;
@@ -302,8 +400,6 @@ const sources = (() => {
         option.textContent = adapter.type;
         typeSelect.appendChild(option);
       });
-    } else {
-      console.warn('No adapter types available. _adapterTypes:', _adapterTypes);
     }
     typeSelect.value = type;
     
@@ -317,14 +413,14 @@ const sources = (() => {
     _initializeMappings(mappings);
     const entityTypeSelect = ui.el('mapping-entity-type-select');
     if (entityTypeSelect) {
-      // Default to 'agency' as first entity type
+      // Default to 'agency'
       const defaultEntityType = 'agency';
       entityTypeSelect.value = defaultEntityType;
-      _currentDisplayedEntityType = defaultEntityType; // Initialize tracking variable
+      _currentDisplayedEntityType = defaultEntityType;
       _renderMappingsForEntityType(defaultEntityType);
     }
     
-    // Reset to first tab (Konfiguration) - scope to source-modal only
+    // Reset to first tab (Configuration)
     const modal = ui.el('source-modal');
     modal.querySelectorAll('.modal__tab').forEach((tab, idx) => {
       const isFirst = idx === 0;
@@ -358,7 +454,7 @@ const sources = (() => {
   }
   
   async function _openCreateSource() {
-    // Ensure adapter types are loaded before opening modal
+    // Load adapter types before opening modal
     if (!_adapterTypes || _adapterTypes.length === 0) {
       await _loadAdapterTypes();
     }
@@ -373,13 +469,13 @@ const sources = (() => {
       mappings: []
     });
     
-    // Setup form submit handler for create mode
+    // Setup submit handler for create mode
     document.getElementById('source-form').onsubmit = e => _saveSource(e);
   }
 
   async function _openEditSource(sourceId) {
     try {
-      // Ensure adapter types are loaded before opening modal
+      // Load adapter types before opening modal
       if (!_adapterTypes || _adapterTypes.length === 0) {
         await _loadAdapterTypes();
       }
@@ -387,12 +483,11 @@ const sources = (() => {
       _editingSourceId = sourceId;
       const source = await api.getSource(sourceId);
       
-      // Backend returns config as JSON string, parse it
+      // Parse config JSON from backend
       let configObj = {};
       try {
         configObj = JSON.parse(source.config || '{}');
       } catch (err) {
-        console.error('Failed to parse source config:', err);
         configObj = {};
       }
       
@@ -405,7 +500,7 @@ const sources = (() => {
         mappings: source.mappings || []
       });
       
-      // Setup form submit handler for edit mode
+      // Setup submit handler for edit mode
       document.getElementById('source-form').onsubmit = e => _saveSource(e);
     } catch (err) {
       ui.toast(err.message, 'error');
@@ -424,7 +519,7 @@ const sources = (() => {
       return;
     }
 
-    // Parse config from form fields
+    // Parse config from form
     let config = {};
     document.querySelectorAll('#source-config-fields input, #source-config-fields textarea').forEach(input => {
       const fieldName = input.name.replace('config-', '');
@@ -439,7 +534,7 @@ const sources = (() => {
 
     _setSourceModalBusy(true);
     try {
-      // Backend expects config as JSON string, not object
+      // Backend expects config as JSON string
       const data = { 
         name, 
         type, 
@@ -496,7 +591,7 @@ const sources = (() => {
     }
   }
 
-  // -- Config Fields Rendering --------------------------------------------
+  // Config fields rendering
   function _renderConfigFields(adapterType, configValues = {}) {
     const container = ui.el('source-config-fields');
     container.innerHTML = '';
@@ -522,14 +617,14 @@ const sources = (() => {
       if (field.type === 'textarea') {
         fieldDiv.innerHTML = `
           <textarea class="md-field__input" name="config-${field.name}" 
-                    placeholder=" "${field.required ? ' required' : ''}>${ui.esc(value)}</textarea>
+                    placeholder=" " ${field.required ? ' required' : ''}>${ui.esc(value)}</textarea>
           <label class="md-field__label" for="config-${field.name}">${ui.esc(field.label)}</label>
           ${field.help_text ? `<div class="md-field__helper">${ui.esc(field.help_text)}</div>` : ''}
         `;
       } else {
         fieldDiv.innerHTML = `
           <input class="md-field__input" type="${inputType}" name="config-${field.name}" 
-                 value="${ui.esc(value)}" placeholder=" "${field.required ? ' required' : ''} />
+                 value="${ui.esc(value)}" placeholder=" " ${field.required ? ' required' : ''} />
           <label class="md-field__label" for="config-${field.name}">${ui.esc(field.label)}</label>
           ${field.help_text ? `<div class="md-field__helper">${ui.esc(field.help_text)}</div>` : ''}
         `;
@@ -539,15 +634,13 @@ const sources = (() => {
     });
   }
 
-  // -- Event Handlers -----------------------------------------------------
+  // Event handlers
   async function init() {
-    console.log('Sources module initializing...');
-    
     // Load initial data
     await _loadAdapterTypes();
     
-    // Register form-specific event listeners
-    // Modal handlers (submit is handled per-modal-open, not here)
+    // Register event listeners
+    // Modal handlers
     ui.el('source-modal-cancel-btn')?.addEventListener('click', _closeSourceModal);
     ui.el('source-modal')?.querySelector('.modal__backdrop')
       ?.addEventListener('click', _closeSourceModal);
@@ -560,13 +653,18 @@ const sources = (() => {
 
     // Mapping entity type change handler
     ui.el('mapping-entity-type-select')?.addEventListener('change', (e) => {
-      console.log('Entity type changed to:', e.target.value);
       _saveCurrentMappings(); // Save current mappings before switching
       _renderMappingsForEntityType(e.target.value);
     });
 
     // Add mapping button handler
     ui.el('add-mapping-btn')?.addEventListener('click', _addMappingRow);
+
+    // Export mappings to CSV button handler
+    ui.el('export-mappings-btn')?.addEventListener('click', _exportMappingsToCSV);
+
+    // Import mappings from CSV button handler
+    ui.el('import-mappings-btn')?.addEventListener('click', _importMappingsFromCSV);
 
     // Remove mapping button handler (delegated)
     document.addEventListener('click', (e) => {
@@ -594,7 +692,6 @@ const sources = (() => {
       });
     });
     
-    console.log('Sources module initialization complete.');
   }
 
   async function load() {
@@ -621,7 +718,7 @@ const sources = (() => {
     }
   }
 
-  // -- Public API --------------------------------------------------------
+  // Public API
   return { 
     init, 
     load, 

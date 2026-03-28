@@ -1,5 +1,5 @@
 /* ==========================================================================
-   MAIN APP - Haupt-Anwendungslogik und Navigation
+   MAIN APP - Main application logic and navigation
 ========================================================================== */
 
 // Global app state for cross-module access
@@ -11,7 +11,7 @@ window.appState = {
 const app = (() => {
   let _currentUser = null;
 
-  // -- Authentication -----------------------------------------------------
+  // Authentication
   async function handleLogin(e) {
     e.preventDefault();
     const form = e.target;
@@ -28,7 +28,7 @@ const app = (() => {
       const response = await api.login(credentials);
       localStorage.setItem('auth-token', response.access_token);
       
-      // Get user data after successful login
+      // Fetch user data after successful login
       const user = await api.getMe();
       localStorage.setItem('current-user', JSON.stringify(user));
       
@@ -46,7 +46,7 @@ const app = (() => {
     window.location.reload();
   }
 
-  // -- Navigation ---------------------------------------------------------
+  // Navigation
   function handleNavClick(e) {
     const navItem = e.target.closest('.nav-item[data-panel]');
     if (!navItem) return;
@@ -55,36 +55,32 @@ const app = (() => {
     const panel = navItem.dataset.panel;
     ui.setPanel(panel);
 
-    // Load panel-specific data
+    // Load panel data
     switch (panel) {
       case 'accounts':
         if (typeof accounts !== 'undefined') {
-          console.log('Loading accounts...');
           accounts.load();
         }
         break;
       case 'sources':
         if (typeof sources !== 'undefined') {
-          console.log('Loading sources...');
           sources.load();
         }
         break;
       case 'alerts':
         if (typeof alerts !== 'undefined') {
-          console.log('Loading alerts...');
           alerts.load();
         }
         break;
       case 'settings':
         if (typeof settings !== 'undefined') {
-          console.log('Loading settings...');
           settings.load();
         }
         break;
     }
   }
 
-  // -- Add Handlers -------------------------------------------------------
+  // Add handlers
   function handleAddAccount() {
     if (typeof accounts !== 'undefined') accounts.openCreateModal();
   }
@@ -97,7 +93,7 @@ const app = (() => {
     if (typeof alerts !== 'undefined') alerts.openCreateModal();
   }
 
-  // -- Content Click Handlers (delegation to modules) -------------------
+  // Content click handlers (delegate to modules)
   function handleAccountsContentClick(e) {
     if (typeof accounts !== 'undefined') accounts.handleContentClick(e);
   }
@@ -110,9 +106,9 @@ const app = (() => {
     if (typeof alerts !== 'undefined') alerts.handleContentClick(e);
   }
 
-  // -- Initialization ----------------------------------------------------
+  // Initialization
   async function init() {
-    // Check for existing auth
+    // Check for existing authentication
     const token = localStorage.getItem('auth-token');
     const userData = localStorage.getItem('current-user');
     
@@ -123,7 +119,7 @@ const app = (() => {
     }
 
     try {
-      // Verify token and get fresh user data
+      // Verify token and get current user data
       _currentUser = await api.getMe();
       localStorage.setItem('current-user', JSON.stringify(_currentUser));
       window.appState.currentUser = _currentUser;
@@ -134,34 +130,29 @@ const app = (() => {
       ui.showView('app');
       ui.setPanel('alerts'); // Default panel
 
-      // Load settings and apply theme
+      // Load settings
       try {
         const appSettings = await api.getSettings();
         theme.apply(appSettings);
       } catch (err) {
-        console.warn('Could not load settings:', err.message);
       }
 
       // Initialize modules
-      console.log('Initializing modules...');
       if (typeof accounts !== 'undefined') accounts.init();
       if (typeof sources !== 'undefined') await sources.init(); // sources.init is async
       if (typeof alerts !== 'undefined') alerts.init();
       if (typeof settings !== 'undefined') settings.init();
-      console.log('Modules initialized.');
 
-      // Load default panel data
-      console.log('Loading default panel (alerts)...');
+      // Load default panel
       if (typeof alerts !== 'undefined') {
         await alerts.load();
       } else {
-        // Fallback if alerts module is not available
+        // Fallback if module not available
         ui.el('alerts-content').innerHTML = '<div class="panel__placeholder">Aktuell sind noch keine Meldungen verfügbar.</div>';
       }
-      console.log('Default panel loaded.');
 
     } catch (err) {
-      // Token expired or invalid
+      // Token invalid or expired
       localStorage.removeItem('auth-token');
       localStorage.removeItem('current-user');
       ui.showView('login');
@@ -170,7 +161,7 @@ const app = (() => {
     ui.setLoading(false);
   }
 
-  // -- Public API --------------------------------------------------------
+  // Public API
   return {
     init, handleLogin, handleLogout, handleNavClick,
     handleAddAccount, handleAccountsContentClick,
@@ -180,7 +171,7 @@ const app = (() => {
 })();
 
 /* ==========================================================================
-   BOOTSTRAP - Event Listeners und App-Start
+   BOOTSTRAP - Event listeners and app startup
 ========================================================================== */
 document.addEventListener('DOMContentLoaded', () => {
   initRipples();
@@ -200,7 +191,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Panel-specific handlers
   document.getElementById('add-account-btn')?.addEventListener('click', () => {
-    console.log('Add account clicked');
     app.handleAddAccount();
   });
   document.getElementById('accounts-content')?.addEventListener('click', app.handleAccountsContentClick);
@@ -211,13 +201,11 @@ document.addEventListener('DOMContentLoaded', () => {
     ?.addEventListener('click', () => ui.closeAccountModal());
 
   document.getElementById('add-source-btn')?.addEventListener('click', () => {
-    console.log('Add source clicked');
     app.handleAddSource();
   });
   document.getElementById('sources-content')?.addEventListener('click', app.handleSourcesContentClick);
 
   document.getElementById('add-alert-btn')?.addEventListener('click', () => {
-    console.log('Add alert clicked');
     app.handleAddAlert();
   });
   document.getElementById('alerts-content')?.addEventListener('click', app.handleAlertsContentClick);
@@ -264,7 +252,6 @@ document.addEventListener('DOMContentLoaded', () => {
     ui.addEntityItem();
   });
 
-  // Initialize app
-  console.log('Starting application initialization...');
+  // Initialize application
   app.init();
 });

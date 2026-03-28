@@ -1,12 +1,12 @@
 /* ==========================================================================
-   ALERTS MODULE - Meldungs-Management
+   ALERTS MODULE - Alerts management
 ========================================================================== */
 
 const alerts = (() => {
   let _alerts = [];
-  let _sources = []; // For external source names
-  let _filterText = ''; // Current filter text
-  let _sortOrder = 'newest'; // 'newest' or 'oldest'
+  let _sources = [];
+  let _filterText = '';
+  let _sortOrder = 'newest';
   
   // Cache for GTFS entity data to avoid redundant API calls
   let _agenciesCache = null;
@@ -22,11 +22,7 @@ const alerts = (() => {
   // Helper function to get agencies (cached)
   async function _getCachedAgencies() {
     if (_agenciesCache === null) {
-      console.log('[Cache MISS] Loading agencies into cache...');
       _agenciesCache = await api.getAgencies();
-      console.log(`[Cache] Agencies cached: ${_agenciesCache.length} items`);
-    } else {
-      console.log('[Cache HIT] Using cached agencies');
     }
     return _agenciesCache;
   }
@@ -34,11 +30,7 @@ const alerts = (() => {
   // Helper function to get routes (cached)
   async function _getCachedRoutes(routeId) {
     if (!_routesCache[routeId]) {
-      console.log(`[Cache MISS] Loading routes for ${routeId} into cache...`);
       _routesCache[routeId] = await api.getRoutes(routeId);
-      console.log(`[Cache] Routes for ${routeId} cached: ${_routesCache[routeId].length} items`);
-    } else {
-      console.log(`[Cache HIT] Using cached routes for ${routeId}`);
     }
     return _routesCache[routeId];
   }
@@ -46,24 +38,19 @@ const alerts = (() => {
   // Helper function to get stops (cached)
   async function _getCachedStops(stopId) {
     if (!_stopsCache[stopId]) {
-      console.log(`[Cache MISS] Loading stops for ${stopId} into cache...`);
       _stopsCache[stopId] = await api.getStops(stopId);
-      console.log(`[Cache] Stops for ${stopId} cached: ${_stopsCache[stopId].length} items`);
-    } else {
-      console.log(`[Cache HIT] Using cached stops for ${stopId}`);
     }
     return _stopsCache[stopId];
   }
 
   // Clear all caches
   function _clearCache() {
-    console.log('Clearing entity data cache...');
     _agenciesCache = null;
     _routesCache = {};
     _stopsCache = {};
   }
 
-  // Helper function to enrich entity with names from GTFS data
+  // Enrich entity with names from GTFS data
   async function _enrichEntityWithNames(entity) {
     const enriched = { ...entity, hasResolutionError: false };
     
@@ -102,7 +89,6 @@ const alerts = (() => {
         }
       }
     } catch (err) {
-      console.warn('Error enriching entity:', err);
       enriched.hasResolutionError = true;
     }
     
@@ -117,30 +103,28 @@ const alerts = (() => {
     _clearCache();
     
     try {
-      // Load alerts (and sources only if user has poweruser rights)
+      // Load alerts and sources (if user has poweruser rights)
       const requests = [api.getAlerts()];
       
       if (_isPoweruser()) {
         requests.push(api.getSources().catch(() => []));
       } else {
-        requests.push(Promise.resolve([])); // Empty sources array for non-powerusers
+        requests.push(Promise.resolve([]));
       }
       
       [_alerts, _sources] = await Promise.all(requests);
-      console.log('Alerts loaded:', _alerts.length);
       await _renderAlertsList();
     } catch (err) {
-      console.error('Error loading alerts:', err);
       container.innerHTML = '<div class="panel__placeholder">Fehler beim Laden der Meldungen.</div>';
     }
   }
 
-  // Helper function to match filter with wildcards
+  // Match filter with wildcards
   function _matchesFilter(text, filter) {
     if (!filter) return true;
     if (!text) return false;
     
-    // Automatically add wildcards if not present
+    // Add wildcards if not present
     let searchPattern = filter;
     if (!searchPattern.startsWith('*')) {
       searchPattern = '*' + searchPattern;
@@ -149,36 +133,32 @@ const alerts = (() => {
       searchPattern = searchPattern + '*';
     }
     
-    // Convert wildcard pattern to regex
-    // Escape special regex chars except *
+    // Convert wildcard pattern to regex and escape special chars
     const escapedFilter = searchPattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
-    // Replace * with .* for wildcard matching
     const pattern = '^' + escapedFilter.replace(/\*/g, '.*') + '$';
-    const regex = new RegExp(pattern, 'i'); // case-insensitive
+    const regex = new RegExp(pattern, 'i');
     
     return regex.test(text);
   }
 
-  // Helper function to get start time from alert for sorting
+  // Get start time from alert for sorting
   function _getAlertStartTime(alert) {
     if (alert.active_periods && alert.active_periods.length > 0 && alert.active_periods[0].start_time) {
       return alert.active_periods[0].start_time;
     }
-    // Return Infinity for alerts without time period
-    // This ensures they appear at top for "newest" and bottom for "oldest"
     return Infinity;
   }
 
-  // Helper function to sort alerts based on current sort order
+  // Sort alerts based on current sort order
   function _sortAlerts(alerts) {
     return [...alerts].sort((a, b) => {
       const timeA = _getAlertStartTime(a);
       const timeB = _getAlertStartTime(b);
       
       if (_sortOrder === 'newest') {
-        return timeB - timeA; // Newest first (descending)
+        return timeB - timeA;
       } else {
-        return timeA - timeB; // Oldest first (ascending)
+        return timeA - timeB;
       }
     });
   }
@@ -190,11 +170,11 @@ const alerts = (() => {
       return;
     }
     
-    // Apply filter
+    // Filter alerts
     let filteredAlerts = _alerts.filter(alert => {
       if (!_filterText) return true;
       
-      // Get the title from translations
+      // Get title from translations
       const firstTrans = alert.translations.find(t => t.language === 'de-DE' || t.language === 'de') || alert.translations[0] || {};
       const title = firstTrans.header_text || '';
       
@@ -216,7 +196,7 @@ const alerts = (() => {
       const item = document.createElement('li');
       item.className = 'alert-list-item' + (alert.is_active ? '' : ' alert-list-item--inactive');
       
-      // Get first translation (prefer German, check both de-DE and legacy de)
+      // Get first translation (prefer German)
       const firstTrans = alert.translations.find(t => t.language === 'de-DE' || t.language === 'de') || alert.translations[0] || {};
       const title = firstTrans.header_text || 'Keine Überschrift';
       
@@ -248,7 +228,7 @@ const alerts = (() => {
         }
       }
       
-      // Determine source badge
+      // Build source badge
       const isInternal = alert.source === 'echogtfs' || !alert.data_source_id;
       let sourceName = 'Intern';
       if (!isInternal && alert.data_source_id) {
@@ -560,7 +540,6 @@ const alerts = (() => {
     try {
       localStorage.setItem('echogtfs_alerts_sort', _sortOrder);
     } catch (err) {
-      console.warn('Could not save sort order to localStorage:', err);
     }
     
     // Update button label
@@ -584,24 +563,21 @@ const alerts = (() => {
         _sortOrder = saved;
       }
     } catch (err) {
-      console.warn('Could not load sort order from localStorage:', err);
     }
     _updateSortButton();
   }
 
   function init() {
-    console.log('Alerts module initialized');
-    
-    // Load sort order from localStorage
+    // Load sort order from storage
     _loadSortOrderFromStorage();
     
-    // Setup filter input listener
+    // Setup event listeners
     const filterInput = ui.el('alert-filter');
     if (filterInput) {
       filterInput.addEventListener('input', _handleFilterChange);
     }
     
-    // Setup sort button listener
+
     const sortBtn = ui.el('sort-alerts-btn');
     if (sortBtn) {
       sortBtn.addEventListener('click', _toggleSortOrder);

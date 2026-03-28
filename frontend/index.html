@@ -419,10 +419,20 @@
           </div>
           
           <div class="tab-panel-header">
-            <button type="button" id="add-mapping-btn" class="md-btn md-btn--text md-btn--compact" data-ripple>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-              Mapping hinzufügen
-            </button>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <button type="button" id="add-mapping-btn" class="md-btn md-btn--text md-btn--compact" data-ripple>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                Mapping hinzufügen
+              </button>
+              <button type="button" id="export-mappings-btn" class="md-btn md-btn--text md-btn--compact" data-ripple>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
+                nach CSV exportieren
+              </button>
+              <button type="button" id="import-mappings-btn" class="md-btn md-btn--text md-btn--compact" data-ripple>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z" transform="rotate(180 12 12)"/></svg>
+                aus CSV importieren
+              </button>
+            </div>
           </div>
           <div id="mappings-container">
             <p class="panel__placeholder">Keine Mappings vorhanden.</p>

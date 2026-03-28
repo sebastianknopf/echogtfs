@@ -1,6 +1,6 @@
 /* ==========================================================================
-   CORE - Basis-Funktionalitäten für alle Module
-   API, UI-Helfer, Theme, gemeinsame Utilities
+   CORE - Base functionality for all modules
+   API, UI helpers, theme, shared utilities
 ========================================================================== */
 
 /* ==========================================================================
@@ -40,8 +40,6 @@ const api = (() => {
     const url = path.startsWith('http') ? path : `${BASE_URL}${path}`;
     const token = localStorage.getItem('auth-token');
 
-    console.log(`API Request: ${options.method || 'GET'} ${url}`);
-
     const config = {
       ...options,
       headers: {
@@ -55,15 +53,12 @@ const api = (() => {
       
       // Handle 204 No Content
       if (response.status === 204) {
-        console.log(`API Response: ${response.status} ${response.statusText}`);
         return null;
       }
       
       const contentType = response.headers.get('content-type');
       const isJson = contentType?.includes('application/json');
       const data = isJson ? await response.json() : await response.text();
-
-      console.log(`API Response: ${response.status} ${response.statusText}`, data);
 
       if (!response.ok) {
         if (response.status === 401 && !skipAuthRedirect) {
@@ -77,7 +72,6 @@ const api = (() => {
 
       return data;
     } catch (error) {
-      console.error('API Error:', error);
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
         throw new Error('Der Server ist nicht erreichbar. Bitte überprüfen Sie Ihre Internetverbindung.');
       }
@@ -466,13 +460,13 @@ const ui = (() => {
     });
   }
 
-  // -- XSS-safe string escaping -----------------------------------------------
+  // XSS-safe string escaping
   function esc(str) {
     return String(str).replace(/[&<>"']/g, c =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   }
 
-  // -- Confirm dialog (returns Promise<boolean>) ------------------------------
+  // Confirm dialog (returns Promise<boolean>)
   function openConfirmModal(message, title = 'Bestätigung erforderlich') {
     return new Promise(resolve => {
       el('confirm-title').textContent = title;
@@ -494,15 +488,12 @@ const ui = (() => {
     });
   }
 
-  // ==========================================================================
-  // ALERT MODAL STATE & HELPERS
-  // Counter für dynamische IDs - MUSS VOR den Funktionen definiert werden!
-  // ==========================================================================
+  // Alert Modal State & Helpers
+  // Counter for dynamic IDs - must be defined before functions!
   let _periodCounter = 0;
   let _translationCounter = 0;
   let _entityCounter = 0;
   
-  // Autocomplete Cache
   let _autocompleteCache = { agencies: null, routes: null, stops: null };
   let _autocompleteDebounceTimers = {};
   
@@ -517,7 +508,7 @@ const ui = (() => {
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   }
   
-  // Helper: Fetch autocomplete data
+  // Fetch autocomplete data
   async function _fetchAutocompleteData(type, query = '') {
     try {
       if (type === 'agency') {
@@ -533,20 +524,18 @@ const ui = (() => {
         return data || [];
       }
     } catch (error) {
-      console.error(`Failed to fetch ${type} autocomplete data:`, error);
       return [];
     }
     return [];
   }
   
-  // Helper: Setup autocomplete for input field
+  // Setup autocomplete for input field
   function _setupAutocomplete(input) {
     const type = input.dataset.autocompleteType;
     if (!type) return;
     
     const hiddenInput = input.parentElement.querySelector(`input[type="hidden"].entity-${type}-id`);
     if (!hiddenInput) {
-      console.error('Hidden input not found for', type, input);
       return;
     }
     
@@ -699,7 +688,7 @@ const ui = (() => {
     });
   }
   
-  // Helper function to enrich entity with names from GTFS data
+  // Enrich entity with names from GTFS data
   async function _enrichEntityWithNames(entity) {
     const enriched = { ...entity };
     let hasResolutionError = false;
@@ -735,7 +724,6 @@ const ui = (() => {
         }
       }
     } catch (error) {
-      console.error('Failed to enrich entity with names:', error);
       hasResolutionError = true;
     }
     
@@ -748,7 +736,7 @@ const ui = (() => {
     const transId = _translationCounter++;
     const container = el('alert-translations-container');
     
-    // Normalize language code: convert 'de' -> 'de-DE', etc. for backwards compatibility
+    // Normalize language code for backwards compatibility
     const normalizedLang = lang.includes('-') ? lang : 
       (lang === 'de' ? 'de-DE' : 
        lang === 'en' ? 'en-US' : 
@@ -987,14 +975,14 @@ const ui = (() => {
     _clearPeriods();
     _clearEntities();
     
-    // Fill form if editing
+    // Populate form if editing
     if (alert) {
       el('alert-cause').value = alert.cause;
       el('alert-effect').value = alert.effect;
       el('alert-severity').value = alert.severity_level || 'UNKNOWN_SEVERITY';
       el('alert-is-active').checked = alert.is_active;
       
-      // Load existing translations
+      // Populate existing translations
       if (alert.translations && alert.translations.length > 0) {
         alert.translations.forEach(trans => {
           _addTranslationItem(trans.language, trans.header_text, trans.description_text || '', trans.url || '');
@@ -1003,14 +991,14 @@ const ui = (() => {
         _addTranslationItem('de', '', '', '');
       }
       
-      // Load existing periods
+      // Populate existing periods
       if (alert.active_periods && alert.active_periods.length > 0) {
         alert.active_periods.forEach(period => {
           _addPeriodItem(period.start_time, period.end_time);
         });
       }
       
-      // Load existing informed entities
+      // Populate existing informed entities
       if (alert.informed_entities && alert.informed_entities.length > 0) {
         for (const entity of alert.informed_entities) {
           const enriched = await _enrichEntityWithNames(entity);
@@ -1018,7 +1006,7 @@ const ui = (() => {
         }
       }
     } else {
-      // New alert: start with one German translation
+      // New alert: initialize with one German translation
       _addTranslationItem('de', '', '', '');
     }
     
@@ -1073,7 +1061,7 @@ const ui = (() => {
     setPanel,
     // Utilities
     esc, openConfirmModal,
-    // Placeholder UI functions (will be moved to respective modules later)
+    // Account rendering
     renderAccountsList: function(users) {
       const container = el('accounts-content');
       if (!users.length) {
@@ -1119,32 +1107,6 @@ const ui = (() => {
       });
       container.innerHTML = '';
       container.appendChild(table);
-      if (window.initRipples) initRipples(container);
-    },
-    renderAlertsList: function(alerts) {
-      const container = el('alerts-content');
-      if (!alerts.length) {
-        container.innerHTML = '<div class="panel__placeholder">Aktuell sind noch keine Meldungen verfügbar.</div>';
-        return;
-      }
-      container.innerHTML = `<div class="alert-list">${alerts.map(alert => {
-        const firstTrans = alert.translations && alert.translations[0];
-        const title = firstTrans?.header_text || 'Keine Überschrift';
-        return `<div class="alert-list-item" data-alert-id="${alert.id}">
-          <h3>${esc(title)}</h3>
-          <div class="alert-list-item__actions">
-            <button class="icon-btn" data-action="edit" data-id="${alert.id}" title="Bearbeiten" data-ripple>
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
-            </button>
-            <button class="icon-btn icon-btn--danger" data-action="delete" data-id="${alert.id}" title="Löschen" data-ripple>
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-            </button>
-            <button class="icon-btn ${alert.is_active ? 'icon-btn--success' : 'icon-btn--warning'}" data-action="toggle-active" data-id="${alert.id}" title="${alert.is_active ? 'Unterdrücken' : 'Aktivieren'}" data-ripple>
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42C17.99 7.86 19 9.81 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.59-5.41L6.17 5.17C4.23 6.82 3 9.26 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z"/></svg>
-            </button>
-          </div>
-        </div>`;
-      }).join('')}</div>`;
       if (window.initRipples) initRipples(container);
     },
     openAccountModal: function(options = {}) {

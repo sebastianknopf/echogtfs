@@ -1,5 +1,5 @@
 /* ==========================================================================
-   ACCOUNTS MODULE - Account-Management
+   ACCOUNTS MODULE - Account management
 ========================================================================== */
 
 const accounts = (() => {
@@ -12,10 +12,8 @@ const accounts = (() => {
     
     try {
       _users = await api.getUsers();
-      console.log('Users loaded:', _users.length);
       ui.renderAccountsList(_users);
     } catch (err) {
-      console.error('Error loading users:', err);
       container.innerHTML = '<div class="panel__placeholder">Fehler beim Laden der Accounts.</div>';
     }
   }
@@ -131,7 +129,6 @@ const accounts = (() => {
   }
 
   function init() {
-    console.log('Accounts module initialized');
   }
 
   async function load() {
