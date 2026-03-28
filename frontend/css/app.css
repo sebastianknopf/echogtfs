@@ -278,6 +278,15 @@ body {
 /* Modifier – full width */
 .md-btn--full { width: 100%; }
 
+/* Button icon (inline with text) */
+.btn-icon {
+  width: 18px;
+  height: 18px;
+  margin-right: 0;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
 /* Ripple */
 .ripple {
   position: absolute;
@@ -341,6 +350,29 @@ body {
 
 .md-field__helper { font-size: .75rem; margin: 4px 16px 0; color: var(--md-on-surface-medium); }
 .md-field.is-error .md-field__helper { color: var(--md-error); }
+
+/* Inline variant for use in headers (e.g., filters) */
+.md-field--inline {
+  padding-top: 0;
+  margin-bottom: 0;
+  width: 400px;
+  flex-shrink: 0;
+}
+.md-field--inline .md-field__input {
+  padding: 10px 14px;
+  font-size: .875rem;
+  border-radius: var(--md-shape-s);
+}
+.md-field--inline .md-field__label {
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: .875rem;
+}
+.md-field--inline .md-field__input:focus ~ .md-field__label,
+.md-field--inline .md-field__input:not(:placeholder-shown) ~ .md-field__label {
+  top: 0;
+  transform: translateY(-50%) scale(.85);
+}
 
 /* -- Cards ------------------------------------------------------------------- */
 .md-card {
@@ -660,7 +692,11 @@ body {
   padding: 20px 24px 16px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 16px;
+}
+/* Push first button to the right (works for all panels) */
+.user-list-header > .md-btn:first-of-type {
+  margin-left: auto;
 }
 .user-table {
   width: 100%;

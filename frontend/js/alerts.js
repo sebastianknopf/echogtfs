@@ -5,11 +5,19 @@
 const alerts = (() => {
   let _alerts = [];
   let _sources = []; // For external source names
+  let _filterText = ''; // Current filter text
+  let _sortOrder = 'newest'; // 'newest' or 'oldest'
   
   // Cache for GTFS entity data to avoid redundant API calls
   let _agenciesCache = null;
   let _routesCache = {}; // Keyed by route_id
   let _stopsCache = {}; // Keyed by stop_id
+
+  // Helper to check if user has poweruser or admin rights
+  function _isPoweruser() {
+    const user = window.appState?.currentUser;
+    return user && (user.is_technical_contact || user.is_superuser);
+  }
 
   // Helper function to get agencies (cached)
   async function _getCachedAgencies() {
@@ -109,17 +117,70 @@ const alerts = (() => {
     _clearCache();
     
     try {
-      // Load alerts and sources in parallel
-      [_alerts, _sources] = await Promise.all([
-        api.getAlerts(),
-        api.getSources().catch(() => []) // Fallback if sources not available
-      ]);
+      // Load alerts (and sources only if user has poweruser rights)
+      const requests = [api.getAlerts()];
+      
+      if (_isPoweruser()) {
+        requests.push(api.getSources().catch(() => []));
+      } else {
+        requests.push(Promise.resolve([])); // Empty sources array for non-powerusers
+      }
+      
+      [_alerts, _sources] = await Promise.all(requests);
       console.log('Alerts loaded:', _alerts.length);
       await _renderAlertsList();
     } catch (err) {
       console.error('Error loading alerts:', err);
       container.innerHTML = '<div class="panel__placeholder">Fehler beim Laden der Meldungen.</div>';
     }
+  }
+
+  // Helper function to match filter with wildcards
+  function _matchesFilter(text, filter) {
+    if (!filter) return true;
+    if (!text) return false;
+    
+    // Automatically add wildcards if not present
+    let searchPattern = filter;
+    if (!searchPattern.startsWith('*')) {
+      searchPattern = '*' + searchPattern;
+    }
+    if (!searchPattern.endsWith('*')) {
+      searchPattern = searchPattern + '*';
+    }
+    
+    // Convert wildcard pattern to regex
+    // Escape special regex chars except *
+    const escapedFilter = searchPattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+    // Replace * with .* for wildcard matching
+    const pattern = '^' + escapedFilter.replace(/\*/g, '.*') + '$';
+    const regex = new RegExp(pattern, 'i'); // case-insensitive
+    
+    return regex.test(text);
+  }
+
+  // Helper function to get start time from alert for sorting
+  function _getAlertStartTime(alert) {
+    if (alert.active_periods && alert.active_periods.length > 0 && alert.active_periods[0].start_time) {
+      return alert.active_periods[0].start_time;
+    }
+    // Return Infinity for alerts without time period
+    // This ensures they appear at top for "newest" and bottom for "oldest"
+    return Infinity;
+  }
+
+  // Helper function to sort alerts based on current sort order
+  function _sortAlerts(alerts) {
+    return [...alerts].sort((a, b) => {
+      const timeA = _getAlertStartTime(a);
+      const timeB = _getAlertStartTime(b);
+      
+      if (_sortOrder === 'newest') {
+        return timeB - timeA; // Newest first (descending)
+      } else {
+        return timeA - timeB; // Oldest first (ascending)
+      }
+    });
   }
 
   async function _renderAlertsList() {
@@ -129,10 +190,29 @@ const alerts = (() => {
       return;
     }
     
+    // Apply filter
+    let filteredAlerts = _alerts.filter(alert => {
+      if (!_filterText) return true;
+      
+      // Get the title from translations
+      const firstTrans = alert.translations.find(t => t.language === 'de-DE' || t.language === 'de') || alert.translations[0] || {};
+      const title = firstTrans.header_text || '';
+      
+      return _matchesFilter(title, _filterText);
+    });
+    
+    // Sort alerts
+    filteredAlerts = _sortAlerts(filteredAlerts);
+    
+    if (!filteredAlerts.length) {
+      container.innerHTML = '<div class="panel__placeholder">Keine Meldungen entsprechen dem Filter.</div>';
+      return;
+    }
+    
     container.innerHTML = '<ul class="alert-list"></ul>';
     const list = container.querySelector('.alert-list');
     
-    for (const alert of _alerts) {
+    for (const alert of filteredAlerts) {
       const item = document.createElement('li');
       item.className = 'alert-list-item' + (alert.is_active ? '' : ' alert-list-item--inactive');
       
@@ -468,8 +548,64 @@ const alerts = (() => {
     }
   }
 
+  function _handleFilterChange(e) {
+    _filterText = e.target.value.trim();
+    _renderAlertsList();
+  }
+
+  function _toggleSortOrder() {
+    _sortOrder = _sortOrder === 'newest' ? 'oldest' : 'newest';
+    
+    // Save to localStorage
+    try {
+      localStorage.setItem('echogtfs_alerts_sort', _sortOrder);
+    } catch (err) {
+      console.warn('Could not save sort order to localStorage:', err);
+    }
+    
+    // Update button label
+    _updateSortButton();
+    
+    // Re-render list
+    _renderAlertsList();
+  }
+
+  function _updateSortButton() {
+    const label = ui.el('sort-alerts-label');
+    if (label) {
+      label.textContent = _sortOrder === 'newest' ? 'neueste zuerst' : 'älteste zuerst';
+    }
+  }
+
+  function _loadSortOrderFromStorage() {
+    try {
+      const saved = localStorage.getItem('echogtfs_alerts_sort');
+      if (saved === 'oldest' || saved === 'newest') {
+        _sortOrder = saved;
+      }
+    } catch (err) {
+      console.warn('Could not load sort order from localStorage:', err);
+    }
+    _updateSortButton();
+  }
+
   function init() {
     console.log('Alerts module initialized');
+    
+    // Load sort order from localStorage
+    _loadSortOrderFromStorage();
+    
+    // Setup filter input listener
+    const filterInput = ui.el('alert-filter');
+    if (filterInput) {
+      filterInput.addEventListener('input', _handleFilterChange);
+    }
+    
+    // Setup sort button listener
+    const sortBtn = ui.el('sort-alerts-btn');
+    if (sortBtn) {
+      sortBtn.addEventListener('click', _toggleSortOrder);
+    }
   }
 
   async function load() {
