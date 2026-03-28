@@ -231,6 +231,15 @@ class ServiceAlertRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ServiceAlertListResponse(BaseModel):
+    """Paginated response for service alerts list."""
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+    items: list[ServiceAlertRead]
+
+
 # ---------------------------------------------------------------------------
 # Data Sources
 # ---------------------------------------------------------------------------

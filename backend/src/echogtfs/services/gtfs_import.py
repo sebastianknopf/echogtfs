@@ -183,8 +183,16 @@ async def _do_import(db: AsyncSession) -> ImportResult:
     for r in stop_rows:
         gtfs_id = r.get("stop_id") or ""
         name    = r.get("stop_name") or ""
+        location_type = r.get("location_type") or ""
+        
         if not gtfs_id or not name:
             continue
+        
+        # Import stops/platforms (0 or empty) and stations (1)
+        # Skip entrances (2), nodes (3), and boarding areas (4)
+        if location_type and location_type not in ("0", "1"):
+            continue
+        
         stops[gtfs_id] = {"gtfs_id": gtfs_id, "name": name}
 
     routes: dict[str, dict] = {}

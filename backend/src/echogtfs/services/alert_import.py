@@ -126,6 +126,8 @@ async def run_import_task(source_id: int) -> None:
             stats = await adapter.sync_alerts(db, source.id, source.name)
             
             # Update last_run_at timestamp
+            # Refresh source to ensure it's still attached to the session
+            await db.refresh(source)
             source.last_run_at = datetime.now(UTC)
             
             await db.commit()

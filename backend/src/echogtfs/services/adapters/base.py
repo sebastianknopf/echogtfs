@@ -288,12 +288,14 @@ class BaseAdapter(ABC):
             )
         
         # Process incoming alerts
+        processed_count = 0
         for alert_data in alert_dicts:
             alert_id = alert_data["id"]
             
             # Override source with data source name
             alert_data["source"] = source_name
             alert_data["data_source_id"] = source_id
+            processed_count += 1
             
             # Extract nested data
             translations_data = alert_data.pop("translations", [])
@@ -303,6 +305,8 @@ class BaseAdapter(ABC):
             if alert_id in alerts_to_update:
                 # UPDATE existing alert (preserve is_active field)
                 existing_alert = existing_alerts[alert_id]
+                
+                logger.debug(f"[{self.get_adapter_type()}] Updating alert {alert_id}")
                 
                 # Update main alert fields (except is_active)
                 existing_alert.cause = alert_data["cause"]
@@ -357,6 +361,7 @@ class BaseAdapter(ABC):
                     db.add(entity)
             else:
                 # INSERT new alert
+                logger.debug(f"[{self.get_adapter_type()}] Inserting new alert {alert_id}")
                 alert = ServiceAlert(**alert_data)
                 db.add(alert)
                 await db.flush()  # Ensure the alert is persisted before adding children
@@ -389,7 +394,7 @@ class BaseAdapter(ABC):
         
         logger.info(
             f"[{self.get_adapter_type()}] Successfully synced {len(alert_dicts)} alerts "
-            f"from {source_name}"
+            f"from {source_name} (processed {processed_count} alerts)"
         )
         
         return {

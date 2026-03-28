@@ -24,6 +24,26 @@ from echogtfs.security import verify_password
 
 router = APIRouter()
 
+# Simple in-memory cache for GTFS-RT feed
+_feed_cache = {
+    "protobuf": None,
+    "json": None,
+    "timestamp": 0,
+    "ttl": 30,  # Cache TTL in seconds
+}
+
+
+def invalidate_gtfs_rt_cache() -> None:
+    """
+    Invalidate the GTFS-RT feed cache.
+    
+    Call this function whenever alerts are created, updated, or deleted
+    to ensure clients get fresh data immediately.
+    """
+    _feed_cache["protobuf"] = None
+    _feed_cache["json"] = None
+    _feed_cache["timestamp"] = 0
+
 
 async def check_gtfs_rt_auth(request: Request, db: AsyncSession = Depends(get_db)) -> None:
     """
@@ -93,10 +113,8 @@ def _build_feed_message(alerts: list[ServiceAlert]) -> gtfs_realtime_pb2.FeedMes
     feed.header.incrementality = gtfs_realtime_pb2.FeedHeader.FULL_DATASET
     feed.header.timestamp = int(time.time())
     
-    # Process only active alerts
+    # Process alerts (already filtered for active in query)
     for alert_model in alerts:
-        if not alert_model.is_active:
-            continue
             
         entity = feed.entity.add()
         entity.id = str(alert_model.id)
@@ -335,9 +353,28 @@ async def get_service_alerts(
             detail="Not found"
         )
     
-    # Load all alerts with their relationships
+    # Check cache validity
+    current_time = time.time()
+    cache_valid = (current_time - _feed_cache["timestamp"]) < _feed_cache["ttl"]
+    
+    # Return cached response if valid
+    if cache_valid:
+        if json_format is not None and _feed_cache["json"] is not None:
+            return Response(
+                content=_feed_cache["json"],
+                media_type="application/json",
+            )
+        elif json_format is None and _feed_cache["protobuf"] is not None:
+            return Response(
+                content=_feed_cache["protobuf"],
+                media_type="application/x-protobuf",
+            )
+    
+    # Cache miss or expired - load from database
+    # Load only active alerts with their relationships
     stmt = (
         select(ServiceAlert)
+        .where(ServiceAlert.is_active == True)
         .options(
             selectinload(ServiceAlert.translations),
             selectinload(ServiceAlert.active_periods),
@@ -352,15 +389,24 @@ async def get_service_alerts(
     # Build GTFS-RT feed
     feed = _build_feed_message(alerts)
     
+    # Generate both formats and cache them
+    protobuf_content = feed.SerializeToString()
+    json_content = json.dumps(_feed_to_dict(feed), indent=2).encode("utf-8")
+    
+    # Update cache
+    _feed_cache["protobuf"] = protobuf_content
+    _feed_cache["json"] = json_content
+    _feed_cache["timestamp"] = current_time
+    
     # Return as JSON or protobuf
     # If ?json is present (even without value), return JSON
     if json_format is not None:
         return Response(
-            content=json.dumps(_feed_to_dict(feed), indent=2).encode("utf-8"),
+            content=json_content,
             media_type="application/json",
         )
     else:
         return Response(
-            content=feed.SerializeToString(),
+            content=protobuf_content,
             media_type="application/x-protobuf",
         )

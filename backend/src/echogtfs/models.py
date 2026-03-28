@@ -2,7 +2,7 @@
 from enum import Enum
 import uuid
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, Uuid, func
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from echogtfs.database import Base
@@ -209,8 +209,8 @@ class ServiceAlertActivePeriod(Base):
     # Unix timestamps (seconds since epoch)
     # If start is None, active from beginning of time
     # If end is None, active until end of time
-    start_time: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    end_time: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    start_time: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
+    end_time: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
     
     # Relationship
     alert: Mapped["ServiceAlert"] = relationship(back_populates="active_periods")

@@ -23,25 +23,46 @@ from echogtfs.models import (
 )
 from echogtfs.schemas import (
     ServiceAlertCreate,
+    ServiceAlertListResponse,
     ServiceAlertRead,
     ServiceAlertUpdate,
 )
 from echogtfs.security import CurrentUser
+from echogtfs.routers.realtime import invalidate_gtfs_rt_cache
 
 router = APIRouter()
 
 _DB = Annotated[AsyncSession, Depends(get_db)]
 
 
-@router.get("/", response_model=list[ServiceAlertRead])
-async def list_alerts(db: _DB) -> list[ServiceAlert]:
+@router.get("/", response_model=ServiceAlertListResponse)
+async def list_alerts(
+    db: _DB,
+    page: int = 1,
+    limit: int = 20,
+    sort: str = "newest",
+    search: str = "",
+) -> ServiceAlertListResponse:
     """
-    List all service alerts (public endpoint).
+    List service alerts with pagination (public endpoint).
     
-    Returns all alerts with their translations, active periods, and informed entities.
+    Returns alerts with their translations, active periods, and informed entities.
     Alerts without periods (permanent/ongoing) appear first,
-    then alerts sorted by first start_time (latest/newest first, descending).
+    then alerts sorted by first start_time.
+    
+    Query parameters:
+    - page: Page number (1-indexed, default: 1)
+    - limit: Items per page (default: 20, max: 100)
+    - sort: Sort order - "newest" (default) or "oldest"
+    - search: Search filter (searches in header_text of translations)
     """
+    # Validate and clamp parameters
+    page = max(1, page)
+    limit = max(1, min(100, limit))
+    offset = (page - 1) * limit
+    sort = sort.lower() if sort in ["newest", "oldest"] else "newest"
+    search = search.strip()
+    
     # Subquery to get the minimum (first) start_time for each alert
     subq = (
         select(
@@ -52,23 +73,62 @@ async def list_alerts(db: _DB) -> list[ServiceAlert]:
         .subquery()
     )
     
+    # Build WHERE conditions for search filter
+    where_conditions = []
+    if search:
+        search_pattern = f"%{search}%"
+        # Filter by alerts that have matching translations
+        where_conditions.append(
+            ServiceAlert.id.in_(
+                select(ServiceAlertTranslation.alert_id)
+                .where(ServiceAlertTranslation.header_text.ilike(search_pattern))
+                .distinct()
+            )
+        )
+    
+    # Count total alerts (with search filter applied)
+    count_stmt = select(func.count(ServiceAlert.id))
+    if where_conditions:
+        count_stmt = count_stmt.where(*where_conditions)
+    count_result = await db.execute(count_stmt)
+    total = count_result.scalar_one()
+    
+    # Determine sort direction
+    sort_expr = subq.c.first_start.desc() if sort == "newest" else subq.c.first_start.asc()
+    
+    # Get paginated alerts
     stmt = (
         select(ServiceAlert)
         .outerjoin(subq, ServiceAlert.id == subq.c.alert_id)
-        .options(
-            selectinload(ServiceAlert.translations),
-            selectinload(ServiceAlert.active_periods),
-            selectinload(ServiceAlert.informed_entities),
-        )
-        .order_by(
-            # Alerts without periods first (first_start IS NULL = 0, else = 1)
-            case((subq.c.first_start.is_(None), 0), else_=1),
-            # Then sort by start_time descending
-            subq.c.first_start.desc().nulls_last()
-        )
     )
+    
+    # Apply search filter
+    if where_conditions:
+        stmt = stmt.where(*where_conditions)
+    
+    stmt = stmt.options(
+        selectinload(ServiceAlert.translations),
+        selectinload(ServiceAlert.active_periods),
+        selectinload(ServiceAlert.informed_entities),
+    ).order_by(
+        # Alerts without periods first (first_start IS NULL = 0, else = 1)
+        case((subq.c.first_start.is_(None), 0), else_=1),
+        # Then sort by start_time
+        sort_expr.nulls_last()
+    ).offset(offset).limit(limit)
+    
     result = await db.execute(stmt)
-    return list(result.scalars().all())
+    items = list(result.scalars().all())
+    
+    total_pages = (total + limit - 1) // limit if total > 0 else 1
+    
+    return ServiceAlertListResponse(
+        total=total,
+        page=page,
+        limit=limit,
+        total_pages=total_pages,
+        items=items,
+    )
 
 
 @router.get("/{alert_id}", response_model=ServiceAlertRead)
@@ -278,6 +338,10 @@ async def update_alert(
         )
     )
     result = await db.execute(stmt)
+    
+    # Invalidate GTFS-RT cache
+    invalidate_gtfs_rt_cache()
+    
     return result.scalar_one()
 
 
@@ -308,6 +372,9 @@ async def delete_alert(
     
     await db.delete(alert)
     await db.commit()
+    
+    # Invalidate GTFS-RT cache
+    invalidate_gtfs_rt_cache()
 
 
 @router.post("/{alert_id}/toggle-active", response_model=ServiceAlertRead)
@@ -344,6 +411,9 @@ async def toggle_alert_active(
     
     await db.commit()
     await db.refresh(alert)
+    
+    # Invalidate GTFS-RT cache
+    invalidate_gtfs_rt_cache()
     
     # Reload with relationships
     stmt = (

@@ -6,6 +6,7 @@ and real-time updates including service alerts.
 """
 
 import logging
+import time
 import uuid
 from typing import Any
 
@@ -151,10 +152,17 @@ class GtfsRtAdapter(BaseAdapter):
         
         # Fetch protobuf data
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
                 response = await client.get(endpoint, headers=headers)
                 response.raise_for_status()
+                
+                # Log final URL after redirects
+                final_url = str(response.url)
+                if final_url != endpoint:
+                    logger.info(f"[GtfsRtAdapter] Redirected to: {final_url}")
+                
                 protobuf_data = response.content
+                logger.info(f"[GtfsRtAdapter] Fetched {len(protobuf_data)} bytes from feed")
         except httpx.HTTPError as e:
             logger.error(f"[GtfsRtAdapter] HTTP error fetching feed: {e}")
             raise ValueError(f"Failed to fetch GTFS-RT feed: {e}")
@@ -177,6 +185,8 @@ class GtfsRtAdapter(BaseAdapter):
         source_name = self.config.get("_source_name", "gtfsrt")
         
         alerts = []
+        filtered_not_yet_valid = 0
+        filtered_expired = 0
         
         for entity in feed.entity:
             if not entity.HasField("alert"):
@@ -243,6 +253,37 @@ class GtfsRtAdapter(BaseAdapter):
                     "end_time": end_time,
                 })
             
+            # Filter alerts based on validity period
+            if active_periods:
+                current_timestamp = int(time.time())
+                
+                # Check if alert starts more than 1 month (30 days) in the future
+                earliest_start = min(
+                    (p["start_time"] for p in active_periods if p["start_time"] is not None),
+                    default=None
+                )
+                one_month_in_seconds = 30 * 24 * 60 * 60  # 2592000 seconds
+                if earliest_start is not None and earliest_start > (current_timestamp + one_month_in_seconds):
+                    logger.debug(
+                        f"[GtfsRtAdapter] Skipping alert {entity.id}: starts more than 1 month in the future "
+                        f"(starts at {earliest_start}, now is {current_timestamp})"
+                    )
+                    filtered_not_yet_valid += 1
+                    continue
+                
+                # Check if alert has expired (latest end_time is in the past)
+                latest_end = max(
+                    (p["end_time"] for p in active_periods if p["end_time"] is not None),
+                    default=None
+                )
+                if latest_end is not None and latest_end < current_timestamp:
+                    logger.debug(
+                        f"[GtfsRtAdapter] Skipping alert {entity.id}: expired "
+                        f"(ended at {latest_end}, now is {current_timestamp})"
+                    )
+                    filtered_expired += 1
+                    continue
+            
             # Parse informed entities
             informed_entities = []
             for entity_selector in alert.informed_entity:
@@ -266,6 +307,14 @@ class GtfsRtAdapter(BaseAdapter):
                 "informed_entities": informed_entities,
             })
         
-        logger.info(f"[GtfsRtAdapter] Transformed {len(alerts)} alerts")
+        # Log filtering statistics
+        total_filtered = filtered_not_yet_valid + filtered_expired
+        if total_filtered > 0:
+            logger.info(
+                f"[GtfsRtAdapter] Filtered {total_filtered} alerts: "
+                f"{filtered_not_yet_valid} not yet valid, {filtered_expired} expired"
+            )
+        
+        logger.info(f"[GtfsRtAdapter] Transformed {len(alerts)} valid alerts")
         
         return alerts

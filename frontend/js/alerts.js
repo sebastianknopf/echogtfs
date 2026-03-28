@@ -7,6 +7,10 @@ const alerts = (() => {
   let _sources = [];
   let _filterText = '';
   let _sortOrder = 'newest';
+  let _currentPage = 1;
+  let _totalPages = 1;
+  let _total = 0;
+  let _filterTimeout = null; // For debouncing filter input
   
   // Cache for GTFS entity data to avoid redundant API calls
   let _agenciesCache = null;
@@ -95,6 +99,25 @@ const alerts = (() => {
     return enriched;
   }
 
+  // Get page from URL parameter
+  function _getPageFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    const page = parseInt(params.get('page'), 10);
+    return (page && page > 0) ? page : 1;
+  }
+  
+  // Set page in URL parameter
+  function _setPageInURL(page) {
+    const params = new URLSearchParams(window.location.search);
+    if (page === 1) {
+      params.delete('page');
+    } else {
+      params.set('page', page);
+    }
+    const newURL = params.toString() ? `?${params}` : window.location.pathname;
+    window.history.pushState({}, '', newURL);
+  }
+
   async function _loadAlerts() {
     const container = ui.el('alerts-content');
     container.innerHTML = '<div class="panel__loading">Wird geladen ...</div>';
@@ -102,9 +125,12 @@ const alerts = (() => {
     // Clear cache when reloading alerts to get fresh data
     _clearCache();
     
+    // Get page from URL
+    _currentPage = _getPageFromURL();
+    
     try {
       // Load alerts and sources (if user has poweruser rights)
-      const requests = [api.getAlerts()];
+      const requests = [api.getAlerts(_currentPage, 20, _sortOrder, _filterText)];
       
       if (_isPoweruser()) {
         requests.push(api.getSources().catch(() => []));
@@ -112,7 +138,14 @@ const alerts = (() => {
         requests.push(Promise.resolve([]));
       }
       
-      [_alerts, _sources] = await Promise.all(requests);
+      const [alertsResponse, sources] = await Promise.all(requests);
+      
+      _alerts = alertsResponse.items;
+      _currentPage = alertsResponse.page;
+      _totalPages = alertsResponse.total_pages;
+      _total = alertsResponse.total;
+      _sources = sources;
+      
       await _renderAlertsList();
     } catch (err) {
       container.innerHTML = '<div class="panel__placeholder">Fehler beim Laden der Meldungen.</div>';
@@ -151,53 +184,52 @@ const alerts = (() => {
 
   // Sort alerts based on current sort order
   function _sortAlerts(alerts) {
-    return [...alerts].sort((a, b) => {
-      const timeA = _getAlertStartTime(a);
-      const timeB = _getAlertStartTime(b);
-      
-      if (_sortOrder === 'newest') {
-        return timeB - timeA;
-      } else {
-        return timeA - timeB;
-      }
-    });
+    // Sorting is now done on the backend, no need to sort here
+    return alerts;
   }
 
   async function _renderAlertsList() {
     const container = ui.el('alerts-content');
     if (!_alerts.length) {
-      container.innerHTML = '<div class="panel__placeholder">Aktuell sind noch keine Meldungen verfügbar.</div>';
+      const message = _filterText 
+        ? '<div class="panel__placeholder">Keine Meldungen entsprechen dem Filter.</div>'
+        : '<div class="panel__placeholder">Aktuell sind noch keine Meldungen verfügbar.</div>';
+      container.innerHTML = message;
       return;
     }
     
-    // Filter alerts
-    let filteredAlerts = _alerts.filter(alert => {
-      if (!_filterText) return true;
-      
-      // Get title from translations
-      const firstTrans = alert.translations.find(t => t.language === 'de-DE' || t.language === 'de') || alert.translations[0] || {};
-      const title = firstTrans.header_text || '';
-      
-      return _matchesFilter(title, _filterText);
-    });
-    
-    // Sort alerts
-    filteredAlerts = _sortAlerts(filteredAlerts);
-    
-    if (!filteredAlerts.length) {
-      container.innerHTML = '<div class="panel__placeholder">Keine Meldungen entsprechen dem Filter.</div>';
-      return;
-    }
+    // No local filtering needed - backend handles it
+    const displayAlerts = _alerts;
     
     container.innerHTML = '<ul class="alert-list"></ul>';
     const list = container.querySelector('.alert-list');
     
-    for (const alert of filteredAlerts) {
+    // Create skeleton placeholders for all alerts
+    const skeletonItems = [];
+    for (let i = 0; i < displayAlerts.length; i++) {
+      const skeleton = document.createElement('li');
+      skeleton.className = 'alert-list-item alert-list-item--loading';
+      skeleton.innerHTML = `
+        <div class="alert-skeleton">
+          <div class="alert-skeleton__spinner"></div>
+          <div class="alert-skeleton__content">
+            <div class="alert-skeleton__line alert-skeleton__line--title"></div>
+            <div class="alert-skeleton__line alert-skeleton__line--subtitle"></div>
+          </div>
+        </div>
+      `;
+      list.appendChild(skeleton);
+      skeletonItems.push(skeleton);
+    }
+    
+    // Render alerts one by one, replacing skeletons
+    for (let i = 0; i < displayAlerts.length; i++) {
+      const alert = displayAlerts[i];
       const item = document.createElement('li');
       item.className = 'alert-list-item' + (alert.is_active ? '' : ' alert-list-item--inactive');
       
       // Get first translation (prefer German)
-      const firstTrans = alert.translations.find(t => t.language === 'de-DE' || t.language === 'de') || alert.translations[0] || {};
+      const firstTrans = alert.translations.find(t => t.language.startsWith('de')) || alert.translations[0] || {};
       const title = firstTrans.header_text || 'Keine Überschrift';
       
       // Get start date from first active period and end date from last period
@@ -237,12 +269,16 @@ const alerts = (() => {
       }
       const sourceBadge = `<span class="badge badge--system">${ui.esc(sourceName)}</span>`;
       
-      // Build entity badges with name resolution
+      // Build entity badges with name resolution (limit to first 10 in list view)
       let entityBadges = '';
       let hasResolutionErrors = false;
       if (alert.informed_entities && alert.informed_entities.length > 0) {
+        const maxEntitiesInList = 10;
+        const entitiesToResolve = alert.informed_entities.slice(0, maxEntitiesInList);
+        const hasMoreEntities = alert.informed_entities.length > maxEntitiesInList;
+        
         const enrichedEntities = await Promise.all(
-          alert.informed_entities.map(entity => _enrichEntityWithNames(entity))
+          entitiesToResolve.map(entity => _enrichEntityWithNames(entity))
         );
         
         hasResolutionErrors = enrichedEntities.some(e => e.hasResolutionError);
@@ -257,6 +293,11 @@ const alerts = (() => {
             `<span class="badge badge--entity">${ui.esc(label)}</span>`
           ).join('');
         }).join('');
+        
+        // Add "..." badge if there are more entities
+        if (hasMoreEntities) {
+          entityBadges += '<span class="badge badge--entity">...</span>';
+        }
       }
       
       item.innerHTML = `
@@ -298,10 +339,68 @@ const alerts = (() => {
         </div>
       `;
       
-      list.appendChild(item);
+      // Replace skeleton with actual content
+      list.replaceChild(item, skeletonItems[i]);
     }
     
     if (window.initRipples) initRipples(container);
+    
+    // Render pagination controls
+    _renderPagination(container);
+  }
+  
+  function _renderPagination(container) {
+    // Only show pagination if there are multiple pages
+    if (_totalPages <= 1) return;
+    
+    const paginationHTML = `
+      <div class="pagination">
+        <div class="pagination__info">
+          Seite ${_currentPage} von ${_totalPages} (${_total} Meldungen)
+        </div>
+        <div class="pagination__controls">
+          <button class="pagination__btn" data-page="1" ${_currentPage === 1 ? 'disabled' : ''}>
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M18.41 16.59L13.82 12l4.59-4.59L17 6l-6 6 6 6 1.41-1.41zM6 6h2v12H6V6z"/>
+            </svg>
+          </button>
+          <button class="pagination__btn" data-page="${_currentPage - 1}" ${_currentPage === 1 ? 'disabled' : ''}>
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12l4.58-4.59z"/>
+            </svg>
+          </button>
+          <span class="pagination__pages">${_currentPage} / ${_totalPages}</span>
+          <button class="pagination__btn" data-page="${_currentPage + 1}" ${_currentPage === _totalPages ? 'disabled' : ''}>
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6-6-6z"/>
+            </svg>
+          </button>
+          <button class="pagination__btn" data-page="${_totalPages}" ${_currentPage === _totalPages ? 'disabled' : ''}>
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M5.59 7.41L10.18 12l-4.59 4.59L7 18l6-6-6-6-1.41 1.41zM16 6h2v12h-2V6z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    `;
+    
+    container.insertAdjacentHTML('beforeend', paginationHTML);
+    
+    // Add click handlers for pagination buttons
+    container.querySelectorAll('.pagination__btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const page = parseInt(btn.dataset.page, 10);
+        if (page && page !== _currentPage) {
+          _goToPage(page);
+        }
+      });
+    });
+  }
+  
+  async function _goToPage(page) {
+    _currentPage = page;
+    _setPageInURL(page);
+    await _loadAlerts();
   }
 
  
@@ -309,7 +408,7 @@ const alerts = (() => {
     const alert = _alerts.find(a => a.id === alertId);
     if (!alert) return;
     
-    const deTrans = alert.translations.find(t => t.language === 'de-DE' || t.language === 'de') || {};
+    const deTrans = alert.translations.find(t => t.language.startsWith('de')) || {};
     const header = deTrans.header_text || 'Unbenannte Meldung';
     
     const confirmed = await ui.openConfirmModal(
@@ -530,7 +629,20 @@ const alerts = (() => {
 
   function _handleFilterChange(e) {
     _filterText = e.target.value.trim();
-    _renderAlertsList();
+    
+    // Clear existing timeout
+    if (_filterTimeout) {
+      clearTimeout(_filterTimeout);
+    }
+    
+    // Debounce: wait 300ms after user stops typing
+    _filterTimeout = setTimeout(() => {
+      // Reset to first page when filtering
+      _currentPage = 1;
+      _setPageInURL(1);
+      // Reload alerts with filter from backend
+      _loadAlerts();
+    }, 300);
   }
 
   function _toggleSortOrder() {
@@ -545,8 +657,10 @@ const alerts = (() => {
     // Update button label
     _updateSortButton();
     
-    // Re-render list
-    _renderAlertsList();
+    // Sort order is now handled by backend, reload alerts
+    _currentPage = 1; // Reset to first page when changing sort
+    _setPageInURL(1);
+    _loadAlerts();
   }
 
   function _updateSortButton() {
@@ -582,6 +696,11 @@ const alerts = (() => {
     if (sortBtn) {
       sortBtn.addEventListener('click', _toggleSortOrder);
     }
+    
+    // Handle browser back/forward navigation
+    window.addEventListener('popstate', () => {
+      _loadAlerts();
+    });
   }
 
   async function load() {

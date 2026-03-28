@@ -126,8 +126,12 @@ const api = (() => {
     },
 
     // Alerts
-    getAlerts() {
-      return request('/alerts/');
+    getAlerts(page = 1, limit = 20, sort = 'newest', search = '') {
+      const params = new URLSearchParams({ page, limit, sort });
+      if (search) {
+        params.set('search', search);
+      }
+      return request(`/alerts/?${params}`);
     },
 
     getAlert(id) {
@@ -732,17 +736,12 @@ const ui = (() => {
   }
   
   // Add translation item
-  function _addTranslationItem(lang = 'de-DE', headerText = '', descText = '', url = '') {
+  function _addTranslationItem(lang = 'de', headerText = '', descText = '', url = '') {
     const transId = _translationCounter++;
     const container = el('alert-translations-container');
     
-    // Normalize language code for backwards compatibility
-    const normalizedLang = lang.includes('-') ? lang : 
-      (lang === 'de' ? 'de-DE' : 
-       lang === 'en' ? 'en-US' : 
-       lang === 'fr' ? 'fr-FR' : 
-       lang === 'it' ? 'it-IT' : 
-       lang === 'es' ? 'es-ES' : lang);
+    // Normalize to BCP47 base language code (remove region)
+    const normalizedLang = lang.split('-')[0];
     
     const transDiv = document.createElement('div');
     transDiv.className = 'alert-translation-item';
@@ -758,12 +757,11 @@ const ui = (() => {
       <div class="alert-period-item__fields">
         <div class="md-field" style="max-width: 200px;">
           <select class="md-field__input translation-lang">
-            <option value="de-DE" ${normalizedLang === 'de-DE' ? 'selected' : ''}>Deutsch (DE)</option>
-            <option value="en-US" ${normalizedLang === 'en-US' ? 'selected' : ''}>English (US)</option>
-            <option value="en-GB" ${normalizedLang === 'en-GB' ? 'selected' : ''}>English (GB)</option>
-            <option value="fr-FR" ${normalizedLang === 'fr-FR' ? 'selected' : ''}>Français (FR)</option>
-            <option value="it-IT" ${normalizedLang === 'it-IT' ? 'selected' : ''}>Italiano (IT)</option>
-            <option value="es-ES" ${normalizedLang === 'es-ES' ? 'selected' : ''}>Español (ES)</option>
+            <option value="de" ${normalizedLang === 'de' ? 'selected' : ''}>Deutsch</option>
+            <option value="en" ${normalizedLang === 'en' ? 'selected' : ''}>English</option>
+            <option value="fr" ${normalizedLang === 'fr' ? 'selected' : ''}>Français</option>
+            <option value="it" ${normalizedLang === 'it' ? 'selected' : ''}>Italiano</option>
+            <option value="es" ${normalizedLang === 'es' ? 'selected' : ''}>Español</option>
           </select>
           <label class="md-field__label">Sprache</label>
         </div>
@@ -1181,7 +1179,7 @@ const ui = (() => {
     const content = el('view-alert-content');
     
     // Set modal title
-    const firstTrans = alert.translations.find(t => t.language === 'de') || alert.translations[0] || {};
+    const firstTrans = alert.translations.find(t => t.language.startsWith('de')) || alert.translations[0] || {};
     const title = firstTrans.header_text || 'Meldung anzeigen';
     el('view-alert-title').textContent = title;
     
