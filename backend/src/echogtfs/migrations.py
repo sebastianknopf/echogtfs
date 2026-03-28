@@ -16,6 +16,35 @@ logger = logging.getLogger(__name__)
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
 
+def split_sql_statements(sql_content: str) -> list[str]:
+    """
+    Split SQL content into individual statements.
+    Handles single-line comments (--) and preserves multi-line statements.
+    Returns a list of executable SQL statements.
+    """
+    # Remove single-line comments (-- comments)
+    lines = []
+    for line in sql_content.split('\n'):
+        # Find comment start (if not in a string)
+        comment_pos = line.find('--')
+        if comment_pos != -1:
+            # Simple approach: take everything before --
+            line = line[:comment_pos]
+        lines.append(line)
+    
+    # Join back and split by semicolon
+    cleaned_sql = '\n'.join(lines)
+    
+    # Split by semicolon
+    statements = []
+    for stmt in cleaned_sql.split(';'):
+        stmt = stmt.strip()
+        if stmt:  # Skip empty statements
+            statements.append(stmt)
+    
+    return statements
+
+
 async def run_migrations(engine: AsyncEngine) -> None:
     """
     Execute all pending database migrations in sequential order.
@@ -52,7 +81,13 @@ async def run_migrations(engine: AsyncEngine) -> None:
             
             # Read and execute the migration SQL
             sql_content = migration_file.read_text(encoding="utf-8")
-            await conn.execute(text(sql_content))
+            
+            # Split into individual statements (asyncpg doesn't support multiple commands)
+            statements = split_sql_statements(sql_content)
+            
+            # Execute each statement separately
+            for stmt in statements:
+                await conn.execute(text(stmt))
             
             # Record that this migration has been applied
             await conn.execute(

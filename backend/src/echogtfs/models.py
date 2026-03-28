@@ -120,10 +120,19 @@ class ServiceAlert(Base):
     
     No foreign keys to GTFS static data - entity references are stored
     as strings only for search purposes.
+    
+    Alerts can be internal (created in echogtfs UI) or external (imported
+    from data sources). External alerts have a data_source_id and cannot
+    be edited in the UI.
     """
     __tablename__ = "service_alerts"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    
+    # Data source relation (NULL = internal alert, created in echogtfs UI)
+    data_source_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("data_sources.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     
     # Alert metadata
     cause: Mapped[AlertCause] = mapped_column(String(32), default=AlertCause.UNKNOWN_CAUSE)
@@ -145,6 +154,7 @@ class ServiceAlert(Base):
     )
     
     # Relationships (with cascade delete)
+    data_source: Mapped["DataSource | None"] = relationship(back_populates="alerts")
     translations: Mapped[list["ServiceAlertTranslation"]] = relationship(
         back_populates="alert", cascade="all, delete-orphan"
     )
@@ -166,7 +176,9 @@ class ServiceAlertTranslation(Base):
     __tablename__ = "service_alert_translations"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    alert_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("service_alerts.id"), index=True)
+    alert_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("service_alerts.id", ondelete="CASCADE"), index=True
+    )
     
     # Language code (ISO 639-1: 'de', 'en', 'fr', etc.)
     language: Mapped[str] = mapped_column(String(8), index=True)
@@ -190,7 +202,9 @@ class ServiceAlertActivePeriod(Base):
     __tablename__ = "service_alert_active_periods"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    alert_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("service_alerts.id"), index=True)
+    alert_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("service_alerts.id", ondelete="CASCADE"), index=True
+    )
     
     # Unix timestamps (seconds since epoch)
     # If start is None, active from beginning of time
@@ -219,7 +233,9 @@ class ServiceAlertInformedEntity(Base):
     __tablename__ = "service_alert_informed_entities"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    alert_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("service_alerts.id"), index=True)
+    alert_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("service_alerts.id", ondelete="CASCADE"), index=True
+    )
     
     # GTFS entity references (NO FOREIGN KEYS - just string IDs for search)
     agency_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
@@ -233,3 +249,77 @@ class ServiceAlertInformedEntity(Base):
     
     # Relationship
     alert: Mapped["ServiceAlert"] = relationship(back_populates="informed_entities")
+
+
+# ---------------------------------------------------------------------------
+# Data Sources
+# ---------------------------------------------------------------------------
+
+class DataSource(Base):
+    """
+    External data source configuration.
+    
+    Each data source has a type that determines how it should be processed.
+    Type-specific configuration is stored as JSON string in the config field.
+    Mappings define how GTFS entities map to external data source values.
+    """
+    __tablename__ = "data_sources"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    type: Mapped[str] = mapped_column(String(64), index=True)
+    
+    # Type-specific configuration stored as JSON string
+    config: Mapped[str] = mapped_column(Text, default="{}")
+    
+    # Optional cron expression for automatic updates
+    cron: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    
+    # Last execution timestamp
+    last_run_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    
+    # Relationships (with cascade delete)
+    mappings: Mapped[list["DataSourceMapping"]] = relationship(
+        back_populates="data_source", cascade="all, delete-orphan"
+    )
+    alerts: Mapped[list["ServiceAlert"]] = relationship(
+        back_populates="data_source", cascade="all, delete-orphan"
+    )
+
+
+class DataSourceMapping(Base):
+    """
+    Mapping between GTFS entities and external data source values.
+    
+    Maps external data source keys to GTFS entity IDs. The value field
+    contains the GTFS entity ID (agency_id, route_id, stop_id, etc.).
+    
+    No foreign keys to GTFS static tables - entity references are stored
+    as strings to allow flexibility and to avoid breaking when GTFS data changes.
+    """
+    __tablename__ = "data_source_mappings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    data_source_id: Mapped[int] = mapped_column(Integer, ForeignKey("data_sources.id"), index=True)
+    
+    # GTFS entity type: "agency", "route", "stop", "trip", etc.
+    entity_type: Mapped[str] = mapped_column(String(32), index=True)
+    
+    # Mapping key-value pair
+    # Key: external identifier from data source
+    # Value: GTFS entity ID (the ID field, not a separate entity_id column)
+    key: Mapped[str] = mapped_column(String(128), index=True)
+    value: Mapped[str] = mapped_column(String(512), index=True)
+    
+    # Relationship
+    data_source: Mapped["DataSource"] = relationship(back_populates="mappings")

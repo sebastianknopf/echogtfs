@@ -383,8 +383,6 @@ body {
   opacity: 1;
   pointer-events: auto;
 }
-.toast.is-error   { background: var(--md-error); }
-.toast.is-success { background: #1c6b35; }
 
 /* -- Chips ------------------------------------------------------------------- */
 /* Generic badge component */
@@ -710,6 +708,10 @@ body {
 .icon-btn:focus-visible    { outline: 2px solid var(--md-primary); outline-offset: 2px; }
 .icon-btn--danger          { color: var(--md-on-surface-medium); }
 .icon-btn--danger:hover    { background: var(--md-error-container); color: var(--md-error); }
+.icon-btn--success         { color: var(--md-on-surface-medium); }
+.icon-btn--success:hover   { background: #e8f5e9; color: #2e7d32; }
+.icon-btn--warning         { color: var(--md-on-surface-medium); }
+.icon-btn--warning:hover   { background: #fff3e0; color: #f57c00; }
 .icon-btn .ripple          { background: rgba(0,0,0,.12); }
 
 /* -- Settings panel ---------------------------------------------------------- */
@@ -916,6 +918,69 @@ body {
 }
 .modal__actions   { padding: 8px 16px 16px; display: flex; justify-content: flex-end; gap: 8px; }
 .modal__switches  { display: flex; gap: 24px; flex-wrap: wrap; padding-top: 4px; }
+
+/* -- Modal sections (for data sources) --------------------------------------- */
+.modal__section {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--md-outline-variant);
+}
+
+.modal__section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.modal__section-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--md-on-surface-medium);
+  margin: 0;
+}
+
+/* -- Mapping table ----------------------------------------------------------- */
+.mapping-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .875rem;
+  margin-top: 8px;
+}
+
+.mapping-table th {
+  text-align: left;
+  font-size: .6875rem;
+  font-weight: 600;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--md-on-surface-medium);
+  padding: 8px;
+  border-bottom: 1px solid rgba(0,0,0,.10);
+}
+
+.mapping-table td {
+  padding: 4px;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+  vertical-align: middle;
+}
+
+.mapping-table tr:last-child td { border-bottom: none; }
+
+.mapping-table input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-xs);
+  font-size: .875rem;
+}
+
+.mapping-table input:focus {
+  outline: 2px solid var(--md-primary);
+  outline-offset: -1px;
+}
 
 /* -- View Alert Content (read-only) ------------------------------------------ */
 .view-alert-content {

@@ -175,6 +175,7 @@ async def update_alert(
 ) -> ServiceAlert:
     """
     Update an existing service alert (requires authentication).
+    Only internal alerts (data_source_id IS NULL) can be updated.
     """
     # Get existing alert
     stmt = (
@@ -193,6 +194,13 @@ async def update_alert(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Alert not found"
+        )
+    
+    # Check if alert is external (imported from data source)
+    if alert.data_source_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot edit external alerts from data sources"
         )
     
     # Update basic fields
@@ -281,6 +289,7 @@ async def delete_alert(
 ) -> None:
     """
     Delete a service alert (requires authentication).
+    Only internal alerts (data_source_id IS NULL) can be deleted.
     """
     alert = await db.get(ServiceAlert, alert_id)
     
@@ -290,5 +299,61 @@ async def delete_alert(
             detail="Alert not found"
         )
     
+    # Check if alert is external (imported from data source)
+    if alert.data_source_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cannot delete external alerts from data sources"
+        )
+    
     await db.delete(alert)
     await db.commit()
+
+
+@router.post("/{alert_id}/toggle-active", response_model=ServiceAlertRead)
+async def toggle_alert_active(
+    alert_id: UUID,
+    _: CurrentUser,
+    db: _DB,
+) -> ServiceAlert:
+    """
+    Toggle the is_active flag of a service alert (requires authentication).
+    This is the only operation allowed on external alerts from data sources.
+    """
+    # Get existing alert
+    stmt = (
+        select(ServiceAlert)
+        .where(ServiceAlert.id == alert_id)
+        .options(
+            selectinload(ServiceAlert.translations),
+            selectinload(ServiceAlert.active_periods),
+            selectinload(ServiceAlert.informed_entities),
+        )
+    )
+    result = await db.execute(stmt)
+    alert = result.scalar_one_or_none()
+    
+    if not alert:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Alert not found"
+        )
+    
+    # Toggle is_active
+    alert.is_active = not alert.is_active
+    
+    await db.commit()
+    await db.refresh(alert)
+    
+    # Reload with relationships
+    stmt = (
+        select(ServiceAlert)
+        .where(ServiceAlert.id == alert.id)
+        .options(
+            selectinload(ServiceAlert.translations),
+            selectinload(ServiceAlert.active_periods),
+            selectinload(ServiceAlert.informed_entities),
+        )
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one()

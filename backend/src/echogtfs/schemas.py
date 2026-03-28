@@ -217,6 +217,7 @@ class ServiceAlertUpdate(BaseModel):
 class ServiceAlertRead(BaseModel):
     """Read model for service alerts."""
     id: UUID
+    data_source_id: int | None
     cause: str
     effect: str
     severity_level: str
@@ -227,4 +228,59 @@ class ServiceAlertRead(BaseModel):
     translations: list[ServiceAlertTranslationRead]
     active_periods: list[ServiceAlertActivePeriodRead]
     informed_entities: list[ServiceAlertInformedEntityRead]
+    model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Data Sources
+# ---------------------------------------------------------------------------
+
+class DataSourceMappingCreate(BaseModel):
+    """Mapping data for creating/updating data sources.
+    
+    Maps external keys to GTFS entity IDs:
+    - entity_type: Type of GTFS entity ("agency", "route", "stop", etc.)
+    - key: External identifier from data source
+    - value: GTFS entity ID (agency_id, route_id, stop_id, etc.)
+    """
+    entity_type: str
+    key: str
+    value: str
+
+
+class DataSourceMappingRead(DataSourceMappingCreate):
+    """Read model with ID."""
+    id: int
+    model_config = {"from_attributes": True}
+
+
+class DataSourceCreate(BaseModel):
+    """Create a new data source."""
+    name: str
+    type: str
+    config: str = "{}"
+    cron: str | None = None
+    mappings: list[DataSourceMappingCreate] = []
+
+
+class DataSourceUpdate(BaseModel):
+    """Update an existing data source."""
+    name: str | None = None
+    type: str | None = None
+    config: str | None = None
+    cron: str | None = None
+    mappings: list[DataSourceMappingCreate] | None = None
+
+
+class DataSourceRead(BaseModel):
+    """Read model for data sources."""
+    id: int
+    name: str
+    type: str
+    config: str
+    cron: str | None
+    last_run_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+    mappings: list[DataSourceMappingRead]
     model_config = {"from_attributes": True}
