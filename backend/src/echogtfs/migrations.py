@@ -20,6 +20,7 @@ def split_sql_statements(sql_content: str) -> list[str]:
     """
     Split SQL content into individual statements.
     Handles single-line comments (--) and preserves multi-line statements.
+    Recognizes DO $$ blocks and keeps them intact (doesn't split on semicolons inside $$...$$ blocks).
     Returns a list of executable SQL statements.
     """
     # Remove single-line comments (-- comments)
@@ -32,15 +33,40 @@ def split_sql_statements(sql_content: str) -> list[str]:
             line = line[:comment_pos]
         lines.append(line)
     
-    # Join back and split by semicolon
+    # Join back
     cleaned_sql = '\n'.join(lines)
     
-    # Split by semicolon
+    # Split by semicolon, but respect DO $$ blocks
     statements = []
-    for stmt in cleaned_sql.split(';'):
-        stmt = stmt.strip()
-        if stmt:  # Skip empty statements
-            statements.append(stmt)
+    current_stmt = ""
+    in_dollar_quote = False
+    i = 0
+    
+    while i < len(cleaned_sql):
+        char = cleaned_sql[i]
+        
+        # Check for $$ to toggle dollar-quote state
+        if i + 1 < len(cleaned_sql) and cleaned_sql[i:i+2] == '$$':
+            in_dollar_quote = not in_dollar_quote
+            current_stmt += '$$'
+            i += 2
+            continue
+        
+        # If we hit a semicolon outside of a dollar-quote block, end the statement
+        if char == ';' and not in_dollar_quote:
+            stmt = current_stmt.strip()
+            if stmt:
+                statements.append(stmt)
+            current_stmt = ""
+        else:
+            current_stmt += char
+        
+        i += 1
+    
+    # Add any remaining statement
+    stmt = current_stmt.strip()
+    if stmt:
+        statements.append(stmt)
     
     return statements
 
