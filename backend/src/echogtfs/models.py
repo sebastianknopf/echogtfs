@@ -84,6 +84,13 @@ class AlertCause(str, Enum):
     MEDICAL_EMERGENCY = "MEDICAL_EMERGENCY"
 
 
+class SiriLiteDialect(str, Enum):
+    """SIRI-Lite dialect variants for different regional implementations."""
+    SWISS = "swiss"
+    NORDIC = "nordic"
+    FRANCE = "france"
+
+
 class AlertEffect(str, Enum):
     """GTFS-RT Alert effect enum."""
     NO_SERVICE = "NO_SERVICE"
@@ -164,6 +171,12 @@ class ServiceAlert(Base):
     informed_entities: Mapped[list["ServiceAlertInformedEntity"]] = relationship(
         back_populates="alert", cascade="all, delete-orphan"
     )
+    
+    @property
+    def data_source_name(self) -> str | None:
+        """Return the name of the data source if this is an external alert."""
+        return self.data_source.name if self.data_source else None
+
 
 
 class ServiceAlertTranslation(Base):
@@ -274,6 +287,9 @@ class DataSource(Base):
     
     # Optional cron expression for automatic updates
     cron: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    
+    # Active status - inactive sources don't run and their alerts are deleted
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     
     # Last execution timestamp
     last_run_at: Mapped[datetime | None] = mapped_column(

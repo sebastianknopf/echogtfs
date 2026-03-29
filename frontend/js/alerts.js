@@ -26,25 +26,33 @@ const alerts = (() => {
   // Helper function to get agencies (cached)
   async function _getCachedAgencies() {
     if (_agenciesCache === null) {
-      _agenciesCache = await api.getAgencies();
+      // Store the promise itself to prevent parallel requests
+      _agenciesCache = api.getAgencies();
     }
-    return _agenciesCache;
+    // Await the cached promise (may already be resolved)
+    return await _agenciesCache;
   }
 
   // Helper function to get routes (cached)
   async function _getCachedRoutes(routeId) {
-    if (!_routesCache[routeId]) {
-      _routesCache[routeId] = await api.getRoutes(routeId);
+    // Check if we have already attempted to resolve this route_id
+    if (!_routesCache.hasOwnProperty(routeId)) {
+      // Store the promise itself to prevent parallel requests for the same ID
+      _routesCache[routeId] = api.getRoutes(routeId);
     }
-    return _routesCache[routeId];
+    // Await the cached promise (may already be resolved)
+    return await _routesCache[routeId];
   }
 
   // Helper function to get stops (cached)
   async function _getCachedStops(stopId) {
-    if (!_stopsCache[stopId]) {
-      _stopsCache[stopId] = await api.getStops(stopId);
+    // Check if we have already attempted to resolve this stop_id
+    if (!_stopsCache.hasOwnProperty(stopId)) {
+      // Store the promise itself to prevent parallel requests for the same ID
+      _stopsCache[stopId] = api.getStops(stopId);
     }
-    return _stopsCache[stopId];
+    // Await the cached promise (may already be resolved)
+    return await _stopsCache[stopId];
   }
 
   // Clear all caches
@@ -145,6 +153,15 @@ const alerts = (() => {
       _totalPages = alertsResponse.total_pages;
       _total = alertsResponse.total;
       _sources = sources;
+      
+      // Reset pagination if current page exceeds total pages
+      if (_currentPage > _totalPages && _totalPages > 0) {
+        _currentPage = 1;
+        _setPageInURL(1);
+        // Reload with corrected page
+        await _loadAlerts();
+        return;
+      }
       
       await _renderAlertsList();
     } catch (err) {
@@ -262,11 +279,7 @@ const alerts = (() => {
       
       // Build source badge
       const isInternal = alert.source === 'echogtfs' || !alert.data_source_id;
-      let sourceName = 'Intern';
-      if (!isInternal && alert.data_source_id) {
-        const source = _sources.find(s => s.id === alert.data_source_id);
-        sourceName = source ? source.name : 'Extern';
-      }
+      const sourceName = isInternal ? 'Intern' : (alert.data_source_name || 'Extern');
       const sourceBadge = `<span class="badge badge--system">${ui.esc(sourceName)}</span>`;
       
       // Build entity badges with name resolution (limit to first 10 in list view)
@@ -294,8 +307,13 @@ const alerts = (() => {
           ).join('');
         }).join('');
         
-        // Add "..." badge if there are more entities
-        if (hasMoreEntities) {
+        // Count how many entities could be resolved (have at least one name)
+        const resolvedCount = enrichedEntities.filter(entity => 
+          entity.agency_name || entity.route_name || entity.stop_name
+        ).length;
+        
+        // Add "..." badge if there are more entities AND at least 10 were resolved
+        if (hasMoreEntities && resolvedCount >= 10) {
           entityBadges += '<span class="badge badge--entity">...</span>';
         }
       }

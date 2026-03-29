@@ -405,6 +405,15 @@
             <label class="md-field__label" for="source-cron">Cron-Ausdruck (optional)</label>
             <div class="md-field__helper">z.B. 0 3 * * * für täglich um 3 Uhr</div>
           </div>
+          
+          <div class="modal__switches" style="margin-top: 24px;">
+            <label class="md-switch">
+              <input type="checkbox" id="source-is-active" checked />
+              <span class="md-switch__track"></span>
+              <span class="md-switch__label">Aktiv</span>
+            </label>
+          </div>
+          <div class="md-field__helper">Inaktive Datenquellen führen keine Importe durch und deren Meldungen werden gelöscht.</div>
         </div>
         
         <!-- Tab Panel: Mapping -->

@@ -228,6 +228,8 @@ class ServiceAlertRead(BaseModel):
     translations: list[ServiceAlertTranslationRead]
     active_periods: list[ServiceAlertActivePeriodRead]
     informed_entities: list[ServiceAlertInformedEntityRead]
+    data_source_name: str | None = None
+    
     model_config = {"from_attributes": True}
 
 
@@ -269,6 +271,7 @@ class DataSourceCreate(BaseModel):
     type: str
     config: str = "{}"
     cron: str | None = None
+    is_active: bool = True
     mappings: list[DataSourceMappingCreate] = []
 
 
@@ -278,6 +281,7 @@ class DataSourceUpdate(BaseModel):
     type: str | None = None
     config: str | None = None
     cron: str | None = None
+    is_active: bool | None = None
     mappings: list[DataSourceMappingCreate] | None = None
 
 
@@ -288,6 +292,7 @@ class DataSourceRead(BaseModel):
     type: str
     config: str
     cron: str | None
+    is_active: bool
     last_run_at: datetime | None
     created_at: datetime
     updated_at: datetime

@@ -68,15 +68,20 @@ async def schedule_import_from_cron(db=None):
     row = await db.get(AppSetting, KEY_CRON)
     cron_expr = row.value if row else None
     scheduler = get_scheduler()
-    logger.info(f"[GTFS] Scheduler: remove_all_jobs() called.")
-    scheduler.remove_all_jobs()
+    
+    # Remove only the GTFS import job, not all jobs
+    job_id = "gtfs_import_cron"
+    if scheduler.get_job(job_id):
+        scheduler.remove_job(job_id)
+        logger.info(f"[GTFS] Scheduler: Removed existing GTFS import job")
+    
     if cron_expr:
         try:
             logger.info(f"[GTFS] Scheduler: Setting new cron job: {cron_expr}")
             scheduler.add_job(
                 run_import_task,
                 CronTrigger.from_crontab(cron_expr),
-                id="gtfs_import_cron",
+                id=job_id,
                 replace_existing=True,
             )
             logger.info(f"[GTFS] Scheduler: Cron job set successfully.")

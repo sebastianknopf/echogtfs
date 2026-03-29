@@ -199,6 +199,10 @@ const api = (() => {
       return request(`/sources/${id}/run`, { method: 'POST' });
     },
 
+    toggleSourceActive(id) {
+      return request(`/sources/${id}/toggle-active`, { method: 'POST' });
+    },
+
     // GTFS data for autocomplete
     getAgencies() {
       return request('/gtfs/agencies');

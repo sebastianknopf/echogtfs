@@ -341,6 +341,13 @@ body {
   transform: translateY(-50%) scale(.75);
   color: var(--md-primary);
 }
+
+/* Select elements don't support :placeholder-shown, handle with class */
+.md-field--has-value .md-field__label {
+  top: 14px;
+  transform: translateY(-50%) scale(.75);
+}
+
 .md-field__input:focus { border-color: var(--md-primary); border-width: 2px; }
 
 /* Error state */
@@ -720,7 +727,8 @@ body {
 }
 .user-table tr:last-child td       { border-bottom: none; }
 .user-table tbody tr:hover td      { background: rgba(0,0,0,.025); }
-.user-table__actions               { display: flex; gap: 4px; justify-content: flex-end; }
+.user-table tbody tr.user-table__row--inactive { opacity: 0.6; }
+.user-table__actions               { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
 
 /* Icon buttons (edit / delete) */
 .icon-btn {
@@ -742,6 +750,7 @@ body {
 .icon-btn svg              { width: 20px; height: 20px; flex-shrink: 0; }
 .icon-btn:hover            { background: rgba(0,0,0,.08); color: var(--md-primary); }
 .icon-btn:focus-visible    { outline: 2px solid var(--md-primary); outline-offset: 2px; }
+.icon-btn:disabled         { opacity: 0.38; cursor: not-allowed; pointer-events: none; }
 .icon-btn--danger          { color: var(--md-on-surface-medium); }
 .icon-btn--danger:hover    { background: var(--md-error-container); color: var(--md-error); }
 .icon-btn--success         { color: var(--md-on-surface-medium); }
@@ -954,6 +963,7 @@ body {
 }
 .modal__actions   { padding: 8px 16px 16px; display: flex; justify-content: flex-end; gap: 8px; }
 .modal__switches  { display: flex; gap: 24px; flex-wrap: wrap; padding-top: 4px; }
+.modal__switches + .md-field__helper { margin-top: 8px; margin-left: 0; line-height: 1.5; }
 
 /* -- Modal sections (for data sources) --------------------------------------- */
 .modal__section {
@@ -1384,7 +1394,7 @@ body {
 }
 .md-switch input:checked ~ .md-switch__track          { background: var(--md-primary); }
 .md-switch input:checked ~ .md-switch__track::after   { transform: translateX(16px); }
-.md-switch__label { font-size: .875rem; }
+.md-switch__label { font-size: .875rem; line-height: 1.5; }
 
 /* -- Modal form helpers ------------------------------------------------------ */
 .modal-form-row {

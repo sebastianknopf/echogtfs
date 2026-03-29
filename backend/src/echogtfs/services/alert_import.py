@@ -35,13 +35,16 @@ def get_scheduler() -> AsyncIOScheduler:
 async def schedule_all_data_sources() -> None:
     """
     Load all data sources with cron expressions and register their jobs.
-    Called at application startup.
+    Called at application startup. Only schedules active data sources.
     """
     logger.info("[AlertImport] Loading data sources with cron schedules")
     
     async with AsyncSessionLocal() as db:
         result = await db.execute(
-            select(DataSource).where(DataSource.cron.isnot(None))
+            select(DataSource).where(
+                DataSource.cron.isnot(None),
+                DataSource.is_active == True
+            )
         )
         sources = result.scalars().all()
         
@@ -56,7 +59,7 @@ async def schedule_all_data_sources() -> None:
             if source.cron:
                 await schedule_data_source_import(source.id, source.name, source.cron)
         
-        logger.info(f"[AlertImport] Scheduled {len(sources)} data source import jobs")
+        logger.info(f"[AlertImport] Scheduled {len(sources)} active data source import jobs")
 
 
 async def schedule_data_source_import(source_id: int, source_name: str, cron_expr: str | None) -> None:
@@ -95,6 +98,7 @@ async def run_import_task(source_id: int) -> None:
     """
     Import service alerts from a specific data source.
     Called by the scheduler or manually triggered.
+    Only runs if the data source is active.
     
     Args:
         source_id: Database ID of the data source to import from
@@ -110,6 +114,11 @@ async def run_import_task(source_id: int) -> None:
         
         if not source:
             logger.error(f"[AlertImport] Data source {source_id} not found")
+            return
+        
+        # Check if source is active
+        if not source.is_active:
+            logger.info(f"[AlertImport] Data source {source.name} is inactive, skipping import")
             return
         
         try:

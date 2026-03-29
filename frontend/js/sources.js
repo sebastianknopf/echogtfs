@@ -334,6 +334,10 @@ const sources = (() => {
     const tbody = table.querySelector('tbody');
     _sources.forEach(source => {
       const tr = document.createElement('tr');
+      if (!source.is_active) {
+        tr.classList.add('user-table__row--inactive');
+      }
+      
       const cronText = source.cron || '—';
       const lastRunText = source.last_run_at 
         ? new Date(source.last_run_at).toLocaleString('de-DE', { 
@@ -341,14 +345,21 @@ const sources = (() => {
             timeStyle: 'short' 
           })
         : '—';
+      
+      // Inaktiv badge (like alerts) - will be shown in actions cell
+      const inactiveBadge = !source.is_active ? '<span class="badge badge--system">Inaktiv</span>' : '';
+      
       tr.innerHTML = `
         <td>${ui.esc(source.name)}</td>
         <td>${ui.esc(source.type)}</td>
         <td><code>${ui.esc(cronText)}</code></td>
         <td>${ui.esc(lastRunText)}</td>
         <td><div class="user-table__actions">
+          ${inactiveBadge}
           <button class="icon-btn" data-action="run" data-id="${source.id}"
-            title="Jetzt ausführen" aria-label="Datenquelle ${ui.esc(source.name)} jetzt ausführen" data-ripple>
+            title="${source.is_active ? 'Jetzt ausführen' : 'Quelle ist deaktiviert'}" 
+            aria-label="Datenquelle ${ui.esc(source.name)} jetzt ausführen" 
+            data-ripple ${!source.is_active ? 'disabled' : ''}>
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
           </button>
           <button class="icon-btn" data-action="edit" data-id="${source.id}"
@@ -358,6 +369,10 @@ const sources = (() => {
           <button class="icon-btn icon-btn--danger" data-action="delete" data-id="${source.id}"
             title="Löschen" aria-label="Datenquelle ${ui.esc(source.name)} löschen" data-ripple>
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+          </button>
+          <button class="icon-btn ${source.is_active ? 'icon-btn--success' : 'icon-btn--warning'}" data-action="toggle" data-id="${source.id}"
+            title="${source.is_active ? 'Deaktivieren' : 'Aktivieren'}" aria-label="Datenquelle ${ui.esc(source.name)} ${source.is_active ? 'deaktivieren' : 'aktivieren'}" data-ripple>
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42C17.99 7.86 19 9.81 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.59-5.41L6.17 5.17C4.23 6.82 3 9.26 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z"/></svg>
           </button>
         </div></td>`;
       tbody.appendChild(tr);
@@ -385,7 +400,7 @@ const sources = (() => {
   }
 
   // Source modal management
-  function _openSourceModal({ title, name = '', type = '', config = {}, cron = '', mappings = [] } = {}) {
+  function _openSourceModal({ title, name = '', type = '', config = {}, cron = '', is_active = true, mappings = [] } = {}) {
     ui.el('source-modal-title').textContent = title;
     ui.el('source-name').value = name;
     ui.el('source-name').readOnly = false;
@@ -408,6 +423,7 @@ const sources = (() => {
     _renderConfigFields(type, configObj);
     
     ui.el('source-cron').value = cron || '';
+    ui.el('source-is-active').checked = is_active;
     
     // Initialize mappings
     _initializeMappings(mappings);
@@ -497,6 +513,7 @@ const sources = (() => {
         type: source.type,
         config: configObj,
         cron: source.cron || '',
+        is_active: source.is_active !== undefined ? source.is_active : true,
         mappings: source.mappings || []
       });
       
@@ -513,15 +530,16 @@ const sources = (() => {
     const name = ui.el('source-name').value.trim();
     const type = ui.el('source-type').value;
     const cron = ui.el('source-cron').value.trim();
+    const isActive = ui.el('source-is-active').checked;
 
     if (!name || !type) {
       _setSourceModalError('Name und Typ sind erforderlich.');
       return;
     }
 
-    // Parse config from form
+    // Parse config from form - include input, textarea, and select elements
     let config = {};
-    document.querySelectorAll('#source-config-fields input, #source-config-fields textarea').forEach(input => {
+    document.querySelectorAll('#source-config-fields input, #source-config-fields textarea, #source-config-fields select').forEach(input => {
       const fieldName = input.name.replace('config-', '');
       const value = input.value.trim();
       if (value) {
@@ -539,7 +557,8 @@ const sources = (() => {
         name, 
         type, 
         config: JSON.stringify(config), 
-        cron: cron || null, 
+        cron: cron || null,
+        is_active: isActive,
         mappings 
       };
       if (!_editingSourceId) {
@@ -577,9 +596,79 @@ const sources = (() => {
     }
   }
 
+  async function _toggleSource(sourceId) {
+    try {
+      const result = await api.toggleSourceActive(sourceId);
+      
+      // Update source in local array
+      const source = _sources.find(s => s.id === sourceId);
+      if (source) {
+        // Use result.is_active if available, otherwise toggle manually
+        source.is_active = result?.is_active !== undefined ? result.is_active : !source.is_active;
+      }
+      
+      // Update DOM without full reload
+      const table = document.querySelector('#sources-content table');
+      if (table) {
+        const rows = table.querySelectorAll('tbody tr');
+        rows.forEach(row => {
+          const toggleBtn = row.querySelector(`[data-action="toggle"][data-id="${sourceId}"]`);
+          if (toggleBtn) {
+            const isActive = source.is_active;
+            
+            // Update row inactive class
+            row.classList.toggle('user-table__row--inactive', !isActive);
+            
+            // Update/add/remove inactive badge in actions cell
+            const actionsCell = row.cells[4]; // Last cell
+            if (actionsCell) {
+              const actionsDiv = actionsCell.querySelector('.user-table__actions');
+              if (actionsDiv) {
+                let inactiveBadge = actionsDiv.querySelector('.badge--system');
+                
+                if (!isActive && !inactiveBadge) {
+                  // Add inactive badge at the beginning
+                  const badge = document.createElement('span');
+                  badge.className = 'badge badge--system';
+                  badge.textContent = 'Inaktiv';
+                  actionsDiv.insertBefore(badge, actionsDiv.firstChild);
+                } else if (isActive && inactiveBadge) {
+                  // Remove inactive badge
+                  inactiveBadge.remove();
+                }
+              }
+            }
+            
+            // Update toggle button
+            toggleBtn.classList.toggle('icon-btn--success', isActive);
+            toggleBtn.classList.toggle('icon-btn--warning', !isActive);
+            toggleBtn.title = isActive ? 'Deaktivieren' : 'Aktivieren';
+            
+            // Update run button
+            const runBtn = row.querySelector(`[data-action="run"][data-id="${sourceId}"]`);
+            if (runBtn) {
+              runBtn.disabled = !isActive;
+              runBtn.title = isActive ? 'Jetzt ausführen' : 'Quelle ist deaktiviert';
+            }
+          }
+        });
+      }
+      
+      ui.toast(source.is_active ? 'Datenquelle aktiviert' : 'Datenquelle deaktiviert', 'success');
+    } catch (err) {
+      ui.toast(err.message, 'error');
+    }
+  }
+
   async function _runSource(sourceId) {
     const source = _sources.find(s => s.id === sourceId);
     if (!source) return;
+
+    // Check if source is active
+    if (!source.is_active) {
+      ui.toast('Diese Datenquelle ist deaktiviert und kann nicht ausgeführt werden.', 'error');
+      return;
+    }
 
     try {
       await api.runSourceImport(sourceId);
@@ -609,19 +698,54 @@ const sources = (() => {
       const fieldDiv = document.createElement('div');
       fieldDiv.className = 'md-field';
       
-      const inputType = field.type === 'password' ? 'password' : 
-                        field.type === 'url' ? 'url' : 'text';
-      
       const value = configValues[field.name] || '';
       
-      if (field.type === 'textarea') {
+      // Handle enum type as dropdown
+      if (field.type === 'enum') {
+        const options = field.options || [];
+        const optionsHtml = options.map(opt => 
+          `<option value="${ui.esc(opt)}" ${value === opt ? 'selected' : ''}>${ui.esc(opt)}</option>`
+        ).join('');
+        
+        // Add has-value class if there's a selected value
+        if (value) {
+          fieldDiv.classList.add('md-field--has-value');
+        }
+        
+        fieldDiv.innerHTML = `
+          <select class="md-field__input" name="config-${field.name}" 
+                  ${field.required ? ' required' : ''}>
+            <option value="">-- Bitte auswählen --</option>
+            ${optionsHtml}
+          </select>
+          <label class="md-field__label" for="config-${field.name}">${ui.esc(field.label)}</label>
+          ${field.help_text ? `<div class="md-field__helper">${ui.esc(field.help_text)}</div>` : ''}
+        `;
+        
+        // Add change listener to update label position
+        const select = fieldDiv.querySelector('select');
+        select.addEventListener('change', function() {
+          if (this.value) {
+            fieldDiv.classList.add('md-field--has-value');
+          } else {
+            fieldDiv.classList.remove('md-field--has-value');
+          }
+        });
+      }
+      // Handle textarea type
+      else if (field.type === 'textarea') {
         fieldDiv.innerHTML = `
           <textarea class="md-field__input" name="config-${field.name}" 
                     placeholder=" " ${field.required ? ' required' : ''}>${ui.esc(value)}</textarea>
           <label class="md-field__label" for="config-${field.name}">${ui.esc(field.label)}</label>
           ${field.help_text ? `<div class="md-field__helper">${ui.esc(field.help_text)}</div>` : ''}
         `;
-      } else {
+      }
+      // Handle text, url, password types
+      else {
+        const inputType = field.type === 'password' ? 'password' : 
+                          field.type === 'url' ? 'url' : 'text';
+        
         fieldDiv.innerHTML = `
           <input class="md-field__input" type="${inputType}" name="config-${field.name}" 
                  value="${ui.esc(value)}" placeholder=" " ${field.required ? ' required' : ''} />
@@ -714,6 +838,9 @@ const sources = (() => {
         break;
       case 'delete':
         _deleteSource(sourceId);
+        break;
+      case 'toggle':
+        _toggleSource(sourceId);
         break;
     }
   }

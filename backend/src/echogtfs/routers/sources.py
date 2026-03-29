@@ -11,11 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from echogtfs.database import get_db
-from echogtfs.models import DataSource, DataSourceMapping, User
+from echogtfs.models import DataSource, DataSourceMapping, ServiceAlert, User
 from echogtfs.schemas import DataSourceCreate, DataSourceRead, DataSourceUpdate
 from echogtfs.security import CurrentPoweruser
 from echogtfs.services.adapters import ADAPTER_REGISTRY
 from echogtfs.services.alert_import import schedule_data_source_import, run_import_task
+from echogtfs.routers.realtime import invalidate_gtfs_rt_cache
 
 router = APIRouter()
 
@@ -81,6 +82,7 @@ async def create_source(
         type=source_data.type,
         config=source_data.config,
         cron=source_data.cron,
+        is_active=source_data.is_active,
     )
     db.add(source)
     await db.flush()  # Get the ID
@@ -98,8 +100,8 @@ async def create_source(
     await db.commit()
     await db.refresh(source)
     
-    # Schedule cron job if cron expression is set
-    if source.cron:
+    # Schedule cron job if active and cron expression is set
+    if source.is_active and source.cron:
         await schedule_data_source_import(source.id, source.name, source.cron)
     
     # Load relationships
@@ -187,6 +189,28 @@ async def update_source(
     if source_data.cron is not None:
         source.cron = source_data.cron
     
+    # Handle is_active changes
+    if source_data.is_active is not None:
+        old_status = source.is_active
+        source.is_active = source_data.is_active
+        
+        # If deactivating, delete all alerts from this source
+        if old_status and not source.is_active:
+            stmt_delete = delete(ServiceAlert).where(ServiceAlert.data_source_id == source_id)
+            result_delete = await db.execute(stmt_delete)
+            deleted_count = result_delete.rowcount
+            
+            # Log the deletion
+            import logging
+            logger = logging.getLogger("uvicorn")
+            logger.info(
+                f"Deactivated data source {source_id} '{source.name}': "
+                f"Deleted {deleted_count} associated alerts"
+            )
+            
+            # Invalidate GTFS-RT cache when alerts are deleted
+            invalidate_gtfs_rt_cache()
+    
     # Replace mappings if provided
     if source_data.mappings is not None:
         # Delete existing mappings
@@ -209,8 +233,12 @@ async def update_source(
     
     await db.commit()
     
-    # Update cron job
-    await schedule_data_source_import(source.id, source.name, source.cron)
+    # Update cron job: only schedule if active, otherwise remove
+    if source.is_active and source.cron:
+        await schedule_data_source_import(source.id, source.name, source.cron)
+    else:
+        # Remove cron job if inactive or no cron expression
+        await schedule_data_source_import(source.id, source.name, None)
     
     # Reload with relationships
     result = await db.execute(
@@ -273,6 +301,80 @@ async def run_source_import(
     asyncio.create_task(run_import_task(source_id))
     
     return {"message": f"Import for data source '{source.name}' has been triggered"}
+
+
+@router.post("/{source_id}/toggle-active", response_model=DataSourceRead)
+async def toggle_source_active(
+    source_id: int,
+    current_user: CurrentPoweruser,
+    db: AsyncSession = Depends(get_db),
+) -> DataSource:
+    """
+    Toggle the is_active flag of a data source (requires poweruser/admin).
+    When deactivating, all alerts from this source will be deleted.
+    
+    Returns:
+        Updated data source
+    """
+    # Get existing source with relationships
+    stmt = (
+        select(DataSource)
+        .where(DataSource.id == source_id)
+        .options(selectinload(DataSource.mappings))
+    )
+    result = await db.execute(stmt)
+    source = result.scalar_one_or_none()
+    
+    if not source:
+        raise HTTPException(
+            status_code=404,
+            detail="Data source not found"
+        )
+    
+    # Toggle is_active
+    old_status = source.is_active
+    source.is_active = not source.is_active
+    
+    # If deactivating, delete all alerts from this source
+    if old_status and not source.is_active:
+        # Delete all alerts associated with this source
+        stmt_delete = delete(ServiceAlert).where(ServiceAlert.data_source_id == source_id)
+        result_delete = await db.execute(stmt_delete)
+        deleted_count = result_delete.rowcount
+        
+        # Log the deletion
+        import logging
+        logger = logging.getLogger("uvicorn")
+        logger.info(
+            f"Deactivated data source {source_id} '{source.name}': "
+            f"Deleted {deleted_count} associated alerts"
+        )
+    
+    await db.commit()
+    await db.refresh(source)
+    
+    # Update cron job: remove if deactivated, add if activated
+    if source.is_active and source.cron:
+        # Re-schedule the cron job when activating
+        await schedule_data_source_import(source.id, source.name, source.cron)
+    elif not source.is_active:
+        # Remove the cron job when deactivating
+        await schedule_data_source_import(source.id, source.name, None)
+    
+    # Invalidate GTFS-RT cache
+    invalidate_gtfs_rt_cache()
+    
+    # Invalidate GTFS-RT cache
+    invalidate_gtfs_rt_cache()
+    
+    # Reload with relationships
+    stmt = (
+        select(DataSource)
+        .where(DataSource.id == source.id)
+        .options(selectinload(DataSource.mappings))
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one()
 
 
 @router.get("/{source_id}/mappings/{entity_type}/export")

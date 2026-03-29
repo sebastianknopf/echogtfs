@@ -110,6 +110,7 @@ async def list_alerts(
         selectinload(ServiceAlert.translations),
         selectinload(ServiceAlert.active_periods),
         selectinload(ServiceAlert.informed_entities),
+        selectinload(ServiceAlert.data_source),
     ).order_by(
         # Alerts without periods first (first_start IS NULL = 0, else = 1)
         case((subq.c.first_start.is_(None), 0), else_=1),
@@ -143,6 +144,7 @@ async def get_alert(alert_id: UUID, db: _DB) -> ServiceAlert:
             selectinload(ServiceAlert.translations),
             selectinload(ServiceAlert.active_periods),
             selectinload(ServiceAlert.informed_entities),
+            selectinload(ServiceAlert.data_source),
         )
     )
     result = await db.execute(stmt)
