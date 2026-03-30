@@ -219,6 +219,7 @@ async def create_alert(
         select(ServiceAlert)
         .where(ServiceAlert.id == alert.id)
         .options(
+            selectinload(ServiceAlert.data_source),
             selectinload(ServiceAlert.translations),
             selectinload(ServiceAlert.active_periods),
             selectinload(ServiceAlert.informed_entities),
@@ -244,6 +245,7 @@ async def update_alert(
         select(ServiceAlert)
         .where(ServiceAlert.id == alert_id)
         .options(
+            selectinload(ServiceAlert.data_source),
             selectinload(ServiceAlert.translations),
             selectinload(ServiceAlert.active_periods),
             selectinload(ServiceAlert.informed_entities),
@@ -334,6 +336,7 @@ async def update_alert(
         select(ServiceAlert)
         .where(ServiceAlert.id == alert.id)
         .options(
+            selectinload(ServiceAlert.data_source),
             selectinload(ServiceAlert.translations),
             selectinload(ServiceAlert.active_periods),
             selectinload(ServiceAlert.informed_entities),
@@ -394,6 +397,7 @@ async def toggle_alert_active(
         select(ServiceAlert)
         .where(ServiceAlert.id == alert_id)
         .options(
+            selectinload(ServiceAlert.data_source),
             selectinload(ServiceAlert.translations),
             selectinload(ServiceAlert.active_periods),
             selectinload(ServiceAlert.informed_entities),
@@ -422,6 +426,7 @@ async def toggle_alert_active(
         select(ServiceAlert)
         .where(ServiceAlert.id == alert.id)
         .options(
+            selectinload(ServiceAlert.data_source),
             selectinload(ServiceAlert.translations),
             selectinload(ServiceAlert.active_periods),
             selectinload(ServiceAlert.informed_entities),
