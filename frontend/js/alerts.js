@@ -282,21 +282,39 @@ const alerts = (() => {
       const sourceName = isInternal ? 'Intern' : (alert.data_source_name || 'Extern');
       const sourceBadge = `<span class="badge badge--system">${ui.esc(sourceName)}</span>`;
       
-      // Build entity badges with name resolution (limit to first 10 in list view)
+      // Build entity badges with name resolution (limit to first 10 successfully resolved)
       let entityBadges = '';
       let hasResolutionErrors = false;
       if (alert.informed_entities && alert.informed_entities.length > 0) {
-        const maxEntitiesInList = 10;
-        const entitiesToResolve = alert.informed_entities.slice(0, maxEntitiesInList);
-        const hasMoreEntities = alert.informed_entities.length > maxEntitiesInList;
+        const maxResolvedEntities = 10;
+        const resolvedEntities = [];
+        let hasMoreEntities = false;
         
-        const enrichedEntities = await Promise.all(
-          entitiesToResolve.map(entity => _enrichEntityWithNames(entity))
-        );
+        // Resolve entities sequentially until we have 10 successful resolutions or run out of entities
+        for (let i = 0; i < alert.informed_entities.length; i++) {
+          const entity = alert.informed_entities[i];
+          const enriched = await _enrichEntityWithNames(entity);
+          
+          // Check if this entity was successfully resolved (has at least one name)
+          const hasName = enriched.agency_name || enriched.route_name || enriched.stop_name;
+          
+          if (hasName) {
+            resolvedEntities.push(enriched);
+            // Stop resolving once we have 10 successful resolutions
+            if (resolvedEntities.length >= maxResolvedEntities) {
+              // Check if there are more entities remaining
+              if (i < alert.informed_entities.length - 1) {
+                hasMoreEntities = true;
+              }
+              break;
+            }
+          } else {
+            hasResolutionErrors = true;
+          }
+        }
         
-        hasResolutionErrors = enrichedEntities.some(e => e.hasResolutionError);
-        
-        entityBadges = enrichedEntities.map(entity => {
+        // Build badges from resolved entities
+        entityBadges = resolvedEntities.map(entity => {
           const labels = [];
           if (entity.agency_name) labels.push(entity.agency_name);
           if (entity.route_name) labels.push(entity.route_name);
@@ -307,13 +325,8 @@ const alerts = (() => {
           ).join('');
         }).join('');
         
-        // Count how many entities could be resolved (have at least one name)
-        const resolvedCount = enrichedEntities.filter(entity => 
-          entity.agency_name || entity.route_name || entity.stop_name
-        ).length;
-        
-        // Add "..." badge if there are more entities AND at least 10 were resolved
-        if (hasMoreEntities && resolvedCount >= 10) {
+        // Add "..." badge if there are more entities remaining
+        if (hasMoreEntities) {
           entityBadges += '<span class="badge badge--entity">...</span>';
         }
       }
