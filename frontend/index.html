@@ -406,7 +406,18 @@
             <div class="md-field__helper">z.B. 0 3 * * * für täglich um 3 Uhr</div>
           </div>
           
-          <div class="modal__switches" style="margin-top: 24px;">
+          <div class="md-field">
+            <select class="md-field__input" id="source-invalid-reference-policy" name="invalid_reference_policy" placeholder=" ">
+              <option value="not_specified">keine Angabe</option>
+              <option value="discard_alert">gesamte Meldung verwerfen</option>
+              <option value="discard_invalid">ungültige Bezüge verwerfen</option>
+              <option value="keep_alert">gesamte Meldung deaktivieren</option>
+            </select>
+            <label class="md-field__label" for="source-invalid-reference-policy">Verfahrensweise bei ungültigen Bezügen</label>
+            <div class="md-field__helper">Definiert, wie mit Meldungen umgegangen wird, die auf nicht-existierende GTFS-Objekte verweisen.</div>
+          </div>
+          
+          <div class="modal__switches">
             <label class="md-switch">
               <input type="checkbox" id="source-is-active" checked />
               <span class="md-switch__track"></span>

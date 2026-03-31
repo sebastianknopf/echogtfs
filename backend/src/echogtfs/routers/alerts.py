@@ -20,6 +20,9 @@ from echogtfs.models import (
     ServiceAlertActivePeriod,
     ServiceAlertInformedEntity,
     ServiceAlertTranslation,
+    GtfsAgency,
+    GtfsRoute,
+    GtfsStop,
 )
 from echogtfs.schemas import (
     ServiceAlertCreate,
@@ -33,6 +36,135 @@ from echogtfs.routers.realtime import invalidate_gtfs_rt_cache
 router = APIRouter()
 
 _DB = Annotated[AsyncSession, Depends(get_db)]
+
+
+async def _load_gtfs_entity_names(db: AsyncSession) -> dict[str, dict[str, str]]:
+    """
+    Load all GTFS entity IDs and names into memory for fast resolution.
+    
+    Returns a dictionary mapping entity types to ID -> name mappings:
+    {
+        "agency": {"agency_id_1": "Agency Name 1", ...},
+        "route": {"route_id_1": "Route Name 1", ...},
+        "stop": {"stop_id_1": "Stop Name 1", ...}
+    }
+    """
+    entity_names = {
+        "agency": {},
+        "route": {},
+        "stop": {}
+    }
+    
+    # Load agencies
+    result = await db.execute(select(GtfsAgency.gtfs_id, GtfsAgency.name))
+    entity_names["agency"] = {row[0]: row[1] for row in result.fetchall()}
+    
+    # Load routes (combine short_name and long_name like the frontend does)
+    result = await db.execute(select(GtfsRoute.gtfs_id, GtfsRoute.short_name, GtfsRoute.long_name))
+    for gtfs_id, short_name, long_name in result.fetchall():
+        # Combine names: "short - long" or fallback to whichever is available
+        if short_name and long_name:
+            name = f"{short_name} - {long_name}"
+        elif short_name:
+            name = short_name
+        elif long_name:
+            name = long_name
+        else:
+            name = None
+        if name:
+            entity_names["route"][gtfs_id] = name
+    
+    # Load stops
+    result = await db.execute(select(GtfsStop.gtfs_id, GtfsStop.name))
+    entity_names["stop"] = {row[0]: row[1] for row in result.fetchall()}
+    
+    return entity_names
+
+
+async def _load_gtfs_entity_ids(db: AsyncSession) -> dict[str, set[str]]:
+    """
+    Load all GTFS entity IDs into memory for validation.
+    
+    Returns a dictionary mapping entity types to sets of valid IDs:
+    {
+        "agency": {"agency_id_1", "agency_id_2", ...},
+        "route": {"route_id_1", "route_id_2", ...},
+        "stop": {"stop_id_1", "stop_id_2", ...}
+    }
+    """
+    entity_ids = {
+        "agency": set(),
+        "route": set(),
+        "stop": set()
+    }
+    
+    # Load agencies
+    result = await db.execute(select(GtfsAgency.gtfs_id))
+    entity_ids["agency"] = {row[0] for row in result.fetchall()}
+    
+    # Load routes
+    result = await db.execute(select(GtfsRoute.gtfs_id))
+    entity_ids["route"] = {row[0] for row in result.fetchall()}
+    
+    # Load stops
+    result = await db.execute(select(GtfsStop.gtfs_id))
+    entity_ids["stop"] = {row[0] for row in result.fetchall()}
+    
+    return entity_ids
+
+
+def _validate_entity(
+    entity: ServiceAlertInformedEntity, 
+    entity_ids: dict[str, set[str]]
+) -> bool:
+    """
+    Validate if an informed entity references valid GTFS entities.
+    
+    Args:
+        entity: ServiceAlertInformedEntity to validate
+        entity_ids: Dictionary of valid GTFS IDs from _load_gtfs_entity_ids()
+    
+    Returns:
+        True if all referenced entities are valid, False otherwise
+    """
+    # Check each entity type that is specified
+    if entity.agency_id and entity.agency_id not in entity_ids["agency"]:
+        return False
+    
+    if entity.route_id and entity.route_id not in entity_ids["route"]:
+        return False
+    
+    if entity.stop_id and entity.stop_id not in entity_ids["stop"]:
+        return False
+    
+    return True
+
+
+def _enrich_alerts_with_entity_names(
+    alerts: list[dict], 
+    entity_names: dict[str, dict[str, str]]
+) -> None:
+    """
+    Enrich alert dicts with resolved GTFS entity names.
+    Modifies the alert dicts in-place by adding name fields to informed entities.
+    
+    Args:
+        alerts: List of alert dicts (already serialized from Pydantic)
+        entity_names: Dictionary from _load_gtfs_entity_names()
+    """
+    for alert in alerts:
+        for entity in alert.get("informed_entities", []):
+            # Resolve agency name
+            if entity.get("agency_id"):
+                entity["agency_name"] = entity_names["agency"].get(entity["agency_id"])
+            
+            # Resolve route name
+            if entity.get("route_id"):
+                entity["route_name"] = entity_names["route"].get(entity["route_id"])
+            
+            # Resolve stop name
+            if entity.get("stop_id"):
+                entity["stop_name"] = entity_names["stop"].get(entity["stop_id"])
 
 
 @router.get("/", response_model=ServiceAlertListResponse)
@@ -121,15 +253,21 @@ async def list_alerts(
     result = await db.execute(stmt)
     items = list(result.scalars().all())
     
-    total_pages = (total + limit - 1) // limit if total > 0 else 1
-    
-    return ServiceAlertListResponse(
+    # Convert to Pydantic models first
+    response = ServiceAlertListResponse(
         total=total,
         page=page,
         limit=limit,
-        total_pages=total_pages,
+        total_pages=(total + limit - 1) // limit if total > 0 else 1,
         items=items,
     )
+    
+    # Load GTFS entity names and enrich alert dicts
+    entity_names = await _load_gtfs_entity_names(db)
+    response_dict = response.model_dump()
+    _enrich_alerts_with_entity_names(response_dict["items"], entity_names)
+    
+    return response_dict
 
 
 @router.get("/{alert_id}", response_model=ServiceAlertRead)
@@ -156,7 +294,14 @@ async def get_alert(alert_id: UUID, db: _DB) -> ServiceAlert:
             detail="Alert not found"
         )
     
-    return alert
+    # Convert to Pydantic and then enrich with entity names
+    alert_read = ServiceAlertRead.model_validate(alert)
+    alert_dict = alert_read.model_dump()
+    
+    entity_names = await _load_gtfs_entity_names(db)
+    _enrich_alerts_with_entity_names([alert_dict], entity_names)
+    
+    return alert_dict
 
 
 @router.post("/", response_model=ServiceAlertRead, status_code=status.HTTP_201_CREATED)
@@ -168,6 +313,9 @@ async def create_alert(
     """
     Create a new service alert (requires authentication).
     """
+    # Load GTFS entity IDs for validation
+    entity_ids = await _load_gtfs_entity_ids(db)
+    
     # Create alert
     alert = ServiceAlert(
         cause=payload.cause,
@@ -198,7 +346,7 @@ async def create_alert(
         )
         db.add(period)
     
-    # Add informed entities
+    # Add informed entities with validation
     for entity_data in payload.informed_entities:
         entity = ServiceAlertInformedEntity(
             alert_id=alert.id,
@@ -209,6 +357,8 @@ async def create_alert(
             trip_id=entity_data.trip_id,
             direction_id=entity_data.direction_id,
         )
+        # Validate and set is_valid flag
+        entity.is_valid = _validate_entity(entity, entity_ids)
         db.add(entity)
     
     await db.commit()
@@ -226,7 +376,19 @@ async def create_alert(
         )
     )
     result = await db.execute(stmt)
-    return result.scalar_one()
+    alert = result.scalar_one()
+    
+    # Convert to Pydantic and then enrich with entity names
+    alert_read = ServiceAlertRead.model_validate(alert)
+    alert_dict = alert_read.model_dump()
+    
+    entity_names = await _load_gtfs_entity_names(db)
+    _enrich_alerts_with_entity_names([alert_dict], entity_names)
+    
+    # Invalidate GTFS-RT cache since alerts changed
+    invalidate_gtfs_rt_cache()
+    
+    return alert_dict
 
 
 @router.patch("/{alert_id}", response_model=ServiceAlertRead)
@@ -311,11 +473,14 @@ async def update_alert(
     
     # Replace informed entities if provided
     if payload.informed_entities is not None:
+        # Load GTFS entity IDs for validation
+        entity_ids = await _load_gtfs_entity_ids(db)
+        
         # Delete existing entities
         for entity in alert.informed_entities:
             await db.delete(entity)
         
-        # Add new entities
+        # Add new entities with validation
         for entity_data in payload.informed_entities:
             entity = ServiceAlertInformedEntity(
                 alert_id=alert.id,
@@ -326,6 +491,8 @@ async def update_alert(
                 trip_id=entity_data.trip_id,
                 direction_id=entity_data.direction_id,
             )
+            # Validate and set is_valid flag
+            entity.is_valid = _validate_entity(entity, entity_ids)
             db.add(entity)
     
     await db.commit()
@@ -343,11 +510,19 @@ async def update_alert(
         )
     )
     result = await db.execute(stmt)
+    alert = result.scalar_one()
+    
+    # Convert to Pydantic and then enrich with entity names
+    alert_read = ServiceAlertRead.model_validate(alert)
+    alert_dict = alert_read.model_dump()
+    
+    entity_names = await _load_gtfs_entity_names(db)
+    _enrich_alerts_with_entity_names([alert_dict], entity_names)
     
     # Invalidate GTFS-RT cache
     invalidate_gtfs_rt_cache()
     
-    return result.scalar_one()
+    return alert_dict
 
 
 @router.delete("/{alert_id}", status_code=status.HTTP_204_NO_CONTENT)

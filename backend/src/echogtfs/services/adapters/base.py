@@ -175,6 +175,78 @@ class BaseAdapter(ABC):
         
         return structured_mappings
     
+    async def _load_gtfs_entities(self, db: AsyncSession) -> dict[str, set[str]]:
+        """Load all GTFS entity IDs into memory for fast validation.
+        
+        Returns a dictionary with sets of valid IDs:
+        {
+            "agency": {"agency_1", "agency_2", ...},
+            "route": {"route_1", "route_2", ...},
+            "stop": {"stop_1", "stop_2", ...}
+        }
+        
+        Args:
+            db: Database session
+        """
+        from echogtfs.models import GtfsAgency, GtfsRoute, GtfsStop
+        
+        logger.info("[Adapter] Loading GTFS entities into memory for validation")
+        
+        gtfs_entities = {
+            "agency": set(),
+            "route": set(),
+            "stop": set()
+        }
+        
+        # Load agencies
+        result = await db.execute(select(GtfsAgency.gtfs_id))
+        gtfs_entities["agency"] = {row[0] for row in result.fetchall()}
+        
+        # Load routes
+        result = await db.execute(select(GtfsRoute.gtfs_id))
+        gtfs_entities["route"] = {row[0] for row in result.fetchall()}
+        
+        # Load stops
+        result = await db.execute(select(GtfsStop.gtfs_id))
+        gtfs_entities["stop"] = {row[0] for row in result.fetchall()}
+        
+        logger.info(
+            f"[Adapter] Loaded {len(gtfs_entities['agency'])} agencies, "
+            f"{len(gtfs_entities['route'])} routes, {len(gtfs_entities['stop'])} stops"
+        )
+        
+        return gtfs_entities
+    
+    def _validate_entity(
+        self, 
+        entity_data: dict[str, Any], 
+        gtfs_entities: dict[str, set[str]]
+    ) -> bool:
+        """Validate if an informed entity references valid GTFS entities.
+        
+        Args:
+            entity_data: Dictionary with entity fields (agency_id, route_id, stop_id)
+            gtfs_entities: Dictionary of valid GTFS IDs from _load_gtfs_entities()
+        
+        Returns:
+            True if all referenced entities are valid, False otherwise
+        """
+        # Check each entity type that is specified
+        if entity_data.get("agency_id"):
+            if entity_data["agency_id"] not in gtfs_entities["agency"]:
+                return False
+        
+        if entity_data.get("route_id"):
+            if entity_data["route_id"] not in gtfs_entities["route"]:
+                return False
+        
+        if entity_data.get("stop_id"):
+            if entity_data["stop_id"] not in gtfs_entities["stop"]:
+                return False
+        
+        # If no entities are specified or all specified entities are valid
+        return True
+    
     def _apply_entity_mappings(self, entity_data: dict[str, Any], mappings: dict[str, dict[str, str]]) -> dict[str, Any]:
         """Apply mappings to informed entity data.
         
@@ -214,10 +286,12 @@ class BaseAdapter(ABC):
         
         This method orchestrates the complete sync process:
         1. Fetches alerts from the external source (via fetch_alerts)
-        2. Compares with existing alerts in the database
-        3. Updates existing alerts (preserving is_active flag)
-        4. Inserts new alerts
-        5. Deletes alerts that no longer exist in the source
+        2. Loads GTFS entities for validation
+        3. Compares with existing alerts in the database
+        4. Validates entities according to data source policy
+        5. Updates existing alerts (preserving is_active flag)
+        6. Inserts new alerts
+        7. Deletes alerts that no longer exist in the source
         
         Args:
             db: Database session
@@ -232,15 +306,38 @@ class BaseAdapter(ABC):
             ServiceAlert, 
             ServiceAlertTranslation, 
             ServiceAlertActivePeriod, 
-            ServiceAlertInformedEntity
+            ServiceAlertInformedEntity,
+            DataSource,
+            InvalidReferencePolicy
+        )
+        
+        # Load the data source to get its invalid_reference_policy
+        result = await db.execute(
+            select(DataSource).where(DataSource.id == source_id)
+        )
+        data_source = result.scalar_one()
+        policy = data_source.invalid_reference_policy
+        
+        # Convert string to enum if needed (database stores as string)
+        if isinstance(policy, str):
+            policy = InvalidReferencePolicy(policy)
+        
+        logger.info(
+            f"[{self.get_adapter_type()}] Starting import from '{source_name}' "
+            f"(policy: {policy.value})"
         )
         
         # Fetch alerts from external source
-        logger.info(f"[{self.get_adapter_type()}] Fetching alerts from {source_name}")
         alert_dicts = await self.fetch_alerts()
+        total_fetched = len(alert_dicts)
+        
+        logger.info(f"[{self.get_adapter_type()}] Fetched {total_fetched} alerts from source")
         
         # Load mappings for this data source
         mappings = await self._load_mappings(db, source_id)
+        
+        # Load GTFS entities for validation
+        gtfs_entities = await self._load_gtfs_entities(db)
         
         # Get IDs of alerts from the feed
         incoming_alert_ids = {alert_data["id"] for alert_data in alert_dicts}
@@ -275,11 +372,15 @@ class BaseAdapter(ABC):
             if alert.data_source_id == source_id and aid not in incoming_alert_ids
         }
         
-        logger.info(
-            f"[{self.get_adapter_type()}] Changes for {source_name}: "
-            f"{len(alerts_to_add)} new, {len(alerts_to_update)} updated, "
-            f"{len(alerts_to_delete)} deleted"
-        )
+        # Track alerts that should be deleted due to policy (will be added during processing)
+        policy_based_deletes = set()
+        
+        # Statistics tracking
+        stats_created = 0
+        stats_created_inactive = 0
+        stats_updated = 0
+        stats_deleted = len(alerts_to_delete)
+        stats_policy_discarded = 0
         
         # Delete alerts that are no longer in the feed
         if alerts_to_delete:
@@ -288,25 +389,106 @@ class BaseAdapter(ABC):
             )
         
         # Process incoming alerts
-        processed_count = 0
         for alert_data in alert_dicts:
             alert_id = alert_data["id"]
             
             # Override source with data source name
             alert_data["source"] = source_name
             alert_data["data_source_id"] = source_id
-            processed_count += 1
             
             # Extract nested data
             translations_data = alert_data.pop("translations", [])
             periods_data = alert_data.pop("active_periods", [])
             entities_data = alert_data.pop("informed_entities", [])
             
+            # Apply mappings to all entities and validate them
+            validated_entities = []
+            has_invalid_entity = False
+            
+            for entity_data in entities_data:
+                # Apply mappings to entity data
+                mapped_entity_data = self._apply_entity_mappings(entity_data, mappings)
+                
+                # Validate the mapped entity
+                is_valid = self._validate_entity(mapped_entity_data, gtfs_entities)
+                
+                # Mark entity as valid/invalid
+                mapped_entity_data["is_valid"] = is_valid
+                
+                if not is_valid:
+                    has_invalid_entity = True
+                    logger.debug(
+                        f"[{self.get_adapter_type()}] Invalid entity reference in alert {alert_id}: "
+                        f"{mapped_entity_data}"
+                    )
+                
+                validated_entities.append(mapped_entity_data)
+            
+            # Apply invalid reference policy
+            should_skip_alert = False
+            should_deactivate_alert = False
+            entities_to_create = validated_entities
+            
+            if has_invalid_entity:
+                if policy == InvalidReferencePolicy.DISCARD_ALERT:
+                    # Discard entire alert if any reference is invalid
+                    logger.debug(
+                        f"[{self.get_adapter_type()}] Discarding alert {alert_id} "
+                        f"due to invalid references (policy: {policy.value})"
+                    )
+                    should_skip_alert = True
+                    stats_policy_discarded += 1
+                    
+                    # If the alert already exists, mark it for deletion
+                    if alert_id in existing_alert_ids:
+                        policy_based_deletes.add(alert_id)
+                
+                elif policy == InvalidReferencePolicy.DISCARD_INVALID:
+                    # Keep only valid entities
+                    entities_to_create = [e for e in validated_entities if e["is_valid"]]
+                    
+                    # If no valid entities remain, deactivate the alert
+                    if not entities_to_create:
+                        should_deactivate_alert = True
+                        logger.debug(
+                            f"[{self.get_adapter_type()}] Deactivating alert {alert_id} "
+                            f"- all entity references were invalid (policy: {policy.value})"
+                        )
+                    else:
+                        logger.debug(
+                            f"[{self.get_adapter_type()}] Removed {len(validated_entities) - len(entities_to_create)} "
+                            f"invalid entities from alert {alert_id} (policy: {policy.value})"
+                        )
+                
+                elif policy == InvalidReferencePolicy.KEEP_ALERT:
+                    # Keep all entities but deactivate the alert
+                    should_deactivate_alert = True
+                    logger.debug(
+                        f"[{self.get_adapter_type()}] Deactivating alert {alert_id} "
+                        f"due to invalid references (policy: {policy.value})"
+                    )
+                
+                # policy == InvalidReferencePolicy.NOT_SPECIFIED:
+                # Pass through without changes
+            
+            # Check if alert has no entities at all (either none provided or all removed by policy)
+            # Deactivate such alerts as they have no meaningful content
+            if not entities_to_create and not should_skip_alert:
+                should_deactivate_alert = True
+                logger.debug(
+                    f"[{self.get_adapter_type()}] Deactivating alert {alert_id} - no valid entities"
+                )
+            
+            # Skip this alert if policy dictates
+            if should_skip_alert:
+                continue
+            
             if alert_id in alerts_to_update:
-                # UPDATE existing alert (preserve is_active field)
+                # UPDATE existing alert (preserve is_active field - never overwrite)
                 existing_alert = existing_alerts[alert_id]
                 
                 logger.debug(f"[{self.get_adapter_type()}] Updating alert {alert_id}")
+                stats_updated += 1
                 
                 # Update main alert fields (except is_active)
                 existing_alert.cause = alert_data["cause"]
@@ -314,7 +496,8 @@ class BaseAdapter(ABC):
                 existing_alert.severity_level = alert_data["severity_level"]
                 existing_alert.source = alert_data["source"]
                 existing_alert.data_source_id = source_id  # Ensure data_source_id is set
-                # is_active is intentionally NOT updated to allow manual suppression
+                
+                # is_active is intentionally NOT updated to preserve manual user changes
                 
                 # Delete and recreate child objects (translations, periods, entities)
                 # This is simpler than trying to update each one individually
@@ -350,18 +533,24 @@ class BaseAdapter(ABC):
                     )
                     db.add(period)
                 
-                # Create new informed entities
-                for entity_data in entities_data:
-                    # Apply mappings to entity data
-                    mapped_entity_data = self._apply_entity_mappings(entity_data, mappings)
+                # Create new informed entities (using validated and filtered list)
+                for entity_data in entities_to_create:
                     entity = ServiceAlertInformedEntity(
                         alert_id=alert_id,
-                        **mapped_entity_data
+                        **entity_data
                     )
                     db.add(entity)
             else:
                 # INSERT new alert
-                logger.debug(f"[{self.get_adapter_type()}] Inserting new alert {alert_id}")
+                logger.debug(f"[{self.get_adapter_type()}] Creating new alert {alert_id}")
+                
+                # Set is_active based on policy
+                if should_deactivate_alert:
+                    alert_data["is_active"] = False
+                    stats_created_inactive += 1
+                
+                stats_created += 1
+                
                 alert = ServiceAlert(**alert_data)
                 db.add(alert)
                 await db.flush()  # Ensure the alert is persisted before adding children
@@ -382,24 +571,37 @@ class BaseAdapter(ABC):
                     )
                     db.add(period)
                 
-                # Create informed entities
-                for entity_data in entities_data:
-                    # Apply mappings to entity data
-                    mapped_entity_data = self._apply_entity_mappings(entity_data, mappings)
+                # Create informed entities (using validated and filtered list)
+                for entity_data in entities_to_create:
                     entity = ServiceAlertInformedEntity(
                         alert_id=alert.id,
-                        **mapped_entity_data
+                        **entity_data
                     )
                     db.add(entity)
         
+        # Delete alerts that were discarded due to policy
+        if policy_based_deletes:
+            logger.debug(
+                f"[{self.get_adapter_type()}] Deleting {len(policy_based_deletes)} existing alerts "
+                f"due to invalid reference policy"
+            )
+            await db.execute(
+                delete(ServiceAlert).where(ServiceAlert.id.in_(policy_based_deletes))
+            )
+            # Add to total delete count
+            stats_deleted += len(policy_based_deletes)
+        
+        # Log final statistics
         logger.info(
-            f"[{self.get_adapter_type()}] Successfully synced {len(alert_dicts)} alerts "
-            f"from {source_name} (processed {processed_count} alerts)"
+            f"[{self.get_adapter_type()}] Import completed for '{source_name}': "
+            f"fetched={total_fetched}, created={stats_created} "
+            f"(inactive={stats_created_inactive}), updated={stats_updated}, "
+            f"deleted={stats_deleted}, policy_discarded={stats_policy_discarded}"
         )
         
         return {
-            "added": len(alerts_to_add),
-            "updated": len(alerts_to_update),
-            "deleted": len(alerts_to_delete),
+            "added": stats_created,
+            "updated": stats_updated,
+            "deleted": stats_deleted,
         }
 

@@ -697,48 +697,6 @@ const ui = (() => {
   }
   
   // Enrich entity with names from GTFS data
-  async function _enrichEntityWithNames(entity) {
-    const enriched = { ...entity };
-    let hasResolutionError = false;
-    
-    try {
-      if (entity.agency_id && !entity.agency_name) {
-        const agencies = await _fetchAutocompleteData('agency');
-        const agency = agencies?.find(a => a.gtfs_id === entity.agency_id);
-        if (agency) {
-          enriched.agency_name = agency.name;
-        } else {
-          hasResolutionError = true;
-        }
-      }
-      
-      if (entity.route_id && !entity.route_name) {
-        const routes = await api.getRoutes(entity.route_id);
-        const route = routes?.find(r => r.gtfs_id === entity.route_id);
-        if (route) {
-          enriched.route_name = `${route.short_name} ${route.long_name}`;
-        } else {
-          hasResolutionError = true;
-        }
-      }
-      
-      if (entity.stop_id && !entity.stop_name) {
-        const stops = await api.getStops(entity.stop_id);
-        const stop = stops?.find(s => s.gtfs_id === entity.stop_id);
-        if (stop) {
-          enriched.stop_name = stop.name;
-        } else {
-          hasResolutionError = true;
-        }
-      }
-    } catch (error) {
-      hasResolutionError = true;
-    }
-    
-    enriched.hasResolutionError = hasResolutionError;
-    return enriched;
-  }
-  
   // Add translation item
   function _addTranslationItem(lang = 'de', headerText = '', descText = '', url = '') {
     const transId = _translationCounter++;
@@ -869,26 +827,25 @@ const ui = (() => {
     let agencyName = '';
     let routeName = '';
     let stopName = '';
-    let hasResolutionError = false;
+    
+    // Use is_valid flag from API if available
+    const isInvalid = entity.is_valid === false;
     
     if (entity.agency_id) {
       agencyName = entity.agency_name || entity.agency_id;
-      if (!entity.agency_name) hasResolutionError = true;
     }
     if (entity.route_id) {
       routeName = entity.route_name || entity.route_id;
-      if (!entity.route_name) hasResolutionError = true;
     }
     if (entity.stop_id) {
       stopName = entity.stop_name || entity.stop_id;
-      if (!entity.stop_name) hasResolutionError = true;
     }
     
     entityDiv.innerHTML = `
       <div class="alert-period-item__header">
         <span class="alert-period-item__title">Bezug ${container.children.length + 1}</span>
         <div class="alert-period-item__header-actions">
-          ${hasResolutionError ? `<span class="resolution-warning resolution-warning--inline" title="Bezug konnte nicht aufgelöst werden">
+          ${isInvalid ? `<span class="resolution-warning resolution-warning--inline" title="Bezug konnte nicht aufgelöst werden">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
           </span>` : ''}
           <button type="button" class="icon-btn icon-btn--danger" data-action="remove-entity" data-entity-id="${entityId}" title="Entfernen" data-ripple>
@@ -1000,11 +957,10 @@ const ui = (() => {
         });
       }
       
-      // Populate existing informed entities
+      // Populate existing informed entities (already enriched with names from API)
       if (alert.informed_entities && alert.informed_entities.length > 0) {
         for (const entity of alert.informed_entities) {
-          const enriched = await _enrichEntityWithNames(entity);
-          _addEntityItem(enriched);
+          _addEntityItem(entity);
         }
       }
     } else {
@@ -1254,7 +1210,7 @@ const ui = (() => {
         if (e.stop_id) parts.push(`Haltestelle: ${e.stop_name || e.stop_id}`);
         if (e.trip_id) parts.push(`Fahrt: ${e.trip_id}`);
         
-        const warning = e.hasResolutionError 
+        const warning = e.is_valid === false
           ? '<span class="view-item__warning" title="Bezug konnte nicht aufgelöst werden"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg></span>'
           : '';
         

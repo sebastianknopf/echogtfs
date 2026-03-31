@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, field_validator
 
+from echogtfs.models import InvalidReferencePolicy
+
 _HEX_COLOR = re.compile(r'^#[0-9a-fA-F]{6}$')
 
 
@@ -187,8 +189,13 @@ class ServiceAlertInformedEntityCreate(BaseModel):
 
 
 class ServiceAlertInformedEntityRead(ServiceAlertInformedEntityCreate):
-    """Read model with ID."""
+    """Read model with ID, validation status, and resolved names."""
     id: int
+    is_valid: bool  # Validation status of the entity reference
+    # Resolved names from GTFS data (populated by API, not from DB)
+    agency_name: str | None = None
+    route_name: str | None = None
+    stop_name: str | None = None
     model_config = {"from_attributes": True}
 
 
@@ -272,6 +279,7 @@ class DataSourceCreate(BaseModel):
     config: str = "{}"
     cron: str | None = None
     is_active: bool = True
+    invalid_reference_policy: InvalidReferencePolicy = InvalidReferencePolicy.NOT_SPECIFIED
     mappings: list[DataSourceMappingCreate] = []
 
 
@@ -282,6 +290,7 @@ class DataSourceUpdate(BaseModel):
     config: str | None = None
     cron: str | None = None
     is_active: bool | None = None
+    invalid_reference_policy: InvalidReferencePolicy | None = None
     mappings: list[DataSourceMappingCreate] | None = None
 
 
@@ -293,6 +302,7 @@ class DataSourceRead(BaseModel):
     config: str
     cron: str | None
     is_active: bool
+    invalid_reference_policy: InvalidReferencePolicy
     last_run_at: datetime | None
     created_at: datetime
     updated_at: datetime

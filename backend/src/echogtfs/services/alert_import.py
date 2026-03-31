@@ -118,7 +118,7 @@ async def run_import_task(source_id: int) -> None:
         
         # Check if source is active
         if not source.is_active:
-            logger.info(f"[AlertImport] Data source {source.name} is inactive, skipping import")
+            logger.info(f"[AlertImport] Data source '{source.name}' is inactive, skipping import")
             return
         
         try:
@@ -142,10 +142,10 @@ async def run_import_task(source_id: int) -> None:
             await db.commit()
             
             logger.info(
-                f"[AlertImport] Import completed for {source.name}: "
-                f"+{stats['added']} ~{stats['updated']} -{stats['deleted']}"
+                f"[AlertImport] Import task completed for '{source.name}': "
+                f"created={stats['added']}, updated={stats['updated']}, deleted={stats['deleted']}"
             )
             
         except Exception as e:
-            logger.error(f"[AlertImport] Failed to import from {source.name}: {e}", exc_info=True)
+            logger.error(f"[AlertImport] Import task failed for '{source.name}': {e}", exc_info=True)
             await db.rollback()

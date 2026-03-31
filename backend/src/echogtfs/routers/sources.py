@@ -83,6 +83,7 @@ async def create_source(
         config=source_data.config,
         cron=source_data.cron,
         is_active=source_data.is_active,
+        invalid_reference_policy=source_data.invalid_reference_policy,
     )
     db.add(source)
     await db.flush()  # Get the ID
@@ -188,6 +189,9 @@ async def update_source(
     
     if source_data.cron is not None:
         source.cron = source_data.cron
+    
+    if source_data.invalid_reference_policy is not None:
+        source.invalid_reference_policy = source_data.invalid_reference_policy
     
     # Handle is_active changes
     if source_data.is_active is not None:

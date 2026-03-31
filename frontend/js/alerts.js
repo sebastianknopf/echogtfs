@@ -11,100 +11,11 @@ const alerts = (() => {
   let _totalPages = 1;
   let _total = 0;
   let _filterTimeout = null; // For debouncing filter input
-  
-  // Cache for GTFS entity data to avoid redundant API calls
-  let _agenciesCache = null;
-  let _routesCache = {}; // Keyed by route_id
-  let _stopsCache = {}; // Keyed by stop_id
 
   // Helper to check if user has poweruser or admin rights
   function _isPoweruser() {
     const user = window.appState?.currentUser;
     return user && (user.is_technical_contact || user.is_superuser);
-  }
-
-  // Helper function to get agencies (cached)
-  async function _getCachedAgencies() {
-    if (_agenciesCache === null) {
-      // Store the promise itself to prevent parallel requests
-      _agenciesCache = api.getAgencies();
-    }
-    // Await the cached promise (may already be resolved)
-    return await _agenciesCache;
-  }
-
-  // Helper function to get routes (cached)
-  async function _getCachedRoutes(routeId) {
-    // Check if we have already attempted to resolve this route_id
-    if (!_routesCache.hasOwnProperty(routeId)) {
-      // Store the promise itself to prevent parallel requests for the same ID
-      _routesCache[routeId] = api.getRoutes(routeId);
-    }
-    // Await the cached promise (may already be resolved)
-    return await _routesCache[routeId];
-  }
-
-  // Helper function to get stops (cached)
-  async function _getCachedStops(stopId) {
-    // Check if we have already attempted to resolve this stop_id
-    if (!_stopsCache.hasOwnProperty(stopId)) {
-      // Store the promise itself to prevent parallel requests for the same ID
-      _stopsCache[stopId] = api.getStops(stopId);
-    }
-    // Await the cached promise (may already be resolved)
-    return await _stopsCache[stopId];
-  }
-
-  // Clear all caches
-  function _clearCache() {
-    _agenciesCache = null;
-    _routesCache = {};
-    _stopsCache = {};
-  }
-
-  // Enrich entity with names from GTFS data
-  async function _enrichEntityWithNames(entity) {
-    const enriched = { ...entity, hasResolutionError: false };
-    
-    try {
-      if (entity.agency_id) {
-        const agencies = await _getCachedAgencies();
-        const agency = agencies.find(a => a.gtfs_id === entity.agency_id);
-        if (agency) {
-          enriched.agency_name = agency.name;
-        } else {
-          enriched.hasResolutionError = true;
-        }
-      }
-      
-      if (entity.route_id) {
-        const routes = await _getCachedRoutes(entity.route_id);
-        const route = routes.find(r => r.gtfs_id === entity.route_id);
-        if (route) {
-          // Combine short_name and long_name for full route display
-          const parts = [];
-          if (route.short_name) parts.push(route.short_name);
-          if (route.long_name) parts.push(route.long_name);
-          enriched.route_name = parts.length > 0 ? parts.join(' – ') : 'Unbekannte Linie';
-        } else {
-          enriched.hasResolutionError = true;
-        }
-      }
-      
-      if (entity.stop_id) {
-        const stops = await _getCachedStops(entity.stop_id);
-        const stop = stops.find(s => s.gtfs_id === entity.stop_id);
-        if (stop) {
-          enriched.stop_name = stop.name;
-        } else {
-          enriched.hasResolutionError = true;
-        }
-      }
-    } catch (err) {
-      enriched.hasResolutionError = true;
-    }
-    
-    return enriched;
   }
 
   // Get page from URL parameter
@@ -129,9 +40,6 @@ const alerts = (() => {
   async function _loadAlerts() {
     const container = ui.el('alerts-content');
     container.innerHTML = '<div class="panel__loading">Wird geladen ...</div>';
-    
-    // Clear cache when reloading alerts to get fresh data
-    _clearCache();
     
     // Get page from URL
     _currentPage = _getPageFromURL();
@@ -282,52 +190,36 @@ const alerts = (() => {
       const sourceName = isInternal ? 'Intern' : (alert.data_source_name || 'Extern');
       const sourceBadge = `<span class="badge badge--system">${ui.esc(sourceName)}</span>`;
       
-      // Build entity badges with name resolution (limit to first 10 successfully resolved)
+      // Build entity badges using API-resolved names
       let entityBadges = '';
-      let hasResolutionErrors = false;
+      let hasInvalidEntities = false;
       if (alert.informed_entities && alert.informed_entities.length > 0) {
-        const maxResolvedEntities = 10;
-        const resolvedEntities = [];
-        let hasMoreEntities = false;
+        // Check if any entity is invalid
+        hasInvalidEntities = alert.informed_entities.some(entity => entity.is_valid === false);
         
-        // Resolve entities sequentially until we have 10 successful resolutions or run out of entities
-        for (let i = 0; i < alert.informed_entities.length; i++) {
-          const entity = alert.informed_entities[i];
-          const enriched = await _enrichEntityWithNames(entity);
-          
-          // Check if this entity was successfully resolved (has at least one name)
-          const hasName = enriched.agency_name || enriched.route_name || enriched.stop_name;
-          
-          if (hasName) {
-            resolvedEntities.push(enriched);
-            // Stop resolving once we have 10 successful resolutions
-            if (resolvedEntities.length >= maxResolvedEntities) {
-              // Check if there are more entities remaining
-              if (i < alert.informed_entities.length - 1) {
-                hasMoreEntities = true;
-              }
-              break;
-            }
-          } else {
-            hasResolutionErrors = true;
-          }
+        // Collect all resolved entity names (entities that have at least one resolved name)
+        const resolvedNames = [];
+        for (const entity of alert.informed_entities) {
+          if (entity.agency_name) resolvedNames.push(entity.agency_name);
+          if (entity.route_name) resolvedNames.push(entity.route_name);
+          if (entity.stop_name) resolvedNames.push(entity.stop_name);
         }
         
-        // Build badges from resolved entities
-        entityBadges = resolvedEntities.map(entity => {
-          const labels = [];
-          if (entity.agency_name) labels.push(entity.agency_name);
-          if (entity.route_name) labels.push(entity.route_name);
-          if (entity.stop_name) labels.push(entity.stop_name);
+        // Only show badges if we have resolved names
+        if (resolvedNames.length > 0) {
+          const maxNames = 10;
+          const namesToShow = resolvedNames.slice(0, maxNames);
+          const hasMoreNames = resolvedNames.length > maxNames;
           
-          return labels.map(label => 
-            `<span class="badge badge--entity">${ui.esc(label)}</span>`
+          // Build badges for the first 10 resolved names
+          entityBadges = namesToShow.map(name => 
+            `<span class="badge badge--entity">${ui.esc(name)}</span>`
           ).join('');
-        }).join('');
-        
-        // Add "..." badge if there are more entities remaining
-        if (hasMoreEntities) {
-          entityBadges += '<span class="badge badge--entity">...</span>';
+          
+          // Add "..." badge if there are more than 10 resolved names
+          if (hasMoreNames) {
+            entityBadges += '<span class="badge badge--entity">...</span>';
+          }
         }
       }
       
@@ -352,7 +244,7 @@ const alerts = (() => {
         </div>
         
         <div class="alert-list-item__actions">
-          ${hasResolutionErrors ? `<span class="resolution-warning" title="Einige Bezüge konnten nicht aufgelöst werden">
+          ${hasInvalidEntities ? `<span class="resolution-warning" title="Einige Bezüge konnten nicht aufgelöst werden">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
           </span>` : ''}
           <button class="icon-btn" data-action="view" data-id="${alert.id}" title="Anzeigen" data-ripple>
@@ -465,15 +357,8 @@ const alerts = (() => {
       return;
     }
     
-    // Enrich entities before showing
-    const enrichedAlert = { ...alert };
-    if (alert.informed_entities && alert.informed_entities.length > 0) {
-      enrichedAlert.informed_entities = await Promise.all(
-        alert.informed_entities.map(entity => _enrichEntityWithNames(entity))
-      );
-    }
-    
-    await ui.openViewAlertModal(enrichedAlert);
+    // Alert already contains resolved entity names from API
+    await ui.openViewAlertModal(alert);
   }
 
   async function _openEditAlert(alertId) {

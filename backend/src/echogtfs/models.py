@@ -114,6 +114,14 @@ class AlertSeverityLevel(str, Enum):
     SEVERE = "SEVERE"
 
 
+class InvalidReferencePolicy(str, Enum):
+    """Policy for handling alerts with invalid entity references."""
+    DISCARD_ALERT = "discard_alert"  # Discard entire alert if any reference is invalid
+    KEEP_ALERT = "keep_alert"  # Keep entire alert even if references are invalid
+    DISCARD_INVALID = "discard_invalid"  # Discard only invalid references, keep alert
+    NOT_SPECIFIED = "not_specified"  # No specific policy defined
+
+
 # ---------------------------------------------------------------------------
 # GTFS-RT ServiceAlert tables
 # ---------------------------------------------------------------------------
@@ -260,6 +268,9 @@ class ServiceAlertInformedEntity(Base):
     # Optional direction filter (0 or 1)
     direction_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     
+    # Validation status - marks whether this entity reference is valid
+    is_valid: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    
     # Relationship
     alert: Mapped["ServiceAlert"] = relationship(back_populates="informed_entities")
 
@@ -290,6 +301,11 @@ class DataSource(Base):
     
     # Active status - inactive sources don't run and their alerts are deleted
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    
+    # Policy for handling invalid entity references
+    invalid_reference_policy: Mapped[InvalidReferencePolicy] = mapped_column(
+        String(32), default=InvalidReferencePolicy.NOT_SPECIFIED, index=True
+    )
     
     # Last execution timestamp
     last_run_at: Mapped[datetime | None] = mapped_column(

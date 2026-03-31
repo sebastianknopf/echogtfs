@@ -400,7 +400,7 @@ const sources = (() => {
   }
 
   // Source modal management
-  function _openSourceModal({ title, name = '', type = '', config = {}, cron = '', is_active = true, mappings = [] } = {}) {
+  function _openSourceModal({ title, name = '', type = '', config = {}, cron = '', is_active = true, invalid_reference_policy = 'not_specified', mappings = [] } = {}) {
     ui.el('source-modal-title').textContent = title;
     ui.el('source-name').value = name;
     ui.el('source-name').readOnly = false;
@@ -424,6 +424,7 @@ const sources = (() => {
     
     ui.el('source-cron').value = cron || '';
     ui.el('source-is-active').checked = is_active;
+    ui.el('source-invalid-reference-policy').value = invalid_reference_policy || 'not_specified';
     
     // Initialize mappings
     _initializeMappings(mappings);
@@ -514,6 +515,7 @@ const sources = (() => {
         config: configObj,
         cron: source.cron || '',
         is_active: source.is_active !== undefined ? source.is_active : true,
+        invalid_reference_policy: source.invalid_reference_policy || 'not_specified',
         mappings: source.mappings || []
       });
       
@@ -531,6 +533,7 @@ const sources = (() => {
     const type = ui.el('source-type').value;
     const cron = ui.el('source-cron').value.trim();
     const isActive = ui.el('source-is-active').checked;
+    const invalidReferencePolicy = ui.el('source-invalid-reference-policy').value;
 
     if (!name || !type) {
       _setSourceModalError('Name und Typ sind erforderlich.');
@@ -559,6 +562,7 @@ const sources = (() => {
         config: JSON.stringify(config), 
         cron: cron || null,
         is_active: isActive,
+        invalid_reference_policy: invalidReferencePolicy,
         mappings 
       };
       if (!_editingSourceId) {
