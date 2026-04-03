@@ -11,7 +11,7 @@
   <!-- -- Loading screen -------------------------------------------------- -->
   <div id="loading-screen" class="loading-screen" aria-live="polite" aria-label="Wird geladen">
     <div class="spinner"></div>
-    <span>Wird geladen …</span>
+    <span data-i18n="loading.screen">Wird geladen …</span>
   </div>
 
   <!-- -- Snackbar --------------------------------------------------------- -->
@@ -25,7 +25,7 @@
 
       <div class="login-card__header">
         <h1 class="login-card__title" id="app-title-login">echogtfs</h1>
-        <p class="login-card__subtitle">Bitte melden Sie sich an</p>
+        <p class="login-card__subtitle" data-i18n="login.subtitle">Bitte melden Sie sich an</p>
       </div>
 
       <form id="login-form" novalidate autocomplete="on" class="login-card__body">
@@ -44,7 +44,7 @@
             aria-required="true"
             aria-describedby="field-username-helper"
           />
-          <label class="md-field__label" for="username">Benutzername</label>
+          <label class="md-field__label" for="username" data-i18n="login.username">Benutzername</label>
         </div>
 
         <div class="md-field" id="field-password">
@@ -58,7 +58,7 @@
             required
             aria-required="true"
           />
-          <label class="md-field__label" for="password">Passwort</label>
+          <label class="md-field__label" for="password" data-i18n="login.password">Passwort</label>
         </div>
 
         <div class="login-card__actions">
@@ -69,7 +69,7 @@
             data-ripple
           >
             <span id="login-btn-spinner" class="btn-spinner" hidden aria-hidden="true"></span>
-            <span id="login-btn-label">Anmelden</span>
+            <span id="login-btn-label" data-i18n="login.button">Anmelden</span>
           </button>
         </div>
 
@@ -92,7 +92,9 @@
         id="logout-btn"
         class="md-icon-btn"
         data-ripple
+        data-i18n-title="topbar.logout.title"
         title="Abmelden"
+        data-i18n-aria-label="topbar.logout.label"
         aria-label="Abmelden"
       >&#x23FB;</button>
     </header>
@@ -107,13 +109,13 @@
             <span class="nav-item__icon">
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
             </span>
-            <span class="nav-item__label">Meldungen</span>
+            <span class="nav-item__label" data-i18n="nav.alerts">Meldungen</span>
           </button>
           <button class="nav-item" data-panel="sources" data-poweruser-only data-ripple>
             <span class="nav-item__icon">
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3C7.58 3 4 4.79 4 7s3.58 4 8 4 8-1.79 8-4-3.58-4-8-4zM4 9v3c0 2.21 3.58 4 8 4s8-1.79 8-4V9c0 2.21-3.58 4-8 4S4 11.21 4 9zm0 5v3c0 2.21 3.58 4 8 4s8-1.79 8-4v-3c0 2.21-3.58 4-8 4s-8-1.79-8-4z"/></svg>
             </span>
-            <span class="nav-item__label">Datenquellen</span>
+            <span class="nav-item__label" data-i18n="nav.sources">Datenquellen</span>
           </button>
         </div>
 
@@ -122,13 +124,13 @@
             <span class="nav-item__icon">
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
             </span>
-            <span class="nav-item__label">Accounts</span>
+            <span class="nav-item__label" data-i18n="nav.accounts">Accounts</span>
           </button>
           <button class="nav-item" data-panel="settings" data-admin-only data-ripple>
             <span class="nav-item__icon">
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39 1c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-1a.49.49 0 0 0-.59.22L2.74 8.87a.49.49 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-1c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39 1c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z"/></svg>
             </span>
-            <span class="nav-item__label">Einstellungen</span>
+            <span class="nav-item__label" data-i18n="nav.settings">Einstellungen</span>
           </button>
         </div>
       </nav>
@@ -140,60 +142,61 @@
         <div class="panel" data-panel="alerts">
           <section class="md-card" aria-label="Meldungen">
             <div class="md-card__header user-list-header">
-              <h2 class="md-card__title">Meldungen</h2>
+              <h2 class="md-card__title" data-i18n="alerts.title">Meldungen</h2>
               <div class="md-field md-field--inline">
                 <input
                   class="md-field__input"
                   type="text"
                   id="alert-filter"
+                  data-i18n-placeholder="alerts.quickfilter.placeholder"
                   placeholder="Suchbegriff eingeben..."
                 />
-                <label class="md-field__label" for="alert-filter">Schnellfilter</label>
+                <label class="md-field__label" for="alert-filter" data-i18n="alerts.quickfilter">Schnellfilter</label>
               </div>
-              <button id="sort-alerts-btn" class="md-btn md-btn--text" data-ripple title="Sortierung umkehren">
+              <button id="sort-alerts-btn" class="md-btn md-btn--text" data-ripple data-i18n-title="alerts.sort.title" title="Sortierung umkehren">
                 <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                   <path d="M12 5.83L15.17 9l1.41-1.41L12 3 7.41 7.59 8.83 9 12 5.83zm0 12.34L8.83 15l-1.41 1.41L12 21l4.59-4.59L15.17 15 12 18.17z"/>
                 </svg>
-                <span id="sort-alerts-label">neueste zuerst</span>
+                <span id="sort-alerts-label" data-i18n="alerts.sort.newest">neueste zuerst</span>
               </button>
               <div class="filter-dropdown-container">
-                <button id="filter-alerts-btn" class="md-btn md-btn--text" data-ripple title="Filter">
+                <button id="filter-alerts-btn" class="md-btn md-btn--text" data-ripple data-i18n-title="alerts.filter" data-i18n-aria-label="alerts.filter" title="Filter">
                   <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/>
                   </svg>
-                  <span>Filter</span>
+                  <span data-i18n="alerts.filter">Filter</span>
                 </button>
                 <div id="filter-alerts-popout" class="filter-popout" hidden>
                   <div class="filter-popout__section">
-                    <div class="filter-popout__label">Status</div>
+                    <div class="filter-popout__label" data-i18n="alerts.filter.status">Status</div>
                     <label class="filter-checkbox">
                       <input type="checkbox" id="filter-active" checked>
-                      <span>aktive Meldungen</span>
+                      <span data-i18n="alerts.filter.status.active">aktive Meldungen</span>
                     </label>
                     <label class="filter-checkbox">
                       <input type="checkbox" id="filter-inactive" checked>
-                      <span>inaktive Meldungen</span>
+                      <span data-i18n="alerts.filter.status.inactive">inaktive Meldungen</span>
                     </label>
                   </div>
                   <div class="filter-popout__section">
-                    <div class="filter-popout__label">Quelle</div>
+                    <div class="filter-popout__label" data-i18n="alerts.filter.source">Quelle</div>
                     <label class="filter-checkbox">
                       <input type="checkbox" id="filter-internal" checked>
-                      <span>interne Meldungen</span>
+                      <span data-i18n="alerts.filter.source.internal">interne Meldungen</span>
                     </label>
                     <label class="filter-checkbox">
                       <input type="checkbox" id="filter-external" checked>
-                      <span>externe Meldungen</span>
+                      <span data-i18n="alerts.filter.source.external">externe Meldungen</span>
                     </label>
                   </div>
                 </div>
               </div>
-              <button id="add-alert-btn" class="md-btn md-btn--filled" data-ripple>
+              <button id="add-alert-btn" class="md-btn md-btn--filled" data-ripple data-i18n="alerts.add">
                 + Erfassen
               </button>
             </div>
             <div class="md-card__content" id="alerts-content">
-              <div class="panel__loading">Wird geladen ...</div>
+              <div class="panel__loading" data-i18n="alerts.loading">Wird geladen ...</div>
             </div>
           </section>
         </div>
@@ -202,13 +205,13 @@
         <div class="panel" data-panel="sources">
           <section class="md-card" aria-label="Datenquellen">
             <div class="md-card__header user-list-header">
-              <h2 class="md-card__title">Datenquellen</h2>
-              <button id="add-source-btn" class="md-btn md-btn--filled" data-ripple>
+              <h2 class="md-card__title" data-i18n="sources.title">Datenquellen</h2>
+              <button id="add-source-btn" class="md-btn md-btn--filled" data-ripple data-i18n="sources.add">
                 + Hinzufügen
               </button>
             </div>
             <div class="md-card__content" id="sources-content">
-              <div class="panel__loading">Wird geladen ...</div>
+              <div class="panel__loading" data-i18n="sources.loading">Wird geladen ...</div>
             </div>
           </section>
         </div>
@@ -217,13 +220,13 @@
         <div class="panel" data-panel="accounts">
           <section class="md-card" aria-label="Accounts">
             <div class="md-card__header user-list-header">
-              <h2 class="md-card__title">Accounts</h2>
-              <button id="add-account-btn" class="md-btn md-btn--filled" data-admin-only data-ripple>
+              <h2 class="md-card__title" data-i18n="accounts.title">Accounts</h2>
+              <button id="add-account-btn" class="md-btn md-btn--filled" data-admin-only data-ripple data-i18n="accounts.add">
                 + Neuer Account
               </button>
             </div>
             <div class="md-card__content" id="accounts-content">
-              <div class="panel__loading">Wird geladen ...</div>
+              <div class="panel__loading" data-i18n="accounts.loading">Wird geladen ...</div>
             </div>
           </section>
         </div>
@@ -232,72 +235,80 @@
         <div class="panel" data-panel="settings">
           <section class="md-card" aria-label="Einstellungen">
             <div class="md-card__header">
-              <h2 class="md-card__title">Einstellungen</h2>
+              <h2 class="md-card__title" data-i18n="settings.title">Einstellungen</h2>
             </div>
             <div class="md-card__content">
 
               <form id="settings-form" novalidate>
-                <p class="settings-section-label">Allgemein</p>
+                <p class="settings-section-label" data-i18n="settings.section.general">Allgemein</p>
 
                 <div class="md-field">
                   <input type="text" id="settings-app-title" class="md-field__input" placeholder=" " maxlength="80" />
-                  <label class="md-field__label" for="settings-app-title">App-Titel</label>
+                  <label class="md-field__label" for="settings-app-title" data-i18n="settings.app_title">App-Titel</label>
                 </div>
 
-                <p class="settings-section-label">Erscheinungsbild</p>
+                <p class="settings-section-label" data-i18n="settings.section.appearance">Erscheinungsbild</p>
 
                 <div class="color-picker-row">
                   <div class="color-picker-field">
-                    <label class="color-picker-label" for="settings-color-primary">Primärfarbe</label>
+                    <label class="color-picker-label" for="settings-color-primary" data-i18n="settings.color_primary">Primärfarbe</label>
                     <div class="color-picker-control">
                       <input type="color" id="settings-color-primary" name="color_primary" class="color-swatch-input" />
-                      <input type="text"  id="settings-color-primary-hex" class="color-hex-input md-field__input" maxlength="7" placeholder="#008c99" aria-label="Primärfarbe (Hex)" />
+                      <input type="text"  id="settings-color-primary-hex" class="color-hex-input md-field__input" maxlength="7" placeholder="#008c99" data-i18n-aria-label="settings.color_primary.aria" aria-label="Primärfarbe (Hex)" />
                     </div>
                   </div>
 
                   <div class="color-picker-field">
-                    <label class="color-picker-label" for="settings-color-secondary">Sekundärfarbe</label>
+                    <label class="color-picker-label" for="settings-color-secondary" data-i18n="settings.color_secondary">Sekundärfarbe</label>
                     <div class="color-picker-control">
                       <input type="color" id="settings-color-secondary" name="color_secondary" class="color-swatch-input" />
-                      <input type="text"  id="settings-color-secondary-hex" class="color-hex-input md-field__input" maxlength="7" placeholder="#99cc04" aria-label="Sekundärfarbe (Hex)" />
+                      <input type="text"  id="settings-color-secondary-hex" class="color-hex-input md-field__input" maxlength="7" placeholder="#99cc04" data-i18n-aria-label="settings.color_secondary.aria" aria-label="Sekundärfarbe (Hex)" />
                     </div>
                   </div>
                 </div>
 
-                <p class="settings-section-label">GTFS-Realtime</p>
+                <div class="md-field">
+                  <select id="settings-app-language" class="md-field__input">
+                    <option value="de" selected data-i18n="settings.language.de">Deutsch</option>
+                    <option value="en" data-i18n="settings.language.en">English</option>
+                  </select>
+                  <label class="md-field__label" for="settings-app-language" data-i18n="settings.language">Sprache</label>
+                </div>
+
+                <p class="settings-section-label" data-i18n="settings.section.gtfs_realtime">GTFS-Realtime</p>
 
                 <div class="md-field">
                   <input type="text" id="settings-gtfs-rt-path" class="md-field__input" placeholder=" " maxlength="255" />
-                  <label class="md-field__label" for="settings-gtfs-rt-path">GTFS-RT Endpunkt-Pfad</label>
-                  <div class="md-field__helper">Pfad ohne /api/ Präfix, z.B. <code>realtime/service-alerts.pbf</code></div>
+                  <label class="md-field__label" for="settings-gtfs-rt-path" data-i18n="settings.gtfs_rt_path">GTFS-RT Endpunkt-Pfad</label>
+                  <div class="md-field__helper" data-i18n="settings.gtfs_rt_path.helper">Pfad ohne /api/ Präfix, z.B. <code>realtime/service-alerts.pbf</code></div>
                 </div>
 
                 <div class="md-field">
                   <input type="text" id="settings-gtfs-rt-username" class="md-field__input" placeholder=" " maxlength="64" autocomplete="off" />
-                  <label class="md-field__label" for="settings-gtfs-rt-username">Basic Auth Benutzername (optional)</label>
-                  <div class="md-field__helper">Beide Felder löschen, um Basic Auth zu deaktivieren</div>
+                  <label class="md-field__label" for="settings-gtfs-rt-username" data-i18n="settings.gtfs_rt_username">Basic Auth Benutzername (optional)</label>
+                  <div class="md-field__helper" data-i18n="settings.gtfs_rt_username.helper">Beide Felder löschen, um Basic Auth zu deaktivieren</div>
                 </div>
 
                 <div class="md-field">
                   <input type="password" id="settings-gtfs-rt-password" class="md-field__input" placeholder=" " maxlength="128" autocomplete="new-password" />
-                  <label class="md-field__label" for="settings-gtfs-rt-password">Basic Auth Passwort (optional)</label>
-                  <div class="md-field__helper" id="settings-gtfs-rt-password-helper">Leer lassen für neues Passwort oder altes Passwort behalten</div>
+                  <label class="md-field__label" for="settings-gtfs-rt-password" data-i18n="settings.gtfs_rt_password">Basic Auth Passwort (optional)</label>
+                  <div class="md-field__helper" id="settings-gtfs-rt-password-helper" data-i18n="settings.gtfs_rt_password.helper">Leer lassen für neues Passwort oder altes Passwort behalten</div>
                 </div>
 
                 <p id="settings-error" class="login-card__error" role="alert"></p>
 
                 <div class="settings-actions">
-                  <button type="button" id="settings-reset-btn" class="md-btn md-btn--text" data-ripple>Zurücksetzen</button>
+                  <button type="button" id="settings-reset-btn" class="md-btn md-btn--text" data-ripple data-i18n="settings.reset">Zurücksetzen</button>
                   <button type="submit" id="settings-save-btn" class="md-btn md-btn--filled" data-ripple>
                     <span id="settings-save-spinner" class="btn-spinner" hidden aria-hidden="true"></span>
-                    <span id="settings-save-label">Speichern</span>
+                    <span id="settings-save-label" data-i18n="settings.save">Speichern</span>
                   </button>
                 </div>
               </form>
 
               <!-- GTFS-Feed section (independent from theme form) -->
               <div id="settings-gtfs-section">
-                <p class="settings-section-label">GTFS-Feed</p>
+                <p class="settings-section-label" data-i18n="settings.section.gtfs_feed">GTFS-Feed</p>
 
                 <div class="md-field" id="field-gtfs-url">
                   <input
@@ -309,7 +320,7 @@
                     maxlength="2048"
                     aria-describedby="settings-gtfs-status"
                   />
-                  <label class="md-field__label" for="settings-gtfs-url">Feed-URL (GTFS Static ZIP)</label>
+                  <label class="md-field__label" for="settings-gtfs-url" data-i18n="settings.gtfs_url">Feed-URL (GTFS Static ZIP)</label>
                 </div>
 
                 <div class="md-field" id="field-gtfs-cron">
@@ -321,8 +332,8 @@
                     maxlength="64"
                     autocomplete="off"
                   />
-                  <label class="md-field__label" for="settings-gtfs-cron">Cron-Ausdruck für automatischen Import</label>
-                  <div class="md-field__helper">z.B. <code>0 3 * * *</code> für täglich um 3 Uhr</div>
+                  <label class="md-field__label" for="settings-gtfs-cron" data-i18n="settings.gtfs_cron">Cron-Ausdruck für automatischen Import</label>
+                  <div class="md-field__helper" data-i18n="settings.gtfs_cron.helper">z.B. <code>0 3 * * *</code> für täglich um 3 Uhr</div>
                 </div>
 
                 <div id="settings-gtfs-status" class="gtfs-status" aria-live="polite" aria-atomic="true"></div>
@@ -332,9 +343,9 @@
                 <div class="settings-actions">
                   <button type="button" id="settings-gtfs-import-btn" class="md-btn md-btn--text" data-ripple>
                     <span id="settings-gtfs-import-spinner" class="btn-spinner" hidden aria-hidden="true"></span>
-                    <span id="settings-gtfs-import-label">Importieren</span>
+                    <span id="settings-gtfs-import-label" data-i18n="settings.gtfs_import">Importieren</span>
                   </button>
-                  <button type="button" id="settings-gtfs-save-btn" class="md-btn md-btn--filled" data-ripple>Speichern</button>
+                  <button type="button" id="settings-gtfs-save-btn" class="md-btn md-btn--filled" data-ripple data-i18n="settings.gtfs_save">Speichern</button>
                 </div>
               </div>
 
@@ -351,46 +362,46 @@
     <div class="modal__backdrop"></div>
     <div class="modal__panel">
       <div class="modal__header">
-        <h2 class="modal__title" id="modal-title">Account erstellen</h2>
+        <h2 class="modal__title" id="modal-title" data-i18n="account.modal.create">Account erstellen</h2>
       </div>
       <form id="account-form" class="modal__body" novalidate>
         <div class="md-field" id="modal-field-username">
           <input class="md-field__input" type="text" id="modal-username" name="username" placeholder=" " autocomplete="off" />
-          <label class="md-field__label" for="modal-username">Benutzername</label>
+          <label class="md-field__label" for="modal-username" data-i18n="account.username">Benutzername</label>
         </div>
         <div class="md-field" id="modal-field-email">
           <input class="md-field__input" type="email" id="modal-email" name="email" placeholder=" " autocomplete="off" />
-          <label class="md-field__label" for="modal-email">E-Mail</label>
+          <label class="md-field__label" for="modal-email" data-i18n="account.email">E-Mail</label>
         </div>
         <div class="md-field" id="modal-field-password">
           <input class="md-field__input" type="password" id="modal-password" name="password" placeholder=" " autocomplete="new-password" />
-          <label class="md-field__label" for="modal-password">Passwort</label>
+          <label class="md-field__label" for="modal-password" data-i18n="account.password">Passwort</label>
           <div class="md-field__helper" id="modal-password-hint"></div>
         </div>
         <div class="modal__switches">
           <label class="md-switch">
             <input type="checkbox" id="modal-is-active" name="is_active" />
             <span class="md-switch__track"></span>
-            <span class="md-switch__label">Aktiv</span>
+            <span class="md-switch__label" data-i18n="account.active">Aktiv</span>
           </label>
           <label class="md-switch">
             <input type="checkbox" id="modal-is-superuser" name="is_superuser" />
             <span class="md-switch__track"></span>
-            <span class="md-switch__label">Admin</span>
+            <span class="md-switch__label" data-i18n="account.superuser">Admin</span>
           </label>
           <label class="md-switch">
             <input type="checkbox" id="modal-is-technical-contact" name="is_technical_contact" />
             <span class="md-switch__track"></span>
-            <span class="md-switch__label">Poweruser</span>
+            <span class="md-switch__label" data-i18n="account.poweruser">Poweruser</span>
           </label>
         </div>
         <p id="modal-error" class="login-card__error" role="alert"></p>
       </form>
       <div class="modal__actions">
-        <button type="button" id="modal-cancel-btn" class="md-btn md-btn--text" data-ripple>Abbrechen</button>
+        <button type="button" id="modal-cancel-btn" class="md-btn md-btn--text" data-ripple data-i18n="common.cancel">Abbrechen</button>
         <button type="submit" form="account-form" id="modal-submit-btn" class="md-btn md-btn--filled" data-ripple>
           <span id="modal-submit-spinner" class="btn-spinner" hidden aria-hidden="true"></span>
-          <span id="modal-submit-label">Speichern</span>
+          <span id="modal-submit-label" data-i18n="common.save">Speichern</span>
         </button>
       </div>
     </div>
@@ -401,15 +412,15 @@
     <div class="modal__backdrop"></div>
     <div class="modal__panel modal__panel--lg">
       <div class="modal__header">
-        <h2 class="modal__title" id="source-modal-title">Datenquelle erstellen</h2>
+        <h2 class="modal__title" id="source-modal-title" data-i18n="source.modal.create">Datenquelle erstellen</h2>
       </div>
       
       <!-- Tabs Navigation -->
       <div class="modal__tabs" role="tablist">
-        <button type="button" class="modal__tab modal__tab--active" role="tab" data-tab="configuration" aria-selected="true">
+        <button type="button" class="modal__tab modal__tab--active" role="tab" data-tab="configuration" aria-selected="true" data-i18n="source.tabs.configuration">
           Konfiguration
         </button>
-        <button type="button" class="modal__tab" role="tab" data-tab="mapping" aria-selected="false">
+        <button type="button" class="modal__tab" role="tab" data-tab="mapping" aria-selected="false" data-i18n="source.tabs.mapping">
           Mapping
         </button>
       </div>
@@ -420,13 +431,13 @@
         <div id="source-tab-configuration" class="modal__tab-panel" role="tabpanel" data-tab="configuration">
           <div class="md-field">
             <input class="md-field__input" type="text" id="source-name" name="name" placeholder=" " required />
-            <label class="md-field__label" for="source-name">Name</label>
+            <label class="md-field__label" for="source-name" data-i18n="source.name">Name</label>
           </div>
           <div class="md-field">
             <select class="md-field__input" id="source-type" name="type" placeholder=" " required>
-              <option value="">Typ auswählen...</option>
+              <option value="" data-i18n="source.type.placeholder">Typ auswählen...</option>
             </select>
-            <label class="md-field__label" for="source-type">Adapter-Typ</label>
+            <label class="md-field__label" for="source-type" data-i18n="source.type">Adapter-Typ</label>
           </div>
           
           <!-- Dynamic config fields will be inserted here -->
@@ -434,56 +445,56 @@
           
           <div class="md-field">
             <input class="md-field__input" type="text" id="source-cron" name="cron" placeholder=" " />
-            <label class="md-field__label" for="source-cron">Cron-Ausdruck (optional)</label>
-            <div class="md-field__helper">z.B. 0 3 * * * für täglich um 3 Uhr</div>
+            <label class="md-field__label" for="source-cron" data-i18n="source.cron">Cron-Ausdruck (optional)</label>
+            <div class="md-field__helper" data-i18n="source.cron.helper">z.B. 0 3 * * * für täglich um 3 Uhr</div>
           </div>
           
           <div class="md-field">
             <select class="md-field__input" id="source-invalid-reference-policy" name="invalid_reference_policy" placeholder=" ">
-              <option value="not_specified">keine Angabe</option>
-              <option value="discard_alert">gesamte Meldung verwerfen</option>
-              <option value="discard_invalid">ungültige Bezüge verwerfen</option>
-              <option value="discard_invalid_elements">ungültige Bezugselemente verwerfen</option>
-              <option value="keep_alert">gesamte Meldung deaktivieren</option>
+              <option value="not_specified" data-i18n="source.invalid_reference_policy.not_specified">keine Angabe</option>
+              <option value="discard_alert" data-i18n="source.invalid_reference_policy.discard_alert">gesamte Meldung verwerfen</option>
+              <option value="discard_invalid" data-i18n="source.invalid_reference_policy.discard_invalid">ungültige Bezüge verwerfen</option>
+              <option value="discard_invalid_elements" data-i18n="source.invalid_reference_policy.discard_invalid_elements">ungültige Bezugselemente verwerfen</option>
+              <option value="keep_alert" data-i18n="source.invalid_reference_policy.keep_alert">gesamte Meldung deaktivieren</option>
             </select>
-            <label class="md-field__label" for="source-invalid-reference-policy">Verfahrensweise bei ungültigen Bezügen</label>
-            <div class="md-field__helper">Definiert, wie mit Meldungen umgegangen wird, die auf nicht-existierende GTFS-Objekte verweisen.</div>
+            <label class="md-field__label" for="source-invalid-reference-policy" data-i18n="source.invalid_reference_policy">Verfahrensweise bei ungültigen Bezügen</label>
+            <div class="md-field__helper" data-i18n="source.invalid_reference_policy.helper">Definiert, wie mit Meldungen umgegangen wird, die auf nicht-existierende GTFS-Objekte verweisen.</div>
           </div>
           
           <div class="modal__switches">
             <label class="md-switch">
               <input type="checkbox" id="source-is-active" checked />
               <span class="md-switch__track"></span>
-              <span class="md-switch__label">Aktiv</span>
+              <span class="md-switch__label" data-i18n="source.active">Aktiv</span>
             </label>
           </div>
-          <div class="md-field__helper">Inaktive Datenquellen führen keine Importe durch und deren Meldungen werden gelöscht.</div>
+          <div class="md-field__helper" data-i18n="source.inactive.helper">Inaktive Datenquellen führen keine Importe durch und deren Meldungen werden gelöscht.</div>
         </div>
         
         <!-- Tab Panel: Mapping -->
         <div id="source-tab-mapping" class="modal__tab-panel" role="tabpanel" data-tab="mapping" hidden>
           <div class="md-field">
             <select class="md-field__input" id="mapping-entity-type-select" placeholder=" ">
-              <option value="agency">Unternehmen</option>
-              <option value="route">Linien</option>
-              <option value="stop">Haltestellen</option>
+              <option value="agency" data-i18n="source.mapping.type.agency">Unternehmen</option>
+              <option value="route" data-i18n="source.mapping.type.route">Linien</option>
+              <option value="stop" data-i18n="source.mapping.type.stop">Haltestellen</option>
             </select>
-            <label class="md-field__label" for="mapping-entity-type-select">Mapping-Typ</label>
+            <label class="md-field__label" for="mapping-entity-type-select" data-i18n="source.mapping.type">Mapping-Typ</label>
           </div>
           
           <div class="tab-panel-header">
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
               <button type="button" id="add-mapping-btn" class="md-btn md-btn--text md-btn--compact" data-ripple>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-                Mapping hinzufügen
+                <span data-i18n="source.mapping.add">Mapping hinzufügen</span>
               </button>
               <button type="button" id="export-mappings-btn" class="md-btn md-btn--text md-btn--compact" data-ripple>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z"/></svg>
-                nach CSV exportieren
+                <span data-i18n="source.mapping.export">nach CSV exportieren</span>
               </button>
               <button type="button" id="import-mappings-btn" class="md-btn md-btn--text md-btn--compact" data-ripple>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2v9.67z" transform="rotate(180 12 12)"/></svg>
-                aus CSV importieren
+                <span data-i18n="source.mapping.import">aus CSV importieren</span>
               </button>
             </div>
           </div>
@@ -495,10 +506,10 @@
         <p id="source-modal-error" class="login-card__error" role="alert"></p>
       </form>
       <div class="modal__actions">
-        <button type="button" id="source-modal-cancel-btn" class="md-btn md-btn--text" data-ripple>Abbrechen</button>
+        <button type="button" id="source-modal-cancel-btn" class="md-btn md-btn--text" data-ripple data-i18n="common.cancel">Abbrechen</button>
         <button type="submit" form="source-form" id="source-modal-submit-btn" class="md-btn md-btn--filled" data-ripple>
           <span id="source-modal-submit-spinner" class="btn-spinner" hidden aria-hidden="true"></span>
-          <span id="source-modal-submit-label">Speichern</span>
+          <span id="source-modal-submit-label" data-i18n="common.save">Speichern</span>
         </button>
       </div>
     </div>
@@ -509,21 +520,21 @@
     <div class="modal__backdrop"></div>
     <div class="modal__panel modal__panel--lg">
       <div class="modal__header">
-        <h2 class="modal__title" id="alert-modal-title">Meldung erfassen</h2>
+        <h2 class="modal__title" id="alert-modal-title" data-i18n="alert.modal.create">Meldung erfassen</h2>
       </div>
       
       <!-- Tabs Navigation -->
       <div class="modal__tabs" role="tablist">
-        <button type="button" class="modal__tab modal__tab--active" role="tab" data-tab="basics" aria-selected="true">
+        <button type="button" class="modal__tab modal__tab--active" role="tab" data-tab="basics" aria-selected="true" data-i18n="alert.tabs.basics">
           Grunddaten
         </button>
-        <button type="button" class="modal__tab" role="tab" data-tab="validity" aria-selected="false">
+        <button type="button" class="modal__tab" role="tab" data-tab="validity" aria-selected="false" data-i18n="alert.tabs.validity">
           Gültigkeit
         </button>
-        <button type="button" class="modal__tab" role="tab" data-tab="references" aria-selected="false">
+        <button type="button" class="modal__tab" role="tab" data-tab="references" aria-selected="false" data-i18n="alert.tabs.references">
           Bezug
         </button>
-        <button type="button" class="modal__tab" role="tab" data-tab="text" aria-selected="false">
+        <button type="button" class="modal__tab" role="tab" data-tab="text" aria-selected="false" data-i18n="alert.tabs.text">
           Text
         </button>
       </div>
@@ -535,55 +546,55 @@
           <div class="modal-form-row">
             <div class="md-field">
               <select class="md-field__input" id="alert-cause">
-                <option value="UNKNOWN_CAUSE">Unbekannte Ursache</option>
-                <option value="OTHER_CAUSE">Sonstige Ursache</option>
-                <option value="TECHNICAL_PROBLEM">Technisches Problem</option>
-                <option value="STRIKE">Streik</option>
-                <option value="DEMONSTRATION">Demonstration</option>
-                <option value="ACCIDENT">Unfall</option>
-                <option value="HOLIDAY">Feiertag</option>
-                <option value="WEATHER">Wetter</option>
-                <option value="MAINTENANCE">Wartung</option>
-                <option value="CONSTRUCTION">Bauarbeiten</option>
-                <option value="POLICE_ACTIVITY">Polizeieinsatz</option>
-                <option value="MEDICAL_EMERGENCY">Medizinischer Notfall</option>
+                <option value="UNKNOWN_CAUSE" data-i18n="alert.cause.unknown">Unbekannte Ursache</option>
+                <option value="OTHER_CAUSE" data-i18n="alert.cause.other">Sonstige Ursache</option>
+                <option value="TECHNICAL_PROBLEM" data-i18n="alert.cause.technical">Technisches Problem</option>
+                <option value="STRIKE" data-i18n="alert.cause.strike">Streik</option>
+                <option value="DEMONSTRATION" data-i18n="alert.cause.demonstration">Demonstration</option>
+                <option value="ACCIDENT" data-i18n="alert.cause.accident">Unfall</option>
+                <option value="HOLIDAY" data-i18n="alert.cause.holiday">Feiertag</option>
+                <option value="WEATHER" data-i18n="alert.cause.weather">Wetter</option>
+                <option value="MAINTENANCE" data-i18n="alert.cause.maintenance">Wartung</option>
+                <option value="CONSTRUCTION" data-i18n="alert.cause.construction">Bauarbeiten</option>
+                <option value="POLICE_ACTIVITY" data-i18n="alert.cause.police">Polizeieinsatz</option>
+                <option value="MEDICAL_EMERGENCY" data-i18n="alert.cause.medical">Medizinischer Notfall</option>
               </select>
-              <label class="md-field__label" for="alert-cause">Ursache</label>
+              <label class="md-field__label" for="alert-cause" data-i18n="alert.cause">Ursache</label>
             </div>
 
             <div class="md-field">
               <select class="md-field__input" id="alert-effect">
-                <option value="UNKNOWN_EFFECT">Unbekannte Auswirkung</option>
-                <option value="NO_SERVICE">Kein Service</option>
-                <option value="REDUCED_SERVICE">Eingeschränkter Service</option>
-                <option value="SIGNIFICANT_DELAYS">Erhebliche Verspätungen</option>
-                <option value="DETOUR">Umleitung</option>
-                <option value="ADDITIONAL_SERVICE">Zusätzlicher Service</option>
-                <option value="MODIFIED_SERVICE">Geänderter Service</option>
-                <option value="OTHER_EFFECT">Sonstige Auswirkung</option>
-                <option value="STOP_MOVED">Haltestelle verlegt</option>
-                <option value="NO_EFFECT">Keine Auswirkung</option>
-                <option value="ACCESSIBILITY_ISSUE">Barrierefreiheitsproblem</option>
+                <option value="UNKNOWN_EFFECT" data-i18n="alert.effect.unknown">Unbekannte Auswirkung</option>
+                <option value="NO_SERVICE" data-i18n="alert.effect.no_service">Kein Service</option>
+                <option value="REDUCED_SERVICE" data-i18n="alert.effect.reduced">Eingeschränkter Service</option>
+                <option value="SIGNIFICANT_DELAYS" data-i18n="alert.effect.delays">Erhebliche Verspätungen</option>
+                <option value="DETOUR" data-i18n="alert.effect.detour">Umleitung</option>
+                <option value="ADDITIONAL_SERVICE" data-i18n="alert.effect.additional">Zusätzlicher Service</option>
+                <option value="MODIFIED_SERVICE" data-i18n="alert.effect.modified">Geänderter Service</option>
+                <option value="OTHER_EFFECT" data-i18n="alert.effect.other">Sonstige Auswirkung</option>
+                <option value="STOP_MOVED" data-i18n="alert.effect.stop_moved">Haltestelle verlegt</option>
+                <option value="NO_EFFECT" data-i18n="alert.effect.no_effect">Keine Auswirkung</option>
+                <option value="ACCESSIBILITY_ISSUE" data-i18n="alert.effect.accessibility">Barrierefreiheitsproblem</option>
               </select>
-              <label class="md-field__label" for="alert-effect">Auswirkung</label>
+              <label class="md-field__label" for="alert-effect" data-i18n="alert.effect">Auswirkung</label>
             </div>
           </div>
 
           <div class="md-field" style="margin-top: 16px;">
             <select class="md-field__input" id="alert-severity">
-              <option value="UNKNOWN_SEVERITY">Unbekannt</option>
-              <option value="INFO">Info</option>
-              <option value="WARNING">Warnung</option>
-              <option value="SEVERE">Schwerwiegend</option>
+              <option value="UNKNOWN_SEVERITY" data-i18n="alert.severity.unknown">Unbekannt</option>
+              <option value="INFO" data-i18n="alert.severity.info">Info</option>
+              <option value="WARNING" data-i18n="alert.severity.warning">Warnung</option>
+              <option value="SEVERE" data-i18n="alert.severity.severe">Schwerwiegend</option>
             </select>
-            <label class="md-field__label" for="alert-severity">Schweregrad</label>
+            <label class="md-field__label" for="alert-severity" data-i18n="alert.severity">Schweregrad</label>
           </div>
 
           <div class="modal__switches" style="margin-top: 24px;">
             <label class="md-switch">
               <input type="checkbox" id="alert-is-active" checked />
               <span class="md-switch__track"></span>
-              <span class="md-switch__label">Aktiv</span>
+              <span class="md-switch__label" data-i18n="alert.active">Aktiv</span>
             </label>
           </div>
         </div>
@@ -593,7 +604,7 @@
           <div class="tab-panel-header">
             <button type="button" id="alert-add-period-btn" class="md-btn md-btn--text md-btn--compact" data-ripple>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-              Zeitraum hinzufügen
+              <span data-i18n="alert.period.add">Zeitraum hinzufügen</span>
             </button>
           </div>
           <div id="alert-periods-container"></div>
@@ -604,7 +615,7 @@
           <div class="tab-panel-header">
             <button type="button" id="alert-add-entity-btn" class="md-btn md-btn--text md-btn--compact" data-ripple>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-              Bezug hinzufügen
+              <span data-i18n="alert.entity.add">Bezug hinzufügen</span>
             </button>
           </div>
           <div id="alert-entities-container"></div>
@@ -615,7 +626,7 @@
           <div class="tab-panel-header">
             <button type="button" id="alert-add-translation-btn" class="md-btn md-btn--text md-btn--compact" data-ripple>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-              Übersetzung hinzufügen
+              <span data-i18n="alert.translation.add">Übersetzung hinzufügen</span>
             </button>
           </div>
           <div id="alert-translations-container"></div>
@@ -629,10 +640,10 @@
       </div>
 
       <div class="modal__actions">
-        <button type="button" id="alert-modal-cancel-btn" class="md-btn md-btn--text" data-ripple>Abbrechen</button>
+        <button type="button" id="alert-modal-cancel-btn" class="md-btn md-btn--text" data-ripple data-i18n="common.cancel">Abbrechen</button>
         <button type="submit" form="alert-form" id="alert-modal-submit-btn" class="md-btn md-btn--filled" data-ripple>
           <span id="alert-modal-submit-spinner" class="btn-spinner" hidden aria-hidden="true"></span>
-          <span id="alert-modal-submit-label">Speichern</span>
+          <span id="alert-modal-submit-label" data-i18n="common.save">Speichern</span>
         </button>
       </div>
     </div>
@@ -644,13 +655,13 @@
     <div class="modal__backdrop"></div>
     <div class="modal__panel modal__panel--lg">
       <div class="modal__header">
-        <h2 class="modal__title" id="view-alert-title">Meldung anzeigen</h2>
+        <h2 class="modal__title" id="view-alert-title" data-i18n="alert.modal.view">Meldung anzeigen</h2>
       </div>
       <div class="modal__body" style="max-height: calc(100vh - 200px);">
         <div id="view-alert-content" class="view-alert-content"></div>
       </div>
       <div class="modal__actions">
-        <button type="button" id="view-alert-close-btn" class="md-btn md-btn--text" data-ripple>Schließen</button>
+        <button type="button" id="view-alert-close-btn" class="md-btn md-btn--text" data-ripple data-i18n="common.close">Schließen</button>
       </div>
     </div>
   </div>
@@ -660,18 +671,20 @@
     <div class="modal__backdrop"></div>
     <div class="modal__panel modal__panel--sm">
       <div class="modal__header">
-        <h2 class="modal__title" id="confirm-title">Bestätigung erforderlich</h2>
+        <h2 class="modal__title" id="confirm-title" data-i18n="confirm.title">Bestätigung erforderlich</h2>
       </div>
       <div class="modal__body">
         <p id="confirm-message"></p>
       </div>
       <div class="modal__actions">
-        <button type="button" id="confirm-cancel-btn" class="md-btn md-btn--text" data-ripple>Abbrechen</button>
-        <button type="button" id="confirm-ok-btn" class="md-btn md-btn--danger" data-ripple>Löschen</button>
+        <button type="button" id="confirm-cancel-btn" class="md-btn md-btn--text" data-ripple data-i18n="common.cancel">Abbrechen</button>
+        <button type="button" id="confirm-ok-btn" class="md-btn md-btn--danger" data-ripple data-i18n="common.delete">Löschen</button>
       </div>
     </div>
   </div>
 
+  <script src="js/languages.js"></script>
+  <script src="js/localization.js"></script>
   <script src="js/core.js"></script>
   <script src="js/accounts.js"></script>
   <script src="js/sources.js"></script>

@@ -12,9 +12,9 @@ const sources = (() => {
   let _currentDisplayedEntityType = 'agency';
   
   const _entityTypeNames = {
-    'agency': 'Unternehmen',
-    'route': 'Linien', 
-    'stop': 'Haltestellen'
+    'agency': window.i18n('source.mapping.type.agency'),
+    'route': window.i18n('source.mapping.type.route'), 
+    'stop': window.i18n('source.mapping.type.stop')
   };
   
   // Helper to check poweruser/admin rights
@@ -69,8 +69,8 @@ const sources = (() => {
     const container = ui.el('mappings-container');
     
     if (!filteredMappings.length) {
-      const entityTypeName = _entityTypeNames[entityType] || 'diesen Typ';
-      container.innerHTML = `<p class="panel__placeholder">Keine Mappings für ${entityTypeName} vorhanden.</p>`;
+      const entityTypeName = _entityTypeNames[entityType] || window.i18n('source.mapping.type.agency');
+      container.innerHTML = `<p class="panel__placeholder">${window.i18n('source.mapping.empty', { type: entityTypeName })}</p>`;
       // Update tracking
       _currentDisplayedEntityType = entityType;
       return;
@@ -80,8 +80,8 @@ const sources = (() => {
     table.className = 'mapping-table';
     table.innerHTML = `
       <thead><tr>
-        <th>Schlüssel</th>
-        <th>Wert (Entity ID)</th>
+        <th>${window.i18n('source.mapping.key')}</th>
+        <th>${window.i18n('source.mapping.value')}</th>
         <th></th>
       </tr></thead>
       <tbody></tbody>`;
@@ -113,9 +113,9 @@ const sources = (() => {
     const valueValue = ui.esc(mapping.value || '');
     
     tr.innerHTML = `
-      <td><input type="text" name="mapping-key" class="md-field__input" value="${keyValue}" placeholder="z.B. externer Key" /></td>
-      <td><input type="text" name="mapping-value" class="md-field__input" value="${valueValue}" placeholder="z.B. route_123" /></td>
-      <td><button type="button" class="icon-btn icon-btn--danger" data-action="remove-mapping" title="Entfernen" data-ripple>
+      <td><input type="text" name="mapping-key" class="md-field__input" value="${keyValue}" placeholder="${window.i18n('source.mapping.key.placeholder')}" /></td>
+      <td><input type="text" name="mapping-value" class="md-field__input" value="${valueValue}" placeholder="${window.i18n('source.mapping.value.placeholder')}" /></td>
+      <td><button type="button" class="icon-btn icon-btn--danger" data-action="remove-mapping" title="${window.i18n('common.remove')}" data-ripple>
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
         </svg>
@@ -135,8 +135,8 @@ const sources = (() => {
       table.className = 'mapping-table';
       table.innerHTML = `
         <thead><tr>
-          <th>Schlüssel</th>
-          <th>Wert (Entity ID)</th>
+          <th>${window.i18n('source.mapping.key')}</th>
+          <th>${window.i18n('source.mapping.value')}</th>
           <th></th>
         </tr></thead>
         <tbody></tbody>`;
@@ -163,9 +163,9 @@ const sources = (() => {
     // Show placeholder if no rows left
     if (tbody.children.length === 0) {
       const entityType = ui.el('mapping-entity-type-select')?.value || 'agency';
-      const entityTypeName = _entityTypeNames[entityType] || 'diesen Typ';
+      const entityTypeName = _entityTypeNames[entityType] || window.i18n('source.mapping.type.agency');
       ui.el('mappings-container').innerHTML = 
-        `<p class="panel__placeholder">Keine Mappings für ${entityTypeName} vorhanden.</p>`;
+        `<p class="panel__placeholder">${window.i18n('source.mapping.empty', { type: entityTypeName })}</p>`;
     }
   }
   
@@ -178,7 +178,7 @@ const sources = (() => {
   // Exports only the mappings for the currently selected entity type of the current source
   async function _exportMappingsToCSV() {
     if (!_editingSourceId) {
-      ui.toast('Bitte speichern Sie die Datenquelle zuerst.', 'error');
+      ui.toast(window.i18n('source.error.save_first'), 'error');
       return;
     }
 
@@ -196,7 +196,7 @@ const sources = (() => {
       });
 
       if (!response.ok) {
-        throw new Error('Export fehlgeschlagen');
+        throw new Error(window.i18n('source.mapping.import.error'));
       }
 
       // Get filename from Content-Disposition header or use default
@@ -221,7 +221,7 @@ const sources = (() => {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      ui.toast(`${entityTypeName}-Mappings erfolgreich exportiert.`, 'success');
+      ui.toast(window.i18n('source.mapping.exported', { type: entityTypeName }), 'success');
     } catch (err) {
       ui.toast(err.message, 'error');
     }
@@ -231,7 +231,7 @@ const sources = (() => {
   // Imports only mappings for the currently selected entity type of the current source
   async function _importMappingsFromCSV() {
     if (!_editingSourceId) {
-      ui.toast('Bitte speichern Sie die Datenquelle zuerst.', 'error');
+      ui.toast(window.i18n('source.error.save_first'), 'error');
       return;
     }
 
@@ -251,13 +251,13 @@ const sources = (() => {
       // Validate file size on client side (10 MB max)
       const maxSize = 10 * 1024 * 1024; // 10 MB
       if (file.size > maxSize) {
-        ui.toast('Die Datei ist zu groß. Maximal 10 MB erlaubt.', 'error');
+        ui.toast(window.i18n('source.mapping.import.error.size'), 'error');
         return;
       }
       
       // Validate file extension
       if (!file.name.toLowerCase().endsWith('.csv')) {
-        ui.toast('Bitte nur CSV-Dateien hochladen.', 'error');
+        ui.toast(window.i18n('source.mapping.import.error.format'), 'error');
         return;
       }
       
@@ -276,7 +276,7 @@ const sources = (() => {
         
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.detail || 'Import fehlgeschlagen');
+          throw new Error(errorData.detail || window.i18n('source.mapping.import.error'));
         }
         
         const result = await response.json();
@@ -288,7 +288,7 @@ const sources = (() => {
         // Re-render current entity type
         _renderMappingsForEntityType(entityType);
         
-        ui.toast(`${result.count} ${entityTypeName}-Mappings erfolgreich importiert.`, 'success');
+        ui.toast(window.i18n('source.mapping.imported', { count: result.count, type: entityTypeName }), 'success');
       } catch (err) {
         ui.toast(err.message, 'error');
       }
@@ -308,14 +308,14 @@ const sources = (() => {
       ui.toast(err.message, 'error');
       // Show error in UI
       const container = ui.el('sources-content');
-      container.innerHTML = `<div class="panel__placeholder">Fehler beim Laden: ${err.message}</div>`;
+      container.innerHTML = `<div class="panel__placeholder">${window.i18n('sources.error.load')}: ${err.message}</div>`;
     }
   }
   
   function _renderSourcesList() {
     const container = ui.el('sources-content');
     if (!_sources.length) {
-      container.innerHTML = '<div class="panel__placeholder">Keine Datenquellen vorhanden.</div>';
+      container.innerHTML = `<div class="panel__placeholder">${window.i18n('sources.empty')}</div>`;
       return;
     }
     
@@ -323,10 +323,10 @@ const sources = (() => {
     table.className = 'user-table';
     table.innerHTML = `
       <thead><tr>
-        <th>Name</th>
-        <th>Typ</th>
-        <th>Cron</th>
-        <th>Letzte Ausführung</th>
+        <th data-i18n="sources.table.name">${window.i18n('sources.table.name')}</th>
+        <th data-i18n="sources.table.type">${window.i18n('sources.table.type')}</th>
+        <th data-i18n="sources.table.cron">${window.i18n('sources.table.cron')}</th>
+        <th data-i18n="sources.table.lastrun">${window.i18n('sources.table.lastrun')}</th>
         <th></th>
       </tr></thead>
       <tbody></tbody>`;
@@ -347,7 +347,7 @@ const sources = (() => {
         : '—';
       
       // Inaktiv badge (like alerts) - will be shown in actions cell
-      const inactiveBadge = !source.is_active ? '<span class="badge badge--system">Inaktiv</span>' : '';
+      const inactiveBadge = !source.is_active ? `<span class="badge badge--system">${window.i18n('sources.badge.inactive')}</span>` : '';
       
       tr.innerHTML = `
         <td>${ui.esc(source.name)}</td>
@@ -357,21 +357,21 @@ const sources = (() => {
         <td><div class="user-table__actions">
           ${inactiveBadge}
           <button class="icon-btn" data-action="run" data-id="${source.id}"
-            title="${source.is_active ? 'Jetzt ausführen' : 'Quelle ist deaktiviert'}" 
-            aria-label="Datenquelle ${ui.esc(source.name)} jetzt ausführen" 
+            title="${source.is_active ? window.i18n('sources.run.title') : window.i18n('sources.run.disabled')}" 
+            aria-label="${window.i18n('sources.run.title')} ${ui.esc(source.name)}" 
             data-ripple ${!source.is_active ? 'disabled' : ''}>
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
           </button>
           <button class="icon-btn" data-action="edit" data-id="${source.id}"
-            title="Bearbeiten" aria-label="Datenquelle ${ui.esc(source.name)} bearbeiten" data-ripple>
+            title="${window.i18n('common.edit')}" aria-label="${window.i18n('common.edit')} ${ui.esc(source.name)}" data-ripple>
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
           </button>
           <button class="icon-btn icon-btn--danger" data-action="delete" data-id="${source.id}"
-            title="Löschen" aria-label="Datenquelle ${ui.esc(source.name)} löschen" data-ripple>
+            title="${window.i18n('common.delete')}" aria-label="${window.i18n('common.delete')} ${ui.esc(source.name)}" data-ripple>
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
           </button>
           <button class="icon-btn ${source.is_active ? 'icon-btn--success' : 'icon-btn--warning'}" data-action="toggle" data-id="${source.id}"
-            title="${source.is_active ? 'Deaktivieren' : 'Aktivieren'}" aria-label="Datenquelle ${ui.esc(source.name)} ${source.is_active ? 'deaktivieren' : 'aktivieren'}" data-ripple>
+            title="${source.is_active ? window.i18n('common.deactivate') : window.i18n('common.activate')}" aria-label="${source.is_active ? window.i18n('common.deactivate') : window.i18n('common.activate')} ${ui.esc(source.name)}" data-ripple>
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42C17.99 7.86 19 9.81 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.59-5.41L6.17 5.17C4.23 6.82 3 9.26 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z"/></svg>
           </button>
         </div></td>`;
@@ -407,7 +407,7 @@ const sources = (() => {
     
     // Populate adapter type dropdown
     const typeSelect = ui.el('source-type');
-    typeSelect.innerHTML = '<option value="">Typ auswählen...</option>';
+    typeSelect.innerHTML = `<option value="">${window.i18n('source.type.placeholder')}</option>`;
     if (_adapterTypes && Array.isArray(_adapterTypes) && _adapterTypes.length > 0) {
       _adapterTypes.forEach(adapter => {
         const option = document.createElement('option');
@@ -461,7 +461,7 @@ const sources = (() => {
   function _setSourceModalBusy(busy) {
     ui.el('source-modal-submit-btn').disabled = busy;
     ui.el('source-modal-submit-spinner').hidden = !busy;
-    ui.el('source-modal-submit-label').textContent = busy ? 'Wird gespeichert ...' : 'Speichern';
+    ui.el('source-modal-submit-label').textContent = busy ? window.i18n('loading.saving') : window.i18n('common.save');
   }
   
   function _setSourceModalError(msg) {
@@ -478,7 +478,7 @@ const sources = (() => {
     
     _editingSourceId = null;
     _openSourceModal({
-      title: 'Neue Datenquelle',
+      title: window.i18n('source.modal.create'),
       name: '',
       type: '',
       config: {},
@@ -509,7 +509,7 @@ const sources = (() => {
       }
       
       _openSourceModal({
-        title: 'Datenquelle bearbeiten',
+        title: window.i18n('source.modal.edit'),
         name: source.name,
         type: source.type,
         config: configObj,
@@ -536,7 +536,7 @@ const sources = (() => {
     const invalidReferencePolicy = ui.el('source-invalid-reference-policy').value;
 
     if (!name || !type) {
-      _setSourceModalError('Name und Typ sind erforderlich.');
+      _setSourceModalError(window.i18n('source.error.required'));
       return;
     }
 
@@ -572,7 +572,7 @@ const sources = (() => {
       }
       _closeSourceModal();
       await _loadSources();
-      ui.toast(_editingSourceId ? 'Datenquelle aktualisiert.' : 'Datenquelle erstellt.');
+      ui.toast(_editingSourceId ? window.i18n('sources.updated') : window.i18n('sources.created'));
     } catch (err) {
       _setSourceModalError(err.message);
     } finally {
@@ -585,8 +585,8 @@ const sources = (() => {
     if (!source) return;
 
     const confirmed = await ui.openConfirmModal(
-      `Möchten Sie die Datenquelle "${source.name}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`,
-      'Datenquelle löschen'
+      window.i18n('sources.delete.confirm', { name: source.name }),
+      window.i18n('sources.delete.title')
     );
 
     if (!confirmed) return;
@@ -594,7 +594,7 @@ const sources = (() => {
     try {
       await api.deleteSource(sourceId);
       await _loadSources();
-      ui.toast('Datenquelle gelöscht.');
+      ui.toast(window.i18n('sources.deleted'));
     } catch (err) {
       ui.toast(err.message, 'error');
     }
@@ -634,7 +634,7 @@ const sources = (() => {
                   // Add inactive badge at the beginning
                   const badge = document.createElement('span');
                   badge.className = 'badge badge--system';
-                  badge.textContent = 'Inaktiv';
+                  badge.textContent = window.i18n('sources.badge.inactive');
                   actionsDiv.insertBefore(badge, actionsDiv.firstChild);
                 } else if (isActive && inactiveBadge) {
                   // Remove inactive badge
@@ -646,19 +646,19 @@ const sources = (() => {
             // Update toggle button
             toggleBtn.classList.toggle('icon-btn--success', isActive);
             toggleBtn.classList.toggle('icon-btn--warning', !isActive);
-            toggleBtn.title = isActive ? 'Deaktivieren' : 'Aktivieren';
+            toggleBtn.title = isActive ? window.i18n('common.deactivate') : window.i18n('common.activate');
             
             // Update run button
             const runBtn = row.querySelector(`[data-action="run"][data-id="${sourceId}"]`);
             if (runBtn) {
               runBtn.disabled = !isActive;
-              runBtn.title = isActive ? 'Jetzt ausführen' : 'Quelle ist deaktiviert';
+              runBtn.title = isActive ? window.i18n('sources.run.title') : window.i18n('sources.run.disabled');
             }
           }
         });
       }
       
-      ui.toast(source.is_active ? 'Datenquelle aktiviert' : 'Datenquelle deaktiviert', 'success');
+      ui.toast(source.is_active ? window.i18n('sources.activated') : window.i18n('sources.deactivated'), 'success');
     } catch (err) {
       ui.toast(err.message, 'error');
     }
@@ -670,13 +670,13 @@ const sources = (() => {
 
     // Check if source is active
     if (!source.is_active) {
-      ui.toast('Diese Datenquelle ist deaktiviert und kann nicht ausgeführt werden.', 'error');
+      ui.toast(window.i18n('sources.run.error.inactive'), 'error');
       return;
     }
 
     try {
       await api.runSourceImport(sourceId);
-      ui.toast(`Import von "${source.name}" wurde gestartet.`);
+      ui.toast(window.i18n('sources.run.started', { name: source.name }));
       // Reload to show updated last_run_at
       setTimeout(() => _loadSources(), 2000);
     } catch (err) {
@@ -704,12 +704,21 @@ const sources = (() => {
       
       const value = configValues[field.name] || '';
       
+      // Translate field properties
+      const translatedLabel = window.i18n(field.label);
+      const translatedHelpText = field.help_text ? window.i18n(field.help_text) : '';
+      
       // Handle enum type as dropdown
       if (field.type === 'enum') {
         const options = field.options || [];
-        const optionsHtml = options.map(opt => 
-          `<option value="${ui.esc(opt)}" ${value === opt ? 'selected' : ''}>${ui.esc(opt)}</option>`
-        ).join('');
+        const optionsHtml = options.map(opt => {
+          // Generate translation key for option: adapter.{adapterType}.{fieldName}.option.{optionValue}
+          // Replace special characters in option value (e.g., "/" becomes "_")
+          const optionKey = opt.replace(/\//g, '_').replace(/-/g, '_');
+          const translationKey = `adapter.${adapterType}.${field.name}.option.${optionKey}`;
+          const translatedOption = window.i18n(translationKey);
+          return `<option value="${ui.esc(opt)}" ${value === opt ? 'selected' : ''}>${ui.esc(translatedOption)}</option>`;
+        }).join('');
         
         // Add has-value class if there's a selected value
         if (value) {
@@ -719,11 +728,11 @@ const sources = (() => {
         fieldDiv.innerHTML = `
           <select class="md-field__input" name="config-${field.name}" 
                   ${field.required ? ' required' : ''}>
-            <option value="">-- Bitte auswählen --</option>
+            <option value="">${ui.esc(window.i18n('sources.select_option'))}</option>
             ${optionsHtml}
           </select>
-          <label class="md-field__label" for="config-${field.name}">${ui.esc(field.label)}</label>
-          ${field.help_text ? `<div class="md-field__helper">${ui.esc(field.help_text)}</div>` : ''}
+          <label class="md-field__label" for="config-${field.name}">${ui.esc(translatedLabel)}</label>
+          ${translatedHelpText ? `<div class="md-field__helper">${ui.esc(translatedHelpText)}</div>` : ''}
         `;
         
         // Add change listener to update label position
@@ -741,8 +750,8 @@ const sources = (() => {
         fieldDiv.innerHTML = `
           <textarea class="md-field__input" name="config-${field.name}" 
                     placeholder=" " ${field.required ? ' required' : ''}>${ui.esc(value)}</textarea>
-          <label class="md-field__label" for="config-${field.name}">${ui.esc(field.label)}</label>
-          ${field.help_text ? `<div class="md-field__helper">${ui.esc(field.help_text)}</div>` : ''}
+          <label class="md-field__label" for="config-${field.name}">${ui.esc(translatedLabel)}</label>
+          ${translatedHelpText ? `<div class="md-field__helper">${ui.esc(translatedHelpText)}</div>` : ''}
         `;
       }
       // Handle text, url, password types
@@ -753,8 +762,8 @@ const sources = (() => {
         fieldDiv.innerHTML = `
           <input class="md-field__input" type="${inputType}" name="config-${field.name}" 
                  value="${ui.esc(value)}" placeholder=" " ${field.required ? ' required' : ''} />
-          <label class="md-field__label" for="config-${field.name}">${ui.esc(field.label)}</label>
-          ${field.help_text ? `<div class="md-field__helper">${ui.esc(field.help_text)}</div>` : ''}
+          <label class="md-field__label" for="config-${field.name}">${ui.esc(translatedLabel)}</label>
+          ${translatedHelpText ? `<div class="md-field__helper">${ui.esc(translatedHelpText)}</div>` : ''}
         `;
       }
       

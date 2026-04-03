@@ -74,6 +74,7 @@ class AppSettings(BaseModel):
     color_primary:   str = '#008c99'
     color_secondary: str = '#99cc04'
     app_title:       str = 'echogtfs'
+    app_language:    str = 'de'  # 'de' or 'en'
     
     # GTFS-RT endpoint configuration
     gtfs_rt_path:     str = 'realtime/service-alerts.pbf'

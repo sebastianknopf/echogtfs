@@ -91,6 +91,11 @@ const settings = (() => {
       titleInput.value = settings.app_title || '';
     }
     
+    const languageInput = ui.el('settings-app-language');
+    if (languageInput) {
+      languageInput.value = settings.app_language || 'de';
+    }
+    
     const primaryColor = settings.color_primary || '#008c99';
     const primaryInput = ui.el('settings-color-primary');
     const primaryHex = ui.el('settings-color-primary-hex');
@@ -152,19 +157,19 @@ const settings = (() => {
       : null;
 
     if (status.status === 'running') {
-      _showStatus('Import läuft …', 'running');
+      _showStatus(window.i18n('settings.gtfs_import_running'), 'running');
     } else if (status.status === 'success') {
       _showStatus(
-        (time ? `Letzter Import: ${time} — ` : '') + (status.message ?? ''),
+        (time ? window.i18n('settings.gtfs_import_last', { time }) + ' — ' : '') + (status.message ?? ''),
         'success',
       );
     } else if (status.status === 'error') {
       _showStatus(
-        (time ? `Fehler (${time}): ` : 'Fehler: ') + (status.message ?? ''),
+        (time ? window.i18n('settings.gtfs_import_error_time', { time, message: status.message ?? '' }) : window.i18n('settings.gtfs_import_error_short', { message: status.message ?? '' })),
         'error',
       );
     } else {
-      _showStatus(time ? `Letzter Import: ${time}` : 'Noch kein Import durchgeführt.');
+      _showStatus(time ? window.i18n('settings.gtfs_import_last_short', { time }) : window.i18n('settings.gtfs_import_none'));
     }
     
     // Continue polling during import
@@ -184,10 +189,11 @@ const settings = (() => {
     try {
       saveBtn.disabled = true;
       spinner.hidden = false;
-      label.textContent = 'Wird gespeichert...';
+      label.textContent = window.i18n('loading.saving');
       
       const data = {
         app_title: ui.el('settings-app-title')?.value || '',
+        app_language: ui.el('settings-app-language')?.value || 'de',
         color_primary: ui.el('settings-color-primary')?.value || '#008c99',
         color_secondary: ui.el('settings-color-secondary')?.value || '#99cc04',
         gtfs_rt_path: ui.el('settings-gtfs-rt-path')?.value || '',
@@ -200,7 +206,12 @@ const settings = (() => {
       // Apply theme immediately
       theme.apply(result);
       
-      ui.toast('Einstellungen gespeichert.');
+      // Apply language immediately
+      if (result.app_language) {
+        window.i18n.setLanguage(result.app_language);
+      }
+      
+      ui.toast(window.i18n('settings.saved'));
       
       // Clear password field after successful save
       const pwInput = ui.el('settings-gtfs-rt-password');
@@ -215,14 +226,14 @@ const settings = (() => {
     } finally {
       saveBtn.disabled = false;
       spinner.hidden = true;
-      label.textContent = 'Speichern';
+      label.textContent = window.i18n('common.save');
     }
   }
 
   async function _resetSettings() {
     const confirmed = await ui.openConfirmModal(
-      'Möchten Sie wirklich alle Einstellungen auf die Standardwerte zurücksetzen?',
-      'Einstellungen zurücksetzen'
+      window.i18n('settings.reset.confirm'),
+      window.i18n('settings.reset.title')
     );
 
     if (!confirmed) return;
@@ -230,6 +241,7 @@ const settings = (() => {
     try {
       const defaults = {
         app_title: 'echogtfs',
+        app_language: 'de',
         color_primary: '#008c99',
         color_secondary: '#99cc04',
         gtfs_rt_path: 'realtime/service-alerts.pbf',
@@ -245,7 +257,7 @@ const settings = (() => {
       // Apply theme
       theme.apply(result);
       
-      ui.toast('Einstellungen zurückgesetzt.');
+      ui.toast(window.i18n('settings.reset.done'));
     } catch (err) {
       ui.toast(err.message, 'error');
     }
@@ -270,7 +282,7 @@ const settings = (() => {
       
       await api.updateGtfsFeedUrl(data);
       
-      ui.toast('Feed-URL und Cron gespeichert.', 'success');
+      ui.toast(window.i18n('settings.gtfs_url_saved'), 'success');
       
     } catch (err) {
       if (errorEl) {
@@ -298,7 +310,7 @@ const settings = (() => {
     
     if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) {
       if (errorEl) {
-        errorEl.textContent = 'Bitte zuerst eine gültige Feed-URL eingeben.';
+        errorEl.textContent = window.i18n('settings.gtfs_import_url_required');
         errorEl.style.display = 'block';
       }
       return;
@@ -307,9 +319,9 @@ const settings = (() => {
     try {
       importBtn.disabled = true;
       spinner.hidden = false;
-      label.textContent = 'Wird importiert …';
+      label.textContent = window.i18n('loading.importing');
       
-      _showStatus('Import läuft …', 'running');
+      _showStatus(window.i18n('settings.gtfs_import_running'), 'running');
       
       await api.updateGtfsFeedUrl({ feed_url: url, cron });
       await api.triggerGtfsImport();
@@ -320,7 +332,7 @@ const settings = (() => {
     } catch (err) {
       importBtn.disabled = false;
       spinner.hidden = true;
-      label.textContent = 'Importieren';
+      label.textContent = window.i18n('common.import');
       _showStatus('');
       if (errorEl) {
         errorEl.textContent = err.message;
@@ -359,12 +371,12 @@ const settings = (() => {
           
           if (importBtn) importBtn.disabled = false;
           if (spinner) spinner.hidden = true;
-          if (label) label.textContent = 'Importieren';
+          if (label) label.textContent = window.i18n('common.import');
           
           if (status.status === 'success') {
-            ui.toast('GTFS-Import erfolgreich abgeschlossen.');
+            ui.toast(window.i18n('settings.gtfs_import_success'));
           } else if (status.status === 'error') {
-            ui.toast('GTFS-Import fehlgeschlagen. Siehe Status-Details.', 'error');
+            ui.toast(window.i18n('settings.gtfs_import_error'), 'error');
           }
         }
         

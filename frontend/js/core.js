@@ -11,29 +11,29 @@ const api = (() => {
   
   function translateError(msg, status) {
     const translations = {
-      'Invalid credentials': 'Ungültige Anmeldedaten.',
-      'User not found': 'Benutzer nicht gefunden.',
-      'User already exists': 'Benutzer existiert bereits.',
-      'Missing required fields': 'Erforderliche Felder fehlen.',
-      'Invalid email format': 'Ungültiges E-Mail-Format.',
-      'Password too short': 'Passwort zu kurz.',
-      'Access denied': 'Zugriff verweigert.',
-      'Data source not found': 'Datenquelle nicht gefunden.',
-      'Invalid cron expression': 'Ungültiger Cron-Ausdruck.',
-      'Alert not found': 'Meldung nicht gefunden.',
-      'Cannot delete external alert': 'Externe Meldungen können nicht gelöscht werden.',
-      'Invalid active period': 'Ungültiger Aktivierungszeitraum.',
-      'Missing translation': 'Übersetzung fehlt.',
-      'Invalid informed entity': 'Ungültiger Bezug.',
+      'Invalid credentials': window.i18n('error.invalid_credentials'),
+      'User not found': window.i18n('error.user_not_found'),
+      'User already exists': window.i18n('error.user_exists'),
+      'Missing required fields': window.i18n('error.required_fields'),
+      'Invalid email format': window.i18n('error.invalid_email'),
+      'Password too short': window.i18n('error.password_short'),
+      'Access denied': window.i18n('error.access_denied'),
+      'Data source not found': window.i18n('error.source_not_found'),
+      'Invalid cron expression': window.i18n('error.invalid_cron'),
+      'Alert not found': window.i18n('error.alert_not_found'),
+      'Cannot delete external alert': window.i18n('error.cannot_delete_external'),
+      'Invalid active period': window.i18n('error.invalid_period'),
+      'Missing translation': window.i18n('error.missing_translation'),
+      'Invalid informed entity': window.i18n('error.invalid_entity'),
     };
     
-    if (status === 422) return 'Die Eingabedaten sind ungültig. Bitte überprüfen Sie Ihre Eingaben.';
-    if (status === 409) return 'Konflikt: Die angeforderte Änderung ist nicht möglich.';
-    if (status === 500) return 'Interner Serverfehler. Bitte versuchen Sie es später erneut.';
-    if (status === 503) return 'Der Server ist vorübergehend nicht verfügbar.';
-    if (status >= 400 && status < 500) return translations[msg] || 'Anfrage fehlgeschlagen.';
-    if (status >= 500) return 'Serverfehler. Bitte wenden Sie sich an den Administrator.';
-    return translations[msg] || msg || 'Ein unbekannter Fehler ist aufgetreten.';
+    if (status === 422) return window.i18n('error.invalid_input');
+    if (status === 409) return window.i18n('error.conflict');
+    if (status === 500) return window.i18n('error.server_500');
+    if (status === 503) return window.i18n('error.server_503');
+    if (status >= 400 && status < 500) return translations[msg] || window.i18n('error.request_failed');
+    if (status >= 500) return window.i18n('error.server_error');
+    return translations[msg] || msg || window.i18n('error.unknown');
   }
 
   async function request(path, options = {}, skipAuthRedirect = false) {
@@ -73,7 +73,7 @@ const api = (() => {
       return data;
     } catch (error) {
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        throw new Error('Der Server ist nicht erreichbar. Bitte überprüfen Sie Ihre Internetverbindung.');
+        throw new Error(window.i18n('error.network'));
       }
       throw error;
     }
@@ -390,7 +390,7 @@ const ui = (() => {
     const btn = el('login-btn');
     btn.disabled = busy;
     el('login-btn-spinner').hidden = !busy;
-    el('login-btn-label').textContent = busy ? 'Anmelden …' : 'Anmelden';
+    el('login-btn-label').textContent = busy ? window.i18n('login.button.busy') : window.i18n('login.button');
   }
 
   // -- Render authenticated user -------------------------------------------
@@ -416,19 +416,19 @@ const ui = (() => {
       if (user.is_active) {
         const c = document.createElement('span');
         c.className = 'md-chip md-chip--primary';
-        c.textContent = 'Aktiv';
+        c.textContent = window.i18n('account.chip.active');
         chipsEl.appendChild(c);
       }
       if (user.is_superuser) {
         const c = document.createElement('span');
         c.className = 'md-chip md-chip--secondary';
-        c.textContent = 'Admin';
+        c.textContent = window.i18n('account.chip.admin');
         chipsEl.appendChild(c);
       }
       if (user.is_technical_contact) {
         const c = document.createElement('span');
         c.className = 'md-chip md-chip--secondary';
-        c.textContent = 'Poweruser';
+        c.textContent = window.i18n('account.chip.poweruser');
         chipsEl.appendChild(c);
       }
     }
@@ -448,7 +448,7 @@ const ui = (() => {
     }
     
     const detailRole = el('detail-role');
-    if (detailRole) detailRole.textContent = user.is_superuser ? 'Admin' : (user.is_technical_contact ? 'Poweruser' : 'Standard');
+    if (detailRole) detailRole.textContent = user.is_superuser ? window.i18n('account.chip.admin') : (user.is_technical_contact ? window.i18n('account.chip.poweruser') : window.i18n('account.chip.standard'));
 
     // Show/hide poweruser-only sidebar items (for powerusers and admins)
     document.querySelectorAll('.nav-item[data-poweruser-only]').forEach(item => {
@@ -492,9 +492,9 @@ const ui = (() => {
   }
 
   // Confirm dialog (returns Promise<boolean>)
-  function openConfirmModal(message, title = 'Bestätigung erforderlich') {
+  function openConfirmModal(message, title = null) {
     return new Promise(resolve => {
-      el('confirm-title').textContent = title;
+      el('confirm-title').textContent = title || window.i18n('confirm.title');
       el('confirm-message').textContent = message;
       el('confirm-modal').hidden = false;
       const ok     = el('confirm-ok-btn');
@@ -728,34 +728,34 @@ const ui = (() => {
     
     transDiv.innerHTML = `
       <div class="alert-period-item__header">
-        <span class="alert-period-item__title">Übersetzung ${container.children.length + 1}</span>
-        <button type="button" class="icon-btn icon-btn--danger" data-action="remove-translation" data-trans-id="${transId}" title="Entfernen" data-ripple>
+        <span class="alert-period-item__title">${window.i18n('alert.translation.title', {number: container.children.length + 1})}</span>
+        <button type="button" class="icon-btn icon-btn--danger" data-action="remove-translation" data-trans-id="${transId}" data-i18n-title="common.remove.title" title="Entfernen" data-ripple>
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
         </button>
       </div>
       <div class="alert-period-item__fields">
         <div class="md-field" style="max-width: 200px;">
           <select class="md-field__input translation-lang">
-            <option value="de" ${normalizedLang === 'de' ? 'selected' : ''}>Deutsch</option>
-            <option value="en" ${normalizedLang === 'en' ? 'selected' : ''}>English</option>
-            <option value="fr" ${normalizedLang === 'fr' ? 'selected' : ''}>Français</option>
-            <option value="it" ${normalizedLang === 'it' ? 'selected' : ''}>Italiano</option>
-            <option value="es" ${normalizedLang === 'es' ? 'selected' : ''}>Español</option>
+            <option value="de" ${normalizedLang === 'de' ? 'selected' : ''}>${window.i18n('alert.translation.language.de')}</option>
+            <option value="en" ${normalizedLang === 'en' ? 'selected' : ''}>${window.i18n('alert.translation.language.en')}</option>
+            <option value="fr" ${normalizedLang === 'fr' ? 'selected' : ''}>${window.i18n('alert.translation.language.fr')}</option>
+            <option value="it" ${normalizedLang === 'it' ? 'selected' : ''}>${window.i18n('alert.translation.language.it')}</option>
+            <option value="es" ${normalizedLang === 'es' ? 'selected' : ''}>${window.i18n('alert.translation.language.es')}</option>
           </select>
-          <label class="md-field__label">Sprache</label>
+          <label class="md-field__label" data-i18n="alert.translation.language">${window.i18n('alert.translation.language')}</label>
         </div>
         <div class="md-field">
           <input class="md-field__input translation-header" type="text" placeholder=" " maxlength="512" value="${esc(headerText)}" />
-          <label class="md-field__label">Titel</label>
+          <label class="md-field__label" data-i18n="alert.translation.header">${window.i18n('alert.translation.header')}</label>
         </div>
       </div>
       <div class="md-field">
         <textarea class="md-field__input translation-desc" placeholder=" " rows="3">${esc(descText)}</textarea>
-        <label class="md-field__label">Beschreibung (optional)</label>
+        <label class="md-field__label" data-i18n="alert.translation.desc">${window.i18n('alert.translation.desc')}</label>
       </div>
       <div class="md-field">
         <input class="md-field__input translation-url" type="url" placeholder=" " maxlength="1024" value="${esc(url)}" />
-        <label class="md-field__label">URL (optional)</label>
+        <label class="md-field__label" data-i18n="alert.translation.url">${window.i18n('alert.translation.url')}</label>
       </div>
     `;
     
@@ -771,7 +771,7 @@ const ui = (() => {
   function _updateTranslationTitles() {
     const items = document.querySelectorAll('.alert-translation-item');
     items.forEach((item, idx) => {
-      item.querySelector('.alert-period-item__title').textContent = `Übersetzung ${idx + 1}`;
+      item.querySelector('.alert-period-item__title').textContent = window.i18n('alert.translation.title', {number: idx + 1});
     });
   }
   
@@ -794,19 +794,19 @@ const ui = (() => {
     
     periodDiv.innerHTML = `
       <div class="alert-period-item__header">
-        <span class="alert-period-item__title">Zeitraum ${container.children.length + 1}</span>
-        <button type="button" class="icon-btn icon-btn--danger" data-action="remove-period" data-period-id="${periodId}" title="Entfernen" data-ripple>
+        <span class="alert-period-item__title">${window.i18n('alert.period.title', {number: container.children.length + 1})}</span>
+        <button type="button" class="icon-btn icon-btn--danger" data-action="remove-period" data-period-id="${periodId}" data-i18n-title="common.remove.title" title="Entfernen" data-ripple>
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
         </button>
       </div>
       <div class="alert-period-item__fields">
         <div class="md-field">
           <input class="md-field__input period-start" type="datetime-local" placeholder=" " value="${startVal}" />
-          <label class="md-field__label">Von (optional)</label>
+          <label class="md-field__label" data-i18n="alert.period.start.label">${window.i18n('alert.period.start.label')}</label>
         </div>
         <div class="md-field">
           <input class="md-field__input period-end" type="datetime-local" placeholder=" " value="${endVal}" />
-          <label class="md-field__label">Bis (optional)</label>
+          <label class="md-field__label" data-i18n="alert.period.end.label">${window.i18n('alert.period.end.label')}</label>
         </div>
       </div>
     `;
@@ -823,7 +823,7 @@ const ui = (() => {
   function _updatePeriodTitles() {
     const items = document.querySelectorAll('.alert-period-item');
     items.forEach((item, idx) => {
-      item.querySelector('.alert-period-item__title').textContent = `Zeitraum ${idx + 1}`;
+      item.querySelector('.alert-period-item__title').textContent = window.i18n('alert.period.title', {number: idx + 1});
     });
   }
   
@@ -860,12 +860,12 @@ const ui = (() => {
     
     entityDiv.innerHTML = `
       <div class="alert-period-item__header">
-        <span class="alert-period-item__title">Bezug ${container.children.length + 1}</span>
+        <span class="alert-period-item__title">${window.i18n('alert.entity.title', {number: container.children.length + 1})}</span>
         <div class="alert-period-item__header-actions">
-          ${isInvalid ? `<span class="resolution-warning resolution-warning--inline" title="Bezug konnte nicht aufgelöst werden">
+          ${isInvalid ? `<span class="resolution-warning resolution-warning--inline" data-i18n-title="alert.entity.invalid.tooltip" title="${window.i18n('alert.entity.invalid.tooltip')}">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
           </span>` : ''}
-          <button type="button" class="icon-btn icon-btn--danger" data-action="remove-entity" data-entity-id="${entityId}" title="Entfernen" data-ripple>
+          <button type="button" class="icon-btn icon-btn--danger" data-action="remove-entity" data-entity-id="${entityId}" data-i18n-title="common.remove.title" title="${window.i18n('common.remove.title')}" data-ripple>
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
           </button>
         </div>
@@ -874,42 +874,42 @@ const ui = (() => {
         <div class="md-field">
           <input class="md-field__input entity-agency-name autocomplete-input" type="text" placeholder=" " value="${esc(agencyName)}" data-autocomplete-type="agency" />
           <input type="hidden" class="entity-agency-id" value="${esc(entity.agency_id || '')}" />
-          <label class="md-field__label">Unternehmen (optional)</label>
+          <label class="md-field__label" data-i18n="alert.entity.agency.label">${window.i18n('alert.entity.agency.label')}</label>
         </div>
         <div class="md-field">
           <input class="md-field__input entity-route-name autocomplete-input" type="text" placeholder=" " value="${esc(routeName)}" data-autocomplete-type="route" />
           <input type="hidden" class="entity-route-id" value="${esc(entity.route_id || '')}" />
-          <label class="md-field__label">Linie (optional)</label>
+          <label class="md-field__label" data-i18n="alert.entity.route.label">${window.i18n('alert.entity.route.label')}</label>
         </div>
       </div>
       <div class="alert-period-item__fields">
         <div class="md-field">
           <select class="md-field__input entity-route-type">
             <option value="" ${entity.route_type === null || entity.route_type === undefined ? 'selected' : ''}></option>
-            <option value="0" ${entity.route_type === 0 ? 'selected' : ''}>Straßenbahn</option>
-            <option value="1" ${entity.route_type === 1 ? 'selected' : ''}>U-Bahn</option>
-            <option value="2" ${entity.route_type === 2 ? 'selected' : ''}>Zug</option>
-            <option value="3" ${entity.route_type === 3 ? 'selected' : ''}>Bus</option>
-            <option value="4" ${entity.route_type === 4 ? 'selected' : ''}>Fähre</option>
-            <option value="5" ${entity.route_type === 5 ? 'selected' : ''}>Seilbahn</option>
-            <option value="6" ${entity.route_type === 6 ? 'selected' : ''}>Gondel</option>
-            <option value="7" ${entity.route_type === 7 ? 'selected' : ''}>Standseilbahn</option>
+            <option value="0" ${entity.route_type === 0 ? 'selected' : ''}>${window.i18n('alert.entity.route_type.tram')}</option>
+            <option value="1" ${entity.route_type === 1 ? 'selected' : ''}>${window.i18n('alert.entity.route_type.subway')}</option>
+            <option value="2" ${entity.route_type === 2 ? 'selected' : ''}>${window.i18n('alert.entity.route_type.rail')}</option>
+            <option value="3" ${entity.route_type === 3 ? 'selected' : ''}>${window.i18n('alert.entity.route_type.bus')}</option>
+            <option value="4" ${entity.route_type === 4 ? 'selected' : ''}>${window.i18n('alert.entity.route_type.ferry')}</option>
+            <option value="5" ${entity.route_type === 5 ? 'selected' : ''}>${window.i18n('alert.entity.route_type.cable_tram')}</option>
+            <option value="6" ${entity.route_type === 6 ? 'selected' : ''}>${window.i18n('alert.entity.route_type.aerial_lift')}</option>
+            <option value="7" ${entity.route_type === 7 ? 'selected' : ''}>${window.i18n('alert.entity.route_type.funicular')}</option>
           </select>
-          <label class="md-field__label">Linientyp (optional)</label>
+          <label class="md-field__label" data-i18n="alert.entity.route_type.label">${window.i18n('alert.entity.route_type.label')}</label>
         </div>
         <div class="md-field">
           <select class="md-field__input entity-direction-id">
             <option value="" ${entity.direction_id === null || entity.direction_id === undefined ? 'selected' : ''}></option>
-            <option value="0" ${entity.direction_id === 0 ? 'selected' : ''}>Hinfahrt</option>
-            <option value="1" ${entity.direction_id === 1 ? 'selected' : ''}>Rückfahrt</option>
+            <option value="0" ${entity.direction_id === 0 ? 'selected' : ''}>${window.i18n('alert.entity.direction.outbound')}</option>
+            <option value="1" ${entity.direction_id === 1 ? 'selected' : ''}>${window.i18n('alert.entity.direction.inbound')}</option>
           </select>
-          <label class="md-field__label">Richtung (optional)</label>
+          <label class="md-field__label" data-i18n="alert.entity.direction.label">${window.i18n('alert.entity.direction.label')}</label>
         </div>
       </div>
       <div class="md-field">
         <input class="md-field__input entity-stop-name autocomplete-input" type="text" placeholder=" " value="${esc(stopName)}" data-autocomplete-type="stop" />
         <input type="hidden" class="entity-stop-id" value="${esc(entity.stop_id || '')}" />
-        <label class="md-field__label">Haltestelle (optional)</label>
+        <label class="md-field__label" data-i18n="alert.entity.stop.label">${window.i18n('alert.entity.stop.label')}</label>
       </div>
     `;
     
@@ -929,7 +929,7 @@ const ui = (() => {
   function _updateEntityTitles() {
     const items = document.querySelectorAll('.alert-entity-item');
     items.forEach((item, idx) => {
-      item.querySelector('.alert-period-item__title').textContent = `Bezug ${idx + 1}`;
+      item.querySelector('.alert-period-item__title').textContent = window.i18n('alert.entity.title', {number: idx + 1});
     });
   }
   
@@ -1040,17 +1040,17 @@ const ui = (() => {
     renderAccountsList: function(users) {
       const container = el('accounts-content');
       if (!users.length) {
-        container.innerHTML = '<div class="panel__placeholder">Keine Accounts vorhanden.</div>';
+        container.innerHTML = `<div class="panel__placeholder">${window.i18n('accounts.empty')}</div>`;
         return;
       }
       const table = document.createElement('table');
       table.className = 'user-table';
       table.innerHTML = `
         <thead><tr>
-          <th>Benutzername</th>
-          <th>E-Mail</th>
-          <th>Rolle</th>
-          <th>Status</th>
+          <th data-i18n="accounts.table.username">${window.i18n('accounts.table.username')}</th>
+          <th data-i18n="accounts.table.email">${window.i18n('accounts.table.email')}</th>
+          <th data-i18n="accounts.table.role">${window.i18n('accounts.table.role')}</th>
+          <th data-i18n="accounts.table.status">${window.i18n('accounts.table.status')}</th>
           <th></th>
         </tr></thead>
         <tbody></tbody>`;
@@ -1061,20 +1061,20 @@ const ui = (() => {
           <td>${esc(user.username)}</td>
           <td>${esc(user.email)}</td>
           <td>${user.is_superuser
-            ? '<span class="badge badge--system">Admin</span>'
+            ? `<span class="badge badge--system" data-i18n="accounts.role.admin">${window.i18n('accounts.role.admin')}</span>`
             : (user.is_technical_contact
-              ? '<span class="badge badge--system">Poweruser</span>'
-              : '<span class="badge badge--system">Standard</span>')}</td>
+              ? `<span class="badge badge--system" data-i18n="accounts.role.poweruser">${window.i18n('accounts.role.poweruser')}</span>`
+              : `<span class="badge badge--system" data-i18n="accounts.role.standard">${window.i18n('accounts.role.standard')}</span>`)}</td>
           <td>${user.is_active
-            ? '<span class="badge badge--system">Aktiv</span>'
-            : '<span class="badge badge--system">Inaktiv</span>'}</td>
+            ? `<span class="badge badge--system" data-i18n="accounts.status.active">${window.i18n('accounts.status.active')}</span>`
+            : `<span class="badge badge--system" data-i18n="accounts.status.inactive">${window.i18n('accounts.status.inactive')}</span>`}</td>
           <td><div class="user-table__actions">
             <button class="icon-btn" data-action="edit" data-id="${user.id}"
-              title="Bearbeiten" aria-label="Account ${esc(user.username)} bearbeiten" data-ripple>
+              data-i18n-title="accounts.edit.tooltip" title="${window.i18n('accounts.edit.tooltip')}" data-i18n-aria-label="accounts.edit.aria" aria-label="${window.i18n('accounts.edit.aria', {name: user.username})}" data-ripple>
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
             </button>
             <button class="icon-btn icon-btn--danger" data-action="delete" data-id="${user.id}"
-              title="Löschen" aria-label="Account ${esc(user.username)} löschen" data-ripple>
+              data-i18n-title="accounts.delete.tooltip" title="${window.i18n('accounts.delete.tooltip')}" data-i18n-aria-label="accounts.delete.aria" aria-label="${window.i18n('accounts.delete.aria', {name: user.username})}" data-ripple>
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
             </button>
           </div></td>`;
@@ -1103,7 +1103,7 @@ const ui = (() => {
       el('modal-is-active').checked = isActive;
       el('modal-is-superuser').checked = isSuperuser;
       el('modal-is-technical-contact').checked = isTechnicalContact;
-      el('modal-password-hint').textContent = editMode ? 'Leer lassen, um das Passwort nicht zu ändern.' : '';
+      el('modal-password-hint').textContent = editMode ? window.i18n('account.password.hint.edit') : window.i18n('account.password.hint.create');
       el('modal-error').textContent = '';
       el('modal-error').classList.remove('is-visible');
       el('account-modal').hidden = false;
@@ -1115,7 +1115,7 @@ const ui = (() => {
     setModalBusy: function(busy) {
       el('modal-submit-btn').disabled = busy;
       el('modal-submit-spinner').hidden = !busy;
-      el('modal-submit-label').textContent = busy ? 'Wird gespeichert ...' : 'Speichern';
+      el('modal-submit-label').textContent = busy ? window.i18n('loading.saving') : window.i18n('common.save');
     },
     setModalError: function(msg) {
       const e = el('modal-error');
@@ -1160,24 +1160,31 @@ const ui = (() => {
     const title = firstTrans.header_text || 'Meldung anzeigen';
     el('view-alert-title').textContent = title;
     
-    // Helper maps
-    const causeMap = {
-      'TECHNICAL_PROBLEM': 'Technisches Problem', 'STRIKE': 'Streik', 'ACCIDENT': 'Unfall',
-      'WEATHER': 'Wetter', 'MAINTENANCE': 'Wartung', 'CONSTRUCTION': 'Bauarbeiten',
-      'POLICE_ACTIVITY': 'Polizeieinsatz', 'MEDICAL_EMERGENCY': 'Medizinischer Notfall',
-      'DEMONSTRATION': 'Demonstration', 'HOLIDAY': 'Feiertag', 'OTHER_CAUSE': 'Sonstige Ursache',
-      'UNKNOWN_CAUSE': 'Unbekannte Ursache'
+    // Helper: Get localized cause/effect/severity
+    const getCauseText = (cause) => {
+      const key = `alert.cause.${cause.toLowerCase().replace(/_/g, '.')}`;
+      return window.i18n(key);
     };
-    const effectMap = {
-      'NO_SERVICE': 'Kein Service', 'REDUCED_SERVICE': 'Eingeschränkter Service',
-      'SIGNIFICANT_DELAYS': 'Erhebliche Verspätungen', 'DETOUR': 'Umleitung',
-      'ADDITIONAL_SERVICE': 'Zusätzlicher Service', 'MODIFIED_SERVICE': 'Geänderter Service',
-      'STOP_MOVED': 'Haltestelle verlegt', 'NO_EFFECT': 'Keine Auswirkung',
-      'ACCESSIBILITY_ISSUE': 'Barrierefreiheitsproblem', 'OTHER_EFFECT': 'Sonstige Auswirkung',
-      'UNKNOWN_EFFECT': 'Unbekannte Auswirkung'
+    const getEffectText = (effect) => {
+      const key = `alert.effect.${effect.toLowerCase().replace(/_/g, '.')}`;
+      return window.i18n(key);
     };
-    const severityMap = {
-      'INFO': 'Info', 'WARNING': 'Warnung', 'SEVERE': 'Schwerwiegend', 'UNKNOWN_SEVERITY': 'Unbekannt'
+    const getSeverityText = (severity) => {
+      const key = `alert.severity.${severity.toLowerCase().replace(/_/g, '.')}`;
+      return window.i18n(key);
+    };
+    const getRouteTypeText = (routeType) => {
+      const types = [
+        window.i18n('alert.entity.route_type.tram'),
+        window.i18n('alert.entity.route_type.subway'),
+        window.i18n('alert.entity.route_type.rail'),
+        window.i18n('alert.entity.route_type.bus'),
+        window.i18n('alert.entity.route_type.ferry'),
+        window.i18n('alert.entity.route_type.cable_tram'),
+        window.i18n('alert.entity.route_type.aerial_lift'),
+        window.i18n('alert.entity.route_type.funicular')
+      ];
+      return types[routeType] || routeType;
     };
     
     // Translations
@@ -1207,7 +1214,7 @@ const ui = (() => {
         return `<div class="view-item view-item--entity"><div class="view-item__content">${start} – ${end}</div></div>`;
       }).join('');
     } else {
-      periodsHtml = '<div class="view-item view-item--entity"><div class="view-item__content"><em>Dauerhaft gültig</em></div></div>';
+      periodsHtml = `<div class="view-item view-item--entity"><div class="view-item__content"><em>${window.i18n('alert.period.always_valid')}</em></div></div>`;
     }
     
     // Informed Entities
@@ -1215,62 +1222,61 @@ const ui = (() => {
     if (alert.informed_entities && alert.informed_entities.length > 0) {
       entitiesHtml = alert.informed_entities.map(e => {
         const parts = [];
-        if (e.agency_id) parts.push(`Unternehmen: ${e.agency_name || e.agency_id}`);
-        if (e.route_id) parts.push(`Linie: ${e.route_name || e.route_id}`);
+        if (e.agency_id) parts.push(`${window.i18n('alert.entity.label.agency')}: ${e.agency_name || e.agency_id}`);
+        if (e.route_id) parts.push(`${window.i18n('alert.entity.label.route')}: ${e.route_name || e.route_id}`);
         if (e.route_type !== null && e.route_type !== undefined) {
-          const types = ['Straßenbahn', 'U-Bahn', 'Zug', 'Bus', 'Fähre', 'Seilbahn', 'Gondel', 'Standseilbahn'];
-          parts.push(`Linientyp: ${types[e.route_type] || e.route_type}`);
+          parts.push(`${window.i18n('alert.entity.label.route_type')}: ${getRouteTypeText(e.route_type)}`);
         }
         if (e.direction_id !== null && e.direction_id !== undefined) {
-          parts.push(`Richtung: ${e.direction_id === 0 ? 'Hinfahrt' : 'Rückfahrt'}`);
+          parts.push(`${window.i18n('alert.entity.direction')}: ${e.direction_id === 0 ? window.i18n('alert.entity.direction.outbound') : window.i18n('alert.entity.direction.inbound')}`);
         }
-        if (e.stop_id) parts.push(`Haltestelle: ${e.stop_name || e.stop_id}`);
-        if (e.trip_id) parts.push(`Fahrt: ${e.trip_id}`);
+        if (e.stop_id) parts.push(`${window.i18n('alert.entity.stop')}: ${e.stop_name || e.stop_id}`);
+        if (e.trip_id) parts.push(`${window.i18n('alert.entity.label.trip')}: ${e.trip_id}`);
         
         const warning = e.is_valid === false
-          ? '<span class="view-item__warning" title="Bezug konnte nicht aufgelöst werden"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg></span>'
+          ? `<span class="view-item__warning" title="${window.i18n('alert.entity.invalid.tooltip')}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg></span>`
           : '';
         
         return `<div class="view-item view-item--entity"><div class="view-item__content">${parts.join(' • ')}</div>${warning}</div>`;
       }).join('');
     } else {
-      entitiesHtml = '<div class="view-item view-item--entity"><div class="view-item__content"><em>Alle Verbindungen betroffen</em></div></div>';
+      entitiesHtml = `<div class="view-item view-item--entity"><div class="view-item__content"><em>${window.i18n('alert.entity.all_routes')}</em></div></div>`;
     }
     
     content.innerHTML = `
       <div class="view-section">
-        <h3 class="view-section__title">Grunddaten</h3>
+        <h3 class="view-section__title" data-i18n="alert.tabs.basics">${window.i18n('alert.tabs.basics')}</h3>
         <div class="view-item">
-          <div class="view-item__label">Ursache</div>
-          <div class="view-item__content">${causeMap[alert.cause] || alert.cause}</div>
+          <div class="view-item__label" data-i18n="alert.cause">${window.i18n('alert.cause')}</div>
+          <div class="view-item__content">${getCauseText(alert.cause)}</div>
         </div>
         <div class="view-item">
-          <div class="view-item__label">Auswirkung</div>
-          <div class="view-item__content">${effectMap[alert.effect] || alert.effect}</div>
+          <div class="view-item__label" data-i18n="alert.effect">${window.i18n('alert.effect')}</div>
+          <div class="view-item__content">${getEffectText(alert.effect)}</div>
         </div>
         <div class="view-item">
-          <div class="view-item__label">Schweregrad</div>
-          <div class="view-item__content">${severityMap[alert.severity_level] || alert.severity_level}</div>
+          <div class="view-item__label" data-i18n="alert.severity">${window.i18n('alert.severity')}</div>
+          <div class="view-item__content">${getSeverityText(alert.severity_level)}</div>
         </div>
         <div class="view-item">
-          <div class="view-item__label">Status</div>
-          <div class="view-item__content">${alert.is_active ? '✓ Aktiv' : '✗ Inaktiv'}</div>
+          <div class="view-item__label" data-i18n="alert.view.status">${window.i18n('alert.view.status')}</div>
+          <div class="view-item__content">${alert.is_active ? window.i18n('alert.active.yes') : window.i18n('alert.active.no')}</div>
         </div>
         <div class="view-item">
-          <div class="view-item__label">Quelle</div>
-          <div class="view-item__content">${alert.source === 'echogtfs' ? 'Intern (echogtfs)' : esc(alert.source)}</div>
+          <div class="view-item__label" data-i18n="alert.view.source">${window.i18n('alert.view.source')}</div>
+          <div class="view-item__content">${alert.source === 'echogtfs' ? window.i18n('alert.view.source.internal') : esc(alert.source)}</div>
         </div>
       </div>
       <div class="view-section">
-        <h3 class="view-section__title">Gültigkeitszeiträume</h3>
+        <h3 class="view-section__title" data-i18n="alert.tabs.validity">${window.i18n('alert.tabs.validity')}</h3>
         ${periodsHtml}
       </div>
       <div class="view-section">
-        <h3 class="view-section__title">Bezüge</h3>
+        <h3 class="view-section__title" data-i18n="alert.tabs.references">${window.i18n('alert.tabs.references')}</h3>
         ${entitiesHtml}
       </div>
       <div class="view-section">
-        <h3 class="view-section__title">Übersetzungen</h3>
+        <h3 class="view-section__title" data-i18n="alert.translation.translations">${window.i18n('alert.translation.translations')}</h3>
         ${translationsHtml}
       </div>
     `;

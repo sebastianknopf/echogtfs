@@ -8,20 +8,20 @@ const accounts = (() => {
   
   async function _loadUsers() {
     const container = ui.el('accounts-content');
-    container.innerHTML = '<div class="panel__loading">Wird geladen ...</div>';
+    container.innerHTML = `<div class="panel__loading">${window.i18n('accounts.loading')}</div>`;
     
     try {
       _users = await api.getUsers();
       ui.renderAccountsList(_users);
     } catch (err) {
-      container.innerHTML = '<div class="panel__placeholder">Fehler beim Laden der Accounts.</div>';
+      container.innerHTML = `<div class="panel__placeholder">${window.i18n('accounts.error.load')}</div>`;
     }
   }
 
   function _openCreateModal() {
     _editingUserId = null;
     ui.openAccountModal({
-      title: 'Neuer Account',
+      title: window.i18n('account.modal.create'),
       editMode: false
     });
     const form = ui.el('account-form');
@@ -33,12 +33,12 @@ const accounts = (() => {
   function _openEditModal(userId) {
     const user = _users.find(u => u.id === userId);
     if (!user) {
-      ui.toast('Account nicht gefunden.', 'error');
+      ui.toast(window.i18n('accounts.error.notfound'), 'error');
       return;
     }
     _editingUserId = userId;
     ui.openAccountModal({
-      title: 'Account bearbeiten',
+      title: window.i18n('account.modal.edit'),
       username: user.username,
       email: user.email,
       isActive: user.is_active,
@@ -64,15 +64,15 @@ const accounts = (() => {
 
     ui.setModalError(null);
     if (!email) {
-      ui.setModalError('Bitte E-Mail eingeben.');
+      ui.setModalError(window.i18n('account.error.email_required'));
       return;
     }
     if (!userId && !username) {
-      ui.setModalError('Bitte Benutzername eingeben.');
+      ui.setModalError(window.i18n('account.error.username_required'));
       return;
     }
     if (!userId && !password) {
-      ui.setModalError('Bitte Passwort eingeben.');
+      ui.setModalError(window.i18n('account.error.password_required'));
       return;
     }
 
@@ -100,7 +100,7 @@ const accounts = (() => {
       }
       ui.closeAccountModal();
       await _loadUsers();
-      ui.toast(userId ? 'Account aktualisiert.' : 'Account erstellt.', 'success');
+      ui.toast(userId ? window.i18n('accounts.updated') : window.i18n('accounts.created'), 'success');
     } catch (err) {
       ui.setModalError(err.message);
     } finally {
@@ -113,8 +113,8 @@ const accounts = (() => {
     if (!user) return;
 
     const confirmed = await ui.openConfirmModal(
-      `Account „${user.username}" wirklich löschen? Diese Aktion ist unwiderruflich.`,
-      'Account löschen'
+      window.i18n('accounts.delete.confirm', { name: user.username }),
+      window.i18n('accounts.delete.title')
     );
 
     if (!confirmed) return;
@@ -122,7 +122,7 @@ const accounts = (() => {
     try {
       await api.deleteUser(userId);
       await _loadUsers();
-      ui.toast(`Account „${user.username}" wurde gelöscht.`);
+      ui.toast(window.i18n('accounts.deleted', { name: user.username }));
     } catch (err) {
       ui.toast(err.message, 'error');
     }

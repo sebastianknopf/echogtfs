@@ -31,18 +31,18 @@ class GtfsRtAdapter(BaseAdapter):
         {
             "name": "endpoint",
             "type": "url",
-            "label": "Endpoint URL",
+            "label": "adapter.gtfsrt.endpoint.label",
             "required": True,
-            "placeholder": "https://api.example.com/gtfs-realtime",
-            "help_text": "URL zum GTFS-Realtime Protobuf Feed",
+            "placeholder": "adapter.gtfsrt.endpoint.placeholder",
+            "help_text": "adapter.gtfsrt.endpoint.help_text",
         },
         {
             "name": "token",
             "type": "password",
-            "label": "API Token (optional)",
+            "label": "adapter.gtfsrt.token.label",
             "required": False,
-            "placeholder": "Bearer-Token oder API-Key",
-            "help_text": "Authentifizierungs-Token für die API (falls erforderlich)",
+            "placeholder": "adapter.gtfsrt.token.placeholder",
+            "help_text": "adapter.gtfsrt.token.help_text",
         },
     ]
     

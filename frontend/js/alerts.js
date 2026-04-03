@@ -45,7 +45,7 @@ const alerts = (() => {
 
   async function _loadAlerts() {
     const container = ui.el('alerts-content');
-    container.innerHTML = '<div class="panel__loading">Wird geladen ...</div>';
+    container.innerHTML = `<div class="panel__loading">${window.i18n('alerts.loading')}</div>`;
     
     // Get page from URL
     _currentPage = _getPageFromURL();
@@ -79,7 +79,7 @@ const alerts = (() => {
       
       await _renderAlertsList();
     } catch (err) {
-      container.innerHTML = '<div class="panel__placeholder">Fehler beim Laden der Meldungen.</div>';
+      container.innerHTML = `<div class="panel__placeholder">${window.i18n('alerts.error.load')}</div>`;
     }
   }
 
@@ -123,8 +123,8 @@ const alerts = (() => {
     const container = ui.el('alerts-content');
     if (!_alerts.length) {
       const message = _filterText 
-        ? '<div class="panel__placeholder">Keine Meldungen entsprechen dem Filter.</div>'
-        : '<div class="panel__placeholder">Aktuell sind noch keine Meldungen verfügbar.</div>';
+        ? `<div class="panel__placeholder">${window.i18n('alerts.empty.filter')}</div>`
+        : `<div class="panel__placeholder">${window.i18n('alerts.empty')}</div>`;
       container.innerHTML = message;
       return;
     }
@@ -161,7 +161,7 @@ const alerts = (() => {
       
       // Get first translation (prefer German)
       const firstTrans = alert.translations.find(t => t.language.startsWith('de')) || alert.translations[0] || {};
-      const title = firstTrans.header_text || 'Keine Überschrift';
+      const title = firstTrans.header_text || window.i18n('alerts.title.notitle');
       
       // Get start date from first active period and end date from last period
       let startDate = '';
@@ -193,7 +193,7 @@ const alerts = (() => {
       
       // Build source badge
       const isInternal = alert.source === 'echogtfs' || !alert.data_source_id;
-      const sourceName = isInternal ? 'Intern' : (alert.data_source_name || 'Extern');
+      const sourceName = isInternal ? window.i18n('alerts.badge.internal') : (alert.data_source_name || window.i18n('alerts.badge.external'));
       const sourceBadge = `<span class="badge badge--system">${ui.esc(sourceName)}</span>`;
       
       // Build entity badges using API-resolved names
@@ -235,7 +235,7 @@ const alerts = (() => {
             <h3 class="alert-list-item__title">${ui.esc(title)}</h3>
             <div class="alert-list-item__badges">
               ${sourceBadge}
-              ${!alert.is_active ? '<span class="badge badge--system">Inaktiv</span>' : ''}
+              ${!alert.is_active ? `<span class="badge badge--system badge--inactive">${window.i18n('alerts.badge.inactive')}</span>` : ''}
             </div>
           </div>
           
@@ -250,19 +250,19 @@ const alerts = (() => {
         </div>
         
         <div class="alert-list-item__actions">
-          ${hasInvalidEntities ? `<span class="resolution-warning" title="Einige Bezüge konnten nicht aufgelöst werden">
+          ${hasInvalidEntities ? `<span class="resolution-warning" title="${window.i18n('alerts.resolution.warning')}">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
           </span>` : ''}
-          <button class="icon-btn" data-action="view" data-id="${alert.id}" title="Anzeigen" data-ripple>
+          <button class="icon-btn" data-action="view" data-id="${alert.id}" title="${window.i18n('common.view')}" data-ripple>
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
           </button>
-          ${isInternal ? `<button class="icon-btn" data-action="edit" data-id="${alert.id}" title="Bearbeiten" data-ripple>
+          ${isInternal ? `<button class="icon-btn" data-action="edit" data-id="${alert.id}" title="${window.i18n('common.edit')}" data-ripple>
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
           </button>` : ''}
-          ${isInternal ? `<button class="icon-btn icon-btn--danger" data-action="delete" data-id="${alert.id}" title="Löschen" data-ripple>
+          ${isInternal ? `<button class="icon-btn icon-btn--danger" data-action="delete" data-id="${alert.id}" title="${window.i18n('common.delete')}" data-ripple>
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
           </button>` : ''}
-          <button class="icon-btn ${alert.is_active ? 'icon-btn--success' : 'icon-btn--warning'}" data-action="toggle" data-id="${alert.id}" title="${alert.is_active ? 'Deaktivieren' : 'Aktivieren'}" data-ripple>
+          <button class="icon-btn ${alert.is_active ? 'icon-btn--success' : 'icon-btn--warning'}" data-action="toggle" data-id="${alert.id}" title="${alert.is_active ? window.i18n('common.deactivate') : window.i18n('common.activate')}" data-ripple>
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42C17.99 7.86 19 9.81 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.59-5.41L6.17 5.17C4.23 6.82 3 9.26 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z"/></svg>
           </button>
         </div>
@@ -285,7 +285,7 @@ const alerts = (() => {
     const paginationHTML = `
       <div class="pagination">
         <div class="pagination__info">
-          Seite ${_currentPage} von ${_totalPages} (${_total} Meldungen)
+          ${window.i18n('alerts.pagination.info', { current: _currentPage, total: _totalPages, count: _total })}
         </div>
         <div class="pagination__controls">
           <button class="pagination__btn" data-page="1" ${_currentPage === 1 ? 'disabled' : ''}>
@@ -338,11 +338,11 @@ const alerts = (() => {
     if (!alert) return;
     
     const deTrans = alert.translations.find(t => t.language.startsWith('de')) || {};
-    const header = deTrans.header_text || 'Unbenannte Meldung';
+    const header = deTrans.header_text || window.i18n('alerts.title.unnamed');
     
     const confirmed = await ui.openConfirmModal(
-      `Meldung „${header}" wirklich löschen? Diese Aktion ist unwiderruflich.`,
-      'Meldung löschen'
+      window.i18n('alerts.delete.confirm', { name: header }),
+      window.i18n('alerts.delete.title')
     );
     
     if (!confirmed) return;
@@ -350,7 +350,7 @@ const alerts = (() => {
     try {
       await api.deleteAlert(alertId);
       await _loadAlerts();
-      ui.toast(`Meldung „${header}" wurde gelöscht.`);
+      ui.toast(window.i18n('alerts.deleted', { name: header }));
     } catch (err) {
       ui.toast(err.message, 'error');
     }
@@ -359,7 +359,7 @@ const alerts = (() => {
   async function _viewAlert(alertId) {
     const alert = _alerts.find(a => a.id === alertId);
     if (!alert) {
-      ui.toast('Meldung nicht gefunden.', 'error');
+      ui.toast(window.i18n('alerts.error.notfound'), 'error');
       return;
     }
     
@@ -370,12 +370,12 @@ const alerts = (() => {
   async function _openEditAlert(alertId) {
     const alert = _alerts.find(a => a.id === alertId);
     if (!alert) {
-      ui.toast('Meldung nicht gefunden.', 'error');
+      ui.toast(window.i18n('alerts.error.notfound'), 'error');
       return;
     }
     
     await ui.openAlertModal({
-      title: 'Meldung bearbeiten',
+      title: window.i18n('alert.modal.edit'),
       alert: alert
     });
     
@@ -407,21 +407,20 @@ const alerts = (() => {
           // Update toggle button
           toggleBtn.classList.toggle('icon-btn--success', isActive);
           toggleBtn.classList.toggle('icon-btn--warning', !isActive);
-          toggleBtn.title = isActive ? 'Deaktivieren' : 'Aktivieren';
+          toggleBtn.title = isActive ? window.i18n('common.deactivate') : window.i18n('common.activate');
           
           // Update/remove inactive badge
           const header = item.querySelector('.alert-list-item__header');
           const badgesContainer = header?.querySelector('.alert-list-item__badges');
           if (badgesContainer) {
-            let inactiveBadge = Array.from(badgesContainer.children).find(
-              badge => badge.textContent === 'Inaktiv'
-            );
+            // Find inactive badge by unique class
+            let inactiveBadge = badgesContainer.querySelector('.badge--inactive');
             
             if (!isActive && !inactiveBadge) {
               // Add inactive badge
               const badge = document.createElement('span');
-              badge.className = 'badge badge--system';
-              badge.textContent = 'Inaktiv';
+              badge.className = 'badge badge--system badge--inactive';
+              badge.textContent = window.i18n('alerts.badge.inactive');
               badgesContainer.appendChild(badge);
             } else if (isActive && inactiveBadge) {
               // Remove inactive badge
@@ -431,7 +430,7 @@ const alerts = (() => {
         }
       });
       
-      ui.toast('Meldungsstatus geändert.', 'success');
+      ui.toast(window.i18n('alerts.status.changed'), 'success');
     } catch (err) {
       ui.toast(err.message, 'error');
     }
@@ -439,7 +438,7 @@ const alerts = (() => {
 
   async function _openCreateAlert() {
     await ui.openAlertModal({
-      title: 'Neue Meldung erstellen',
+      title: window.i18n('alert.modal.create'),
       alert: null
     });
     
@@ -477,7 +476,7 @@ const alerts = (() => {
 
     ui.setAlertModalError('');
     if (translations.length === 0) {
-      ui.setAlertModalError('Bitte mindestens eine Übersetzung mit Titel eingeben.');
+      ui.setAlertModalError(window.i18n('alert.error.translation_required'));
       return;
     }
 
@@ -541,7 +540,7 @@ const alerts = (() => {
       }
       ui.closeAlertModal();
       await _loadAlerts();
-      ui.toast(alertId ? 'Meldung aktualisiert.' : 'Meldung erstellt.', 'success');
+      ui.toast(alertId ? window.i18n('alerts.updated') : window.i18n('alerts.created'), 'success');
     } catch (err) {
       ui.setAlertModalError(err.message);
     } finally {
@@ -588,7 +587,7 @@ const alerts = (() => {
   function _updateSortButton() {
     const label = ui.el('sort-alerts-label');
     if (label) {
-      label.textContent = _sortOrder === 'newest' ? 'neueste zuerst' : 'älteste zuerst';
+      label.textContent = _sortOrder === 'newest' ? window.i18n('alerts.sort.newest') : window.i18n('alerts.sort.oldest');
     }
   }
 

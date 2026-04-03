@@ -134,6 +134,11 @@ const app = (() => {
       try {
         const appSettings = await api.getSettings();
         theme.apply(appSettings);
+        
+        // Apply language setting
+        if (appSettings.app_language) {
+          window.i18n.setLanguage(appSettings.app_language);
+        }
       } catch (err) {
       }
 
@@ -148,7 +153,7 @@ const app = (() => {
         await alerts.load();
       } else {
         // Fallback if module not available
-        ui.el('alerts-content').innerHTML = '<div class="panel__placeholder">Aktuell sind noch keine Meldungen verfügbar.</div>';
+        ui.el('alerts-content').innerHTML = `<div class="panel__placeholder">${window.i18n('alerts.empty')}</div>`;
       }
 
     } catch (err) {
@@ -173,7 +178,11 @@ const app = (() => {
 /* ==========================================================================
    BOOTSTRAP - Event listeners and app startup
 ========================================================================== */
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  // Load language from backend settings first (before any UI is shown)
+  await window.i18n.loadLanguageFromSettings();
+  
+  // Initialize button ripple effects
   initRipples();
 
   // Login

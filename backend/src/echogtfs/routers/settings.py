@@ -17,6 +17,7 @@ _DB = Annotated[AsyncSession, Depends(get_db)]
 _KEY_PRIMARY       = "color_primary"
 _KEY_SECONDARY     = "color_secondary"
 _KEY_TITLE         = "app_title"
+_KEY_LANGUAGE      = "app_language"
 _KEY_GTFS_RT_PATH  = "gtfs_rt_path"
 _KEY_GTFS_RT_USER  = "gtfs_rt_username"
 _KEY_GTFS_RT_PASS  = "gtfs_rt_password"
@@ -25,6 +26,7 @@ DEFAULTS = AppSettings(
     color_primary="#008c99",
     color_secondary="#99cc04",
     app_title="echogtfs",
+    app_language="de",
     gtfs_rt_path="realtime/service-alerts.pbf",
     gtfs_rt_username="",
     gtfs_rt_password="",
@@ -57,6 +59,7 @@ async def _load(db: AsyncSession) -> AppSettings:
         color_primary    = rows.get(_KEY_PRIMARY,      DEFAULTS.color_primary),
         color_secondary  = rows.get(_KEY_SECONDARY,    DEFAULTS.color_secondary),
         app_title        = rows.get(_KEY_TITLE,        DEFAULTS.app_title),
+        app_language     = rows.get(_KEY_LANGUAGE,     DEFAULTS.app_language),
         gtfs_rt_path     = rows.get(_KEY_GTFS_RT_PATH, DEFAULTS.gtfs_rt_path),
         gtfs_rt_username = rows.get(_KEY_GTFS_RT_USER, DEFAULTS.gtfs_rt_username),
         gtfs_rt_password = rows.get(_KEY_GTFS_RT_PASS, DEFAULTS.gtfs_rt_password),
@@ -85,6 +88,7 @@ async def update_settings(
     await _upsert(db, _KEY_PRIMARY,      payload.color_primary)
     await _upsert(db, _KEY_SECONDARY,    payload.color_secondary)
     await _upsert(db, _KEY_TITLE,        payload.app_title)
+    await _upsert(db, _KEY_LANGUAGE,     payload.app_language)
     await _upsert(db, _KEY_GTFS_RT_PATH, payload.gtfs_rt_path)
     
     # Basic Auth handling: Only clear both username and password if BOTH are empty/None
