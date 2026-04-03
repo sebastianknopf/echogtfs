@@ -7,6 +7,7 @@ the required methods for fetching and transforming service alerts.
 
 from abc import ABC, abstractmethod
 import logging
+import re
 import uuid
 from typing import Any
 
@@ -304,8 +305,51 @@ class BaseAdapter(ABC):
         
         return cleaned_entity, has_any_valid_reference
     
+    def _apply_mapping_with_wildcard(
+        self, 
+        original_value: str, 
+        mappings: dict[str, str]
+    ) -> str:
+        """
+        Apply mapping with wildcard support.
+        
+        First tries exact match, then checks for wildcard patterns.
+        A mapping key like "de:vpe:04701*" will match any value starting with "de:vpe:04701".
+        
+        Args:
+            original_value: The value to map
+            mappings: Dictionary of mapping key -> mapped value
+            
+        Returns:
+            Mapped value if found, otherwise original_value
+        """
+        # Try exact match first
+        if original_value in mappings:
+            return mappings[original_value]
+        
+        # Try wildcard matching
+        for mapping_key, mapping_value in mappings.items():
+            if '*' in mapping_key:
+                # Check if it's a prefix pattern (e.g., "prefix*")
+                if mapping_key.endswith('*'):
+                    prefix = mapping_key[:-1]  # Remove the trailing *
+                    if original_value.startswith(prefix):
+                        return mapping_value
+                # Support wildcard anywhere in the pattern for future extensibility
+                else:
+                    # Convert to regex pattern (escape special chars except *)
+                    pattern = re.escape(mapping_key).replace(r'\*', '.*')
+                    if re.fullmatch(pattern, original_value):
+                        return mapping_value
+        
+        # No match found, return original
+        return original_value
+    
     def _apply_entity_mappings(self, entity_data: dict[str, Any], mappings: dict[str, dict[str, str]]) -> dict[str, Any]:
         """Apply mappings to informed entity data.
+        
+        Supports wildcard patterns in mapping keys. A key like "de:vpe:04701*" will
+        match any value starting with "de:vpe:04701".
         
         Args:
             entity_data: Dictionary with entity fields (agency_id, route_id, stop_id, etc.)
@@ -320,17 +364,59 @@ class BaseAdapter(ABC):
         # Apply mappings for each supported entity type
         if "agency_id" in mapped_entity and mapped_entity["agency_id"]:
             original_value = mapped_entity["agency_id"]
-            mapped_entity["agency_id"] = mappings.get("agency", {}).get(original_value, original_value)
+            mapped_entity["agency_id"] = self._apply_mapping_with_wildcard(
+                original_value, 
+                mappings.get("agency", {})
+            )
         
         if "route_id" in mapped_entity and mapped_entity["route_id"]:
             original_value = mapped_entity["route_id"]
-            mapped_entity["route_id"] = mappings.get("route", {}).get(original_value, original_value)
+            mapped_entity["route_id"] = self._apply_mapping_with_wildcard(
+                original_value, 
+                mappings.get("route", {})
+            )
         
         if "stop_id" in mapped_entity and mapped_entity["stop_id"]:
             original_value = mapped_entity["stop_id"]
-            mapped_entity["stop_id"] = mappings.get("stop", {}).get(original_value, original_value)
+            mapped_entity["stop_id"] = self._apply_mapping_with_wildcard(
+                original_value, 
+                mappings.get("stop", {})
+            )
         
         return mapped_entity
+    
+    def _deduplicate_entities(self, entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """
+        Remove duplicate informed entities from a list.
+        
+        Two entities are considered duplicates if they have the same values for:
+        agency_id, route_id, route_type, stop_id, trip_id, and direction_id.
+        
+        Args:
+            entities: List of entity dictionaries
+            
+        Returns:
+            List with duplicates removed (preserving order, keeping first occurrence)
+        """
+        seen = set()
+        deduplicated = []
+        
+        for entity in entities:
+            # Create a tuple of relevant fields for comparison (excluding is_valid)
+            entity_key = (
+                entity.get("agency_id"),
+                entity.get("route_id"),
+                entity.get("route_type"),
+                entity.get("stop_id"),
+                entity.get("trip_id"),
+                entity.get("direction_id"),
+            )
+            
+            if entity_key not in seen:
+                seen.add(entity_key)
+                deduplicated.append(entity)
+        
+        return deduplicated
     
     async def sync_alerts(
         self, 
@@ -566,6 +652,19 @@ class BaseAdapter(ABC):
                 
                 # policy == InvalidReferencePolicy.NOT_SPECIFIED:
                 # Pass through without changes
+            
+            # Deduplicate entities - remove duplicates that may have been created
+            # through mapping or policy application
+            if entities_to_create:
+                original_count = len(entities_to_create)
+                entities_to_create = self._deduplicate_entities(entities_to_create)
+                duplicates_removed = original_count - len(entities_to_create)
+                
+                if duplicates_removed > 0:
+                    logger.debug(
+                        f"[{self.get_adapter_type()}] Removed {duplicates_removed} duplicate "
+                        f"entities from alert {alert_id}"
+                    )
             
             # Check if alert has no entities at all (either none provided or all removed by policy)
             # Deactivate such alerts as they have no meaningful content
