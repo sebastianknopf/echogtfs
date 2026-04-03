@@ -10,11 +10,13 @@ Each adapter implements the BaseAdapter interface and provides:
 from echogtfs.services.adapters.base import BaseAdapter
 from echogtfs.services.adapters.sirilite import SiriLiteAdapter
 from echogtfs.services.adapters.gtfsrt import GtfsRtAdapter
+from echogtfs.services.adapters.sirisx import SiriSxAdapter
 
 __all__ = [
     "BaseAdapter",
     "SiriLiteAdapter",
     "GtfsRtAdapter",
+    "SiriSxAdapter",
 ]
 
 
@@ -22,6 +24,7 @@ __all__ = [
 ADAPTER_REGISTRY: dict[str, type[BaseAdapter]] = {
     "sirilite": SiriLiteAdapter,
     "gtfsrt": GtfsRtAdapter,
+    "sirisx": SiriSxAdapter,
 }
 
 
