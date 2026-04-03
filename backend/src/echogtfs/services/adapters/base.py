@@ -247,6 +247,63 @@ class BaseAdapter(ABC):
         # If no entities are specified or all specified entities are valid
         return True
     
+    def _validate_and_clean_entity_elements(
+        self, 
+        entity_data: dict[str, Any], 
+        gtfs_entities: dict[str, set[str]]
+    ) -> tuple[dict[str, Any], bool]:
+        """Validate and clean individual fields within an informed entity.
+        
+        Removes invalid entity references (agency_id, route_id, stop_id) from the entity
+        while keeping valid ones. This is used by DISCARD_INVALID_ELEMENTS policy.
+        
+        Args:
+            entity_data: Dictionary with entity fields (agency_id, route_id, stop_id, etc.)
+            gtfs_entities: Dictionary of valid GTFS IDs from _load_gtfs_entities()
+        
+        Returns:
+            Tuple of (cleaned_entity_data, has_any_valid_reference)
+            - cleaned_entity_data: Entity with invalid fields removed
+            - has_any_valid_reference: True if at least one valid reference remains
+        """
+        # Create a copy to avoid modifying the original
+        cleaned_entity = entity_data.copy()
+        has_any_valid_reference = False
+        removed_fields = []
+        
+        # Check and clean agency_id
+        if cleaned_entity.get("agency_id"):
+            if cleaned_entity["agency_id"] not in gtfs_entities["agency"]:
+                removed_fields.append(f"agency_id={cleaned_entity['agency_id']}")
+                cleaned_entity["agency_id"] = None
+            else:
+                has_any_valid_reference = True
+        
+        # Check and clean route_id
+        if cleaned_entity.get("route_id"):
+            if cleaned_entity["route_id"] not in gtfs_entities["route"]:
+                removed_fields.append(f"route_id={cleaned_entity['route_id']}")
+                cleaned_entity["route_id"] = None
+            else:
+                has_any_valid_reference = True
+        
+        # Check and clean stop_id
+        if cleaned_entity.get("stop_id"):
+            if cleaned_entity["stop_id"] not in gtfs_entities["stop"]:
+                removed_fields.append(f"stop_id={cleaned_entity['stop_id']}")
+                cleaned_entity["stop_id"] = None
+            else:
+                has_any_valid_reference = True
+        
+        # Log removed fields
+        if removed_fields:
+            logger.debug(
+                f"[{self.get_adapter_type()}] Removed invalid fields from entity: "
+                f"{', '.join(removed_fields)}"
+            )
+        
+        return cleaned_entity, has_any_valid_reference
+    
     def _apply_entity_mappings(self, entity_data: dict[str, Any], mappings: dict[str, dict[str, str]]) -> dict[str, Any]:
         """Apply mappings to informed entity data.
         
@@ -327,6 +384,9 @@ class BaseAdapter(ABC):
             f"(policy: {policy.value})"
         )
         
+        # Inject source_name into config so adapters can use it for ID generation
+        self.config["_source_name"] = source_name
+        
         # Fetch alerts from external source
         alert_dicts = await self.fetch_alerts()
         total_fetched = len(alert_dicts)
@@ -402,6 +462,7 @@ class BaseAdapter(ABC):
             entities_data = alert_data.pop("informed_entities", [])
             
             # Apply mappings to all entities and validate them
+            # For DISCARD_INVALID_ELEMENTS policy, also clean individual fields
             validated_entities = []
             has_invalid_entity = False
             
@@ -409,20 +470,37 @@ class BaseAdapter(ABC):
                 # Apply mappings to entity data
                 mapped_entity_data = self._apply_entity_mappings(entity_data, mappings)
                 
-                # Validate the mapped entity
-                is_valid = self._validate_entity(mapped_entity_data, gtfs_entities)
-                
-                # Mark entity as valid/invalid
-                mapped_entity_data["is_valid"] = is_valid
-                
-                if not is_valid:
-                    has_invalid_entity = True
-                    logger.debug(
-                        f"[{self.get_adapter_type()}] Invalid entity reference in alert {alert_id}: "
-                        f"{mapped_entity_data}"
+                # For DISCARD_INVALID_ELEMENTS policy, validate and clean individual fields
+                if policy == InvalidReferencePolicy.DISCARD_INVALID_ELEMENTS:
+                    cleaned_entity, has_valid_ref = self._validate_and_clean_entity_elements(
+                        mapped_entity_data, gtfs_entities
                     )
-                
-                validated_entities.append(mapped_entity_data)
+                    # Mark as valid if at least one reference is valid
+                    cleaned_entity["is_valid"] = has_valid_ref
+                    
+                    if not has_valid_ref:
+                        has_invalid_entity = True
+                        logger.debug(
+                            f"[{self.get_adapter_type()}] Entity has no valid references in alert {alert_id}: "
+                            f"{mapped_entity_data}"
+                        )
+                    
+                    validated_entities.append(cleaned_entity)
+                else:
+                    # Standard validation for other policies
+                    is_valid = self._validate_entity(mapped_entity_data, gtfs_entities)
+                    
+                    # Mark entity as valid/invalid
+                    mapped_entity_data["is_valid"] = is_valid
+                    
+                    if not is_valid:
+                        has_invalid_entity = True
+                        logger.debug(
+                            f"[{self.get_adapter_type()}] Invalid entity reference in alert {alert_id}: "
+                            f"{mapped_entity_data}"
+                        )
+                    
+                    validated_entities.append(mapped_entity_data)
             
             # Apply invalid reference policy
             should_skip_alert = False
@@ -458,6 +536,24 @@ class BaseAdapter(ABC):
                         logger.debug(
                             f"[{self.get_adapter_type()}] Removed {len(validated_entities) - len(entities_to_create)} "
                             f"invalid entities from alert {alert_id} (policy: {policy.value})"
+                        )
+                
+                elif policy == InvalidReferencePolicy.DISCARD_INVALID_ELEMENTS:
+                    # Keep only entities that have at least one valid reference
+                    # (invalid fields within entities have already been cleaned)
+                    entities_to_create = [e for e in validated_entities if e["is_valid"]]
+                    
+                    # If no valid entities remain, deactivate the alert
+                    if not entities_to_create:
+                        should_deactivate_alert = True
+                        logger.debug(
+                            f"[{self.get_adapter_type()}] Deactivating alert {alert_id} "
+                            f"- all entities had only invalid references (policy: {policy.value})"
+                        )
+                    else:
+                        logger.debug(
+                            f"[{self.get_adapter_type()}] Cleaned {len(validated_entities) - len(entities_to_create)} "
+                            f"entities with no valid references from alert {alert_id} (policy: {policy.value})"
                         )
                 
                 elif policy == InvalidReferencePolicy.KEEP_ALERT:

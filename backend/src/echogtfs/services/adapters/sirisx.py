@@ -556,22 +556,6 @@ class SiriSxAdapter(BaseAdapter):
             "informed_entities": informed_entities,
         }
     
-    def _make_unique_id(self, situation_number: str, source_name: str) -> str:
-        """
-        Generate a unique ID for an alert.
-        
-        Args:
-            situation_number: SIRI SituationNumber
-            source_name: Data source name
-            
-        Returns:
-            Unique alert ID string
-        """
-        # Use UUID5 with combination of source name and situation number
-        namespace = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')  # URL namespace
-        unique_string = f"{source_name}:{situation_number}"
-        return str(uuid.uuid5(namespace, unique_string))
-    
     def _strip_html(self, text: str) -> str:
         """
         Strip HTML tags and clean up text.

@@ -126,10 +126,27 @@ const api = (() => {
     },
 
     // Alerts
-    getAlerts(page = 1, limit = 20, sort = 'newest', search = '') {
+    getAlerts(page = 1, limit = 20, sort = 'newest', search = '', filters = {}) {
       const params = new URLSearchParams({ page, limit, sort });
       if (search) {
         params.set('search', search);
+      }
+      // Add filter parameters if not all are selected
+      if (filters.active !== undefined && filters.inactive !== undefined) {
+        if (filters.active && !filters.inactive) {
+          params.set('is_active', 'true');
+        } else if (!filters.active && filters.inactive) {
+          params.set('is_active', 'false');
+        }
+        // If both are true or both false, don't add the parameter (show all)
+      }
+      if (filters.internal !== undefined && filters.external !== undefined) {
+        if (filters.internal && !filters.external) {
+          params.set('has_data_source', 'false');
+        } else if (!filters.internal && filters.external) {
+          params.set('has_data_source', 'true');
+        }
+        // If both are true or both false, don't add the parameter (show all)
       }
       return request(`/alerts/?${params}`);
     },

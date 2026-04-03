@@ -126,9 +126,6 @@ async def run_import_task(source_id: int) -> None:
             import json
             config = json.loads(source.config)
             
-            # Add source name to config for deterministic ID generation
-            config["_source_name"] = source.name
-            
             adapter = get_adapter(source.type, config)
             
             # Delegate all sync logic to the adapter

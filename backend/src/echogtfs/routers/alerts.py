@@ -174,6 +174,8 @@ async def list_alerts(
     limit: int = 20,
     sort: str = "newest",
     search: str = "",
+    is_active: bool | None = None,
+    has_data_source: bool | None = None,
 ) -> ServiceAlertListResponse:
     """
     List service alerts with pagination (public endpoint).
@@ -187,6 +189,8 @@ async def list_alerts(
     - limit: Items per page (default: 20, max: 100)
     - sort: Sort order - "newest" (default) or "oldest"
     - search: Search filter (searches in header_text of translations)
+    - is_active: Filter by active status (true/false, optional)
+    - has_data_source: Filter by data source presence - true = external, false = internal (optional)
     """
     # Validate and clamp parameters
     page = max(1, page)
@@ -205,7 +209,7 @@ async def list_alerts(
         .subquery()
     )
     
-    # Build WHERE conditions for search filter
+    # Build WHERE conditions for filters
     where_conditions = []
     if search:
         search_pattern = f"%{search}%"
@@ -217,6 +221,19 @@ async def list_alerts(
                 .distinct()
             )
         )
+    
+    # Filter by active status
+    if is_active is not None:
+        where_conditions.append(ServiceAlert.is_active == is_active)
+    
+    # Filter by data source presence (internal vs external)
+    if has_data_source is not None:
+        if has_data_source:
+            # External: has a data_source_id
+            where_conditions.append(ServiceAlert.data_source_id.is_not(None))
+        else:
+            # Internal: no data_source_id
+            where_conditions.append(ServiceAlert.data_source_id.is_(None))
     
     # Count total alerts (with search filter applied)
     count_stmt = select(func.count(ServiceAlert.id))

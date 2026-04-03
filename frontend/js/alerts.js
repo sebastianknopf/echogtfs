@@ -11,6 +11,12 @@ const alerts = (() => {
   let _totalPages = 1;
   let _total = 0;
   let _filterTimeout = null; // For debouncing filter input
+  let _filters = {
+    active: true,
+    inactive: true,
+    internal: true,
+    external: true
+  };
 
   // Helper to check if user has poweruser or admin rights
   function _isPoweruser() {
@@ -46,7 +52,7 @@ const alerts = (() => {
     
     try {
       // Load alerts and sources (if user has poweruser rights)
-      const requests = [api.getAlerts(_currentPage, 20, _sortOrder, _filterText)];
+      const requests = [api.getAlerts(_currentPage, 20, _sortOrder, _filterText, _filters)];
       
       if (_isPoweruser()) {
         requests.push(api.getSources().catch(() => []));
@@ -543,7 +549,7 @@ const alerts = (() => {
     }
   }
 
-  function _handleFilterChange(e) {
+  function _handleSearchChange(e) {
     _filterText = e.target.value.trim();
     
     // Clear existing timeout
@@ -597,21 +603,104 @@ const alerts = (() => {
     _updateSortButton();
   }
 
+  function _loadFiltersFromStorage() {
+    try {
+      const saved = localStorage.getItem('echogtfs_alerts_filters');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        _filters = { ..._filters, ...parsed };
+      }
+    } catch (err) {
+    }
+    _updateFilterCheckboxes();
+  }
+
+  function _saveFiltersToStorage() {
+    try {
+      localStorage.setItem('echogtfs_alerts_filters', JSON.stringify(_filters));
+    } catch (err) {
+    }
+  }
+
+  function _updateFilterCheckboxes() {
+    const activeCheckbox = ui.el('filter-active');
+    const inactiveCheckbox = ui.el('filter-inactive');
+    const internalCheckbox = ui.el('filter-internal');
+    const externalCheckbox = ui.el('filter-external');
+    
+    if (activeCheckbox) activeCheckbox.checked = _filters.active;
+    if (inactiveCheckbox) inactiveCheckbox.checked = _filters.inactive;
+    if (internalCheckbox) internalCheckbox.checked = _filters.internal;
+    if (externalCheckbox) externalCheckbox.checked = _filters.external;
+  }
+
+  function _toggleFilterPopout() {
+    const popout = ui.el('filter-alerts-popout');
+    if (!popout) return;
+    
+    if (popout.hidden) {
+      popout.hidden = false;
+      // Close popout when clicking outside
+      setTimeout(() => {
+        document.addEventListener('click', _handleOutsideClick);
+      }, 0);
+    } else {
+      popout.hidden = true;
+      document.removeEventListener('click', _handleOutsideClick);
+    }
+  }
+
+  function _handleOutsideClick(e) {
+    const popout = ui.el('filter-alerts-popout');
+    const filterBtn = ui.el('filter-alerts-btn');
+    const container = e.target.closest('.filter-dropdown-container');
+    
+    if (!container && popout && !popout.hidden) {
+      popout.hidden = true;
+      document.removeEventListener('click', _handleOutsideClick);
+    }
+  }
+
+  function _handleFilterChange(checkbox) {
+    const filterType = checkbox.id.replace('filter-', '');
+    _filters[filterType] = checkbox.checked;
+    _saveFiltersToStorage();
+    
+    // Reload alerts with new filters
+    _currentPage = 1;
+    _setPageInURL(1);
+    _loadAlerts();
+  }
+
   function init() {
-    // Load sort order from storage
+    // Load sort order and filters from storage
     _loadSortOrderFromStorage();
+    _loadFiltersFromStorage();
     
     // Setup event listeners
     const filterInput = ui.el('alert-filter');
     if (filterInput) {
-      filterInput.addEventListener('input', _handleFilterChange);
+      filterInput.addEventListener('input', _handleSearchChange);
     }
-    
 
     const sortBtn = ui.el('sort-alerts-btn');
     if (sortBtn) {
       sortBtn.addEventListener('click', _toggleSortOrder);
     }
+
+    const filterBtn = ui.el('filter-alerts-btn');
+    if (filterBtn) {
+      filterBtn.addEventListener('click', _toggleFilterPopout);
+    }
+
+    // Setup filter checkboxes
+    const filterCheckboxes = ['filter-active', 'filter-inactive', 'filter-internal', 'filter-external'];
+    filterCheckboxes.forEach(id => {
+      const checkbox = ui.el(id);
+      if (checkbox) {
+        checkbox.addEventListener('change', () => _handleFilterChange(checkbox));
+      }
+    });
     
     // Handle browser back/forward navigation
     window.addEventListener('popstate', () => {

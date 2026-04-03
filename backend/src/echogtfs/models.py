@@ -130,6 +130,7 @@ class InvalidReferencePolicy(str, Enum):
     DISCARD_ALERT = "discard_alert"  # Discard entire alert if any reference is invalid
     KEEP_ALERT = "keep_alert"  # Keep entire alert even if references are invalid
     DISCARD_INVALID = "discard_invalid"  # Discard only invalid references, keep alert
+    DISCARD_INVALID_ELEMENTS = "discard_invalid_elements"  # Discard invalid fields within references
     NOT_SPECIFIED = "not_specified"  # No specific policy defined
 
 
