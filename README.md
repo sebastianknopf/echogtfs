@@ -1,10 +1,19 @@
+
 # echogtfs
+
+
+**Looking for the full documentation?**
+👉 [Read the EchoGTFS Manual](docs/manual/README.md)
 
 A lightweight CMS for creating and managing GTFS-RT ServiceAlerts based on existing GTFS feeds. The system allows transit agencies to create real-time service alerts and integrate additional data sources such as SIRI-SX.
 
+
 ## Overview
 
-**echogtfs** is designed to simplify the creation and distribution of GTFS-Realtime ServiceAlerts. It provides:
+
+**echogtfs** is designed to simplify the creation and distribution of GTFS-Realtime ServiceAlerts. For a comprehensive guide, configuration options, and advanced usage, see the [EchoGTFS Manual](docs/manual/README.md).
+
+It provides:
 
 - A web-based interface for managing service alerts
 - Integration with existing static GTFS feeds
