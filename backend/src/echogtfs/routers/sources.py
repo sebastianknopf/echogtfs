@@ -373,7 +373,10 @@ async def toggle_source_active(
     stmt = (
         select(DataSource)
         .where(DataSource.id == source_id)
-        .options(selectinload(DataSource.mappings))
+        .options(
+            selectinload(DataSource.mappings),
+            selectinload(DataSource.enrichments)
+        )
     )
     result = await db.execute(stmt)
     source = result.scalar_one_or_none()
@@ -424,7 +427,10 @@ async def toggle_source_active(
     stmt = (
         select(DataSource)
         .where(DataSource.id == source.id)
-        .options(selectinload(DataSource.mappings))
+        .options(
+            selectinload(DataSource.mappings),
+            selectinload(DataSource.enrichments)
+        )
     )
     result = await db.execute(stmt)
     return result.scalar_one()

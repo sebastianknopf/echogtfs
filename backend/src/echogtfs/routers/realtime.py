@@ -319,12 +319,13 @@ async def get_service_alerts(
     db: Annotated[AsyncSession, Depends(get_db)],
     _auth: Annotated[None, Depends(check_gtfs_rt_auth)],
     json_format: Annotated[str | None, Query(alias="json")] = None,
+    debug_format: Annotated[str | None, Query(alias="debug")] = None,
 ) -> Response:
     """
     Export GTFS-Realtime ServiceAlerts.
     
     Returns active service alerts in GTFS-RT protobuf format (default)
-    or JSON format when ?json parameter is present.
+    or JSON format when ?json or ?debug parameter is present.
     
     The endpoint path is configurable via settings. Authentication is
     optional and only enforced if credentials are configured.
@@ -335,6 +336,7 @@ async def get_service_alerts(
         db: Database session
         _auth: Auth dependency (automatically checks if needed)
         json_format: If present (query param ?json), return JSON instead of protobuf
+        debug_format: If present (query param ?debug), return JSON instead of protobuf
         
     Returns:
         Response with either application/x-protobuf or application/json content
@@ -359,12 +361,12 @@ async def get_service_alerts(
     
     # Return cached response if valid
     if cache_valid:
-        if json_format is not None and _feed_cache["json"] is not None:
+        if (json_format is not None or debug_format is not None) and _feed_cache["json"] is not None:
             return Response(
                 content=_feed_cache["json"],
                 media_type="application/json",
             )
-        elif json_format is None and _feed_cache["protobuf"] is not None:
+        elif (json_format is None and debug_format is None) and _feed_cache["protobuf"] is not None:
             return Response(
                 content=_feed_cache["protobuf"],
                 media_type="application/x-protobuf",
@@ -399,8 +401,8 @@ async def get_service_alerts(
     _feed_cache["timestamp"] = current_time
     
     # Return as JSON or protobuf
-    # If ?json is present (even without value), return JSON
-    if json_format is not None:
+    # If ?json or ?debug is present (even without value), return JSON
+    if json_format is not None or debug_format is not None:
         return Response(
             content=json_content,
             media_type="application/json",

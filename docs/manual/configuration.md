@@ -13,7 +13,18 @@ EchoGTFS offers flexible configuration options to adapt the system to your envir
 ## GTFS Realtime Configuration
 - After logging in as an admin, navigate to the **Settings** section.
 - Define a GTFS-RT endpoint URL for accessing the GTFS-RT service alerts feed. This URL is always appended to `https://[YourDomain]/api/`.
-- Optionally you can define a basic auth username and password for protecting the GTFS-RT stream. To change a given password, enter a new password. To disable basic auth, simply remove the username. 
+- Optionally you can define a basic auth username and password for protecting the GTFS-RT stream. To change a given password, enter a new password. To disable basic auth, simply remove the username.
+
+### Output Formats
+The GTFS-RT endpoint supports different output formats via query parameters:
+- **Default (no parameter):** Returns the feed in GTFS-RT Protobuf format (binary, `application/x-protobuf`)
+- **`?json`:** Returns the feed as JSON for debugging and inspection
+- **`?debug`:** Alternative parameter for JSON output, functionally identical to `?json`
+
+Example:
+- `https://[YourDomain]/api/gtfs-rt` → Protobuf (for production use)
+- `https://[YourDomain]/api/gtfs-rt?json` → JSON (for debugging)
+- `https://[YourDomain]/api/gtfs-rt?debug` → JSON (for debugging) 
 
 ## GTFS Static Configuration
 - After logging in as an admin, navigate to the **Settings** section.
