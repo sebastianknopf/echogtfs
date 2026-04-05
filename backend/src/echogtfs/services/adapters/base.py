@@ -176,6 +176,198 @@ class BaseAdapter(ABC):
         
         return structured_mappings
     
+    async def _load_enrichments(self, db: AsyncSession, source_id: int) -> list[dict[str, Any]]:
+        """Load enrichments for the specified data source.
+        
+        Returns a list of enrichment rules sorted by priority (sort_order).
+        Each enrichment is a dict with: enrichment_type, source_field, key, value.
+        
+        Args:
+            db: Database session
+            source_id: ID of the data source to load enrichments for
+        """
+        from echogtfs.models import DataSourceEnrichment
+        
+        # Load all enrichments for this data source, sorted by priority
+        result = await db.execute(
+            select(DataSourceEnrichment)
+            .where(DataSourceEnrichment.data_source_id == source_id)
+            .order_by(DataSourceEnrichment.sort_order)
+        )
+        enrichments = result.scalars().all()
+        
+        # Convert to list of dictionaries
+        enrichment_list = []
+        for enrichment in enrichments:
+            enrichment_list.append({
+                "enrichment_type": enrichment.enrichment_type,
+                "source_field": enrichment.source_field,
+                "key": enrichment.key,
+                "value": enrichment.value,
+            })
+        
+        return enrichment_list
+    
+    def _match_enrichment_pattern(self, text: str, pattern: str) -> bool:
+        """
+        Check if text matches the enrichment pattern using regex-light rules.
+        
+        Rules:
+        - Case-insensitive matching
+        - '*' is treated as a wildcard (matches any characters)
+        - Implicit wildcards at start and end (pattern is always wrapped in *)
+        - Comma-separated values in pattern are AND conditions (all must match)
+        
+        Args:
+            text: The text to check (header or description)
+            pattern: The pattern to match (can contain * wildcards and commas)
+            
+        Returns:
+            True if text matches pattern, False otherwise
+        """
+        if not text or not pattern:
+            return False
+        
+        # Normalize text to lowercase for case-insensitive matching
+        text_lower = text.lower()
+        
+        # Split pattern by comma for AND conditions
+        # Each part must be found in the text (after trimming whitespace)
+        pattern_parts = [part.strip() for part in pattern.split(',') if part.strip()]
+        
+        # All parts must match (AND condition)
+        for part in pattern_parts:
+            # Normalize pattern part to lowercase
+            part_lower = part.lower()
+            
+            # Convert pattern to regex:
+            # - Escape special regex characters except *
+            # - Replace * with .*
+            # - Add implicit wildcards at start and end
+            regex_pattern = re.escape(part_lower).replace(r'\*', '.*')
+            regex_pattern = f'.*{regex_pattern}.*'
+            
+            # Check if this part matches
+            if not re.search(regex_pattern, text_lower):
+                return False
+        
+        # All parts matched
+        return True
+    
+    def _apply_enrichments(
+        self, 
+        alert_dicts: list[dict[str, Any]], 
+        enrichments: list[dict[str, Any]]
+    ) -> None:
+        """
+        Apply enrichments to alert dictionaries.
+        
+        Enrichments are pattern-based rules that extract cause, effect, or severity
+        from alert header/description text. They are processed in priority order
+        (sort_order), and the first match for each enrichment type wins.
+        
+        Args:
+            alert_dicts: List of alert dictionaries (modified in place)
+            enrichments: List of enrichment rules from _load_enrichments()
+        """
+        from echogtfs.models import EnrichmentType, SourceField
+        
+        # Track which enrichment types can be overridden (default/unknown values)
+        default_values = {
+            "cause": {"UNKNOWN_CAUSE", "OTHER_CAUSE"},
+            "effect": {"UNKNOWN_EFFECT", "OTHER_EFFECT"},
+            "severity": {"UNKNOWN_SEVERITY", "INFO"},
+        }
+        
+        for alert_data in alert_dicts:
+            # Track which enrichment types have been set for this alert
+            enriched_types = {
+                "cause": False,
+                "effect": False,
+                "severity": False,
+            }
+            
+            # Check current values - only override if they're default/unknown
+            current_cause = alert_data.get("cause", "UNKNOWN_CAUSE")
+            current_effect = alert_data.get("effect", "UNKNOWN_EFFECT")
+            current_severity = alert_data.get("severity_level", "UNKNOWN_SEVERITY")
+            
+            # Determine which types can be enriched
+            can_enrich_cause = current_cause in default_values["cause"]
+            can_enrich_effect = current_effect in default_values["effect"]
+            can_enrich_severity = current_severity in default_values["severity"]
+            
+            # Extract all header and description texts from translations
+            headers = []
+            descriptions = []
+            for translation in alert_data.get("translations", []):
+                if translation.get("header_text"):
+                    headers.append(translation["header_text"])
+                if translation.get("description_text"):
+                    descriptions.append(translation["description_text"])
+            
+            # Process enrichments in priority order (already sorted by sort_order)
+            for enrichment in enrichments:
+                enrichment_type = enrichment["enrichment_type"]
+                source_field = enrichment["source_field"]
+                pattern = enrichment["key"]
+                value = enrichment["value"]
+                
+                # Skip if this enrichment type has already been set
+                if enrichment_type == EnrichmentType.CAUSE:
+                    if enriched_types["cause"] or not can_enrich_cause:
+                        continue
+                elif enrichment_type == EnrichmentType.EFFECT:
+                    if enriched_types["effect"] or not can_enrich_effect:
+                        continue
+                elif enrichment_type == EnrichmentType.SEVERITY:
+                    if enriched_types["severity"] or not can_enrich_severity:
+                        continue
+                
+                # Determine which texts to search based on source_field
+                texts_to_search = []
+                if source_field == SourceField.HEADER:
+                    texts_to_search = headers
+                elif source_field == SourceField.DESCRIPTION:
+                    texts_to_search = descriptions
+                elif source_field == SourceField.HEADER_DESCRIPTION:
+                    texts_to_search = headers + descriptions
+                
+                # Check if pattern matches any of the texts
+                matched = False
+                for text in texts_to_search:
+                    if self._match_enrichment_pattern(text, pattern):
+                        matched = True
+                        break
+                
+                # Apply enrichment if matched
+                if matched:
+                    if enrichment_type == EnrichmentType.CAUSE:
+                        alert_data["cause"] = value
+                        enriched_types["cause"] = True
+                        logger.debug(
+                            f"[{self.get_adapter_type()}] Enriched alert {alert_data['id']}: "
+                            f"cause={value} (matched pattern: {pattern})"
+                        )
+                    elif enrichment_type == EnrichmentType.EFFECT:
+                        alert_data["effect"] = value
+                        enriched_types["effect"] = True
+                        logger.debug(
+                            f"[{self.get_adapter_type()}] Enriched alert {alert_data['id']}: "
+                            f"effect={value} (matched pattern: {pattern})"
+                        )
+                    elif enrichment_type == EnrichmentType.SEVERITY:
+                        alert_data["severity_level"] = value
+                        enriched_types["severity"] = True
+                        logger.debug(
+                            f"[{self.get_adapter_type()}] Enriched alert {alert_data['id']}: "
+                            f"severity_level={value} (matched pattern: {pattern})"
+                        )
+                    
+                    # If all types have been enriched, we can stop processing for this alert
+                    if all(enriched_types.values()):
+                        break
+    
     async def _load_gtfs_entities(self, db: AsyncSession) -> dict[str, set[str]]:
         """Load all GTFS entity IDs into memory for fast validation.
         
@@ -508,6 +700,16 @@ class BaseAdapter(ABC):
         
         # Load mappings for this data source
         mappings = await self._load_mappings(db, source_id)
+        
+        # Load enrichments for this data source
+        enrichments = await self._load_enrichments(db, source_id)
+        
+        # Apply enrichments to alerts (before validation, as they may affect cause/effect/severity)
+        if enrichments:
+            logger.info(
+                f"[{self.get_adapter_type()}] Applying {len(enrichments)} enrichment rules to alerts"
+            )
+            self._apply_enrichments(alert_dicts, enrichments)
         
         # Load GTFS entities for validation
         gtfs_entities = await self._load_gtfs_entities(db)

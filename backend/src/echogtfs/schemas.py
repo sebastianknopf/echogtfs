@@ -2,9 +2,16 @@
 import re
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, field_validator, model_validator
 
-from echogtfs.models import InvalidReferencePolicy
+from echogtfs.models import (
+    InvalidReferencePolicy, 
+    EnrichmentType, 
+    SourceField,
+    AlertCause,
+    AlertEffect,
+    AlertSeverityLevel
+)
 
 _HEX_COLOR = re.compile(r'^#[0-9a-fA-F]{6}$')
 
@@ -278,6 +285,55 @@ class DataSourceMappingRead(DataSourceMappingCreate):
     model_config = {"from_attributes": True}
 
 
+class DataSourceEnrichmentCreate(BaseModel):
+    """Enrichment data for creating/updating data sources.
+    
+    Enrichments extract cause, effect, or severity from alert text fields:
+    - enrichment_type: Type of enrichment ("cause", "effect", "severity")
+    - source_field: Where to look ("header", "description", "header_description")
+    - key: Text or regex pattern to match
+    - value: Value to assign when matched (e.g., "STRIKE", "NO_SERVICE", "SEVERE")
+    - sort_order: Priority (lower numbers processed first)
+    """
+    enrichment_type: EnrichmentType
+    source_field: SourceField
+    key: str
+    value: str
+    sort_order: int = 0
+
+    @model_validator(mode='after')
+    def validate_enrichment_value(self):
+        """Validate that value matches the enrichment_type."""
+        if self.enrichment_type == EnrichmentType.CAUSE:
+            # Validate against AlertCause enum
+            valid_values = [cause.value for cause in AlertCause]
+            if self.value not in valid_values:
+                raise ValueError(
+                    f"Invalid cause value '{self.value}'. Must be one of: {', '.join(valid_values)}"
+                )
+        elif self.enrichment_type == EnrichmentType.EFFECT:
+            # Validate against AlertEffect enum
+            valid_values = [effect.value for effect in AlertEffect]
+            if self.value not in valid_values:
+                raise ValueError(
+                    f"Invalid effect value '{self.value}'. Must be one of: {', '.join(valid_values)}"
+                )
+        elif self.enrichment_type == EnrichmentType.SEVERITY:
+            # Validate against AlertSeverityLevel enum
+            valid_values = [severity.value for severity in AlertSeverityLevel]
+            if self.value not in valid_values:
+                raise ValueError(
+                    f"Invalid severity value '{self.value}'. Must be one of: {', '.join(valid_values)}"
+                )
+        return self
+
+
+class DataSourceEnrichmentRead(DataSourceEnrichmentCreate):
+    """Read model with ID."""
+    id: int
+    model_config = {"from_attributes": True}
+
+
 class DataSourceCreate(BaseModel):
     """Create a new data source."""
     name: str
@@ -287,6 +343,7 @@ class DataSourceCreate(BaseModel):
     is_active: bool = True
     invalid_reference_policy: InvalidReferencePolicy = InvalidReferencePolicy.NOT_SPECIFIED
     mappings: list[DataSourceMappingCreate] = []
+    enrichments: list[DataSourceEnrichmentCreate] = []
 
 
 class DataSourceUpdate(BaseModel):
@@ -298,6 +355,7 @@ class DataSourceUpdate(BaseModel):
     is_active: bool | None = None
     invalid_reference_policy: InvalidReferencePolicy | None = None
     mappings: list[DataSourceMappingCreate] | None = None
+    enrichments: list[DataSourceEnrichmentCreate] | None = None
 
 
 class DataSourceRead(BaseModel):
@@ -313,4 +371,5 @@ class DataSourceRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     mappings: list[DataSourceMappingRead]
+    enrichments: list[DataSourceEnrichmentRead]
     model_config = {"from_attributes": True}

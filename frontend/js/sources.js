@@ -17,6 +17,48 @@ const sources = (() => {
     'stop': window.i18n('source.mapping.type.stop')
   };
   
+  // Source enrichment management
+  let _allEnrichments = [];
+  let _currentDisplayedEnrichmentType = 'cause';
+  
+  const _enrichmentTypeNames = {
+    'cause': window.i18n('source.enrichment.type.cause'),
+    'effect': window.i18n('source.enrichment.type.effect'),
+    'severity': window.i18n('source.enrichment.type.severity')
+  };
+  
+  const _enrichmentValues = {
+    'cause': [
+      'UNKNOWN_CAUSE', 'OTHER_CAUSE', 'TECHNICAL_PROBLEM', 'STRIKE',
+      'DEMONSTRATION', 'ACCIDENT', 'HOLIDAY', 'WEATHER',
+      'MAINTENANCE', 'CONSTRUCTION', 'POLICE_ACTIVITY', 'MEDICAL_EMERGENCY'
+    ],
+    'effect': [
+      'NO_SERVICE', 'REDUCED_SERVICE', 'SIGNIFICANT_DELAYS', 'DETOUR',
+      'ADDITIONAL_SERVICE', 'MODIFIED_SERVICE', 'OTHER_EFFECT', 'UNKNOWN_EFFECT',
+      'STOP_MOVED', 'NO_EFFECT', 'ACCESSIBILITY_ISSUE'
+    ],
+    'severity': [
+      'UNKNOWN_SEVERITY', 'INFO', 'WARNING', 'SEVERE'
+    ]
+  };
+  
+  const _sourceFieldNames = {
+    'header': window.i18n('source.enrichment.source_field.header'),
+    'description': window.i18n('source.enrichment.source_field.description'),
+    'header_description': window.i18n('source.enrichment.source_field.header_description')
+  };
+  
+  // Helper function to get translated label for enrichment value
+  function _getEnrichmentValueLabel(enrichmentType, value) {
+    if (!value) return '';
+    
+    // Convert value to lowercase and replace underscores with dots for i18n key
+    const valueLower = value.toLowerCase().replace(/_/g, '.');
+    const i18nKey = `alert.${enrichmentType}.${valueLower}`;
+    return window.i18n(i18nKey);
+  }
+  
   // Helper to check poweruser/admin rights
   function _isPoweruser() {
     const user = window.appState?.currentUser;
@@ -299,6 +341,267 @@ const sources = (() => {
     document.body.removeChild(fileInput);
   }
 
+  // ========== ENRICHMENT MANAGEMENT ==========
+  
+  function _initializeEnrichments(enrichments) {
+    _allEnrichments = enrichments || [];
+  }
+  
+  function _saveCurrentEnrichments() {
+    // Use currently displayed enrichment type
+    const enrichmentTypeToSave = _currentDisplayedEnrichmentType;
+    if (!enrichmentTypeToSave) return;
+    
+    // Get existing enrichments for this type (to preserve IDs)
+    const existingEnrichments = _allEnrichments.filter(e => e.enrichment_type === enrichmentTypeToSave);
+    
+    // Remove existing enrichments for this type
+    _allEnrichments = _allEnrichments.filter(e => e.enrichment_type !== enrichmentTypeToSave);
+    
+    // Add current UI enrichments for this type
+    const container = ui.el('enrichments-container');
+    if (!container) return;
+    
+    const rows = container.querySelectorAll('.enrichment-row');
+    
+    rows.forEach((row, index) => {
+      const sourceField = row.querySelector('[name="enrichment-source-field"]')?.value?.trim();
+      const key = row.querySelector('[name="enrichment-key"]')?.value?.trim();
+      const value = row.querySelector('[name="enrichment-value"]')?.value?.trim();
+      const sortOrder = parseInt(row.dataset.sortOrder || index.toString(), 10);
+      
+      if (sourceField && key && value) {
+        // Try to preserve ID if enrichment already existed
+        const existingEnrichment = existingEnrichments.find(e => 
+          e.source_field === sourceField && e.key === key && e.value === value
+        );
+        const enrichment = {
+          enrichment_type: enrichmentTypeToSave,
+          source_field: sourceField,
+          key,
+          value,
+          sort_order: sortOrder
+        };
+        // Preserve ID if it existed
+        if (existingEnrichment && existingEnrichment.id) {
+          enrichment.id = existingEnrichment.id;
+        }
+        _allEnrichments.push(enrichment);
+      }
+    });
+  }
+  
+  function _renderEnrichmentsForType(enrichmentType) {
+    const filteredEnrichments = _allEnrichments.filter(e => e.enrichment_type === enrichmentType);
+    const container = ui.el('enrichments-container');
+    
+    if (!filteredEnrichments.length) {
+      const enrichmentTypeName = _enrichmentTypeNames[enrichmentType] || window.i18n('source.enrichment.type.cause');
+      container.innerHTML = `<p class="panel__placeholder">${window.i18n('source.enrichment.empty', { type: enrichmentTypeName })}</p>`;
+      // Update tracking
+      _currentDisplayedEnrichmentType = enrichmentType;
+      return;
+    }
+    
+    // Sort by sort_order before rendering
+    filteredEnrichments.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+    
+    const table = document.createElement('table');
+    table.className = 'mapping-table';
+    table.innerHTML = `
+      <thead><tr>
+        <th style="min-width: 200px;">${window.i18n('source.enrichment.source_field')}</th>
+        <th>${window.i18n('source.mapping.key')}</th>
+        <th style="width: 240px;">${window.i18n('source.enrichment.value')}</th>
+        <th style="width: 80px;"></th>
+      </tr></thead>
+      <tbody></tbody>`;
+    
+    const tbody = table.querySelector('tbody');
+    filteredEnrichments.forEach(enrichment => {
+      const row = _createEnrichmentRow(enrichment);
+      tbody.appendChild(row);
+    });
+    
+    container.innerHTML = '';
+    container.appendChild(table);
+    
+    // Re-initialize ripples for new buttons
+    initRipples(container);
+    
+    // Update tracking
+    _currentDisplayedEnrichmentType = enrichmentType;
+  }
+  
+  function _createEnrichmentRow(enrichment = {}) {
+    const tr = document.createElement('tr');
+    tr.className = 'enrichment-row';
+    
+    const currentEnrichmentType = enrichment.enrichment_type || ui.el('enrichment-type-select')?.value || 'cause';
+    tr.dataset.enrichmentType = currentEnrichmentType;
+    
+    const sourceFieldValue = enrichment.source_field || 'header';
+    const keyValue = ui.esc(enrichment.key || '');
+    const valueValue = enrichment.value || '';
+    const sortOrderValue = enrichment.sort_order || 0;
+    
+    // Store sort_order as data attribute
+    tr.dataset.sortOrder = sortOrderValue;
+    
+    // Get valid values for the current enrichment type
+    const validValues = _enrichmentValues[currentEnrichmentType] || [];
+    const valueOptions = validValues.map(v => {
+      const label = _getEnrichmentValueLabel(currentEnrichmentType, v);
+      return `<option value="${v}" ${v === valueValue ? 'selected' : ''}>${ui.esc(label)}</option>`;
+    }).join('');
+    
+    tr.innerHTML = `
+      <td>
+        <select name="enrichment-source-field" class="md-field__input" style="min-width: 200px;">
+          <option value="header" ${sourceFieldValue === 'header' ? 'selected' : ''}>${window.i18n('source.enrichment.source_field.header')}</option>
+          <option value="description" ${sourceFieldValue === 'description' ? 'selected' : ''}>${window.i18n('source.enrichment.source_field.description')}</option>
+          <option value="header_description" ${sourceFieldValue === 'header_description' ? 'selected' : ''}>${window.i18n('source.enrichment.source_field.header_description')}</option>
+        </select>
+      </td>
+      <td><input type="text" name="enrichment-key" class="md-field__input" value="${keyValue}" placeholder="${window.i18n('source.mapping.key.placeholder')}" /></td>
+      <td>
+        <select name="enrichment-value" class="md-field__input" style="width: 240px;">
+          <option value="">${window.i18n('source.enrichment.value.placeholder')}</option>
+          ${valueOptions}
+        </select>
+      </td>
+      <td>
+        <div style="display: flex; gap: 4px; justify-content: flex-end; align-items: center;">
+          <div style="display: flex; flex-direction: column; gap: 0;">
+            <button type="button" class="icon-btn icon-btn--compact" data-action="move-enrichment-up" title="${window.i18n('common.move_up')}" data-ripple>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M7 14l5-5 5 5z"/>
+              </svg>
+            </button>
+            <button type="button" class="icon-btn icon-btn--compact" data-action="move-enrichment-down" title="${window.i18n('common.move_down')}" data-ripple>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M7 10l5 5 5-5z"/>
+              </svg>
+            </button>
+          </div>
+          <button type="button" class="icon-btn icon-btn--danger" data-action="remove-enrichment" title="${window.i18n('common.remove')}" data-ripple>
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+            </svg>
+          </button>
+        </div>
+      </td>`;
+    
+    return tr;
+  }
+  
+  function _addEnrichmentRow() {
+    const enrichmentType = ui.el('enrichment-type-select')?.value || 'cause';
+    const container = ui.el('enrichments-container');
+    
+    // Create table if it doesn't exist
+    let table = container.querySelector('.mapping-table');
+    if (!table) {
+      table = document.createElement('table');
+      table.className = 'mapping-table';
+      table.innerHTML = `
+        <thead><tr>
+          <th style="min-width: 200px;">${window.i18n('source.enrichment.source_field')}</th>
+          <th>${window.i18n('source.mapping.key')}</th>
+          <th style="width: 240px;">${window.i18n('source.enrichment.value')}</th>
+          <th style="width: 80px;"></th>
+        </tr></thead>
+        <tbody></tbody>`;
+      container.innerHTML = '';
+      container.appendChild(table);
+    }
+    
+    const tbody = table.querySelector('tbody');
+    const row = _createEnrichmentRow({ enrichment_type: enrichmentType });
+    tbody.appendChild(row);
+    
+    // Update sort_order for all rows
+    _updateEnrichmentSortOrder();
+    
+    // Initialize ripples for new button
+    initRipples(row);
+  }
+  
+  function _removeEnrichmentRow(event) {
+    const btn = event.target.closest('[data-action="remove-enrichment"]');
+    if (!btn) return;
+    
+    const row = btn.closest('.enrichment-row');
+    const tbody = row.parentElement;
+    row.remove();
+    
+    // Show placeholder if no rows left
+    if (tbody.children.length === 0) {
+      const enrichmentType = ui.el('enrichment-type-select')?.value || 'cause';
+      const enrichmentTypeName = _enrichmentTypeNames[enrichmentType] || window.i18n('source.enrichment.type.cause');
+      ui.el('enrichments-container').innerHTML = 
+        `<p class="panel__placeholder">${window.i18n('source.enrichment.empty', { type: enrichmentTypeName })}</p>`;
+    } else {
+      // Update sort_order for remaining rows
+      _updateEnrichmentSortOrder();
+    }
+  }
+  
+  function _getAllEnrichments() {
+    _saveCurrentEnrichments();
+    return [..._allEnrichments];
+  }
+
+  function _moveEnrichmentUp(event) {
+    const btn = event.target.closest('[data-action="move-enrichment-up"]');
+    if (!btn) return;
+    
+    const row = btn.closest('.enrichment-row');
+    const tbody = row.parentElement;
+    const previousRow = row.previousElementSibling;
+    
+    if (previousRow) {
+      // Swap rows
+      tbody.insertBefore(row, previousRow);
+      
+      // Update sort_order data attributes
+      _updateEnrichmentSortOrder();
+      
+      // Re-initialize ripples
+      initRipples(tbody);
+    }
+  }
+
+  function _moveEnrichmentDown(event) {
+    const btn = event.target.closest('[data-action="move-enrichment-down"]');
+    if (!btn) return;
+    
+    const row = btn.closest('.enrichment-row');
+    const tbody = row.parentElement;
+    const nextRow = row.nextElementSibling;
+    
+    if (nextRow) {
+      // Swap rows
+      tbody.insertBefore(nextRow, row);
+      
+      // Update sort_order data attributes
+      _updateEnrichmentSortOrder();
+      
+      // Re-initialize ripples
+      initRipples(tbody);
+    }
+  }
+
+  function _updateEnrichmentSortOrder() {
+    const container = ui.el('enrichments-container');
+    if (!container) return;
+    
+    const rows = container.querySelectorAll('.enrichment-row');
+    rows.forEach((row, index) => {
+      row.dataset.sortOrder = (index * 10).toString();
+    });
+  }
+
   // Internal state management
   async function _loadSources() {
     try {
@@ -400,7 +703,7 @@ const sources = (() => {
   }
 
   // Source modal management
-  function _openSourceModal({ title, name = '', type = '', config = {}, cron = '', is_active = true, invalid_reference_policy = 'not_specified', mappings = [] } = {}) {
+  function _openSourceModal({ title, name = '', type = '', config = {}, cron = '', is_active = true, invalid_reference_policy = 'not_specified', mappings = [], enrichments = [] } = {}) {
     ui.el('source-modal-title').textContent = title;
     ui.el('source-name').value = name;
     ui.el('source-name').readOnly = false;
@@ -435,6 +738,17 @@ const sources = (() => {
       entityTypeSelect.value = defaultEntityType;
       _currentDisplayedEntityType = defaultEntityType;
       _renderMappingsForEntityType(defaultEntityType);
+    }
+    
+    // Initialize enrichments
+    _initializeEnrichments(enrichments);
+    const enrichmentTypeSelect = ui.el('enrichment-type-select');
+    if (enrichmentTypeSelect) {
+      // Default to 'cause'
+      const defaultEnrichmentType = 'cause';
+      enrichmentTypeSelect.value = defaultEnrichmentType;
+      _currentDisplayedEnrichmentType = defaultEnrichmentType;
+      _renderEnrichmentsForType(defaultEnrichmentType);
     }
     
     // Reset to first tab (Configuration)
@@ -483,7 +797,8 @@ const sources = (() => {
       type: '',
       config: {},
       cron: '',
-      mappings: []
+      mappings: [],
+      enrichments: []
     });
     
     // Setup submit handler for create mode
@@ -516,7 +831,8 @@ const sources = (() => {
         cron: source.cron || '',
         is_active: source.is_active !== undefined ? source.is_active : true,
         invalid_reference_policy: source.invalid_reference_policy || 'not_specified',
-        mappings: source.mappings || []
+        mappings: source.mappings || [],
+        enrichments: source.enrichments || []
       });
       
       // Setup submit handler for edit mode
@@ -552,6 +868,16 @@ const sources = (() => {
 
     // Collect mappings from internal mapping manager
     const mappings = _getAllMappings();
+    
+    // Collect enrichments from internal enrichment manager
+    const enrichments = _getAllEnrichments();
+    
+    // Validate enrichments - all must have a value selected
+    const invalidEnrichments = enrichments.filter(e => !e.value || e.value.trim() === '');
+    if (invalidEnrichments.length > 0) {
+      _setSourceModalError(window.i18n('source.error.enrichment_value_required'));
+      return;
+    }
 
     _setSourceModalBusy(true);
     try {
@@ -563,7 +889,8 @@ const sources = (() => {
         cron: cron || null,
         is_active: isActive,
         invalid_reference_policy: invalidReferencePolicy,
-        mappings 
+        mappings,
+        enrichments
       };
       if (!_editingSourceId) {
         await api.createSource(data);
@@ -810,10 +1137,40 @@ const sources = (() => {
       }
     });
     
+    // Enrichment type change handler
+    ui.el('enrichment-type-select')?.addEventListener('change', (e) => {
+      _saveCurrentEnrichments(); // Save current enrichments before switching
+      _renderEnrichmentsForType(e.target.value);
+    });
+
+    // Add enrichment button handler
+    ui.el('add-enrichment-btn')?.addEventListener('click', _addEnrichmentRow);
+
+    // Remove enrichment button handler (delegated)
+    document.addEventListener('click', (e) => {
+      if (e.target.matches('[data-action="remove-enrichment"]') || e.target.closest('[data-action="remove-enrichment"]')) {
+        _removeEnrichmentRow(e);
+      }
+      if (e.target.matches('[data-action="move-enrichment-up"]') || e.target.closest('[data-action="move-enrichment-up"]')) {
+        _moveEnrichmentUp(e);
+      }
+      if (e.target.matches('[data-action="move-enrichment-down"]') || e.target.closest('[data-action="move-enrichment-down"]')) {
+        _moveEnrichmentDown(e);
+      }
+    });
+    
     // Source modal tabs
     document.querySelectorAll('#source-modal .modal__tab').forEach(tab => {
       tab.addEventListener('click', () => {
         const targetTab = tab.dataset.tab;
+        
+        // Save current tab data before switching
+        const currentActiveTab = document.querySelector('#source-modal .modal__tab--active')?.dataset.tab;
+        if (currentActiveTab === 'mapping') {
+          _saveCurrentMappings();
+        } else if (currentActiveTab === 'enrichment') {
+          _saveCurrentEnrichments();
+        }
         
         // Update tab buttons
         document.querySelectorAll('#source-modal .modal__tab').forEach(t => {

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from echogtfs.database import get_db
-from echogtfs.models import DataSource, DataSourceMapping, ServiceAlert, User
+from echogtfs.models import DataSource, DataSourceMapping, DataSourceEnrichment, ServiceAlert, User
 from echogtfs.schemas import DataSourceCreate, DataSourceRead, DataSourceUpdate
 from echogtfs.security import CurrentPoweruser
 from echogtfs.services.adapters import ADAPTER_REGISTRY
@@ -46,12 +46,15 @@ async def list_sources(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    List all data sources with their mappings.
+    List all data sources with their mappings and enrichments.
     Requires poweruser or admin role.
     """
     result = await db.execute(
         select(DataSource)
-        .options(selectinload(DataSource.mappings))
+        .options(
+            selectinload(DataSource.mappings),
+            selectinload(DataSource.enrichments)
+        )
         .order_by(DataSource.name)
     )
     sources = result.scalars().all()
@@ -65,7 +68,7 @@ async def create_source(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Create a new data source with mappings.
+    Create a new data source with mappings and enrichments.
     Requires poweruser or admin role.
     """
     # Check if name already exists
@@ -98,6 +101,18 @@ async def create_source(
         )
         db.add(mapping)
     
+    # Create enrichments
+    for enrichment_data in source_data.enrichments:
+        enrichment = DataSourceEnrichment(
+            data_source_id=source.id,
+            enrichment_type=enrichment_data.enrichment_type,
+            source_field=enrichment_data.source_field,
+            key=enrichment_data.key,
+            value=enrichment_data.value,
+            sort_order=enrichment_data.sort_order,
+        )
+        db.add(enrichment)
+    
     await db.commit()
     await db.refresh(source)
     
@@ -109,7 +124,10 @@ async def create_source(
     result = await db.execute(
         select(DataSource)
         .where(DataSource.id == source.id)
-        .options(selectinload(DataSource.mappings))
+        .options(
+            selectinload(DataSource.mappings),
+            selectinload(DataSource.enrichments)
+        )
     )
     source = result.scalar_one()
     
@@ -123,13 +141,16 @@ async def get_source(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Get a single data source by ID with mappings.
+    Get a single data source by ID with mappings and enrichments.
     Requires poweruser or admin role.
     """
     result = await db.execute(
         select(DataSource)
         .where(DataSource.id == source_id)
-        .options(selectinload(DataSource.mappings))
+        .options(
+            selectinload(DataSource.mappings),
+            selectinload(DataSource.enrichments)
+        )
     )
     source = result.scalar_one_or_none()
     if not source:
@@ -146,13 +167,16 @@ async def update_source(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Update a data source and optionally replace its mappings.
+    Update a data source and optionally replace its mappings and enrichments.
     Requires poweruser or admin role.
     """
     result = await db.execute(
         select(DataSource)
         .where(DataSource.id == source_id)
-        .options(selectinload(DataSource.mappings))
+        .options(
+            selectinload(DataSource.mappings),
+            selectinload(DataSource.enrichments)
+        )
     )
     source = result.scalar_one_or_none()
     if not source:
@@ -235,6 +259,28 @@ async def update_source(
             )
             db.add(mapping)
     
+    # Replace enrichments if provided
+    if source_data.enrichments is not None:
+        # Delete existing enrichments
+        await db.execute(
+            select(DataSourceEnrichment)
+            .where(DataSourceEnrichment.data_source_id == source_id)
+        )
+        for enrichment in source.enrichments:
+            await db.delete(enrichment)
+        
+        # Create new enrichments
+        for enrichment_data in source_data.enrichments:
+            enrichment = DataSourceEnrichment(
+                data_source_id=source.id,
+                enrichment_type=enrichment_data.enrichment_type,
+                source_field=enrichment_data.source_field,
+                key=enrichment_data.key,
+                value=enrichment_data.value,
+                sort_order=enrichment_data.sort_order,
+            )
+            db.add(enrichment)
+    
     await db.commit()
     
     # Update cron job: only schedule if active, otherwise remove
@@ -248,7 +294,10 @@ async def update_source(
     result = await db.execute(
         select(DataSource)
         .where(DataSource.id == source_id)
-        .options(selectinload(DataSource.mappings))
+        .options(
+            selectinload(DataSource.mappings),
+            selectinload(DataSource.enrichments)
+        )
     )
     source = result.scalar_one()
     

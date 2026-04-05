@@ -133,6 +133,20 @@ class InvalidReferencePolicy(str, Enum):
     NOT_SPECIFIED = "not_specified"  # No specific policy defined
 
 
+class EnrichmentType(str, Enum):
+    """Type of enrichment that can be extracted from alert text."""
+    CAUSE = "cause"
+    EFFECT = "effect"
+    SEVERITY = "severity"
+
+
+class SourceField(str, Enum):
+    """Source field to extract enrichment values from."""
+    HEADER = "header"
+    DESCRIPTION = "description"
+    HEADER_DESCRIPTION = "header_description"  # Match in either header or description
+
+
 # ---------------------------------------------------------------------------
 # GTFS-RT ServiceAlert tables
 # ---------------------------------------------------------------------------
@@ -335,6 +349,11 @@ class DataSource(Base):
     mappings: Mapped[list["DataSourceMapping"]] = relationship(
         back_populates="data_source", cascade="all, delete-orphan"
     )
+    enrichments: Mapped[list["DataSourceEnrichment"]] = relationship(
+        back_populates="data_source", 
+        cascade="all, delete-orphan",
+        order_by="DataSourceEnrichment.sort_order"
+    )
     alerts: Mapped[list["ServiceAlert"]] = relationship(
         back_populates="data_source", cascade="all, delete-orphan"
     )
@@ -366,3 +385,38 @@ class DataSourceMapping(Base):
     
     # Relationship
     data_source: Mapped["DataSource"] = relationship(back_populates="mappings")
+
+
+class DataSourceEnrichment(Base):
+    """
+    Enrichment rules for extracting cause, effect, and severity from alert text.
+    
+    Enrichments allow pattern matching in alert header/description text to
+    automatically derive cause, effect, or severity values. Unlike mappings,
+    enrichments are sortable to control priority when multiple patterns match.
+    
+    The key field can contain text or regex patterns to match against the
+    specified source field(s). When a match is found, the value is applied.
+    """
+    __tablename__ = "data_source_enrichments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    data_source_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("data_sources.id", ondelete="CASCADE"), index=True
+    )
+    
+    # Enrichment configuration
+    enrichment_type: Mapped[EnrichmentType] = mapped_column(String(32), index=True)
+    source_field: Mapped[SourceField] = mapped_column(String(32), index=True)
+    
+    # Pattern matching
+    # Key: text or regex pattern to match in the source field
+    # Value: the value to assign (e.g., "STRIKE", "NO_SERVICE", "SEVERE")
+    key: Mapped[str] = mapped_column(String(512), index=True)
+    value: Mapped[str] = mapped_column(String(128), index=True)
+    
+    # Sort order for priority (lower number = higher priority)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    
+    # Relationship
+    data_source: Mapped["DataSource"] = relationship(back_populates="enrichments")

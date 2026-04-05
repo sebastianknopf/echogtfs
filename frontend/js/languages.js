@@ -35,6 +35,8 @@ window.translations = {
     'common.run': 'Jetzt ausführen',
     'common.import': 'Importieren',
     'common.export': 'Exportieren',
+    'common.move_up': 'Nach oben',
+    'common.move_down': 'Nach unten',
     
     // === NAVIGATION ===
     'nav.main': 'Hauptnavigation',
@@ -244,6 +246,7 @@ window.translations = {
     'source.inactive.helper': 'Inaktive Datenquellen führen keine Importe durch und deren Meldungen werden gelöscht.',
     'source.error.required': 'Name und Typ sind erforderlich.',
     'source.error.save_first': 'Bitte speichern Sie die Datenquelle zuerst.',
+    'source.error.enrichment_value_required': 'Bitte wählen Sie für alle Anreicherungen einen gültigen Wert aus.',
     'source.mapping.type': 'Mapping-Typ',
     'source.mapping.type.agency': 'Unternehmen',
     'source.mapping.type.route': 'Linien',
@@ -261,6 +264,25 @@ window.translations = {
     'source.mapping.import.error.size': 'Die Datei ist zu groß. Maximal 10 MB erlaubt.',
     'source.mapping.import.error.format': 'Bitte nur CSV-Dateien hochladen.',
     'source.mapping.import.error': 'Import fehlgeschlagen',
+    
+    // Source Enrichments
+    'source.tabs.enrichment': 'Anreicherung',
+    'source.enrichment.type': 'Anreicherungstyp',
+    'source.enrichment.type.cause': 'Ursache',
+    'source.enrichment.type.effect': 'Auswirkung',
+    'source.enrichment.type.severity': 'Schweregrad',
+    'source.enrichment.add': 'Wert hinzufügen',
+    'source.enrichment.empty': 'Keine Anreicherungen für {type} vorhanden.',
+    'source.enrichment.source_field': 'Quellfeld',
+    'source.enrichment.source_field.header': 'Titel',
+    'source.enrichment.source_field.description': 'Beschreibung',
+    'source.enrichment.source_field.header_description': 'Titel & Beschreibung',
+    'source.enrichment.key': 'Schlüssel (Text/Regex)',
+    'source.enrichment.key.placeholder': 'z.B. Streik|Ausstand',
+    'source.enrichment.value': 'Wert',
+    'source.enrichment.value.placeholder': 'Wert auswählen...',
+    'source.enrichment.sort_order': 'Priorität',
+    'source.enrichment.sort_order.placeholder': '0',
     
     // === ACCOUNTS PANEL ===
     'accounts.title': 'Accounts',
@@ -456,6 +478,8 @@ window.translations = {
     'common.run': 'Run now',
     'common.import': 'Import',
     'common.export': 'Export',
+    'common.move_up': 'Move up',
+    'common.move_down': 'Move down',
     
     // === NAVIGATION ===
     'nav.main': 'Main navigation',
@@ -665,6 +689,7 @@ window.translations = {
     'source.inactive.helper': 'Inactive data sources do not perform imports and their alerts are deleted.',
     'source.error.required': 'Name and type are required.',
     'source.error.save_first': 'Please save the data source first.',
+    'source.error.enrichment_value_required': 'Please select a valid value for all enrichments.',
     'source.mapping.type': 'Mapping type',
     'source.mapping.type.agency': 'Agencies',
     'source.mapping.type.route': 'Routes',
@@ -682,6 +707,25 @@ window.translations = {
     'source.mapping.import.error.size': 'File is too large. Maximum 10 MB allowed.',
     'source.mapping.import.error.format': 'Please upload CSV files only.',
     'source.mapping.import.error': 'Import failed',
+    
+    // Source Enrichments
+    'source.tabs.enrichment': 'Enrichment',
+    'source.enrichment.type': 'Enrichment type',
+    'source.enrichment.type.cause': 'Cause',
+    'source.enrichment.type.effect': 'Effect',
+    'source.enrichment.type.severity': 'Severity',
+    'source.enrichment.add': 'Add value',
+    'source.enrichment.empty': 'No enrichments for {type} available.',
+    'source.enrichment.source_field': 'Source field',
+    'source.enrichment.source_field.header': 'Title',
+    'source.enrichment.source_field.description': 'Description',
+    'source.enrichment.source_field.header_description': 'Title & Description',
+    'source.enrichment.key': 'Key (text/regex)',
+    'source.enrichment.key.placeholder': 'e.g., strike|walkout',
+    'source.enrichment.value': 'Value',
+    'source.enrichment.value.placeholder': 'Select value...',
+    'source.enrichment.sort_order': 'Priority',
+    'source.enrichment.sort_order.placeholder': '0',
     
     // === ACCOUNTS PANEL ===
     'accounts.title': 'Accounts',
