@@ -232,6 +232,22 @@ class BaseAdapter(ABC):
         Returns:
             True if all referenced entities are valid, False otherwise
         """
+        # Trip references are not managed/validated - if only trip_id is set,
+        # mark the entity as invalid (trip_id without other references)
+        has_trip_id = bool(entity_data.get("trip_id"))
+        has_agency_id = bool(entity_data.get("agency_id"))
+        has_route_id = bool(entity_data.get("route_id"))
+        has_stop_id = bool(entity_data.get("stop_id"))
+        
+        # If only trip_id is set (without agency, route, or stop), mark as invalid
+        # direction_id and route_type are just qualifiers, not primary references
+        if has_trip_id and not has_agency_id and not has_route_id and not has_stop_id:
+            logger.debug(
+                f"[{self.get_adapter_type()}] Entity has only trip_id without other references - "
+                f"marking as invalid (trip references not managed): trip_id={entity_data.get('trip_id')}"
+            )
+            return False
+        
         # Check each entity type that is specified
         if entity_data.get("agency_id"):
             if entity_data["agency_id"] not in gtfs_entities["agency"]:
@@ -272,6 +288,11 @@ class BaseAdapter(ABC):
         has_any_valid_reference = False
         removed_fields = []
         
+        # If entity is already marked as invalid (e.g., trip references),
+        # don't clean it further - just return it as-is
+        if entity_data.get("is_valid") is False:
+            return cleaned_entity, False
+        
         # Check and clean agency_id
         if cleaned_entity.get("agency_id"):
             if cleaned_entity["agency_id"] not in gtfs_entities["agency"]:
@@ -295,6 +316,12 @@ class BaseAdapter(ABC):
                 cleaned_entity["stop_id"] = None
             else:
                 has_any_valid_reference = True
+        
+        # Trip references are not managed - if only trip_id remains after cleaning,
+        # this entity has no valid references (trip_id alone is not sufficient)
+        if cleaned_entity.get("trip_id") and not has_any_valid_reference:
+            removed_fields.append(f"trip_id={cleaned_entity['trip_id']} (not managed)")
+            cleaned_entity["trip_id"] = None
         
         # Log removed fields
         if removed_fields:
@@ -562,9 +589,13 @@ class BaseAdapter(ABC):
                         mapped_entity_data, gtfs_entities
                     )
                     # Mark as valid if at least one reference is valid
-                    cleaned_entity["is_valid"] = has_valid_ref
+                    # Unless already explicitly marked as invalid (e.g., trip references)
+                    if "is_valid" not in mapped_entity_data:
+                        cleaned_entity["is_valid"] = has_valid_ref
+                    else:
+                        cleaned_entity["is_valid"] = mapped_entity_data["is_valid"]
                     
-                    if not has_valid_ref:
+                    if not cleaned_entity["is_valid"]:
                         has_invalid_entity = True
                         logger.debug(
                             f"[{self.get_adapter_type()}] Entity has no valid references in alert {alert_id}: "
@@ -574,10 +605,13 @@ class BaseAdapter(ABC):
                     validated_entities.append(cleaned_entity)
                 else:
                     # Standard validation for other policies
-                    is_valid = self._validate_entity(mapped_entity_data, gtfs_entities)
-                    
-                    # Mark entity as valid/invalid
-                    mapped_entity_data["is_valid"] = is_valid
+                    # Check if entity already has is_valid flag set (e.g., trip references)
+                    if "is_valid" in mapped_entity_data:
+                        is_valid = mapped_entity_data["is_valid"]
+                    else:
+                        is_valid = self._validate_entity(mapped_entity_data, gtfs_entities)
+                        # Mark entity as valid/invalid
+                        mapped_entity_data["is_valid"] = is_valid
                     
                     if not is_valid:
                         has_invalid_entity = True

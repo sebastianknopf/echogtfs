@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=68", "setuptools_scm>=8", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "echogtfs"
-version = "0.1.0"
+dynamic = ["version"]
 description = "echogtfs – FastAPI backend service"
 requires-python = ">=3.11"
 dependencies = [
@@ -31,3 +31,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 echogtfs = ["migrations/*.sql"]
+
+[tool.setuptools_scm]
+root = ".."
+write_to = "backend/src/echogtfs/_version.py"

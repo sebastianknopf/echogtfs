@@ -21,9 +21,10 @@ __all__ = [
 
 
 # Registry mapping adapter type names to adapter classes
+# Order determines display order in UI
 ADAPTER_REGISTRY: dict[str, type[BaseAdapter]] = {
-    "sirilite": SiriLiteAdapter,
     "gtfsrt": GtfsRtAdapter,
+    "sirilite": SiriLiteAdapter,
     "sirisx": SiriSxAdapter,
 }
 

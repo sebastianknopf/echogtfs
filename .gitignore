@@ -14,6 +14,9 @@ env/
 .env
 *.pyc
 
+# setuptools_scm generated version file
+backend/src/echogtfs/_version.py
+
 # pyproject / pip
 pip-wheel-metadata/
 share/python-wheels/

@@ -129,14 +129,19 @@ const app = (() => {
       ui.renderUser(_currentUser);
       ui.showView('app');
       ui.setPanel('alerts'); // Default panel
+      
+      // Update language selector to show active language
+      if (typeof languageSelector !== 'undefined') {
+        languageSelector.init();
+      }
 
       // Load settings
       try {
         const appSettings = await api.getSettings();
         theme.apply(appSettings);
         
-        // Apply language setting
-        if (appSettings.app_language) {
+        // Apply language setting only if user hasn't set a preference in browser
+        if (appSettings.app_language && !window.i18n.getUserLanguagePreference()) {
           window.i18n.setLanguage(appSettings.app_language);
         }
       } catch (err) {
@@ -176,14 +181,147 @@ const app = (() => {
 })();
 
 /* ==========================================================================
+   LANGUAGE SELECTOR - Language switching functionality
+========================================================================== */
+const languageSelector = (() => {
+  let _isOpen = false;
+  
+  function toggleMenu() {
+    const menu = document.getElementById('language-menu');
+    const button = document.getElementById('language-btn');
+    
+    if (!menu || !button) return;
+    
+    _isOpen = !_isOpen;
+    
+    if (_isOpen) {
+      menu.classList.add('is-open');
+      button.setAttribute('aria-expanded', 'true');
+      updateActiveLanguage();
+      
+      // Focus first option when opening
+      const firstOption = menu.querySelector('.language-selector__option');
+      if (firstOption) {
+        setTimeout(() => firstOption.focus(), 0);
+      }
+    } else {
+      menu.classList.remove('is-open');
+      button.setAttribute('aria-expanded', 'false');
+    }
+  }
+  
+  function closeMenu() {
+    const menu = document.getElementById('language-menu');
+    const button = document.getElementById('language-btn');
+    
+    if (!menu || !button) return;
+    
+    _isOpen = false;
+    menu.classList.remove('is-open');
+    button.setAttribute('aria-expanded', 'false');
+  }
+  
+  function updateActiveLanguage() {
+    const currentLang = window.i18n.getCurrentLanguage();
+    const options = document.querySelectorAll('.language-selector__option');
+    
+    options.forEach(option => {
+      const lang = option.getAttribute('data-lang');
+      if (lang === currentLang) {
+        option.classList.add('is-active');
+      } else {
+        option.classList.remove('is-active');
+      }
+    });
+  }
+  
+  function selectLanguage(lang) {
+    // Set language with saveToStorage = true to persist in localStorage
+    window.i18n.setLanguage(lang, true);
+    updateActiveLanguage();
+    closeMenu();
+  }
+  
+  function init() {
+    // Set initial active state
+    updateActiveLanguage();
+  }
+  
+  return {
+    init,
+    toggleMenu,
+    closeMenu,
+    selectLanguage,
+  };
+})();
+
+/* ==========================================================================
    BOOTSTRAP - Event listeners and app startup
 ========================================================================== */
+
+/**
+ * Load public app settings (theme and language) from backend.
+ * This is called before login to apply theme and language to the login page.
+ */
+async function loadPublicAppSettings() {
+  try {
+    const response = await fetch('/api/settings/app');
+    
+    if (response.ok) {
+      const settings = await response.json();
+      
+      // Apply theme
+      if (settings.color_primary && settings.color_secondary) {
+        theme.apply({
+          color_primary: settings.color_primary,
+          color_secondary: settings.color_secondary,
+          app_title: settings.app_title
+        });
+      }
+      
+      // Display version
+      if (settings.app_version) {
+        const versionLogin = document.getElementById('version-info-login');
+        const versionApp = document.getElementById('version-info-app');
+        console.log('Setting version to:', settings.app_version);
+        if (versionLogin) versionLogin.textContent = `v${settings.app_version}`;
+        if (versionApp) versionApp.textContent = `v${settings.app_version}`;
+      } else {
+        console.warn('No app_version in settings:', settings);
+      }
+      
+      // Apply language: localStorage preference > backend setting
+      const userPreference = window.i18n.getUserLanguagePreference();
+      if (userPreference) {
+        console.log('Using language from localStorage:', userPreference);
+        window.i18n.setLanguage(userPreference);
+      } else if (settings.app_language) {
+        console.log('Using language from backend settings:', settings.app_language);
+        window.i18n.setLanguage(settings.app_language);
+      } else {
+        // No language set, initialize with default
+        window.i18n.initializeTranslations();
+      }
+    } else {
+      // Failed to fetch settings, initialize with default
+      window.i18n.initializeTranslations();
+    }
+  } catch (error) {
+    console.warn('Failed to load public app settings, using defaults:', error);
+    // Initialize with defaults on error
+    window.i18n.initializeTranslations();
+  }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
-  // Load language from backend settings first (before any UI is shown)
-  await window.i18n.loadLanguageFromSettings();
+  // Load theme and language from backend settings first (before any UI is shown)
+  await loadPublicAppSettings();
   
   // Initialize button ripple effects
   initRipples();
+  
+  // Initialize language selector
+  languageSelector.init();
 
   // Login
   document.getElementById('login-form')?.addEventListener('submit', app.handleLogin);
@@ -194,6 +332,69 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Logout
   document.getElementById('logout-btn')?.addEventListener('click', app.handleLogout);
   document.getElementById('logout-card-btn')?.addEventListener('click', app.handleLogout);
+  
+  // Language selector
+  document.getElementById('language-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    languageSelector.toggleMenu();
+  });
+  
+  // Language options
+  document.querySelectorAll('.language-selector__option').forEach(option => {
+    option.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const lang = option.getAttribute('data-lang');
+      if (lang) {
+        languageSelector.selectLanguage(lang);
+      }
+    });
+    
+    // Keyboard navigation
+    option.addEventListener('keydown', (e) => {
+      const options = Array.from(document.querySelectorAll('.language-selector__option'));
+      const currentIndex = options.indexOf(option);
+      
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          const nextIndex = (currentIndex + 1) % options.length;
+          options[nextIndex].focus();
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          const prevIndex = (currentIndex - 1 + options.length) % options.length;
+          options[prevIndex].focus();
+          break;
+        case 'Enter':
+        case ' ':
+          e.preventDefault();
+          const lang = option.getAttribute('data-lang');
+          if (lang) {
+            languageSelector.selectLanguage(lang);
+          }
+          break;
+      }
+    });
+  });
+  
+  // Close language menu when clicking outside
+  document.addEventListener('click', (e) => {
+    const languageMenu = document.getElementById('language-menu');
+    const languageBtn = document.getElementById('language-btn');
+    
+    if (languageMenu && languageBtn &&
+        !languageMenu.contains(e.target) && 
+        !languageBtn.contains(e.target)) {
+      languageSelector.closeMenu();
+    }
+  });
+  
+  // Close language menu on Escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      languageSelector.closeMenu();
+    }
+  });
 
   // Sidebar navigation
   document.querySelector('.sidebar')?.addEventListener('click', app.handleNavClick);

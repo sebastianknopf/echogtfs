@@ -88,6 +88,22 @@ class AppSettings(BaseModel):
             raise ValueError('Must be a 6-digit hex color, e.g. #008c99')
         return v.lower()
 
+
+class PublicAppSettings(BaseModel):
+    """Public app settings available without authentication (theme and language)."""
+    color_primary:   str = '#008c99'
+    color_secondary: str = '#99cc04'
+    app_title:       str = 'echogtfs'
+    app_language:    str = 'de'  # 'de' or 'en'
+    app_version:     str = '0.0.0'
+
+    @field_validator('color_primary', 'color_secondary')
+    @classmethod
+    def must_be_hex(cls, v: str) -> str:
+        if not _HEX_COLOR.match(v):
+            raise ValueError('Must be a 6-digit hex color, e.g. #008c99')
+        return v.lower()
+
     @field_validator('app_title')
     @classmethod
     def clean_title(cls, v: str) -> str:
@@ -95,17 +111,6 @@ class AppSettings(BaseModel):
         if not v:
             raise ValueError('App title cannot be empty')
         return v[:80]
-    
-    @field_validator('gtfs_rt_path')
-    @classmethod
-    def clean_path(cls, v: str) -> str:
-        v = v.strip().strip('/')
-        if not v:
-            raise ValueError('GTFS-RT path cannot be empty')
-        # Basic path validation
-        if not re.match(r'^[a-zA-Z0-9/_.-]+$', v):
-            raise ValueError('GTFS-RT path contains invalid characters')
-        return v
 
 
 # ---------------------------------------------------------------------------

@@ -173,6 +173,69 @@ body {
 .status-badge.is-ok    { background: #22a752; }
 .status-badge.is-error { background: var(--md-error); }
 
+/* -- Language Selector ------------------------------------------------------- */
+.language-selector {
+  position: relative;
+}
+
+.language-selector__menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 160px;
+  background: var(--md-surface);
+  border-radius: 4px;
+  box-shadow: var(--md-elev-8);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-8px);
+  transition: opacity 0.2s, transform 0.2s, visibility 0.2s;
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.language-selector__menu.is-open {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.language-selector__option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
+  color: var(--md-on-surface);
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--md-transition);
+  outline: none;
+}
+
+.language-selector__option:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.language-selector__option:focus-visible {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.language-selector__checkmark {
+  width: 20px;
+  font-size: 1rem;
+  color: var(--md-primary);
+  opacity: 0;
+  transition: opacity var(--md-transition);
+}
+
+.language-selector__option.is-active .language-selector__checkmark {
+  opacity: 1;
+}
+
 /* -- Icon button ------------------------------------------------------------- */
 .md-icon-btn {
   position: relative;
@@ -530,6 +593,13 @@ body {
 }
 .login-card__error.is-visible { display: block; }
 .login-card__actions { padding: 12px 28px 28px; }
+.login-card__footer {
+  padding: 0 28px 20px;
+  text-align: center;
+  border-top: 1px solid var(--md-surface-variant);
+  margin-top: 8px;
+  padding-top: 16px;
+}
 
 /* Button inline spinner */
 .btn-spinner {
@@ -551,6 +621,8 @@ body {
   height: 100vh;
   min-height: unset;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 /* App shell: sidebar + content side by side */
@@ -558,6 +630,22 @@ body {
   display: flex;
   flex: 1;
   min-height: 0;
+}
+
+/* App footer with version info */
+.app-footer {
+  padding: 12px 24px;
+  text-align: center;
+  background: var(--md-surface);
+  border-top: 1px solid var(--md-surface-variant);
+  flex-shrink: 0;
+}
+
+/* Version info styling */
+.version-info {
+  font-size: 0.75rem;
+  color: var(--md-on-surface-medium);
+  font-family: 'Roboto Mono', 'Courier New', monospace;
 }
 
 /* -- Sidebar ----------------------------------------------------------------- */

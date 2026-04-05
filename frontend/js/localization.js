@@ -6,6 +6,9 @@
 const i18n = (() => {
   // Current language (default: German)
   let _currentLanguage = 'de';
+  
+  // LocalStorage key for user language preference
+  const STORAGE_KEY = 'echogtfs_language';
 
   /**
    * Get translated string for a given key in the current language.
@@ -47,8 +50,9 @@ const i18n = (() => {
    * Set the current language.
    * 
    * @param {string} language - Language code ('de' or 'en')
+   * @param {boolean} saveToStorage - Whether to save preference to localStorage (default: false)
    */
-  function setLanguage(language) {
+  function setLanguage(language, saveToStorage = false) {
     const translations = window.translations || {};
     
     if (!translations[language]) {
@@ -58,8 +62,42 @@ const i18n = (() => {
     
     _currentLanguage = language;
     
+    // Save to localStorage if requested
+    if (saveToStorage) {
+      try {
+        localStorage.setItem(STORAGE_KEY, language);
+      } catch (error) {
+        console.warn('Failed to save language preference to localStorage:', error);
+      }
+    }
+    
     // Re-translate all elements with data-i18n attribute
     initializeTranslations();
+  }
+  
+  /**
+   * Get user's language preference from localStorage.
+   * 
+   * @returns {string|null} Language code or null if not set
+   */
+  function getUserLanguagePreference() {
+    try {
+      return localStorage.getItem(STORAGE_KEY);
+    } catch (error) {
+      console.warn('Failed to read language preference from localStorage:', error);
+      return null;
+    }
+  }
+  
+  /**
+   * Clear user's language preference from localStorage.
+   */
+  function clearUserLanguagePreference() {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (error) {
+      console.warn('Failed to clear language preference from localStorage:', error);
+    }
   }
 
   /**
@@ -72,18 +110,29 @@ const i18n = (() => {
   }
 
   /**
-   * Load language setting from backend API.
+   * Load language setting from localStorage (user preference) or backend API.
+   * Priority: localStorage > backend setting > default (de)
    * This is called early in the app initialization, before login.
-   * The settings endpoint is public and doesn't require authentication.
+   * The /app endpoint is public and doesn't require authentication.
    */
   async function loadLanguageFromSettings() {
+    // First check localStorage for user preference
+    const userPreference = getUserLanguagePreference();
+    if (userPreference) {
+      console.log('Using language from localStorage:', userPreference);
+      setLanguage(userPreference);
+      return;
+    }
+    
+    // If no user preference, try to load from backend
     try {
-      const response = await fetch('/api/settings/');
+      const response = await fetch('/api/settings/app');
       
       if (response.ok) {
         const settings = await response.json();
         
         if (settings.app_language) {
+          console.log('Using language from backend settings:', settings.app_language);
           setLanguage(settings.app_language);
         } else {
           // No language set in backend, initialize with default
@@ -171,6 +220,8 @@ const i18n = (() => {
     setLanguage,
     getCurrentLanguage,
     loadLanguageFromSettings,
+    getUserLanguagePreference,
+    clearUserLanguagePreference,
     
     // Initialization
     initializeTranslations,

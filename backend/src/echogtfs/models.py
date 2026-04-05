@@ -87,8 +87,7 @@ class AlertCause(str, Enum):
 class SiriLiteDialect(str, Enum):
     """SIRI-Lite dialect variants for different regional implementations."""
     SWISS = "swiss"
-    NORDIC = "nordic"
-    FRANCE = "france"
+    SIRISX = "sirisx"
 
 
 class SiriSxMethod(str, Enum):

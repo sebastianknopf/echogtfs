@@ -6,6 +6,7 @@ Create, Update, Delete require authentication.
 List is public (read-only).
 """
 
+import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -34,6 +35,7 @@ from echogtfs.security import CurrentUser
 from echogtfs.routers.realtime import invalidate_gtfs_rt_cache
 
 router = APIRouter()
+logger = logging.getLogger("uvicorn")
 
 _DB = Annotated[AsyncSession, Depends(get_db)]
 
@@ -127,6 +129,22 @@ def _validate_entity(
     Returns:
         True if all referenced entities are valid, False otherwise
     """
+    # Trip references are not managed/validated - if only trip_id is set,
+    # mark the entity as invalid (trip_id without other references)
+    has_trip_id = bool(entity.trip_id)
+    has_agency_id = bool(entity.agency_id)
+    has_route_id = bool(entity.route_id)
+    has_stop_id = bool(entity.stop_id)
+    
+    # If only trip_id is set (without agency, route, or stop), mark as invalid
+    # direction_id and route_type are just qualifiers, not primary references
+    if has_trip_id and not has_agency_id and not has_route_id and not has_stop_id:
+        logger.debug(
+            f"Entity has only trip_id without other references - "
+            f"marking as invalid (trip references not managed): trip_id={entity.trip_id}"
+        )
+        return False
+    
     # Check each entity type that is specified
     if entity.agency_id and entity.agency_id not in entity_ids["agency"]:
         return False

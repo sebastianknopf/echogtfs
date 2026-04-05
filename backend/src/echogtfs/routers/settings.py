@@ -6,8 +6,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from echogtfs.database import get_db
 from echogtfs.models import AppSetting
-from echogtfs.schemas import AppSettings, ThemeSettings
+from echogtfs.schemas import AppSettings, PublicAppSettings, ThemeSettings
 from echogtfs.security import CurrentSuperuser, hash_password
+
+try:
+    from echogtfs._version import version as __version__
+except ImportError:
+    __version__ = "0.0.0+unknown"
 
 router = APIRouter()
 
@@ -74,9 +79,22 @@ async def _upsert(db: AsyncSession, key: str, value: str) -> None:
         row.value = value
 
 
+@router.get("/app", response_model=PublicAppSettings)
+async def get_public_app_settings(db: _DB) -> PublicAppSettings:
+    """Public: returns theme and language settings (no authentication required)."""
+    settings = await _load(db)
+    return PublicAppSettings(
+        color_primary=settings.color_primary,
+        color_secondary=settings.color_secondary,
+        app_title=settings.app_title,
+        app_language=settings.app_language,
+        app_version=__version__,
+    )
+
+
 @router.get("/", response_model=AppSettings)
-async def get_settings(db: _DB) -> AppSettings:
-    """Public: returns the current app settings (theme + GTFS-RT config)."""
+async def get_settings(_: CurrentSuperuser, db: _DB) -> AppSettings:
+    """Admin only: returns all app settings including GTFS-RT configuration."""
     return await _load(db)
 
 

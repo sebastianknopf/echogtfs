@@ -6,6 +6,7 @@ is a standard for exchanging information about incidents, disruptions and
 other situations affecting public transport services.
 """
 
+import locale
 import logging
 import re
 import time
@@ -146,6 +147,50 @@ class SiriSxAdapter(BaseAdapter):
         )
         
         return url
+    
+    def _get_language_with_fallback(
+        self,
+        text_element: ET.Element,
+        situation_element: ET.Element
+    ) -> str:
+        """
+        Get language code with fallback hierarchy for SIRI-SX dialects.
+        
+        Tries in order:
+        1. xml:lang attribute on the text element
+        2. <Language> element on the PtSituationElement
+        3. System locale language
+        4. Fallback to 'de'
+        
+        Args:
+            text_element: The text element (e.g., Summary, Detail)
+            situation_element: The PtSituationElement
+            
+        Returns:
+            Language code in lowercase
+        """
+        # 1. Try xml:lang on text element
+        lang = text_element.get('{http://www.w3.org/XML/1998/namespace}lang')
+        if lang:
+            return lang.lower()
+        
+        # 2. Try <Language> element on PtSituationElement
+        language_elem = situation_element.find('siri:Language', self.SIRI_NS)
+        if language_elem is not None and language_elem.text:
+            return language_elem.text.lower()
+        
+        # 3. Try system locale
+        try:
+            system_locale = locale.getdefaultlocale()
+            if system_locale and system_locale[0]:
+                # Extract language code (e.g., 'de_DE' -> 'de')
+                lang_code = system_locale[0].split('_')[0]
+                return lang_code.lower()
+        except Exception:
+            pass  # Fall through to default
+        
+        # 4. Final fallback
+        return 'de'
     
     def _build_request_xml(self) -> str:
         """
@@ -481,8 +526,7 @@ class SiriSxAdapter(BaseAdapter):
         
         # Extract Summary elements
         for summary_elem in summary_elements:
-            lang = summary_elem.get('{http://www.w3.org/XML/1998/namespace}lang', 'de')
-            lang = lang.lower()
+            lang = self._get_language_with_fallback(summary_elem, situation)
             header = self._strip_html(summary_elem.text or "")
             
             if lang not in translations_dict:
@@ -491,8 +535,7 @@ class SiriSxAdapter(BaseAdapter):
         
         # Extract Detail elements and collect them for concatenation
         for detail_elem in detail_elements:
-            lang = detail_elem.get('{http://www.w3.org/XML/1998/namespace}lang', 'de')
-            lang = lang.lower()
+            lang = self._get_language_with_fallback(detail_elem, situation)
             description = self._strip_html(detail_elem.text or "")
             
             if description:  # Only add non-empty descriptions
@@ -502,8 +545,7 @@ class SiriSxAdapter(BaseAdapter):
         
         # Also extract Description elements (alternative to Detail) and collect them
         for desc_elem in description_elements:
-            lang = desc_elem.get('{http://www.w3.org/XML/1998/namespace}lang', 'de')
-            lang = lang.lower()
+            lang = self._get_language_with_fallback(desc_elem, situation)
             description = self._strip_html(desc_elem.text or "")
             
             if description:  # Only add non-empty descriptions
@@ -744,7 +786,12 @@ class SiriSxAdapter(BaseAdapter):
         SIRI_NS: dict[str, str]
     ) -> list[dict[str, Any]]:
         """
-        Extract informed entities from Affects sections.
+        Extract informed entities from Affects sections with hierarchical fallback.
+        
+        Tries in order:
+        1. PublishingActions > PublishAtScope > Affects
+        2. Consequences > Consequence > Affects
+        3. Affects directly on PtSituationElement
         
         Args:
             situation: PtSituationElement XML element
@@ -755,91 +802,219 @@ class SiriSxAdapter(BaseAdapter):
             List of informed entity dictionaries
         """
         informed_entities = []
+        affects_elements = []
         
+        # Try PublishingActions > PublishAtScope > Affects first
         for pub_action in publishing_actions:
-            # Check both PublishAtScope and Consequences for Affects
-            affects_elements = []
-            
             publish_at_scope = pub_action.find('siri:PublishAtScope', SIRI_NS)
             if publish_at_scope is not None:
                 affects_elem = publish_at_scope.find('siri:Affects', SIRI_NS)
                 if affects_elem is not None:
                     affects_elements.append(affects_elem)
-            
-            # Also check Consequences (from situation level)
+        
+        # Fallback: Try Consequences > Consequence > Affects
+        if not affects_elements:
             consequences = situation.findall('.//siri:Consequence', SIRI_NS)
             for consequence in consequences:
                 affects_elem = consequence.find('siri:Affects', SIRI_NS)
                 if affects_elem is not None:
                     affects_elements.append(affects_elem)
-            
-            for affects in affects_elements:
-                # Extract Networks (contains routes/lines and operators)
-                networks = affects.findall('.//siri:AffectedNetwork', SIRI_NS)
-                for network in networks:
-                    affected_lines = network.findall('.//siri:AffectedLine', SIRI_NS)
-                    for affected_line in affected_lines:
+        
+        # Last fallback: Try Affects directly on PtSituationElement
+        if not affects_elements:
+            direct_affects = situation.find('siri:Affects', SIRI_NS)
+            if direct_affects is not None:
+                affects_elements.append(direct_affects)
+        
+        # Extract entities from all found Affects elements
+        for affects in affects_elements:
+            self._extract_entities_from_affects(affects, informed_entities, SIRI_NS)
+        
+        return informed_entities
+    
+    def _extract_entities_from_affects(
+        self,
+        affects: ET.Element,
+        informed_entities: list[dict[str, Any]],
+        SIRI_NS: dict[str, str]
+    ) -> None:
+        """
+        Extract entities from an Affects element and append to informed_entities list.
+        
+        Args:
+            affects: Affects XML element
+            informed_entities: List to append extracted entities to
+            SIRI_NS: SIRI namespace dictionary
+        """
+        # Extract Networks (contains routes/lines and operators)
+        networks = affects.findall('.//siri:AffectedNetwork', SIRI_NS)
+        for network in networks:
+            affected_lines = network.findall('.//siri:AffectedLine', SIRI_NS)
+            for affected_line in affected_lines:
+                entity = {
+                    "agency_id": None,
+                    "route_id": None,
+                    "route_type": None,
+                    "stop_id": None,
+                    "trip_id": None,
+                    "direction_id": None,
+                }
+                
+                # Extract OperatorRef (agency_id)
+                operator_ref = affected_line.find('.//siri:OperatorRef', SIRI_NS)
+                if operator_ref is not None and operator_ref.text:
+                    entity["agency_id"] = operator_ref.text
+                
+                # Extract LineRef (route_id)
+                line_ref = affected_line.find('siri:LineRef', SIRI_NS)
+                if line_ref is not None and line_ref.text:
+                    entity["route_id"] = line_ref.text
+                
+                informed_entities.append(entity)
+        
+        # Extract StopPlaces and StopPoints
+        stop_places = affects.findall('.//siri:AffectedStopPlace', SIRI_NS)
+        for stop_place in stop_places:
+            stop_place_ref = stop_place.find('siri:StopPlaceRef', SIRI_NS)
+            if stop_place_ref is not None and stop_place_ref.text:
+                # Also extract lines within this stop place
+                lines_in_stop = stop_place.findall('.//siri:AffectedLine', SIRI_NS)
+                
+                if lines_in_stop:
+                    # Create entity for each line at this stop
+                    for affected_line in lines_in_stop:
                         entity = {
                             "agency_id": None,
                             "route_id": None,
                             "route_type": None,
-                            "stop_id": None,
+                            "stop_id": stop_place_ref.text,
                             "trip_id": None,
                             "direction_id": None,
                         }
                         
                         # Extract OperatorRef (agency_id)
                         operator_ref = affected_line.find('.//siri:OperatorRef', SIRI_NS)
-                        if operator_ref is not None:
+                        if operator_ref is not None and operator_ref.text:
                             entity["agency_id"] = operator_ref.text
                         
                         # Extract LineRef (route_id)
                         line_ref = affected_line.find('siri:LineRef', SIRI_NS)
-                        if line_ref is not None:
+                        if line_ref is not None and line_ref.text:
                             entity["route_id"] = line_ref.text
                         
                         informed_entities.append(entity)
-                
-                # Extract StopPlaces
-                stop_places = affects.findall('.//siri:AffectedStopPlace', SIRI_NS)
-                for stop_place in stop_places:
-                    stop_place_ref = stop_place.find('siri:StopPlaceRef', SIRI_NS)
-                    if stop_place_ref is not None:
-                        # Also extract lines within this stop place
-                        lines_in_stop = stop_place.findall('.//siri:AffectedLine', SIRI_NS)
-                        
-                        if lines_in_stop:
-                            # Create entity for each line at this stop
-                            for affected_line in lines_in_stop:
-                                entity = {
-                                    "agency_id": None,
-                                    "route_id": None,
-                                    "route_type": None,
-                                    "stop_id": stop_place_ref.text,
-                                    "trip_id": None,
-                                    "direction_id": None,
-                                }
-                                
-                                # Extract OperatorRef (agency_id)
-                                operator_ref = affected_line.find('.//siri:OperatorRef', SIRI_NS)
-                                if operator_ref is not None:
-                                    entity["agency_id"] = operator_ref.text
-                                
-                                # Extract LineRef (route_id)
-                                line_ref = affected_line.find('siri:LineRef', SIRI_NS)
-                                if line_ref is not None:
-                                    entity["route_id"] = line_ref.text
-                                
-                                informed_entities.append(entity)
-                        else:
-                            # Just the stop without specific lines
-                            informed_entities.append({
-                                "agency_id": None,
-                                "route_id": None,
-                                "route_type": None,
-                                "stop_id": stop_place_ref.text,
-                                "trip_id": None,
-                                "direction_id": None,
-                            })
+                else:
+                    # Just the stop without specific lines
+                    informed_entities.append({
+                        "agency_id": None,
+                        "route_id": None,
+                        "route_type": None,
+                        "stop_id": stop_place_ref.text,
+                        "trip_id": None,
+                        "direction_id": None,
+                    })
         
-        return informed_entities
+        # Also extract StopPoints (in addition to StopPlaces)
+        stop_points = affects.findall('.//siri:AffectedStopPoint', SIRI_NS)
+        for stop_point in stop_points:
+            stop_point_ref = stop_point.find('siri:StopPointRef', SIRI_NS)
+            if stop_point_ref is not None and stop_point_ref.text:
+                # Also extract lines within this stop point
+                lines_in_stop = stop_point.findall('.//siri:AffectedLine', SIRI_NS)
+                
+                if lines_in_stop:
+                    # Create entity for each line at this stop
+                    for affected_line in lines_in_stop:
+                        entity = {
+                            "agency_id": None,
+                            "route_id": None,
+                            "route_type": None,
+                            "stop_id": stop_point_ref.text,
+                            "trip_id": None,
+                            "direction_id": None,
+                        }
+                        
+                        # Extract OperatorRef (agency_id)
+                        operator_ref = affected_line.find('.//siri:OperatorRef', SIRI_NS)
+                        if operator_ref is not None and operator_ref.text:
+                            entity["agency_id"] = operator_ref.text
+                        
+                        # Extract LineRef (route_id)
+                        line_ref = affected_line.find('siri:LineRef', SIRI_NS)
+                        if line_ref is not None and line_ref.text:
+                            entity["route_id"] = line_ref.text
+                        
+                        informed_entities.append(entity)
+                else:
+                    # Just the stop without specific lines
+                    informed_entities.append({
+                        "agency_id": None,
+                        "route_id": None,
+                        "route_type": None,
+                        "stop_id": stop_point_ref.text,
+                        "trip_id": None,
+                        "direction_id": None,
+                    })
+        
+        # Extract VehicleJourneys (trip references)
+        vehicle_journeys_container = affects.find('siri:VehicleJourneys', SIRI_NS)
+        if vehicle_journeys_container is not None:
+            vehicle_journeys = vehicle_journeys_container.findall('siri:AffectedVehicleJourney', SIRI_NS)
+            for vehicle_journey in vehicle_journeys:
+                # Extract VehicleJourneyRef or DatedVehicleJourneyRef (trip_id)
+                journey_ref = vehicle_journey.find('siri:VehicleJourneyRef', SIRI_NS)
+                if journey_ref is None or not journey_ref.text:
+                    journey_ref = vehicle_journey.find('siri:DatedVehicleJourneyRef', SIRI_NS)
+                if journey_ref is None or not journey_ref.text:
+                    continue  # Skip if no journey reference
+                
+                trip_id = journey_ref.text
+                
+                # Extract OperatorRef (agency_id)
+                agency_id = None
+                operator = vehicle_journey.find('siri:Operator', SIRI_NS)
+                if operator is not None:
+                    operator_ref = operator.find('siri:OperatorRef', SIRI_NS)
+                    if operator_ref is not None and operator_ref.text:
+                        agency_id = operator_ref.text
+                
+                # Extract StopPoints from Route
+                stop_ids = []
+                route = vehicle_journey.find('siri:Route', SIRI_NS)
+                if route is not None:
+                    stop_points_container = route.find('siri:StopPoints', SIRI_NS)
+                    if stop_points_container is not None:
+                        affected_stop_points = stop_points_container.findall('siri:AffectedStopPoint', SIRI_NS)
+                        for asp in affected_stop_points:
+                            stop_point_ref = asp.find('siri:StopPointRef', SIRI_NS)
+                            if stop_point_ref is not None and stop_point_ref.text:
+                                stop_ids.append(stop_point_ref.text)
+                            # Also check for StopPlaceRef
+                            stop_place_ref = asp.find('siri:StopPlaceRef', SIRI_NS)
+                            if stop_place_ref is not None and stop_place_ref.text:
+                                stop_ids.append(stop_place_ref.text)
+                
+                # Create entities: one per stop_id, or one without stop if no stops found
+                # All trip-based entities are marked as invalid since we cannot validate trips
+                if stop_ids:
+                    for stop_id in stop_ids:
+                        informed_entities.append({
+                            "agency_id": agency_id,
+                            "route_id": None,
+                            "route_type": None,
+                            "stop_id": stop_id,
+                            "trip_id": trip_id,
+                            "direction_id": None,
+                            "is_valid": False,  # Trip references cannot be validated
+                        })
+                else:
+                    # No stops specified - create entity with just trip_id and agency_id
+                    informed_entities.append({
+                        "agency_id": agency_id,
+                        "route_id": None,
+                        "route_type": None,
+                        "stop_id": None,
+                        "trip_id": trip_id,
+                        "direction_id": None,
+                        "is_valid": False,  # Trip references cannot be validated
+                    })
