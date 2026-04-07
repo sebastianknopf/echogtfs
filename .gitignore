@@ -17,6 +17,9 @@ env/
 # setuptools_scm generated version file
 backend/src/echogtfs/_version.py
 
+# protoc generated protobuf file
+backend/src/echogtfs/gtfs_realtime_pb2.py
+
 # pyproject / pip
 pip-wheel-metadata/
 share/python-wheels/

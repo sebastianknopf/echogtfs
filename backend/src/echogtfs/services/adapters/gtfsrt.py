@@ -11,8 +11,8 @@ import uuid
 from typing import Any
 
 import httpx
-from google.transit import gtfs_realtime_pb2
 
+from echogtfs import gtfs_realtime_pb2
 from echogtfs.services.adapters.base import BaseAdapter
 
 logger = logging.getLogger("uvicorn")

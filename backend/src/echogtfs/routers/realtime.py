@@ -12,11 +12,11 @@ import time
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
-from google.transit import gtfs_realtime_pb2
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from echogtfs import gtfs_realtime_pb2
 from echogtfs.database import get_db
 from echogtfs.models import ServiceAlert
 from echogtfs.routers.settings import _load as load_settings
