@@ -1,4 +1,4 @@
-[![Tests](https://github.com/sebastianknopf/echogtfs/actions/workflows/tests.yml/badge.svg)](https://github.com/DEIN-USERNAME/echogtfs/actions/workflows/tests.yml)
+[![Tests](https://github.com/sebastianknopf/echogtfs/actions/workflows/tests.yml/badge.svg)](https://github.com/sebastianknopf/echogtfs/actions/workflows/tests.yml)
 
 # echogtfs
 
