@@ -2,9 +2,8 @@ name: Tests
 
 on:
   push:
-    branches: [ main, master, develop ]
   pull_request:
-    branches: [ main, master, develop ]
+    branches: [ main ]
 
 jobs:
   test:
@@ -21,6 +20,17 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
+    
+    - name: Install protoc
+      run: |
+        PROTOC_VERSION=27.0
+        wget https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip
+        unzip protoc-${PROTOC_VERSION}-linux-x86_64.zip -d $HOME/.local
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+    
+    - name: Generate protobuf files
+      run: |
+        protoc --python_out=backend/src/echogtfs gtfs-realtime.proto
     
     - name: Cache pip packages
       uses: actions/cache@v4
