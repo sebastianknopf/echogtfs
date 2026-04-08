@@ -21,6 +21,7 @@ from echogtfs.routers.gtfs import router as gtfs_router
 from echogtfs.routers.realtime import router as realtime_router
 from echogtfs.services.gtfs_import import schedule_import_from_cron
 from echogtfs.services.alert_import import schedule_all_data_sources
+from echogtfs.services.cleanup import schedule_cleanup_from_settings
 from echogtfs.routers.settings import router as settings_router
 from echogtfs.routers.sources import router as sources_router
 from echogtfs.routers.users import router as users_router
@@ -57,6 +58,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     
     # Schedule all data source alert imports on startup
     await schedule_all_data_sources()
+    
+    # Schedule cleanup job on startup
+    await schedule_cleanup_from_settings()
     
     yield
 

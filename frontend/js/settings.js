@@ -126,6 +126,22 @@ const settings = (() => {
       rtUsername.value = settings.gtfs_rt_username || '';
     }
     
+    // Cleanup settings
+    const cleanupCron = ui.el('settings-cleanup-cron');
+    if (cleanupCron) {
+      cleanupCron.value = settings.cleanup_cron || '*/10 * * * *';
+    }
+    
+    const cleanupPolicy = ui.el('settings-cleanup-policy');
+    if (cleanupPolicy) {
+      cleanupPolicy.value = settings.cleanup_expired_policy || 'deactivate';
+    }
+    
+    const cleanupDeleteDays = ui.el('settings-cleanup-delete-days');
+    if (cleanupDeleteDays) {
+      cleanupDeleteDays.value = String(settings.cleanup_delete_after_days ?? -1);
+    }
+    
     // Password field stays empty for security
   }
 
@@ -199,6 +215,9 @@ const settings = (() => {
         gtfs_rt_path: ui.el('settings-gtfs-rt-path')?.value || '',
         gtfs_rt_username: ui.el('settings-gtfs-rt-username')?.value || '',
         gtfs_rt_password: ui.el('settings-gtfs-rt-password')?.value || '',
+        cleanup_cron: ui.el('settings-cleanup-cron')?.value || '*/10 * * * *',
+        cleanup_expired_policy: ui.el('settings-cleanup-policy')?.value || 'deactivate',
+        cleanup_delete_after_days: parseInt(ui.el('settings-cleanup-delete-days')?.value || '-1', 10),
       };
       
       const result = await api.updateSettings(data);
@@ -246,7 +265,10 @@ const settings = (() => {
         color_secondary: '#99cc04',
         gtfs_rt_path: 'realtime/service-alerts.pbf',
         gtfs_rt_username: '',
-        gtfs_rt_password: ''
+        gtfs_rt_password: '',
+        cleanup_cron: '*/10 * * * *',
+        cleanup_expired_policy: 'deactivate',
+        cleanup_delete_after_days: -1,
       };
       
       const result = await api.updateSettings(defaults);

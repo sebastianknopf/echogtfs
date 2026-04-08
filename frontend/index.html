@@ -334,6 +334,34 @@
                   <div class="md-field__helper" id="settings-gtfs-rt-password-helper" data-i18n="settings.gtfs_rt_password.helper">Leer lassen für neues Passwort oder altes Passwort behalten</div>
                 </div>
 
+                <p class="settings-section-label" data-i18n="settings.section.cleanup">Datenbereinigung</p>
+
+                <div class="md-field__helper" style="margin-top: 0; margin-bottom: 16px;" data-i18n="settings.cleanup_info">Die Datenbereinigung gilt nur für interne Meldungen. Externe Meldungen werden immer ausgehend von ihrer Datenquelle synchronisiert.</div>
+
+                <div class="md-field">
+                  <input type="text" id="settings-cleanup-cron" class="md-field__input" placeholder="*/10 * * * *" maxlength="64" />
+                  <label class="md-field__label" for="settings-cleanup-cron" data-i18n="settings.cleanup_cron">Cron-Ausdruck für Datenbereinigung</label>
+                  <div class="md-field__helper" data-i18n="settings.cleanup_cron.helper">z.B. */10 * * * * für alle 10 Minuten</div>
+                </div>
+
+                <div class="md-field">
+                  <select id="settings-cleanup-policy" class="md-field__input">
+                    <option value="deactivate" selected data-i18n="settings.cleanup_policy.deactivate">Deaktivieren</option>
+                    <option value="delete" data-i18n="settings.cleanup_policy.delete">Löschen</option>
+                  </select>
+                  <label class="md-field__label" for="settings-cleanup-policy" data-i18n="settings.cleanup_policy">Verfahrensweise bei abgelaufenen Meldungen</label>
+                </div>
+
+                <div class="md-field">
+                  <select id="settings-cleanup-delete-days" class="md-field__input">
+                    <option value="-1" selected data-i18n="settings.cleanup_delete_days.never">Niemals</option>
+                    <option value="1" data-i18n="settings.cleanup_delete_days.1">Nach 1 Tag</option>
+                    <option value="7" data-i18n="settings.cleanup_delete_days.7">Nach 7 Tagen</option>
+                    <option value="30" data-i18n="settings.cleanup_delete_days.30">Nach 30 Tagen</option>
+                  </select>
+                  <label class="md-field__label" for="settings-cleanup-delete-days" data-i18n="settings.cleanup_delete_days">Endgültiges Löschen</label>
+                </div>
+
                 <p id="settings-error" class="login-card__error" role="alert"></p>
 
                 <div class="settings-actions">

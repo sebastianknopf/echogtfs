@@ -147,6 +147,12 @@ class SourceField(str, Enum):
     HEADER_DESCRIPTION = "header_description"  # Match in either header or description
 
 
+class ExpiredAlertPolicy(str, Enum):
+    """Policy for handling expired alerts during cleanup."""
+    DEACTIVATE = "deactivate"  # Set is_active=False for expired alerts
+    DELETE = "delete"  # Delete expired alerts from database
+
+
 # ---------------------------------------------------------------------------
 # GTFS-RT ServiceAlert tables
 # ---------------------------------------------------------------------------

@@ -10,7 +10,8 @@ from echogtfs.models import (
     SourceField,
     AlertCause,
     AlertEffect,
-    AlertSeverityLevel
+    AlertSeverityLevel,
+    ExpiredAlertPolicy
 )
 
 _HEX_COLOR = re.compile(r'^#[0-9a-fA-F]{6}$')
@@ -87,6 +88,11 @@ class AppSettings(BaseModel):
     gtfs_rt_path:     str = 'realtime/service-alerts.pbf'
     gtfs_rt_username: str = ''
     gtfs_rt_password: str | None = ''
+    
+    # Data cleanup configuration
+    cleanup_cron:             str = '*/10 * * * *'  # Every 10 minutes
+    cleanup_expired_policy:   ExpiredAlertPolicy = ExpiredAlertPolicy.DEACTIVATE
+    cleanup_delete_after_days: int = -1  # -1 = never, >= 0 = days after expiration
 
     @field_validator('color_primary', 'color_secondary')
     @classmethod
@@ -94,6 +100,13 @@ class AppSettings(BaseModel):
         if not _HEX_COLOR.match(v):
             raise ValueError('Must be a 6-digit hex color, e.g. #008c99')
         return v.lower()
+    
+    @field_validator('cleanup_delete_after_days')
+    @classmethod
+    def validate_delete_days(cls, v: int) -> int:
+        if v < -1:
+            raise ValueError('cleanup_delete_after_days must be >= -1 (-1 = never)')
+        return v
 
 
 class PublicAppSettings(BaseModel):

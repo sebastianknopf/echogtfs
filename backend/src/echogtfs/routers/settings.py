@@ -5,9 +5,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from echogtfs.database import get_db
-from echogtfs.models import AppSetting
+from echogtfs.models import AppSetting, ExpiredAlertPolicy
 from echogtfs.schemas import AppSettings, PublicAppSettings, ThemeSettings
 from echogtfs.security import CurrentSuperuser, hash_password
+from echogtfs.services.cleanup import schedule_cleanup_from_settings
 
 try:
     from echogtfs._version import version as __version__
@@ -26,6 +27,9 @@ _KEY_LANGUAGE      = "app_language"
 _KEY_GTFS_RT_PATH  = "gtfs_rt_path"
 _KEY_GTFS_RT_USER  = "gtfs_rt_username"
 _KEY_GTFS_RT_PASS  = "gtfs_rt_password"
+_KEY_CLEANUP_CRON  = "cleanup_cron"
+_KEY_CLEANUP_POLICY = "cleanup_expired_policy"
+_KEY_CLEANUP_DELETE_DAYS = "cleanup_delete_after_days"
 
 DEFAULTS = AppSettings(
     color_primary="#008c99",
@@ -35,6 +39,9 @@ DEFAULTS = AppSettings(
     gtfs_rt_path="realtime/service-alerts.pbf",
     gtfs_rt_username="",
     gtfs_rt_password="",
+    cleanup_cron="*/10 * * * *",
+    cleanup_expired_policy=ExpiredAlertPolicy.DEACTIVATE,
+    cleanup_delete_after_days=-1,
 )
 
 
@@ -56,6 +63,18 @@ async def _load(db: AsyncSession) -> AppSettings:
         await _upsert(db, _KEY_GTFS_RT_PASS, DEFAULTS.gtfs_rt_password)
         rows[_KEY_GTFS_RT_PASS] = DEFAULTS.gtfs_rt_password
         needs_commit = True
+    if _KEY_CLEANUP_CRON not in rows:
+        await _upsert(db, _KEY_CLEANUP_CRON, DEFAULTS.cleanup_cron)
+        rows[_KEY_CLEANUP_CRON] = DEFAULTS.cleanup_cron
+        needs_commit = True
+    if _KEY_CLEANUP_POLICY not in rows:
+        await _upsert(db, _KEY_CLEANUP_POLICY, DEFAULTS.cleanup_expired_policy.value)
+        rows[_KEY_CLEANUP_POLICY] = DEFAULTS.cleanup_expired_policy.value
+        needs_commit = True
+    if _KEY_CLEANUP_DELETE_DAYS not in rows:
+        await _upsert(db, _KEY_CLEANUP_DELETE_DAYS, str(DEFAULTS.cleanup_delete_after_days))
+        rows[_KEY_CLEANUP_DELETE_DAYS] = str(DEFAULTS.cleanup_delete_after_days)
+        needs_commit = True
     
     if needs_commit:
         await db.commit()
@@ -68,6 +87,13 @@ async def _load(db: AsyncSession) -> AppSettings:
         gtfs_rt_path     = rows.get(_KEY_GTFS_RT_PATH, DEFAULTS.gtfs_rt_path),
         gtfs_rt_username = rows.get(_KEY_GTFS_RT_USER, DEFAULTS.gtfs_rt_username),
         gtfs_rt_password = rows.get(_KEY_GTFS_RT_PASS, DEFAULTS.gtfs_rt_password),
+        cleanup_cron     = rows.get(_KEY_CLEANUP_CRON, DEFAULTS.cleanup_cron),
+        cleanup_expired_policy = ExpiredAlertPolicy(
+            rows.get(_KEY_CLEANUP_POLICY, DEFAULTS.cleanup_expired_policy.value)
+        ),
+        cleanup_delete_after_days = int(
+            rows.get(_KEY_CLEANUP_DELETE_DAYS, str(DEFAULTS.cleanup_delete_after_days))
+        ),
     )
 
 
@@ -109,6 +135,11 @@ async def update_settings(
     await _upsert(db, _KEY_LANGUAGE,     payload.app_language)
     await _upsert(db, _KEY_GTFS_RT_PATH, payload.gtfs_rt_path)
     
+    # Cleanup settings
+    await _upsert(db, _KEY_CLEANUP_CRON, payload.cleanup_cron)
+    await _upsert(db, _KEY_CLEANUP_POLICY, payload.cleanup_expired_policy.value)
+    await _upsert(db, _KEY_CLEANUP_DELETE_DAYS, str(payload.cleanup_delete_after_days))
+    
     # Basic Auth handling: Only clear both username and password if BOTH are empty/None
     # Otherwise, update individually
     username_is_empty = not payload.gtfs_rt_username
@@ -133,6 +164,9 @@ async def update_settings(
         # else: None means keep existing password
     
     await db.commit()
+    
+    # Re-schedule cleanup job with new settings
+    await schedule_cleanup_from_settings(db)
     
     # Return current settings (reload to get actual stored password status)
     return await _load(db)

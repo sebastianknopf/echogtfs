@@ -26,6 +26,30 @@ Example:
 - `https://[YourDomain]/api/gtfs-rt?json` → JSON (for debugging)
 - `https://[YourDomain]/api/gtfs-rt?debug` → JSON (for debugging) 
 
+## Data Cleanup Configuration
+- After logging in as an admin, navigate to the **Settings** section.
+- EchoGTFS includes an automated cleanup service for managing expired internal alerts.
+- **Important:** Data cleanup only affects internal alerts (created within EchoGTFS). External alerts from data sources are always synchronized from their respective sources and are never affected by the cleanup process.
+
+### Cleanup Schedule
+- Define a **cron expression** to control when the cleanup job runs.
+- Default: `*/10 * * * *` (every 10 minutes)
+- The cleanup job automatically starts on system startup and is rescheduled whenever settings are updated.
+
+### Expired Alert Policy
+Configure how the system handles internal alerts whose last validity period has expired:
+- **Deactivate (default):** Sets `is_active=false` for expired alerts. The alerts remain in the database but are no longer published in the GTFS-RT feed.
+- **Delete:** Permanently removes expired alerts from the database.
+
+### Permanent Deletion
+Configure when expired internal alerts should be permanently deleted from the database:
+- **Never (default):** Alerts are never automatically deleted (only deactivated if configured).
+- **After 1 day:** Alerts are deleted if they expired at least 1 day ago.
+- **After 7 days:** Alerts are deleted if they expired at least 7 days ago.
+- **After 30 days:** Alerts are deleted if they expired at least 30 days ago.
+
+**Note:** Only the calendar date is considered for deletion, not the exact time. For example, if an alert expires on April 7 at 5:00 PM and "After 1 day" is configured, it will be deleted on April 8 during the first cleanup run (regardless of time).
+
 ## GTFS Static Configuration
 - After logging in as an admin, navigate to the **Settings** section.
 - Here you can configure GTFS feed sources and adjust system-wide options.

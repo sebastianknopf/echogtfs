@@ -1,6 +1,6 @@
+[![Tests](https://github.com/sebastianknopf/echogtfs/actions/workflows/tests.yml/badge.svg)](https://github.com/DEIN-USERNAME/echogtfs/actions/workflows/tests.yml)
 
 # echogtfs
-
 
 **Looking for the full documentation?**
 👉 [Read the EchoGTFS Manual](docs/manual/README.md)
