@@ -163,12 +163,33 @@ const alerts = (() => {
       const firstTrans = alert.translations.find(t => t.language.startsWith('de')) || alert.translations[0] || {};
       const title = firstTrans.header_text || window.i18n('alerts.title.notitle');
       
-      // Get start date from first active period and end date from last period
-      let startDate = '';
-      let endDate = '';
+      // Group periods by type and calculate date ranges for each type
+      const periodsByType = {
+        impact_period: [],
+        communication_period: []
+      };
+      
       if (alert.active_periods && alert.active_periods.length > 0) {
-        if (alert.active_periods[0].start_time) {
-          const d = new Date(alert.active_periods[0].start_time * 1000);
+        alert.active_periods.forEach(period => {
+          const type = period.period_type || 'impact_period';
+          if (periodsByType[type]) {
+            periodsByType[type].push(period);
+          }
+        });
+      }
+      
+      // Build date range strings for each period type
+      const dateRanges = [];
+      
+      // Impact periods (Gültigkeitszeitraum)
+      if (periodsByType.impact_period.length > 0) {
+        let startDate = '';
+        let endDate = '';
+        
+        // Find first start time
+        const firstPeriod = periodsByType.impact_period[0];
+        if (firstPeriod.start_time) {
+          const d = new Date(firstPeriod.start_time * 1000);
           startDate = d.toLocaleDateString('de-DE', { 
             day: '2-digit', 
             month: 'short', 
@@ -178,7 +199,8 @@ const alerts = (() => {
           });
         }
         
-        const lastPeriod = alert.active_periods[alert.active_periods.length - 1];
+        // Find last end time
+        const lastPeriod = periodsByType.impact_period[periodsByType.impact_period.length - 1];
         if (lastPeriod.end_time) {
           const d = new Date(lastPeriod.end_time * 1000);
           endDate = d.toLocaleDateString('de-DE', { 
@@ -188,6 +210,48 @@ const alerts = (() => {
             hour: '2-digit',
             minute: '2-digit'
           });
+        }
+        
+        if (startDate || endDate) {
+          const dateStr = startDate ? `${startDate}${endDate ? ` – ${endDate}` : ''}` : endDate;
+          dateRanges.push(`${dateStr} ${window.i18n('alert.period.type.impact.short')}`);
+        }
+      }
+      
+      // Communication periods (Veröffentlichungszeitraum)
+      if (periodsByType.communication_period.length > 0) {
+        let startDate = '';
+        let endDate = '';
+        
+        // Find first start time
+        const firstPeriod = periodsByType.communication_period[0];
+        if (firstPeriod.start_time) {
+          const d = new Date(firstPeriod.start_time * 1000);
+          startDate = d.toLocaleDateString('de-DE', { 
+            day: '2-digit', 
+            month: 'short', 
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+        }
+        
+        // Find last end time
+        const lastPeriod = periodsByType.communication_period[periodsByType.communication_period.length - 1];
+        if (lastPeriod.end_time) {
+          const d = new Date(lastPeriod.end_time * 1000);
+          endDate = d.toLocaleDateString('de-DE', { 
+            day: '2-digit', 
+            month: 'short', 
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+        }
+        
+        if (startDate || endDate) {
+          const dateStr = startDate ? `${startDate}${endDate ? ` – ${endDate}` : ''}` : endDate;
+          dateRanges.push(`${dateStr} ${window.i18n('alert.period.type.communication.short')}`);
         }
       }
       
@@ -239,12 +303,12 @@ const alerts = (() => {
             </div>
           </div>
           
-          ${startDate ? `<div class="alert-list-item__time">
+          ${dateRanges.length > 0 ? dateRanges.map(dateStr => `<div class="alert-list-item__time">
             <svg class="alert-list-item__icon" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.2 3.2.8-1.3-4.5-2.7V7z"/>
             </svg>
-            <span>${startDate}${endDate ? ` – ${endDate}` : ''}</span>
-          </div>` : ''}
+            <span>${dateStr}</span>
+          </div>`).join('') : ''}
           
           ${entityBadges ? `<div class="alert-list-item__entities">${entityBadges}</div>` : ''}
         </div>
@@ -485,6 +549,7 @@ const alerts = (() => {
     const activePeriods = [];
     
     periodItems.forEach(item => {
+      const periodType = item.querySelector('.period-type').value;
       const startVal = item.querySelector('.period-start').value;
       const endVal = item.querySelector('.period-end').value;
       
@@ -492,7 +557,11 @@ const alerts = (() => {
       if (startVal) {
         const startTime = Math.floor(new Date(startVal).getTime() / 1000);
         const endTime = endVal ? Math.floor(new Date(endVal).getTime() / 1000) : null;
-        activePeriods.push({ start_time: startTime, end_time: endTime });
+        activePeriods.push({ 
+          period_type: periodType,
+          start_time: startTime, 
+          end_time: endTime 
+        });
       }
     });
 

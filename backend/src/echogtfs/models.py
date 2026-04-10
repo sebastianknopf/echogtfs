@@ -124,6 +124,12 @@ class AlertSeverityLevel(str, Enum):
     SEVERE = "SEVERE"
 
 
+class PeriodType(str, Enum):
+    """Type of validity period for service alerts."""
+    IMPACT_PERIOD = "impact_period"  # Actual validity period (when alert affects service)
+    COMMUNICATION_PERIOD = "communication_period"  # Publication period (when alert should be shown)
+
+
 class InvalidReferencePolicy(str, Enum):
     """Policy for handling alerts with invalid entity references."""
     DISCARD_ALERT = "discard_alert"  # Discard entire alert if any reference is invalid
@@ -250,12 +256,21 @@ class ServiceAlertActivePeriod(Base):
     
     An alert can have multiple active periods (e.g., same disruption
     on multiple days). If no periods are defined, the alert is always active.
+    
+    The period_type field distinguishes between:
+    - impact_period: The actual validity period (when the alert affects service)
+    - communication_period: The publication period (when the alert should be shown)
     """
     __tablename__ = "service_alert_active_periods"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     alert_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("service_alerts.id", ondelete="CASCADE"), index=True
+    )
+    
+    # Period type: impact_period or communication_period
+    period_type: Mapped[PeriodType] = mapped_column(
+        String(32), default=PeriodType.IMPACT_PERIOD, index=True
     )
     
     # Unix timestamps (seconds since epoch)

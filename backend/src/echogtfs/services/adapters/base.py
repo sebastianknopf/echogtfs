@@ -670,7 +670,8 @@ class BaseAdapter(ABC):
             ServiceAlertActivePeriod, 
             ServiceAlertInformedEntity,
             DataSource,
-            InvalidReferencePolicy
+            InvalidReferencePolicy,
+            PeriodType
         )
         
         # Load the data source to get its invalid_reference_policy

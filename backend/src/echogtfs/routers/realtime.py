@@ -18,7 +18,7 @@ from sqlalchemy.orm import selectinload
 
 from echogtfs import gtfs_realtime_pb2
 from echogtfs.database import get_db
-from echogtfs.models import ServiceAlert
+from echogtfs.models import PeriodType, ServiceAlert
 from echogtfs.routers.settings import _load as load_settings
 from echogtfs.security import verify_password
 
@@ -166,13 +166,29 @@ def _build_feed_message(alerts: list[ServiceAlert]) -> gtfs_realtime_pb2.FeedMes
                 url.text = trans.url
                 url.language = trans.language
         
-        # Active periods
+        # Active periods - distinguish between impact and communication periods
         for period in alert_model.active_periods:
-            time_range = alert.active_period.add()
-            if period.start_time is not None:
-                time_range.start = period.start_time
-            if period.end_time is not None:
-                time_range.end = period.end_time
+            if period.period_type == PeriodType.IMPACT_PERIOD:
+                # Impact periods go in both active_period and impact_period (for backward compatibility)
+                time_range = alert.active_period.add()
+                if period.start_time is not None:
+                    time_range.start = period.start_time
+                if period.end_time is not None:
+                    time_range.end = period.end_time
+                
+                # Also add to impact_period
+                impact_range = alert.impact_period.add()
+                if period.start_time is not None:
+                    impact_range.start = period.start_time
+                if period.end_time is not None:
+                    impact_range.end = period.end_time
+            else:  # COMMUNICATION_PERIOD
+                # Communication periods only go in communication_period
+                comm_range = alert.communication_period.add()
+                if period.start_time is not None:
+                    comm_range.start = period.start_time
+                if period.end_time is not None:
+                    comm_range.end = period.end_time
         
         # Informed entities
         for entity_model in alert_model.informed_entities:
@@ -277,6 +293,28 @@ def _feed_to_dict(feed: gtfs_realtime_pb2.FeedMessage) -> dict:
                     if period.HasField("end"):
                         period_dict["end"] = period.end
                     alert_dict["active_period"].append(period_dict)
+            
+            # Impact periods
+            if alert.impact_period:
+                alert_dict["impact_period"] = []
+                for period in alert.impact_period:
+                    period_dict = {}
+                    if period.HasField("start"):
+                        period_dict["start"] = period.start
+                    if period.HasField("end"):
+                        period_dict["end"] = period.end
+                    alert_dict["impact_period"].append(period_dict)
+            
+            # Communication periods
+            if alert.communication_period:
+                alert_dict["communication_period"] = []
+                for period in alert.communication_period:
+                    period_dict = {}
+                    if period.HasField("start"):
+                        period_dict["start"] = period.start
+                    if period.HasField("end"):
+                        period_dict["end"] = period.end
+                    alert_dict["communication_period"].append(period_dict)
             
             # Informed entities
             if alert.informed_entity:

@@ -400,6 +400,252 @@ class TestSiriLiteAdapterAsync(unittest.IsolatedAsyncioTestCase):
             
             # Should return empty list
             self.assertEqual(len(alerts), 0)
+    
+    async def test_parse_validity_period_as_impact_period(self):
+        """Test that ValidityPeriod is parsed as impact_period (Swiss dialect)."""
+        from tests.helpers import MockResponse
+        from echogtfs.models import PeriodType
+        from datetime import datetime, timezone, timedelta
+        
+        config = {
+            "endpoint": "https://api.example.com/siri-lite",
+            "dialect": "swiss"
+        }
+        adapter = SiriLiteAdapter(config)
+        
+        now = datetime.now(timezone.utc)
+        start = now - timedelta(hours=1)
+        end = now + timedelta(hours=8)
+        start_str = start.isoformat().replace('+00:00', 'Z')
+        end_str = end.isoformat().replace('+00:00', 'Z')
+        response_str = now.isoformat().replace('+00:00', 'Z')
+        
+        xml_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Siri xmlns="http://www.siri.org.uk/siri" version="2.0">
+    <ServiceDelivery>
+        <ResponseTimestamp>{response_str}</ResponseTimestamp>
+        <ProducerRef>TEST_PRODUCER</ProducerRef>
+        <SituationExchangeDelivery>
+            <Situations>
+                <PtSituationElement>
+                    <SituationNumber>SIT-VALIDITY-123</SituationNumber>
+                    <ParticipantRef>TEST_PARTICIPANT</ParticipantRef>
+                    <ValidityPeriod>
+                        <StartTime>{start_str}</StartTime>
+                        <EndTime>{end_str}</EndTime>
+                    </ValidityPeriod>
+                    <PublishingActions>
+                        <PublishingAction>
+                            <PassengerInformationAction>
+                                <Perspective>general</Perspective>
+                                <TextualContent>
+                                    <TextualContentSize>L</TextualContentSize>
+                                    <SummaryContent>
+                                        <SummaryText xml:lang="de">Test</SummaryText>
+                                    </SummaryContent>
+                                </TextualContent>
+                            </PassengerInformationAction>
+                        </PublishingAction>
+                    </PublishingActions>
+                </PtSituationElement>
+            </Situations>
+        </SituationExchangeDelivery>
+    </ServiceDelivery>
+</Siri>"""
+        
+        with patch('httpx.AsyncClient') as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+            
+            mock_response = MockResponse(
+                text=xml_content,
+                status_code=200,
+                url="https://api.example.com/siri-lite"
+            )
+            mock_client.get.return_value = mock_response
+            
+            alerts = await adapter.fetch_alerts()
+            
+            self.assertEqual(len(alerts), 1)
+            alert = alerts[0]
+            
+            # Should have exactly 1 active_period (ValidityPeriod as impact_period)
+            self.assertEqual(len(alert["active_periods"]), 1)
+            period = alert["active_periods"][0]
+            
+            self.assertEqual(period["period_type"], PeriodType.IMPACT_PERIOD)
+            self.assertIsNotNone(period["start_time"])
+            self.assertIsNotNone(period["end_time"])
+    
+    async def test_parse_publication_window_as_communication_period(self):
+        """Test that PublicationWindow is parsed as communication_period (Swiss dialect)."""
+        from tests.helpers import MockResponse
+        from echogtfs.models import PeriodType
+        from datetime import datetime, timezone, timedelta
+        
+        config = {
+            "endpoint": "https://api.example.com/siri-lite",
+            "dialect": "swiss"
+        }
+        adapter = SiriLiteAdapter(config)
+        
+        now = datetime.now(timezone.utc)
+        start = now - timedelta(hours=1)
+        end = now + timedelta(hours=8)
+        pub_start = now - timedelta(hours=2)
+        pub_end = now + timedelta(hours=10)
+        start_str = start.isoformat().replace('+00:00', 'Z')
+        end_str = end.isoformat().replace('+00:00', 'Z')
+        pub_start_str = pub_start.isoformat().replace('+00:00', 'Z')
+        pub_end_str = pub_end.isoformat().replace('+00:00', 'Z')
+        response_str = now.isoformat().replace('+00:00', 'Z')
+        
+        xml_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Siri xmlns="http://www.siri.org.uk/siri" version="2.0">
+    <ServiceDelivery>
+        <ResponseTimestamp>{response_str}</ResponseTimestamp>
+        <ProducerRef>TEST_PRODUCER</ProducerRef>
+        <SituationExchangeDelivery>
+            <Situations>
+                <PtSituationElement>
+                    <SituationNumber>SIT-PUBWINDOW-456</SituationNumber>
+                    <ParticipantRef>TEST_PARTICIPANT</ParticipantRef>
+                    <ValidityPeriod>
+                        <StartTime>{start_str}</StartTime>
+                        <EndTime>{end_str}</EndTime>
+                    </ValidityPeriod>
+                    <PublicationWindow>
+                        <StartTime>{pub_start_str}</StartTime>
+                        <EndTime>{pub_end_str}</EndTime>
+                    </PublicationWindow>
+                    <PublishingActions>
+                        <PublishingAction>
+                            <PassengerInformationAction>
+                                <Perspective>general</Perspective>
+                                <TextualContent>
+                                    <TextualContentSize>L</TextualContentSize>
+                                    <SummaryContent>
+                                        <SummaryText xml:lang="de">Test</SummaryText>
+                                    </SummaryContent>
+                                </TextualContent>
+                            </PassengerInformationAction>
+                        </PublishingAction>
+                    </PublishingActions>
+                </PtSituationElement>
+            </Situations>
+        </SituationExchangeDelivery>
+    </ServiceDelivery>
+</Siri>"""
+        
+        with patch('httpx.AsyncClient') as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+            
+            mock_response = MockResponse(
+                text=xml_content,
+                status_code=200,
+                url="https://api.example.com/siri-lite"
+            )
+            mock_client.get.return_value = mock_response
+            
+            alerts = await adapter.fetch_alerts()
+            
+            self.assertEqual(len(alerts), 1)
+            alert = alerts[0]
+            
+            # Should have 2 active_periods: ValidityPeriod (impact) + PublicationWindow (communication)
+            self.assertEqual(len(alert["active_periods"]), 2)
+            
+            # Check that we have one of each type
+            impact_periods = [p for p in alert["active_periods"] if p["period_type"] == PeriodType.IMPACT_PERIOD]
+            comm_periods = [p for p in alert["active_periods"] if p["period_type"] == PeriodType.COMMUNICATION_PERIOD]
+            
+            self.assertEqual(len(impact_periods), 1)
+            self.assertEqual(len(comm_periods), 1)
+            
+            # Check PublicationWindow times
+            comm_period = comm_periods[0]
+            self.assertIsNotNone(comm_period["start_time"])
+            self.assertIsNotNone(comm_period["end_time"])
+            
+            # PublicationWindow should have different times than ValidityPeriod
+            impact_period = impact_periods[0]
+            self.assertNotEqual(comm_period["start_time"], impact_period["start_time"])
+    
+    async def test_parse_periods_sirisx_dialect(self):
+        """Test that both period types are parsed correctly with SIRISX dialect."""
+        from tests.helpers import MockResponse
+        from echogtfs.models import PeriodType
+        from datetime import datetime, timezone, timedelta
+        
+        config = {
+            "endpoint": "https://api.example.com/siri-lite",
+            "dialect": "sirisx"
+        }
+        adapter = SiriLiteAdapter(config)
+        
+        now = datetime.now(timezone.utc)
+        start = now - timedelta(hours=1)
+        end = now + timedelta(hours=8)
+        pub_start = now - timedelta(hours=2)
+        pub_end = now + timedelta(hours=10)
+        start_str = start.isoformat().replace('+00:00', 'Z')
+        end_str = end.isoformat().replace('+00:00', 'Z')
+        pub_start_str = pub_start.isoformat().replace('+00:00', 'Z')
+        pub_end_str = pub_end.isoformat().replace('+00:00', 'Z')
+        response_str = now.isoformat().replace('+00:00', 'Z')
+        
+        xml_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Siri xmlns="http://www.siri.org.uk/siri" version="2.0">
+    <ServiceDelivery>
+        <ResponseTimestamp>{response_str}</ResponseTimestamp>
+        <ProducerRef>TEST_PRODUCER</ProducerRef>
+        <SituationExchangeDelivery>
+            <Situations>
+                <PtSituationElement>
+                    <SituationNumber>SIT-SIRISX-789</SituationNumber>
+                    <ParticipantRef>TEST_PARTICIPANT</ParticipantRef>
+                    <ValidityPeriod>
+                        <StartTime>{start_str}</StartTime>
+                        <EndTime>{end_str}</EndTime>
+                    </ValidityPeriod>
+                    <PublicationWindow>
+                        <StartTime>{pub_start_str}</StartTime>
+                        <EndTime>{pub_end_str}</EndTime>
+                    </PublicationWindow>
+                    <Summary xml:lang="de">Test Summary</Summary>
+                    <Detail xml:lang="de">Test Detail</Detail>
+                </PtSituationElement>
+            </Situations>
+        </SituationExchangeDelivery>
+    </ServiceDelivery>
+</Siri>"""
+        
+        with patch('httpx.AsyncClient') as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+            
+            mock_response = MockResponse(
+                text=xml_content,
+                status_code=200,
+                url="https://api.example.com/siri-lite"
+            )
+            mock_client.get.return_value = mock_response
+            
+            alerts = await adapter.fetch_alerts()
+            
+            self.assertEqual(len(alerts), 1)
+            alert = alerts[0]
+            
+            # Should have 2 active_periods
+            self.assertEqual(len(alert["active_periods"]), 2)
+            
+            # Verify one of each type
+            impact_periods = [p for p in alert["active_periods"] if p["period_type"] == PeriodType.IMPACT_PERIOD]
+            comm_periods = [p for p in alert["active_periods"] if p["period_type"] == PeriodType.COMMUNICATION_PERIOD]
+            
+            self.assertEqual(len(impact_periods), 1)
+            self.assertEqual(len(comm_periods), 1)
 
 
 if __name__ == '__main__':

@@ -11,7 +11,8 @@ from echogtfs.models import (
     AlertCause,
     AlertEffect,
     AlertSeverityLevel,
-    ExpiredAlertPolicy
+    ExpiredAlertPolicy,
+    PeriodType
 )
 
 _HEX_COLOR = re.compile(r'^#[0-9a-fA-F]{6}$')
@@ -194,6 +195,7 @@ class ServiceAlertTranslationRead(ServiceAlertTranslationCreate):
 
 class ServiceAlertActivePeriodCreate(BaseModel):
     """Active period for creating/updating alerts."""
+    period_type: PeriodType = PeriodType.IMPACT_PERIOD
     start_time: int | None = None
     end_time: int | None = None
 

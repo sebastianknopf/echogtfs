@@ -18,7 +18,7 @@ from typing import Any
 
 import httpx
 
-from echogtfs.models import SiriLiteDialect
+from echogtfs.models import PeriodType, SiriLiteDialect
 from echogtfs.services.adapters.base import BaseAdapter
 
 logger = logging.getLogger("uvicorn")
@@ -421,6 +421,42 @@ class SiriLiteAdapter(BaseAdapter):
                     )
             
             active_periods.append({
+                "period_type": PeriodType.IMPACT_PERIOD,
+                "start_time": start_time,
+                "end_time": end_time,
+            })
+        
+        # Parse PublicationWindow(s) to create communication_period entries
+        publication_windows = situation.findall('siri:PublicationWindow', self.SIRI_NS)
+        for pub_window in publication_windows:
+            start_elem = pub_window.find('siri:StartTime', self.SIRI_NS)
+            end_elem = pub_window.find('siri:EndTime', self.SIRI_NS)
+            
+            start_time = None
+            end_time = None
+            
+            if start_elem is not None:
+                try:
+                    start_time = int(datetime.fromisoformat(
+                        start_elem.text.replace('Z', '+00:00')
+                    ).timestamp())
+                except (ValueError, AttributeError) as e:
+                    logger.warning(
+                        f"[SiriLiteAdapter:Swiss] Failed to parse PublicationWindow StartTime: {e}"
+                    )
+            
+            if end_elem is not None:
+                try:
+                    end_time = int(datetime.fromisoformat(
+                        end_elem.text.replace('Z', '+00:00')
+                    ).timestamp())
+                except (ValueError, AttributeError) as e:
+                    logger.warning(
+                        f"[SiriLiteAdapter:Swiss] Failed to parse PublicationWindow EndTime: {e}"
+                    )
+            
+            active_periods.append({
+                "period_type": PeriodType.COMMUNICATION_PERIOD,
                 "start_time": start_time,
                 "end_time": end_time,
             })
@@ -969,6 +1005,47 @@ class SiriLiteAdapter(BaseAdapter):
                     )
             
             active_periods.append({
+                "period_type": PeriodType.IMPACT_PERIOD,
+                "start_time": start_time,
+                "end_time": end_time,
+            })
+        
+        # Parse PublicationWindow(s) to create communication_period entries
+        publication_windows = situation.findall('siri:PublicationWindow', self.SIRI_NS)
+        for pub_window in publication_windows:
+            start_elem = pub_window.find('siri:StartTime', self.SIRI_NS)
+            end_elem = pub_window.find('siri:EndTime', self.SIRI_NS)
+            
+            start_time = None
+            end_time = None
+            
+            if start_elem is not None:
+                try:
+                    start_time = int(datetime.fromisoformat(
+                        start_elem.text.replace('Z', '+00:00')
+                    ).timestamp())
+                except (ValueError, AttributeError) as e:
+                    logger.warning(
+                        f"[SiriLiteAdapter:SIRISX] Failed to parse PublicationWindow StartTime: {e}"
+                    )
+            
+            if end_elem is not None:
+                try:
+                    end_dt = datetime.fromisoformat(
+                        end_elem.text.replace('Z', '+00:00')
+                    )
+                    # If year is 2500, treat as unlimited end time (set to None)
+                    if end_dt.year == 2500:
+                        end_time = None
+                    else:
+                        end_time = int(end_dt.timestamp())
+                except (ValueError, AttributeError) as e:
+                    logger.warning(
+                        f"[SiriLiteAdapter:SIRISX] Failed to parse PublicationWindow EndTime: {e}"
+                    )
+            
+            active_periods.append({
+                "period_type": PeriodType.COMMUNICATION_PERIOD,
                 "start_time": start_time,
                 "end_time": end_time,
             })

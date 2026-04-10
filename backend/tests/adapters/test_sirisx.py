@@ -412,6 +412,157 @@ class TestSiriSxAdapterAsync(unittest.IsolatedAsyncioTestCase):
             call_args = mock_client.post.call_args
             called_url = call_args[0][0]
             self.assertEqual(called_url, "https://api.example.com/MY_PARTICIPANT/siri-sx")
+    
+    async def test_parse_validity_period_as_impact_period(self):
+        """Test that ValidityPeriod is parsed as impact_period."""
+        from tests.helpers import MockResponse
+        from echogtfs.models import PeriodType
+        from datetime import datetime, timezone, timedelta
+        
+        config = {
+            "endpoint": "https://api.example.com/siri-sx",
+            "participantref": "TEST_PARTICIPANT",
+            "method": "request/response",
+            "dialect": "sirisx"
+        }
+        adapter = SiriSxAdapter(config)
+        
+        now = datetime.now(timezone.utc)
+        start = now - timedelta(hours=1)
+        end = now + timedelta(hours=8)
+        start_str = start.isoformat().replace('+00:00', 'Z')
+        end_str = end.isoformat().replace('+00:00', 'Z')
+        response_str = now.isoformat().replace('+00:00', 'Z')
+        
+        xml_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Siri xmlns="http://www.siri.org.uk/siri" version="2.0">
+    <ServiceDelivery>
+        <ResponseTimestamp>{response_str}</ResponseTimestamp>
+        <ProducerRef>TEST_PRODUCER</ProducerRef>
+        <SituationExchangeDelivery>
+            <Situations>
+                <PtSituationElement>
+                    <SituationNumber>SIT-SIRISX-VALIDITY</SituationNumber>
+                    <ParticipantRef>TEST_PARTICIPANT</ParticipantRef>
+                    <ValidityPeriod>
+                        <StartTime>{start_str}</StartTime>
+                        <EndTime>{end_str}</EndTime>
+                    </ValidityPeriod>
+                    <Summary xml:lang="de">Test Summary</Summary>
+                    <Detail xml:lang="de">Test Detail</Detail>
+                </PtSituationElement>
+            </Situations>
+        </SituationExchangeDelivery>
+    </ServiceDelivery>
+</Siri>"""
+        
+        with patch('httpx.AsyncClient') as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+            
+            mock_response = MockResponse(
+                text=xml_content,
+                status_code=200,
+                url="https://api.example.com/siri-sx"
+            )
+            mock_client.post.return_value = mock_response
+            
+            alerts = await adapter.fetch_alerts()
+            
+            self.assertEqual(len(alerts), 1)
+            alert = alerts[0]
+            
+            # Should have exactly 1 active_period (ValidityPeriod as impact_period)
+            self.assertEqual(len(alert["active_periods"]), 1)
+            period = alert["active_periods"][0]
+            
+            self.assertEqual(period["period_type"], PeriodType.IMPACT_PERIOD)
+            self.assertIsNotNone(period["start_time"])
+            self.assertIsNotNone(period["end_time"])
+    
+    async def test_parse_publication_window_as_communication_period(self):
+        """Test that PublicationWindow is parsed as communication_period."""
+        from tests.helpers import MockResponse
+        from echogtfs.models import PeriodType
+        from datetime import datetime, timezone, timedelta
+        
+        config = {
+            "endpoint": "https://api.example.com/siri-sx",
+            "participantref": "TEST_PARTICIPANT",
+            "method": "request/response",
+            "dialect": "sirisx"
+        }
+        adapter = SiriSxAdapter(config)
+        
+        now = datetime.now(timezone.utc)
+        start = now - timedelta(hours=1)
+        end = now + timedelta(hours=8)
+        pub_start = now - timedelta(hours=2)
+        pub_end = now + timedelta(hours=10)
+        start_str = start.isoformat().replace('+00:00', 'Z')
+        end_str = end.isoformat().replace('+00:00', 'Z')
+        pub_start_str = pub_start.isoformat().replace('+00:00', 'Z')
+        pub_end_str = pub_end.isoformat().replace('+00:00', 'Z')
+        response_str = now.isoformat().replace('+00:00', 'Z')
+        
+        xml_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Siri xmlns="http://www.siri.org.uk/siri" version="2.0">
+    <ServiceDelivery>
+        <ResponseTimestamp>{response_str}</ResponseTimestamp>
+        <ProducerRef>TEST_PRODUCER</ProducerRef>
+        <SituationExchangeDelivery>
+            <Situations>
+                <PtSituationElement>
+                    <SituationNumber>SIT-SIRISX-BOTH</SituationNumber>
+                    <ParticipantRef>TEST_PARTICIPANT</ParticipantRef>
+                    <ValidityPeriod>
+                        <StartTime>{start_str}</StartTime>
+                        <EndTime>{end_str}</EndTime>
+                    </ValidityPeriod>
+                    <PublicationWindow>
+                        <StartTime>{pub_start_str}</StartTime>
+                        <EndTime>{pub_end_str}</EndTime>
+                    </PublicationWindow>
+                    <Summary xml:lang="de">Test Summary</Summary>
+                    <Detail xml:lang="de">Test Detail</Detail>
+                </PtSituationElement>
+            </Situations>
+        </SituationExchangeDelivery>
+    </ServiceDelivery>
+</Siri>"""
+        
+        with patch('httpx.AsyncClient') as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+            
+            mock_response = MockResponse(
+                text=xml_content,
+                status_code=200,
+                url="https://api.example.com/siri-sx"
+            )
+            mock_client.post.return_value = mock_response
+            
+            alerts = await adapter.fetch_alerts()
+            
+            self.assertEqual(len(alerts), 1)
+            alert = alerts[0]
+            
+            # Should have 2 active_periods: ValidityPeriod (impact) + PublicationWindow (communication)
+            self.assertEqual(len(alert["active_periods"]), 2)
+            
+            # Check that we have one of each type
+            impact_periods = [p for p in alert["active_periods"] if p["period_type"] == PeriodType.IMPACT_PERIOD]
+            comm_periods = [p for p in alert["active_periods"] if p["period_type"] == PeriodType.COMMUNICATION_PERIOD]
+            
+            self.assertEqual(len(impact_periods), 1)
+            self.assertEqual(len(comm_periods), 1)
+            
+            # Verify PublicationWindow has different times
+            comm_period = comm_periods[0]
+            impact_period = impact_periods[0]
+            self.assertIsNotNone(comm_period["start_time"])
+            self.assertIsNotNone(comm_period["end_time"])
+            self.assertNotEqual(comm_period["start_time"], impact_period["start_time"])
 
 
 if __name__ == '__main__':

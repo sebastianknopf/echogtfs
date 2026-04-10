@@ -13,6 +13,7 @@ from typing import Any
 import httpx
 
 from echogtfs import gtfs_realtime_pb2
+from echogtfs.models import PeriodType
 from echogtfs.services.adapters.base import BaseAdapter
 
 logger = logging.getLogger("uvicorn")
@@ -243,46 +244,75 @@ class GtfsRtAdapter(BaseAdapter):
                     "url": None,
                 })
             
-            # Parse active periods
+            # Parse active periods - check for impact_period, communication_period, and active_period
             active_periods = []
-            for period in alert.active_period:
-                start_time = period.start if period.HasField("start") else None
-                end_time = period.end if period.HasField("end") else None
-                active_periods.append({
-                    "start_time": start_time,
-                    "end_time": end_time,
-                })
             
-            # Filter alerts based on validity period
+            # Parse impact_period (new field in extended GTFS-RT)
+            if hasattr(alert, 'impact_period'):
+                for period in alert.impact_period:
+                    start_time = period.start if period.HasField("start") else None
+                    end_time = period.end if period.HasField("end") else None
+                    active_periods.append({
+                        "period_type": PeriodType.IMPACT_PERIOD,
+                        "start_time": start_time,
+                        "end_time": end_time,
+                    })
+            
+            # Parse communication_period (new field in extended GTFS-RT)
+            if hasattr(alert, 'communication_period'):
+                for period in alert.communication_period:
+                    start_time = period.start if period.HasField("start") else None
+                    end_time = period.end if period.HasField("end") else None
+                    active_periods.append({
+                        "period_type": PeriodType.COMMUNICATION_PERIOD,
+                        "start_time": start_time,
+                        "end_time": end_time,
+                    })
+            
+            # Parse active_period (fallback for standard GTFS-RT feeds without extended fields)
+            # Only use this if neither impact_period nor communication_period are present
+            if not active_periods and alert.active_period:
+                for period in alert.active_period:
+                    start_time = period.start if period.HasField("start") else None
+                    end_time = period.end if period.HasField("end") else None
+                    active_periods.append({
+                        "period_type": PeriodType.IMPACT_PERIOD,
+                        "start_time": start_time,
+                        "end_time": end_time,
+                    })
+            
+            # Filter alerts based on validity period (check all periods regardless of type)
+            # OpenBegin alerts (no start_time) are always imported
+            # OpenEnd alerts (no end_time) never expire
             if active_periods:
                 current_timestamp = int(time.time())
                 
                 # Check if alert starts more than 1 month (30 days) in the future
-                earliest_start = min(
-                    (p["start_time"] for p in active_periods if p["start_time"] is not None),
-                    default=None
-                )
-                one_month_in_seconds = 30 * 24 * 60 * 60  # 2592000 seconds
-                if earliest_start is not None and earliest_start > (current_timestamp + one_month_in_seconds):
-                    logger.debug(
-                        f"[GtfsRtAdapter] Skipping alert {entity.id}: starts more than 1 month in the future "
-                        f"(starts at {earliest_start}, now is {current_timestamp})"
-                    )
-                    filtered_not_yet_valid += 1
-                    continue
+                # If no period has start_time (OpenBegin), alert is always valid
+                start_times = [p["start_time"] for p in active_periods if p["start_time"] is not None]
+                if start_times:  # Only check if at least one period has a start_time
+                    earliest_start = min(start_times)
+                    one_month_in_seconds = 30 * 24 * 60 * 60  # 2592000 seconds
+                    if earliest_start > (current_timestamp + one_month_in_seconds):
+                        logger.debug(
+                            f"[GtfsRtAdapter] Skipping alert {entity.id}: starts more than 1 month in the future "
+                            f"(starts at {earliest_start}, now is {current_timestamp})"
+                        )
+                        filtered_not_yet_valid += 1
+                        continue
                 
                 # Check if alert has expired (latest end_time is in the past)
-                latest_end = max(
-                    (p["end_time"] for p in active_periods if p["end_time"] is not None),
-                    default=None
-                )
-                if latest_end is not None and latest_end < current_timestamp:
-                    logger.debug(
-                        f"[GtfsRtAdapter] Skipping alert {entity.id}: expired "
-                        f"(ended at {latest_end}, now is {current_timestamp})"
-                    )
-                    filtered_expired += 1
-                    continue
+                # If no period has end_time (OpenEnd), alert never expires
+                end_times = [p["end_time"] for p in active_periods if p["end_time"] is not None]
+                if end_times:  # Only check if at least one period has an end_time
+                    latest_end = max(end_times)
+                    if latest_end < current_timestamp:
+                        logger.debug(
+                            f"[GtfsRtAdapter] Skipping alert {entity.id}: expired "
+                            f"(ended at {latest_end}, now is {current_timestamp})"
+                        )
+                        filtered_expired += 1
+                        continue
             
             # Parse informed entities
             informed_entities = []
