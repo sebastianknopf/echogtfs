@@ -11,15 +11,14 @@ RUN apt-get update && \
 COPY .git ./.git
 
 # Copy backend package files
-COPY backend/pyproject.toml ./backend/pyproject.toml
-COPY backend/src/ ./backend/src/
+COPY backend/ ./backend/
 
 # Copy protobuf definition and generate Python code
 COPY gtfs-realtime.proto ./
 RUN protoc --python_out=./backend/src/echogtfs/ gtfs-realtime.proto
 
 # Install from backend directory (setuptools_scm reads git history)
-RUN pip install --no-cache-dir ./backend && \
-    rm -rf .git
+RUN pip install --no-cache-dir ./backend&& \
+    rm -rf .git 
 
 CMD ["echogtfs"]
