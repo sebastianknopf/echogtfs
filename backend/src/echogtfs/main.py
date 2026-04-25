@@ -1,5 +1,6 @@
 ﻿from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+import logging
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,6 +29,8 @@ from echogtfs.routers.sources import router as sources_router
 from echogtfs.routers.users import router as users_router
 from echogtfs.security import create_access_token, hash_password
 
+logger = logging.getLogger("uvicorn.error")
+
 
 # -- Sliding Token Middleware --------------------------------------------------
 
@@ -43,12 +46,16 @@ class SlidingTokenMiddleware(BaseHTTPMiddleware):
         # Only issue new token for successful responses (2xx status codes)
         if 200 <= response.status_code < 300:
             # Check if user was authenticated for this request
-            user = request.state.__dict__.get("user")
-            if user:
+            # Use getattr with default to safely access request.state.user
+            user = getattr(request.state, "user", None)
+            if user is not None:
                 # Generate new token with extended expiration
                 new_token = create_access_token(user.username)
                 # Add new token to response header for frontend to update
                 response.headers["X-New-Token"] = new_token
+                logger.info(f"[SlidingToken] Issued new token for user: {user.username}")
+            else:
+                logger.debug(f"[SlidingToken] No user in request.state for {request.url.path}")
         
         return response
 
@@ -109,6 +116,12 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# -- Sliding Token Middleware --------------------------------------------------
+# IMPORTANT: Must be added BEFORE CORS middleware!
+# Middleware execution order (response flow): Route → SlidingToken → CORS → Client
+# This ensures the X-New-Token header is set before CORS processes it
+app.add_middleware(SlidingTokenMiddleware)
+
 # -- CORS ----------------------------------------------------------------------
 # Origins are controlled by CORS_ORIGINS env var (comma-separated).
 # An empty list means no cross-origin requests are accepted.
@@ -120,10 +133,6 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
     expose_headers=["X-New-Token"],  # Allow frontend to read new token from response
 )
-
-# -- Sliding Token Middleware --------------------------------------------------
-# Must be added AFTER CORS middleware to ensure headers are properly exposed
-app.add_middleware(SlidingTokenMiddleware)
 
 app.include_router(auth_router,     prefix="/api/auth",     tags=["auth"])
 app.include_router(users_router,    prefix="/api/users",    tags=["users"])
