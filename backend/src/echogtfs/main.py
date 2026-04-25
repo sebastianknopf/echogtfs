@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import select
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from echogtfs.config import settings
 from echogtfs.database import AsyncSessionLocal, Base, engine
@@ -25,7 +26,31 @@ from echogtfs.services.cleanup import schedule_cleanup_from_settings
 from echogtfs.routers.settings import router as settings_router
 from echogtfs.routers.sources import router as sources_router
 from echogtfs.routers.users import router as users_router
-from echogtfs.security import hash_password
+from echogtfs.security import create_access_token, hash_password
+
+
+# -- Sliding Token Middleware --------------------------------------------------
+
+class SlidingTokenMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware that issues a new JWT token on every successful authenticated request.
+    This implements a "sliding session" pattern where the session automatically
+    extends with user activity, expiring only after a period of inactivity.
+    """
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        
+        # Only issue new token for successful responses (2xx status codes)
+        if 200 <= response.status_code < 300:
+            # Check if user was authenticated for this request
+            user = request.state.__dict__.get("user")
+            if user:
+                # Generate new token with extended expiration
+                new_token = create_access_token(user.username)
+                # Add new token to response header for frontend to update
+                response.headers["X-New-Token"] = new_token
+        
+        return response
 
 
 @asynccontextmanager
@@ -93,7 +118,12 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
+    expose_headers=["X-New-Token"],  # Allow frontend to read new token from response
 )
+
+# -- Sliding Token Middleware --------------------------------------------------
+# Must be added AFTER CORS middleware to ensure headers are properly exposed
+app.add_middleware(SlidingTokenMiddleware)
 
 app.include_router(auth_router,     prefix="/api/auth",     tags=["auth"])
 app.include_router(users_router,    prefix="/api/users",    tags=["users"])
