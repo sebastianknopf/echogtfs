@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from echogtfs.database import get_db
 from echogtfs.models import User
-from echogtfs.schemas import UserCreate, UserRead, UserUpdate
-from echogtfs.security import CurrentSuperuser, CurrentUser, hash_password
+from echogtfs.schemas import PasswordChange, UserCreate, UserRead, UserUpdate
+from echogtfs.security import CurrentSuperuser, CurrentUser, hash_password, verify_password
 
 router = APIRouter()
 
@@ -41,6 +41,20 @@ async def register(payload: UserCreate, db: _DB) -> User:
 
 
 # -- Current-user endpoints (any authenticated user) ---------------------------
+
+@router.post("/me/password", status_code=status.HTTP_204_NO_CONTENT)
+async def change_own_password(
+    payload: PasswordChange, current_user: CurrentUser, db: _DB
+) -> None:
+    """Change password for the currently authenticated user. Requires current password verification."""
+    if not verify_password(payload.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect",
+        )
+    current_user.hashed_password = hash_password(payload.new_password)
+    await db.commit()
+
 
 @router.get("/me", response_model=UserRead)
 async def read_me(current_user: CurrentUser) -> User:

@@ -96,6 +96,14 @@ const api = (() => {
       return request('/users/me');
     },
 
+    changePassword(data) {
+      return request('/users/me/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+    },
+
     // Users
     getUsers() {
       return request('/users/');

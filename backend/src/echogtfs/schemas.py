@@ -48,6 +48,11 @@ class UserRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str
