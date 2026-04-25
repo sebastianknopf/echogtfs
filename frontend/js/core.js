@@ -781,7 +781,7 @@ const ui = (() => {
   }
   
   // Add period item
-  function _addPeriodItem(startTime = null, endTime = null) {
+  function _addPeriodItem(startTime = null, endTime = null, periodType = 'impact_period') {
     const periodId = _periodCounter++;
     const container = el('alert-periods-container');
     
@@ -800,6 +800,13 @@ const ui = (() => {
         </button>
       </div>
       <div class="alert-period-item__fields">
+        <div class="md-field">
+          <select class="md-field__input period-type">
+            <option value="impact_period" ${periodType === 'impact_period' ? 'selected' : ''}>${window.i18n('alert.period.type.impact')}</option>
+            <option value="communication_period" ${periodType === 'communication_period' ? 'selected' : ''}>${window.i18n('alert.period.type.communication')}</option>
+          </select>
+          <label class="md-field__label" data-i18n="alert.period.type">${window.i18n('alert.period.type')}</label>
+        </div>
         <div class="md-field">
           <input class="md-field__input period-start" type="datetime-local" placeholder=" " value="${startVal}" />
           <label class="md-field__label" data-i18n="alert.period.start.label">${window.i18n('alert.period.start.label')}</label>
@@ -970,7 +977,7 @@ const ui = (() => {
       // Populate existing periods
       if (alert.active_periods && alert.active_periods.length > 0) {
         alert.active_periods.forEach(period => {
-          _addPeriodItem(period.start_time, period.end_time);
+          _addPeriodItem(period.start_time, period.end_time, period.period_type || 'impact_period');
         });
       }
       
@@ -1201,18 +1208,69 @@ const ui = (() => {
         `).join('')
       : '';
     
-    // Active Periods
+    // Active Periods - group by period type
     let periodsHtml = '';
     if (alert.active_periods && alert.active_periods.length > 0) {
-      periodsHtml = alert.active_periods.map(p => {
-        const start = p.start_time ? new Date(p.start_time * 1000).toLocaleDateString('de-DE', { 
-          day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-        }) : '—';
-        const end = p.end_time ? new Date(p.end_time * 1000).toLocaleDateString('de-DE', { 
-          day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-        }) : '—';
-        return `<div class="view-item view-item--entity"><div class="view-item__content">${start} – ${end}</div></div>`;
-      }).join('');
+      // Group periods by type
+      const periodsByType = {
+        impact_period: [],
+        communication_period: []
+      };
+      
+      alert.active_periods.forEach(period => {
+        const type = period.period_type || 'impact_period';
+        if (periodsByType[type]) {
+          periodsByType[type].push(period);
+        }
+      });
+      
+      const periodSections = [];
+      
+      // Impact periods (Gültigkeitszeitraum)
+      if (periodsByType.impact_period.length > 0) {
+        const impactPeriodsHtml = periodsByType.impact_period.map(p => {
+          const start = p.start_time ? new Date(p.start_time * 1000).toLocaleDateString('de-DE', { 
+            day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+          }) : '—';
+          const end = p.end_time ? new Date(p.end_time * 1000).toLocaleDateString('de-DE', { 
+            day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+          }) : '—';
+          return `<div class="view-item view-item--entity"><div class="view-item__content">${start} – ${end}</div></div>`;
+        }).join('');
+        
+        periodSections.push(`
+          <div class="view-item">
+            <div class="view-item__label">${window.i18n('alert.period.type.impact')}</div>
+            <div class="view-item__content">
+              ${impactPeriodsHtml}
+            </div>
+          </div>
+        `);
+      }
+      
+      // Communication periods (Veröffentlichungszeitraum)
+      if (periodsByType.communication_period.length > 0) {
+        const commPeriodsHtml = periodsByType.communication_period.map(p => {
+          const start = p.start_time ? new Date(p.start_time * 1000).toLocaleDateString('de-DE', { 
+            day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+          }) : '—';
+          const end = p.end_time ? new Date(p.end_time * 1000).toLocaleDateString('de-DE', { 
+            day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+          }) : '—';
+          return `<div class="view-item view-item--entity"><div class="view-item__content">${start} – ${end}</div></div>`;
+        }).join('');
+        
+        periodSections.push(`
+          <div class="view-item">
+            <div class="view-item__label">${window.i18n('alert.period.type.communication')}</div>
+            <div class="view-item__content">
+              ${commPeriodsHtml}
+            </div>
+          </div>
+        `);
+      }
+      
+      periodsHtml = periodSections.join('');
     } else {
       periodsHtml = `<div class="view-item view-item--entity"><div class="view-item__content"><em>${window.i18n('alert.period.always_valid')}</em></div></div>`;
     }

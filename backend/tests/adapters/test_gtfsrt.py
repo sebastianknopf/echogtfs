@@ -378,6 +378,392 @@ class TestGtfsRtAdapterAsync(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(alerts[0]["translations"]), 1)
             self.assertEqual(alerts[0]["translations"][0]["language"], "de-DE")
             self.assertEqual(alerts[0]["translations"][0]["header_text"], "Service Alert")
+    
+    async def test_parse_impact_period(self):
+        """Test parsing of impact_period field (extended GTFS-RT)."""
+        from tests.helpers import MockResponse
+        from echogtfs.models import PeriodType
+        
+        config = {"endpoint": "https://api.example.com/gtfs-rt"}
+        adapter = GtfsRtAdapter(config)
+        
+        # Create feed with impact_period
+        feed = gtfs_realtime_pb2.FeedMessage()
+        feed.header.gtfs_realtime_version = "2.0"
+        feed.header.timestamp = int(time.time())
+        
+        entity = gtfs_realtime_pb2.FeedEntity()
+        entity.id = "impact-period-alert"
+        
+        alert = entity.alert
+        alert.cause = gtfs_realtime_pb2.Alert.MAINTENANCE
+        alert.effect = gtfs_realtime_pb2.Alert.REDUCED_SERVICE
+        
+        header_translation = gtfs_realtime_pb2.TranslatedString.Translation()
+        header_translation.text = "Maintenance Work"
+        header_translation.language = "en"
+        alert.header_text.translation.append(header_translation)
+        
+        # Add impact_period
+        period = gtfs_realtime_pb2.TimeRange()
+        period.start = int(time.time()) + 3600  # 1 hour from now
+        period.end = int(time.time()) + 7200    # 2 hours from now
+        alert.impact_period.append(period)
+        
+        feed.entity.append(entity)
+        protobuf_data = feed.SerializeToString()
+        
+        with patch('httpx.AsyncClient') as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+            
+            mock_response = MockResponse(
+                content=protobuf_data,
+                status_code=200,
+                url="https://api.example.com/gtfs-rt"
+            )
+            mock_client.get.return_value = mock_response
+            
+            alerts = await adapter.fetch_alerts()
+            
+            # Verify impact_period is parsed correctly
+            self.assertEqual(len(alerts), 1)
+            self.assertEqual(len(alerts[0]["active_periods"]), 1)
+            self.assertEqual(alerts[0]["active_periods"][0]["period_type"], PeriodType.IMPACT_PERIOD)
+            self.assertIsNotNone(alerts[0]["active_periods"][0]["start_time"])
+            self.assertIsNotNone(alerts[0]["active_periods"][0]["end_time"])
+    
+    async def test_parse_communication_period(self):
+        """Test parsing of communication_period field (extended GTFS-RT)."""
+        from tests.helpers import MockResponse
+        from echogtfs.models import PeriodType
+        
+        config = {"endpoint": "https://api.example.com/gtfs-rt"}
+        adapter = GtfsRtAdapter(config)
+        
+        # Create feed with communication_period
+        feed = gtfs_realtime_pb2.FeedMessage()
+        feed.header.gtfs_realtime_version = "2.0"
+        feed.header.timestamp = int(time.time())
+        
+        entity = gtfs_realtime_pb2.FeedEntity()
+        entity.id = "communication-period-alert"
+        
+        alert = entity.alert
+        alert.cause = gtfs_realtime_pb2.Alert.STRIKE
+        alert.effect = gtfs_realtime_pb2.Alert.NO_SERVICE
+        
+        header_translation = gtfs_realtime_pb2.TranslatedString.Translation()
+        header_translation.text = "Strike Notice"
+        header_translation.language = "en"
+        alert.header_text.translation.append(header_translation)
+        
+        # Add communication_period
+        period = gtfs_realtime_pb2.TimeRange()
+        period.start = int(time.time())         # Now
+        period.end = int(time.time()) + 86400   # 24 hours from now
+        alert.communication_period.append(period)
+        
+        feed.entity.append(entity)
+        protobuf_data = feed.SerializeToString()
+        
+        with patch('httpx.AsyncClient') as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+            
+            mock_response = MockResponse(
+                content=protobuf_data,
+                status_code=200,
+                url="https://api.example.com/gtfs-rt"
+            )
+            mock_client.get.return_value = mock_response
+            
+            alerts = await adapter.fetch_alerts()
+            
+            # Verify communication_period is parsed correctly
+            self.assertEqual(len(alerts), 1)
+            self.assertEqual(len(alerts[0]["active_periods"]), 1)
+            self.assertEqual(alerts[0]["active_periods"][0]["period_type"], PeriodType.COMMUNICATION_PERIOD)
+            self.assertIsNotNone(alerts[0]["active_periods"][0]["start_time"])
+            self.assertIsNotNone(alerts[0]["active_periods"][0]["end_time"])
+    
+    async def test_parse_mixed_periods(self):
+        """Test parsing of both impact_period and communication_period."""
+        from tests.helpers import MockResponse
+        from echogtfs.models import PeriodType
+        
+        config = {"endpoint": "https://api.example.com/gtfs-rt"}
+        adapter = GtfsRtAdapter(config)
+        
+        # Create feed with both period types
+        feed = gtfs_realtime_pb2.FeedMessage()
+        feed.header.gtfs_realtime_version = "2.0"
+        feed.header.timestamp = int(time.time())
+        
+        entity = gtfs_realtime_pb2.FeedEntity()
+        entity.id = "mixed-periods-alert"
+        
+        alert = entity.alert
+        alert.cause = gtfs_realtime_pb2.Alert.CONSTRUCTION
+        alert.effect = gtfs_realtime_pb2.Alert.DETOUR
+        
+        header_translation = gtfs_realtime_pb2.TranslatedString.Translation()
+        header_translation.text = "Mixed Period Alert"
+        header_translation.language = "en"
+        alert.header_text.translation.append(header_translation)
+        
+        # Add impact_period
+        impact_period = gtfs_realtime_pb2.TimeRange()
+        impact_period.start = int(time.time()) + 7200   # 2 hours from now
+        impact_period.end = int(time.time()) + 10800    # 3 hours from now
+        alert.impact_period.append(impact_period)
+        
+        # Add communication_period
+        comm_period = gtfs_realtime_pb2.TimeRange()
+        comm_period.start = int(time.time())            # Now
+        comm_period.end = int(time.time()) + 14400      # 4 hours from now
+        alert.communication_period.append(comm_period)
+        
+        feed.entity.append(entity)
+        protobuf_data = feed.SerializeToString()
+        
+        with patch('httpx.AsyncClient') as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+            
+            mock_response = MockResponse(
+                content=protobuf_data,
+                status_code=200,
+                url="https://api.example.com/gtfs-rt"
+            )
+            mock_client.get.return_value = mock_response
+            
+            alerts = await adapter.fetch_alerts()
+            
+            # Verify both period types are present
+            self.assertEqual(len(alerts), 1)
+            self.assertEqual(len(alerts[0]["active_periods"]), 2)
+            
+            # Check that we have one of each type
+            period_types = [p["period_type"] for p in alerts[0]["active_periods"]]
+            self.assertIn(PeriodType.IMPACT_PERIOD, period_types)
+            self.assertIn(PeriodType.COMMUNICATION_PERIOD, period_types)
+    
+    async def test_backward_compatibility_active_period(self):
+        """Test backward compatibility with active_period when new fields are absent."""
+        from tests.helpers import MockResponse
+        from echogtfs.models import PeriodType
+        
+        config = {"endpoint": "https://api.example.com/gtfs-rt"}
+        adapter = GtfsRtAdapter(config)
+        
+        # Create feed with only active_period (standard GTFS-RT)
+        feed = gtfs_realtime_pb2.FeedMessage()
+        feed.header.gtfs_realtime_version = "2.0"
+        feed.header.timestamp = int(time.time())
+        
+        entity = gtfs_realtime_pb2.FeedEntity()
+        entity.id = "backward-compat-alert"
+        
+        alert = entity.alert
+        alert.cause = gtfs_realtime_pb2.Alert.WEATHER
+        alert.effect = gtfs_realtime_pb2.Alert.SIGNIFICANT_DELAYS
+        
+        header_translation = gtfs_realtime_pb2.TranslatedString.Translation()
+        header_translation.text = "Weather Alert"
+        header_translation.language = "en"
+        alert.header_text.translation.append(header_translation)
+        
+        # Add only active_period (no impact_period or communication_period)
+        period = gtfs_realtime_pb2.TimeRange()
+        period.start = int(time.time())
+        period.end = int(time.time()) + 3600
+        alert.active_period.append(period)
+        
+        feed.entity.append(entity)
+        protobuf_data = feed.SerializeToString()
+        
+        with patch('httpx.AsyncClient') as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+            
+            mock_response = MockResponse(
+                content=protobuf_data,
+                status_code=200,
+                url="https://api.example.com/gtfs-rt"
+            )
+            mock_client.get.return_value = mock_response
+            
+            alerts = await adapter.fetch_alerts()
+            
+            # Verify backward compatibility: active_period is treated as impact_period
+            self.assertEqual(len(alerts), 1)
+            self.assertEqual(len(alerts[0]["active_periods"]), 1)
+            self.assertEqual(alerts[0]["active_periods"][0]["period_type"], PeriodType.IMPACT_PERIOD)
+            self.assertIsNotNone(alerts[0]["active_periods"][0]["start_time"])
+            self.assertIsNotNone(alerts[0]["active_periods"][0]["end_time"])
+    
+    async def test_filter_considers_all_period_types(self):
+        """Test that filtering considers all period types (impact_period and communication_period)."""
+        from tests.helpers import MockResponse
+        from echogtfs.models import PeriodType
+        
+        config = {"endpoint": "https://api.example.com/gtfs-rt"}
+        adapter = GtfsRtAdapter(config)
+        
+        # Create alert with expired impact_period but valid communication_period
+        feed = gtfs_realtime_pb2.FeedMessage()
+        feed.header.gtfs_realtime_version = "2.0"
+        feed.header.timestamp = int(time.time())
+        
+        entity = gtfs_realtime_pb2.FeedEntity()
+        entity.id = "filter-test-alert"
+        
+        alert = entity.alert
+        alert.cause = gtfs_realtime_pb2.Alert.ACCIDENT
+        alert.effect = gtfs_realtime_pb2.Alert.REDUCED_SERVICE
+        
+        header_translation = gtfs_realtime_pb2.TranslatedString.Translation()
+        header_translation.text = "Filter Test"
+        header_translation.language = "en"
+        alert.header_text.translation.append(header_translation)
+        
+        # Add expired impact_period
+        impact_period = gtfs_realtime_pb2.TimeRange()
+        impact_period.start = int(time.time()) - 7200  # 2 hours ago
+        impact_period.end = int(time.time()) - 3600    # 1 hour ago
+        alert.impact_period.append(impact_period)
+        
+        # Add valid communication_period
+        comm_period = gtfs_realtime_pb2.TimeRange()
+        comm_period.start = int(time.time())
+        comm_period.end = int(time.time()) + 3600
+        alert.communication_period.append(comm_period)
+        
+        feed.entity.append(entity)
+        protobuf_data = feed.SerializeToString()
+        
+        with patch('httpx.AsyncClient') as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+            
+            mock_response = MockResponse(
+                content=protobuf_data,
+                status_code=200,
+                url="https://api.example.com/gtfs-rt"
+            )
+            mock_client.get.return_value = mock_response
+            
+            alerts = await adapter.fetch_alerts()
+            
+            # Alert should NOT be filtered because communication_period is still valid
+            # (filtering considers all period types, not just impact_period)
+            self.assertEqual(len(alerts), 1)
+            self.assertEqual(len(alerts[0]["active_periods"]), 2)
+    
+    async def test_filter_open_begin_alert_always_imported(self):
+        """Test that alerts without start_time (OpenBegin) are always imported."""
+        from tests.helpers import MockResponse
+        from echogtfs.models import PeriodType
+        
+        config = {"endpoint": "https://api.example.com/gtfs-rt"}
+        adapter = GtfsRtAdapter(config)
+        
+        # Create alert with only end_time (starts far in the future according to end_time)
+        feed = gtfs_realtime_pb2.FeedMessage()
+        feed.header.gtfs_realtime_version = "2.0"
+        feed.header.timestamp = int(time.time())
+        
+        entity = gtfs_realtime_pb2.FeedEntity()
+        entity.id = "open-begin-alert"
+        
+        alert = entity.alert
+        alert.cause = gtfs_realtime_pb2.Alert.CONSTRUCTION
+        alert.effect = gtfs_realtime_pb2.Alert.DETOUR
+        
+        header_translation = gtfs_realtime_pb2.TranslatedString.Translation()
+        header_translation.text = "Open Begin Alert"
+        header_translation.language = "en"
+        alert.header_text.translation.append(header_translation)
+        
+        # Add period with only end_time (no start_time = OpenBegin)
+        # End time is 2 months in the future
+        period = gtfs_realtime_pb2.TimeRange()
+        period.end = int(time.time()) + (60 * 24 * 60 * 60)  # 60 days
+        alert.impact_period.append(period)
+        
+        feed.entity.append(entity)
+        protobuf_data = feed.SerializeToString()
+        
+        with patch('httpx.AsyncClient') as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+            
+            mock_response = MockResponse(
+                content=protobuf_data,
+                status_code=200,
+                url="https://api.example.com/gtfs-rt"
+            )
+            mock_client.get.return_value = mock_response
+            
+            alerts = await adapter.fetch_alerts()
+            
+            # Alert should be imported despite having no start_time (OpenBegin)
+            self.assertEqual(len(alerts), 1)
+            self.assertIsNone(alerts[0]["active_periods"][0]["start_time"])
+            self.assertIsNotNone(alerts[0]["active_periods"][0]["end_time"])
+    
+    async def test_filter_open_end_alert_never_expires(self):
+        """Test that alerts without end_time (OpenEnd) never expire."""
+        from tests.helpers import MockResponse
+        from echogtfs.models import PeriodType
+        
+        config = {"endpoint": "https://api.example.com/gtfs-rt"}
+        adapter = GtfsRtAdapter(config)
+        
+        # Create alert with only start_time (started in the past)
+        feed = gtfs_realtime_pb2.FeedMessage()
+        feed.header.gtfs_realtime_version = "2.0"
+        feed.header.timestamp = int(time.time())
+        
+        entity = gtfs_realtime_pb2.FeedEntity()
+        entity.id = "open-end-alert"
+        
+        alert = entity.alert
+        alert.cause = gtfs_realtime_pb2.Alert.MAINTENANCE
+        alert.effect = gtfs_realtime_pb2.Alert.MODIFIED_SERVICE
+        
+        header_translation = gtfs_realtime_pb2.TranslatedString.Translation()
+        header_translation.text = "Open End Alert"
+        header_translation.language = "en"
+        alert.header_text.translation.append(header_translation)
+        
+        # Add period with only start_time (no end_time = OpenEnd)
+        # Start time is in the past
+        period = gtfs_realtime_pb2.TimeRange()
+        period.start = int(time.time()) - 86400  # 1 day ago
+        alert.impact_period.append(period)
+        
+        feed.entity.append(entity)
+        protobuf_data = feed.SerializeToString()
+        
+        with patch('httpx.AsyncClient') as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+            
+            mock_response = MockResponse(
+                content=protobuf_data,
+                status_code=200,
+                url="https://api.example.com/gtfs-rt"
+            )
+            mock_client.get.return_value = mock_response
+            
+            alerts = await adapter.fetch_alerts()
+            
+            # Alert should not be filtered even though it started in the past (OpenEnd)
+            self.assertEqual(len(alerts), 1)
+            self.assertIsNotNone(alerts[0]["active_periods"][0]["start_time"])
+            self.assertIsNone(alerts[0]["active_periods"][0]["end_time"])
 
 
 if __name__ == '__main__':

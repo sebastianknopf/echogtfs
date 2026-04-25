@@ -376,6 +376,7 @@ async def create_alert(
     for period_data in payload.active_periods:
         period = ServiceAlertActivePeriod(
             alert_id=alert.id,
+            period_type=period_data.period_type,
             start_time=period_data.start_time,
             end_time=period_data.end_time,
         )
@@ -501,6 +502,7 @@ async def update_alert(
         for period_data in payload.active_periods:
             period = ServiceAlertActivePeriod(
                 alert_id=alert.id,
+                period_type=period_data.period_type,
                 start_time=period_data.start_time,
                 end_time=period_data.end_time,
             )
