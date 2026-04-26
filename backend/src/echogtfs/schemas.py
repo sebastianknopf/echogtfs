@@ -392,6 +392,7 @@ class DataSourceRead(BaseModel):
     updated_at: datetime
     mappings: list[DataSourceMappingRead]
     enrichments: list[DataSourceEnrichmentRead]
+    has_error: bool = False
     model_config = {"from_attributes": True}
 
 

@@ -25,6 +25,55 @@ from echogtfs.routers.realtime import invalidate_gtfs_rt_cache
 router = APIRouter()
 
 
+async def _enrich_source_with_error_flag(source: DataSource, db: AsyncSession) -> DataSourceRead:
+    """
+    Convert a DataSource model to DataSourceRead schema with error flag.
+    
+    Checks the most recent log entry for this data source and sets has_error=True
+    if the status code is in the 4xx or 5xx range.
+    
+    Args:
+        source: DataSource model instance
+        db: Database session
+    
+    Returns:
+        DataSourceRead schema with has_error flag set
+    """
+    # Get the most recent log entry
+    result = await db.execute(
+        select(DataSourceLog)
+        .where(DataSourceLog.data_source_id == source.id)
+        .order_by(DataSourceLog.timestamp.desc())
+        .limit(1)
+    )
+    last_log = result.scalar_one_or_none()
+    
+    # Determine if there's an error based on HTTP status code
+    has_error = False
+    if last_log and last_log.status_code:
+        # 4xx and 5xx status codes indicate errors
+        has_error = last_log.status_code >= 400
+    
+    # Convert to schema
+    source_dict = {
+        "id": source.id,
+        "name": source.name,
+        "type": source.type,
+        "config": source.config,
+        "cron": source.cron,
+        "is_active": source.is_active,
+        "invalid_reference_policy": source.invalid_reference_policy,
+        "last_run_at": source.last_run_at,
+        "created_at": source.created_at,
+        "updated_at": source.updated_at,
+        "mappings": source.mappings,
+        "enrichments": source.enrichments,
+        "has_error": has_error,
+    }
+    
+    return DataSourceRead.model_validate(source_dict)
+
+
 @router.get("/adapter-types")
 async def list_adapter_types(current_user: CurrentPoweruser):
     """
@@ -62,7 +111,14 @@ async def list_sources(
         .order_by(DataSource.name)
     )
     sources = result.scalars().all()
-    return sources
+    
+    # Enrich each source with error flag
+    enriched_sources = []
+    for source in sources:
+        enriched = await _enrich_source_with_error_flag(source, db)
+        enriched_sources.append(enriched)
+    
+    return enriched_sources
 
 
 @router.post("/", response_model=DataSourceRead, status_code=201)
@@ -135,7 +191,7 @@ async def create_source(
     )
     source = result.scalar_one()
     
-    return source
+    return await _enrich_source_with_error_flag(source, db)
 
 
 @router.get("/{source_id}", response_model=DataSourceRead)
@@ -160,7 +216,7 @@ async def get_source(
     if not source:
         raise HTTPException(status_code=404, detail="Data source not found")
     
-    return source
+    return await _enrich_source_with_error_flag(source, db)
 
 
 @router.patch("/{source_id}", response_model=DataSourceRead)
@@ -305,7 +361,7 @@ async def update_source(
     )
     source = result.scalar_one()
     
-    return source
+    return await _enrich_source_with_error_flag(source, db)
 
 
 @router.delete("/{source_id}", status_code=204)
@@ -428,9 +484,6 @@ async def toggle_source_active(
     # Invalidate GTFS-RT cache
     invalidate_gtfs_rt_cache()
     
-    # Invalidate GTFS-RT cache
-    invalidate_gtfs_rt_cache()
-    
     # Reload with relationships
     stmt = (
         select(DataSource)
@@ -441,7 +494,9 @@ async def toggle_source_active(
         )
     )
     result = await db.execute(stmt)
-    return result.scalar_one()
+    source = result.scalar_one()
+    
+    return await _enrich_source_with_error_flag(source, db)
 
 
 @router.get("/{source_id}/mappings/{entity_type}/export")

@@ -567,6 +567,44 @@ body {
   font-weight: 400;
 }
 
+/* Success badge - for successful status codes */
+.badge--success {
+  background: rgba(76, 175, 80, 0.15);
+  color: rgb(27, 94, 32);
+  text-transform: none;
+}
+
+/* Error badge - for error status codes */
+.badge--error {
+  background: rgba(244, 67, 54, 0.15);
+  color: rgb(183, 28, 28);
+  text-transform: none;
+}
+
+/* JSON syntax highlighting */
+.json-key {
+  color: #881391;
+  font-weight: 500;
+}
+
+.json-string {
+  color: #1a1aa6;
+}
+
+.json-number {
+  color: #098658;
+}
+
+.json-boolean {
+  color: #0000ff;
+  font-weight: 500;
+}
+
+.json-null {
+  color: #808080;
+  font-style: italic;
+}
+
 /* Resolution warning icon */
 .resolution-warning {
   display: inline-flex;
@@ -1086,6 +1124,15 @@ body {
 }
 @media (min-width: 1024px) {
   .modal__panel--lg { max-width: 1100px; }
+}
+.modal__panel--xl {
+  max-width: 1000px;
+}
+@media (min-width: 768px) {
+  .modal__panel--xl { max-width: 1200px; }
+}
+@media (min-width: 1280px) {
+  .modal__panel--xl { max-width: 1400px; }
 }
 .modal__header    { padding: 24px 24px 0; }
 .modal__title     { font-size: 1.25rem; font-weight: 500; }

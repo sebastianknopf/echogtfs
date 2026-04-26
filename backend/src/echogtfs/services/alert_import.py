@@ -146,3 +146,18 @@ async def run_import_task(source_id: int) -> None:
         except Exception as e:
             logger.error(f"[AlertImport] Import task failed for '{source.name}': {e}", exc_info=True)
             await db.rollback()
+            
+            # Update last_run_at timestamp even on failure
+            # Reload source in a new transaction after rollback
+            try:
+                result = await db.execute(
+                    select(DataSource).where(DataSource.id == source_id)
+                )
+                source = result.scalar_one_or_none()
+                if source:
+                    source.last_run_at = datetime.now(UTC)
+                    await db.commit()
+            except Exception as timestamp_error:
+                logger.error(
+                    f"[AlertImport] Failed to update last_run_at timestamp for '{source.name}': {timestamp_error}"
+                )

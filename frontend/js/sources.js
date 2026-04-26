@@ -652,6 +652,9 @@ const sources = (() => {
       // Inaktiv badge (like alerts) - will be shown in actions cell
       const inactiveBadge = !source.is_active ? `<span class="badge badge--system">${window.i18n('sources.badge.inactive')}</span>` : '';
       
+      // Error badge if the last run had an error (4xx/5xx status code)
+      const errorBadge = source.has_error ? `<span class="badge badge--danger" title="${window.i18n('sources.badge.error')}">${window.i18n('sources.badge.error')}</span>` : '';
+      
       tr.innerHTML = `
         <td>${ui.esc(source.name)}</td>
         <td>${ui.esc(source.type)}</td>
@@ -659,11 +662,16 @@ const sources = (() => {
         <td>${ui.esc(lastRunText)}</td>
         <td><div class="user-table__actions">
           ${inactiveBadge}
+          ${errorBadge}
           <button class="icon-btn" data-action="run" data-id="${source.id}"
             title="${source.is_active ? window.i18n('sources.run.title') : window.i18n('sources.run.disabled')}" 
             aria-label="${window.i18n('sources.run.title')} ${ui.esc(source.name)}" 
             data-ripple ${!source.is_active ? 'disabled' : ''}>
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+          </button>
+          <button class="icon-btn" data-action="view-logs" data-id="${source.id}"
+            title="${window.i18n('sources.logs.title')}" aria-label="${window.i18n('sources.logs.title')} ${ui.esc(source.name)}" data-ripple>
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
           </button>
           <button class="icon-btn" data-action="edit" data-id="${source.id}"
             title="${window.i18n('common.edit')}" aria-label="${window.i18n('common.edit')} ${ui.esc(source.name)}" data-ripple>
@@ -1098,6 +1106,247 @@ const sources = (() => {
     });
   }
 
+  // Logs modal functions
+  async function _openLogsModal(sourceId) {
+    const source = _sources.find(s => s.id === sourceId);
+    if (!source) return;
+
+    const modal = ui.el('logs-modal');
+    const title = ui.el('logs-modal-title');
+    const loadingDiv = ui.el('logs-loading');
+    const contentDiv = ui.el('logs-content');
+
+    // Set title with source name
+    title.textContent = window.i18n('logs.modal.title', { name: source.name });
+
+    // Show modal and loading state
+    modal.hidden = false;
+    loadingDiv.hidden = false;
+    contentDiv.innerHTML = '';
+
+    try {
+      // Load logs from API
+      const logs = await api.getSourceLogs(sourceId, 100);
+      
+      loadingDiv.hidden = true;
+
+      if (!logs || logs.length === 0) {
+        contentDiv.innerHTML = `<div class="panel__placeholder">${window.i18n('logs.empty')}</div>`;
+        return;
+      }
+
+      // Render logs table
+      const table = document.createElement('table');
+      table.className = 'user-table';
+      table.innerHTML = `
+        <thead><tr>
+          <th data-i18n="logs.timestamp">${window.i18n('logs.timestamp')}</th>
+          <th data-i18n="logs.endpoint">${window.i18n('logs.endpoint')}</th>
+          <th data-i18n="logs.status">${window.i18n('logs.status')}</th>
+          <th data-i18n="logs.size">${window.i18n('logs.size')}</th>
+          <th></th>
+        </tr></thead>
+        <tbody></tbody>`;
+      
+      const tbody = table.querySelector('tbody');
+      
+      // Helper to format bytes to human readable
+      const formatBytes = (bytes) => {
+        if (!bytes || bytes === 0) return '—';
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+      };
+      
+      logs.forEach(log => {
+        const tr = document.createElement('tr');
+        
+        // Format timestamp
+        const timestamp = new Date(log.timestamp).toLocaleString('de-DE', {
+          dateStyle: 'short',
+          timeStyle: 'medium'
+        });
+        
+        const statusCode = log.status_code || '—';
+        const endpoint = ui.esc(log.request_url || '—');
+        const size = formatBytes(log.response_size);
+        
+        tr.innerHTML = `
+          <td style="white-space: nowrap;">${ui.esc(timestamp)}</td>
+          <td title="${endpoint}"><code style="font-size: 0.85em;">${endpoint.length > 60 ? endpoint.substring(0, 60) + '...' : endpoint}</code></td>
+          <td><span class="badge ${log.status_code >= 200 && log.status_code < 300 ? 'badge--success' : 'badge--error'}">${statusCode}</span></td>
+          <td>${size}</td>
+          <td><div class="user-table__actions">
+            <button class="icon-btn view-log-details-btn"
+              title="${window.i18n('logs.details')}" aria-label="${window.i18n('logs.details')}" data-ripple>
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+            </button>
+            <button class="icon-btn" data-action="download-log" data-log-id="${log.id}"
+              title="${window.i18n('logs.download')}" aria-label="${window.i18n('logs.download')}" data-ripple>
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+            </button>
+          </div></td>`;
+        
+        // Attach log data to the details button for later access
+        const detailsBtn = tr.querySelector('.view-log-details-btn');
+        if (detailsBtn) {
+          detailsBtn._logData = {
+            id: log.id,
+            timestamp: log.timestamp,
+            endpoint: log.request_url,
+            status: log.status_code,
+            requestHeaders: log.request_headers,
+            responseHeaders: log.response_headers
+          };
+        }
+        
+        tbody.appendChild(tr);
+      });
+      
+      contentDiv.appendChild(table);
+      if (window.initRipples) initRipples(contentDiv);
+      
+    } catch (err) {
+      loadingDiv.hidden = true;
+      contentDiv.innerHTML = `<div class="panel__placeholder">${window.i18n('logs.error.load')}</div>`;
+      ui.toast(window.i18n('logs.error.load'), 'error');
+    }
+  }
+
+  function _closeLogsModal() {
+    const modal = ui.el('logs-modal');
+    modal.hidden = true;
+  }
+
+  function _openLogDetailModal(logData) {
+    const modal = ui.el('log-detail-modal');
+    const title = ui.el('log-detail-modal-title');
+    const content = ui.el('log-detail-content');
+
+    // Set title with timestamp
+    const timestamp = new Date(logData.timestamp).toLocaleString('de-DE', {
+      dateStyle: 'short',
+      timeStyle: 'medium'
+    });
+    title.textContent = `${window.i18n('logs.details.title')} - ${timestamp}`;
+
+    // Helper to format and syntax highlight JSON
+    const formatData = (text) => {
+      if (!text) return null;
+      
+      // Try to parse as JSON
+      try {
+        const parsed = JSON.parse(text);
+        const formatted = JSON.stringify(parsed, null, 2);
+        
+        // Apply syntax highlighting
+        return formatted
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, (match) => {
+            let cls = 'json-number';
+            if (/^"/.test(match)) {
+              if (/:$/.test(match)) {
+                cls = 'json-key';
+              } else {
+                cls = 'json-string';
+              }
+            } else if (/true|false/.test(match)) {
+              cls = 'json-boolean';
+            } else if (/null/.test(match)) {
+              cls = 'json-null';
+            }
+            return `<span class="${cls}">${match}</span>`;
+          });
+      } catch (e) {
+        // Not JSON, return escaped plain text
+        return ui.esc(text);
+      }
+    };
+
+    // Build content with request and response headers
+    let html = '<div style="display: grid; gap: 24px;">';
+    
+    // Request headers section
+    html += '<div>';
+    html += `<h3 style="margin: 0 0 12px 0; font-size: 1rem; font-weight: 500;">${window.i18n('logs.details.request_headers')}</h3>`;
+    const formattedRequest = formatData(logData.requestHeaders);
+    if (formattedRequest) {
+      html += `<pre style="background: rgba(0,0,0,0.05); padding: 12px; border-radius: 4px; overflow-x: auto; margin: 0; font-size: 0.875rem; line-height: 1.5; font-family: 'Consolas', 'Monaco', 'Courier New', monospace;">${formattedRequest}</pre>`;
+    } else {
+      html += `<p style="color: var(--md-outline); margin: 0;">${window.i18n('logs.details.no_headers')}</p>`;
+    }
+    html += '</div>';
+
+    // Response headers section
+    html += '<div>';
+    html += `<h3 style="margin: 0 0 12px 0; font-size: 1rem; font-weight: 500;">${window.i18n('logs.details.response_headers')}</h3>`;
+    const formattedResponse = formatData(logData.responseHeaders);
+    if (formattedResponse) {
+      html += `<pre style="background: rgba(0,0,0,0.05); padding: 12px; border-radius: 4px; overflow-x: auto; margin: 0; font-size: 0.875rem; line-height: 1.5; font-family: 'Consolas', 'Monaco', 'Courier New', monospace;">${formattedResponse}</pre>`;
+    } else {
+      html += `<p style="color: var(--md-outline); margin: 0;">${window.i18n('logs.details.no_headers')}</p>`;
+    }
+    html += '</div>';
+
+    html += '</div>';
+    content.innerHTML = html;
+
+    modal.hidden = false;
+  }
+
+  function _closeLogDetailModal() {
+    const modal = ui.el('log-detail-modal');
+    modal.hidden = true;
+  }
+
+  async function _downloadLogFile(logId) {
+    try {
+      // Download log file via direct link
+      const token = localStorage.getItem('auth-token');
+      const url = `/api/sources/logs/${logId}/download`;
+      
+      // Set authorization header via fetch and create blob URL
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Download failed');
+      }
+      
+      // Get filename from Content-Disposition header
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = `log_${logId}.log`;
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename=([^;]+)/);
+        if (match) {
+          filename = match[1].replace(/['"]/g, '');
+        }
+      }
+      
+      // Create blob and download
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      
+      // Create temporary anchor element to trigger download
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+      
+    } catch (err) {
+      ui.toast(window.i18n('logs.download.error'), 'error');
+    }
+  }
+
   // Event handlers
   async function init() {
     // Load initial data
@@ -1185,6 +1434,33 @@ const sources = (() => {
         });
       });
     });
+
+    // Logs modal event listeners
+    ui.el('logs-modal-close-btn')?.addEventListener('click', _closeLogsModal);
+    ui.el('logs-modal')?.querySelector('.modal__backdrop')?.addEventListener('click', _closeLogsModal);
+    
+    // Log detail modal event listeners
+    ui.el('log-detail-modal-close-btn')?.addEventListener('click', _closeLogDetailModal);
+    ui.el('log-detail-modal')?.querySelector('.modal__backdrop')?.addEventListener('click', _closeLogDetailModal);
+    
+    // Download log file handler and details button (delegated for logs modal)
+    document.addEventListener('click', (e) => {
+      // View log details button
+      const detailBtn = e.target.closest('.view-log-details-btn');
+      if (detailBtn && detailBtn._logData) {
+        _openLogDetailModal(detailBtn._logData);
+        return;
+      }
+      
+      // Download log button
+      const btn = e.target.closest('[data-action="download-log"]');
+      if (btn) {
+        const logId = parseInt(btn.dataset.logId);
+        if (logId) {
+          _downloadLogFile(logId);
+        }
+      }
+    });
     
   }
 
@@ -1200,6 +1476,9 @@ const sources = (() => {
     const sourceId = parseInt(btn.dataset.id);
 
     switch (action) {
+      case 'view-logs':
+        _openLogsModal(sourceId);
+        break;
       case 'run':
         _runSource(sourceId);
         break;

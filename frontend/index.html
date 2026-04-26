@@ -637,6 +637,41 @@
     </div>
   </div>
 
+  <!-- Modal: View logs for data source -->
+  <div id="logs-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="logs-modal-title" hidden>
+    <div class="modal__backdrop"></div>
+    <div class="modal__panel modal__panel--xl">
+      <div class="modal__header">
+        <h2 class="modal__title" id="logs-modal-title" data-i18n="logs.modal.title">Logs</h2>
+      </div>
+      <div class="modal__body">
+        <div id="logs-loading" class="panel__placeholder" hidden>
+          <span data-i18n="logs.loading">Logs werden geladen...</span>
+        </div>
+        <div id="logs-content"></div>
+      </div>
+      <div class="modal__actions">
+        <button type="button" id="logs-modal-close-btn" class="md-btn md-btn--text" data-ripple data-i18n="common.close">Schließen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: View log details (headers) -->
+  <div id="log-detail-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="log-detail-modal-title" hidden>
+    <div class="modal__backdrop"></div>
+    <div class="modal__panel modal__panel--lg">
+      <div class="modal__header">
+        <h2 class="modal__title" id="log-detail-modal-title" data-i18n="logs.details.title">Log Details</h2>
+      </div>
+      <div class="modal__body">
+        <div id="log-detail-content"></div>
+      </div>
+      <div class="modal__actions">
+        <button type="button" id="log-detail-modal-close-btn" class="md-btn md-btn--text" data-ripple data-i18n="common.close">Schließen</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: Create / Edit alert -->
   <div id="alert-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="alert-modal-title" hidden>
     <div class="modal__backdrop"></div>
