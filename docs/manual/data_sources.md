@@ -117,3 +117,30 @@ Suppose you have a data source that always sets `cause=UNKNOWN_CAUSE` and `effec
 - **Use AND conditions** (commas) to avoid false positives
 - **Test patterns** with real alert data from your sources
 - **Combine with mappings:** Enrichments work independently from ID mappings and are applied after data is fetched but before validation
+
+## Monitoring and Logging
+
+EchoGTFS automatically logs all requests to external data sources. This helps with:
+- **Debugging:** Inspect raw responses when alerts don't import correctly
+- **Monitoring:** Track HTTP status codes and identify failing sources
+- **Analysis:** Compare response sizes over time to detect API changes
+
+### Quick Access
+
+1. Go to **Sources** in the main navigation
+2. Click the **document icon** next to any data source
+3. View the most recent log entries with timestamps, endpoints, status codes, and response sizes
+
+### Error Indicators
+
+- **ERROR badge (red):** Shown when the last request returned a 4xx or 5xx status code
+- Helps quickly identify problematic data sources
+
+### What's Logged
+
+- Complete request and response data (including headers)
+- HTTP status codes
+- Response sizes (actual uncompressed size)
+- Execution timestamps
+
+For detailed information about log interpretation, troubleshooting, and technical details, see the [Data Source Logging](logging.md) documentation.
