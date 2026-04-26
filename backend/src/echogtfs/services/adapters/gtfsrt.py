@@ -212,11 +212,17 @@ class GtfsRtAdapter(BaseAdapter):
         
         # Log the request (convert protobuf to JSON for readability)
         source_id = self.config.get("_source_id")
+        logger.info(f"[GtfsRtAdapter] Source ID from config: {source_id}")
         if source_id:
             try:
                 # Convert protobuf to JSON
                 feed_dict = MessageToDict(feed, preserving_proto_field_name=True)
                 feed_json = json.dumps(feed_dict, indent=2, ensure_ascii=False)
+                
+                logger.info(
+                    f"[GtfsRtAdapter] Logging request for source {source_id}. "
+                    f"JSON size: {len(feed_json)} bytes, Protobuf size: {len(protobuf_data)} bytes"
+                )
                 
                 # Log to database and file
                 await datalog.create_log_entry(
@@ -228,9 +234,11 @@ class GtfsRtAdapter(BaseAdapter):
                     response_mimetype="application/json",
                     status_code=response.status_code,
                 )
-                logger.debug(f"[GtfsRtAdapter] Logged request to data source {source_id}")
+                logger.info(f"[GtfsRtAdapter] Successfully logged request to data source {source_id}")
             except Exception as e:
-                logger.warning(f"[GtfsRtAdapter] Failed to log request: {e}")
+                logger.error(f"[GtfsRtAdapter] Failed to log request: {e}", exc_info=True)
+        else:
+            logger.warning("[GtfsRtAdapter] No source_id in config - logging skipped")
         
         logger.info(f"[GtfsRtAdapter] Parsed {len(feed.entity)} entities from feed")
         

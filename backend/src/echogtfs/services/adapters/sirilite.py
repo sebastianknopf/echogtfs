@@ -194,8 +194,13 @@ class SiriLiteAdapter(BaseAdapter):
         
         # Log the request
         source_id = self.config.get("_source_id")
+        logger.info(f"[SiriLiteAdapter] Source ID from config: {source_id}")
         if source_id:
             try:
+                logger.info(
+                    f"[SiriLiteAdapter] Logging request for source {source_id}. "
+                    f"XML size: {len(xml_content)} characters"
+                )
                 await datalog.create_log_entry(
                     data_source_id=source_id,
                     request_url=str(response.url),
@@ -205,9 +210,11 @@ class SiriLiteAdapter(BaseAdapter):
                     response_mimetype="application/xml",
                     status_code=response.status_code,
                 )
-                logger.debug(f"[SiriLiteAdapter] Logged request to data source {source_id}")
+                logger.info(f"[SiriLiteAdapter] Successfully logged request to data source {source_id}")
             except Exception as e:
-                logger.warning(f"[SiriLiteAdapter] Failed to log request: {e}")
+                logger.error(f"[SiriLiteAdapter] Failed to log request: {e}", exc_info=True)
+        else:
+            logger.warning("[SiriLiteAdapter] No source_id in config - logging skipped")
         
         # Parse XML
         try:

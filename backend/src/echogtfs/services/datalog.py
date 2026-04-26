@@ -75,6 +75,14 @@ async def create_log_entry(
         else:
             content_bytes = response_content
         
+        # Log content size before writing
+        content_size_before = len(content_bytes)
+        logger.info(
+            f"[DataLog] Preparing to write {content_size_before} bytes "
+            f"({content_size_before / 1024:.2f} KB, {content_size_before / (1024 * 1024):.2f} MB) "
+            f"for data source {data_source_id}"
+        )
+        
         # Save log file
         log_dir = get_log_directory()
         log_file_path = log_dir / str(log_uuid)
@@ -88,10 +96,17 @@ async def create_log_entry(
         
         # Get actual file size from disk (ensures we measure the real, uncompressed size)
         actual_size = log_file_path.stat().st_size
-        logger.debug(
-            f"[DataLog] Content size for data source {data_source_id}: {actual_size} bytes "
+        logger.info(
+            f"[DataLog] File written successfully. Size on disk: {actual_size} bytes "
             f"({actual_size / 1024:.2f} KB, {actual_size / (1024 * 1024):.2f} MB)"
         )
+        
+        # Verify sizes match
+        if content_size_before != actual_size:
+            logger.warning(
+                f"[DataLog] Size mismatch! Content size: {content_size_before} bytes, "
+                f"File size: {actual_size} bytes (difference: {abs(content_size_before - actual_size)} bytes)"
+            )
         
         # Convert headers to JSON strings
         request_headers_json = json.dumps(request_headers) if request_headers else None
