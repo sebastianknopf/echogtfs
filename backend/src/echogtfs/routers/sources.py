@@ -2,20 +2,24 @@
 Data sources router
 """
 import io
+import os
+import tempfile
+from pathlib import Path
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
+from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from echogtfs.database import get_db
-from echogtfs.models import DataSource, DataSourceMapping, DataSourceEnrichment, ServiceAlert, User
-from echogtfs.schemas import DataSourceCreate, DataSourceRead, DataSourceUpdate
+from echogtfs.models import DataSource, DataSourceMapping, DataSourceEnrichment, ServiceAlert, User, DataSourceLog
+from echogtfs.schemas import DataSourceCreate, DataSourceRead, DataSourceUpdate, DataSourceLogRead
 from echogtfs.security import CurrentPoweruser
 from echogtfs.services.adapters import ADAPTER_REGISTRY
 from echogtfs.services.alert_import import schedule_data_source_import, run_import_task
+from echogtfs.services import datalog
 from echogtfs.routers.realtime import invalidate_gtfs_rt_cache
 
 router = APIRouter()
@@ -311,7 +315,7 @@ async def delete_source(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Delete a data source (cascades to mappings).
+    Delete a data source (cascades to mappings, alerts, and logs).
     Requires poweruser or admin role.
     """
     result = await db.execute(
@@ -320,6 +324,10 @@ async def delete_source(
     source = result.scalar_one_or_none()
     if not source:
         raise HTTPException(status_code=404, detail="Data source not found")
+    
+    # Delete log files before deleting the data source
+    # (DB entries will be cascade-deleted automatically)
+    await datalog.delete_logs_for_data_source(source_id, db)
     
     # Remove cron job if exists
     await schedule_data_source_import(source.id, source.name, None)
@@ -491,6 +499,120 @@ async def export_mappings_csv(
         media_type="text/csv; charset=utf-8",
         headers={
             "Content-Disposition": f"attachment; filename={filename}"
+        }
+    )
+
+
+@router.get("/{source_id}/logs", response_model=List[DataSourceLogRead])
+async def list_source_logs(
+    source_id: int,
+    limit: int = 100,
+    current_user: CurrentPoweruser = Depends(),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    List recent log entries for a specific data source.
+    Requires poweruser or admin role.
+    
+    Args:
+        source_id: ID of the data source
+        limit: Maximum number of log entries to return (default: 100, max: 1000)
+    
+    Returns:
+        List of log entries, ordered by timestamp descending (newest first)
+    """
+    # Validate limit
+    if limit < 1 or limit > 1000:
+        raise HTTPException(status_code=400, detail="Limit must be between 1 and 1000")
+    
+    # Check if source exists
+    result = await db.execute(
+        select(DataSource).where(DataSource.id == source_id)
+    )
+    source = result.scalar_one_or_none()
+    if not source:
+        raise HTTPException(status_code=404, detail="Data source not found")
+    
+    # Get logs using the datalog service
+    logs = await datalog.get_logs_for_data_source(source_id, limit=limit, db=db)
+    
+    return logs
+
+
+@router.get("/logs/{log_id}/download")
+async def download_log_file(
+    log_id: int,
+    background_tasks: BackgroundTasks,
+    current_user: CurrentPoweruser = Depends(),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Download the log file for a specific log entry.
+    Requires poweruser or admin role.
+    
+    The file extension and content type are determined by the log's MIME type:
+    - application/json -> .json
+    - application/xml -> .xml
+    - text/plain -> .txt
+    - Other types -> .log
+    
+    Args:
+        log_id: ID of the log entry
+    
+    Returns:
+        File download response with appropriate content type
+    """
+    # Get log entry
+    result = await db.execute(
+        select(DataSourceLog).where(DataSourceLog.id == log_id)
+    )
+    log_entry = result.scalar_one_or_none()
+    
+    if not log_entry:
+        raise HTTPException(status_code=404, detail=\"Log entry not found\")
+    
+    # Get log file content
+    log_content = await datalog.get_log_content(log_entry.log_file_uuid)
+    
+    if log_content is None:
+        raise HTTPException(status_code=404, detail=\"Log file not found on disk\")
+    
+    # Determine file extension and media type based on MIME type
+    mime_type = log_entry.response_mimetype or \"text/plain\"
+    
+    if mime_type == \"application/json\":
+        extension = \"json\"
+        media_type = \"application/json\"
+    elif mime_type == \"application/xml\":
+        extension = \"xml\"
+        media_type = \"application/xml\"
+    elif mime_type.startswith(\"text/\"):
+        extension = \"txt\"
+        media_type = \"text/plain\"
+    else:
+        extension = \"log\"
+        media_type = \"application/octet-stream\"
+    
+    # Create filename: log_{log_id}_{timestamp}.{extension}
+    timestamp = log_entry.timestamp.strftime(\"%Y%m%d_%H%M%S\")
+    filename = f\"log_{log_id}_{timestamp}.{extension}\"
+    
+    # Create temporary file
+    temp_file = tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix=f\".{extension}\")
+    temp_file.write(log_content)
+    temp_file.close()
+    temp_path = temp_file.name
+    
+    # Add background task to delete temporary file after response is sent
+    background_tasks.add_task(os.unlink, temp_path)
+    
+    # Return file response with proper headers
+    return FileResponse(
+        path=temp_path,
+        media_type=media_type,
+        filename=filename,
+        headers={
+            \"Content-Disposition\": f\"attachment; filename={filename}\"
         }
     )
 

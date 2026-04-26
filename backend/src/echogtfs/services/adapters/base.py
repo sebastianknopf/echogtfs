@@ -690,8 +690,9 @@ class BaseAdapter(ABC):
             f"(policy: {policy.value})"
         )
         
-        # Inject source_name into config so adapters can use it for ID generation
+        # Inject source_name and source_id into config so adapters can use them
         self.config["_source_name"] = source_name
+        self.config["_source_id"] = source_id
         
         # Fetch alerts from external source
         alert_dicts = await self.fetch_alerts()

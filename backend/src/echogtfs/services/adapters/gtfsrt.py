@@ -5,16 +5,19 @@ GTFS-Realtime is a feed specification for public transportation schedules
 and real-time updates including service alerts.
 """
 
+import json
 import logging
 import time
 import uuid
 from typing import Any
 
 import httpx
+from google.protobuf.json_format import MessageToDict
 
 from echogtfs import gtfs_realtime_pb2
 from echogtfs.models import PeriodType
 from echogtfs.services.adapters.base import BaseAdapter
+from echogtfs.services import datalog
 
 logger = logging.getLogger("uvicorn")
 
@@ -152,20 +155,48 @@ class GtfsRtAdapter(BaseAdapter):
         logger.info(f"[GtfsRtAdapter] Fetching GTFS-RT feed from {endpoint}")
         
         # Fetch protobuf data
+        response = None
+        final_url = endpoint
+        error_occurred = False
+        error_message = None
+        
         try:
             async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
                 response = await client.get(endpoint, headers=headers)
-                response.raise_for_status()
+                final_url = str(response.url)
                 
                 # Log final URL after redirects
-                final_url = str(response.url)
                 if final_url != endpoint:
                     logger.info(f"[GtfsRtAdapter] Redirected to: {final_url}")
+                
+                response.raise_for_status()
                 
                 protobuf_data = response.content
                 logger.info(f"[GtfsRtAdapter] Fetched {len(protobuf_data)} bytes from feed")
         except httpx.HTTPError as e:
+            error_occurred = True
+            error_message = str(e)
             logger.error(f"[GtfsRtAdapter] HTTP error fetching feed: {e}")
+            
+            # Log failed request
+            source_id = self.config.get("_source_id")
+            if source_id and response is not None:
+                try:
+                    # Log error response as plain text
+                    error_content = response.text if response.text else f"HTTP Error: {error_message}"
+                    await datalog.create_log_entry(
+                        data_source_id=source_id,
+                        request_url=final_url,
+                        response_content=error_content,
+                        request_headers=dict(headers) if headers else None,
+                        response_headers=dict(response.headers) if response.headers else None,
+                        response_mimetype="text/plain",
+                        status_code=response.status_code if hasattr(response, 'status_code') else None,
+                    )
+                    logger.debug(f"[GtfsRtAdapter] Logged failed request to data source {source_id}")
+                except Exception as log_error:
+                    logger.warning(f"[GtfsRtAdapter] Failed to log error request: {log_error}")
+            
             raise ValueError(f"Failed to fetch GTFS-RT feed: {e}")
         except Exception as e:
             logger.error(f"[GtfsRtAdapter] Unexpected error fetching feed: {e}")
@@ -178,6 +209,28 @@ class GtfsRtAdapter(BaseAdapter):
         except Exception as e:
             logger.error(f"[GtfsRtAdapter] Failed to parse protobuf: {e}")
             raise ValueError(f"Failed to parse GTFS-RT protobuf: {e}")
+        
+        # Log the request (convert protobuf to JSON for readability)
+        source_id = self.config.get("_source_id")
+        if source_id:
+            try:
+                # Convert protobuf to JSON
+                feed_dict = MessageToDict(feed, preserving_proto_field_name=True)
+                feed_json = json.dumps(feed_dict, indent=2, ensure_ascii=False)
+                
+                # Log to database and file
+                await datalog.create_log_entry(
+                    data_source_id=source_id,
+                    request_url=final_url,
+                    response_content=feed_json,
+                    request_headers=dict(headers) if headers else None,
+                    response_headers=dict(response.headers),
+                    response_mimetype="application/json",
+                    status_code=response.status_code,
+                )
+                logger.debug(f"[GtfsRtAdapter] Logged request to data source {source_id}")
+            except Exception as e:
+                logger.warning(f"[GtfsRtAdapter] Failed to log request: {e}")
         
         logger.info(f"[GtfsRtAdapter] Parsed {len(feed.entity)} entities from feed")
         

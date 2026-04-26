@@ -378,6 +378,9 @@ class DataSource(Base):
     alerts: Mapped[list["ServiceAlert"]] = relationship(
         back_populates="data_source", cascade="all, delete-orphan"
     )
+    logs: Mapped[list["DataSourceLog"]] = relationship(
+        back_populates="data_source", cascade="all, delete-orphan"
+    )
 
 
 class DataSourceMapping(Base):
@@ -441,3 +444,44 @@ class DataSourceEnrichment(Base):
     
     # Relationship
     data_source: Mapped["DataSource"] = relationship(back_populates="enrichments")
+
+
+class DataSourceLog(Base):
+    """
+    Log entry for external data source requests.
+    
+    Tracks HTTP requests to external data sources with metadata stored
+    in the database and full response dumps stored as files.
+    """
+    __tablename__ = "data_source_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    data_source_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("data_sources.id", ondelete="CASCADE"), index=True
+    )
+    
+    # Request timestamp
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    
+    # Request metadata
+    request_url: Mapped[str] = mapped_column(String(2048))
+    request_headers: Mapped[str | None] = mapped_column(Text, nullable=True)
+    
+    # Response metadata
+    response_headers: Mapped[str | None] = mapped_column(Text, nullable=True)
+    response_mimetype: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    response_size: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    
+    # Reference to log file (UUID filename in named volume)
+    log_file_uuid: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
+    
+    # Creation timestamp
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    
+    # Relationship
+    data_source: Mapped["DataSource"] = relationship(back_populates="logs")

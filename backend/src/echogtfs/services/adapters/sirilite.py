@@ -20,6 +20,7 @@ import httpx
 
 from echogtfs.models import PeriodType, SiriLiteDialect
 from echogtfs.services.adapters.base import BaseAdapter
+from echogtfs.services import datalog
 
 logger = logging.getLogger("uvicorn")
 
@@ -151,6 +152,10 @@ class SiriLiteAdapter(BaseAdapter):
         logger.info(f"[SiriLiteAdapter] Fetching SIRI-Lite feed from {endpoint}")
         
         # Fetch XML data
+        response = None
+        error_occurred = False
+        error_message = None
+        
         try:
             async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
                 response = await client.get(endpoint, headers=headers)
@@ -159,11 +164,50 @@ class SiriLiteAdapter(BaseAdapter):
                 xml_content = response.text
                 logger.info(f"[SiriLiteAdapter] Fetched {len(xml_content)} characters from feed")
         except httpx.HTTPError as e:
+            error_occurred = True
+            error_message = str(e)
             logger.error(f"[SiriLiteAdapter] HTTP error fetching feed: {e}")
+            
+            # Log failed request
+            source_id = self.config.get("_source_id")
+            if source_id and response is not None:
+                try:
+                    # Log error response as plain text
+                    error_content = response.text if response.text else f"HTTP Error: {error_message}"
+                    await datalog.create_log_entry(
+                        data_source_id=source_id,
+                        request_url=str(response.url),
+                        response_content=error_content,
+                        request_headers=dict(headers) if headers else None,
+                        response_headers=dict(response.headers) if response.headers else None,
+                        response_mimetype="text/plain",
+                        status_code=response.status_code if hasattr(response, 'status_code') else None,
+                    )
+                    logger.debug(f"[SiriLiteAdapter] Logged failed request to data source {source_id}")
+                except Exception as log_error:
+                    logger.warning(f"[SiriLiteAdapter] Failed to log error request: {log_error}")
+            
             raise ValueError(f"Failed to fetch SIRI-Lite feed: {e}")
         except Exception as e:
             logger.error(f"[SiriLiteAdapter] Unexpected error fetching feed: {e}")
             raise ValueError(f"Failed to fetch SIRI-Lite feed: {e}")
+        
+        # Log the request
+        source_id = self.config.get("_source_id")
+        if source_id:
+            try:
+                await datalog.create_log_entry(
+                    data_source_id=source_id,
+                    request_url=str(response.url),
+                    response_content=xml_content,
+                    request_headers=dict(headers) if headers else None,
+                    response_headers=dict(response.headers),
+                    response_mimetype="application/xml",
+                    status_code=response.status_code,
+                )
+                logger.debug(f"[SiriLiteAdapter] Logged request to data source {source_id}")
+            except Exception as e:
+                logger.warning(f"[SiriLiteAdapter] Failed to log request: {e}")
         
         # Parse XML
         try:

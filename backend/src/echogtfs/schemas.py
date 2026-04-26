@@ -393,3 +393,19 @@ class DataSourceRead(BaseModel):
     mappings: list[DataSourceMappingRead]
     enrichments: list[DataSourceEnrichmentRead]
     model_config = {"from_attributes": True}
+
+
+class DataSourceLogRead(BaseModel):
+    """Read model for data source logs."""
+    id: int
+    data_source_id: int
+    timestamp: datetime
+    request_url: str
+    request_headers: str | None
+    response_headers: str | None
+    response_mimetype: str | None
+    status_code: int | None
+    response_size: int | None
+    log_file_uuid: UUID
+    created_at: datetime
+    model_config = {"from_attributes": True}
