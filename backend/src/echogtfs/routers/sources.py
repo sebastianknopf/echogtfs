@@ -506,9 +506,9 @@ async def export_mappings_csv(
 @router.get("/{source_id}/logs", response_model=List[DataSourceLogRead])
 async def list_source_logs(
     source_id: int,
-    limit: int = 100,
     current_user: CurrentPoweruser,
     db: AsyncSession = Depends(get_db),
+    limit: int = 100,
 ):
     """
     List recent log entries for a specific data source.
