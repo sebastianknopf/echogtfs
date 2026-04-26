@@ -17,6 +17,7 @@ const api = (() => {
       'Missing required fields': window.i18n('error.required_fields'),
       'Invalid email format': window.i18n('error.invalid_email'),
       'Password too short': window.i18n('error.password_short'),
+      'Current password is incorrect': window.i18n('error.current_password_incorrect'),
       'Access denied': window.i18n('error.access_denied'),
       'Data source not found': window.i18n('error.source_not_found'),
       'Invalid cron expression': window.i18n('error.invalid_cron'),
@@ -70,6 +71,12 @@ const api = (() => {
         throw new Error(translateError(isJson ? data.detail : data, response.status));
       }
 
+      // Update token if server provides a new one (sliding session)
+      const newToken = response.headers.get('X-New-Token');
+      if (newToken) {
+        localStorage.setItem('auth-token', newToken);
+      }
+
       return data;
     } catch (error) {
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
@@ -94,6 +101,14 @@ const api = (() => {
 
     getMe() {
       return request('/users/me');
+    },
+
+    changePassword(data) {
+      return request('/users/me/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      }, true);
     },
 
     // Users

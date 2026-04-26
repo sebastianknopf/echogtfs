@@ -51,6 +51,9 @@ window.translations = {
     'topbar.language.label': 'Sprache',
     'topbar.language.de': 'Deutsch',
     'topbar.language.en': 'English',
+    'topbar.profile.title': 'Benutzerprofil',
+    'topbar.profile.label': 'Benutzerprofil',
+    'topbar.profile.change_password': 'Passwort ändern',
     'topbar.logout.title': 'Abmelden',
     'topbar.logout.label': 'Abmelden',
     
@@ -334,6 +337,18 @@ window.translations = {
     'account.error.username_required': 'Bitte Benutzername eingeben.',
     'account.error.password_required': 'Bitte Passwort eingeben.',
     
+    // === PASSWORD CHANGE MODAL ===
+    'password.modal.title': 'Passwort ändern',
+    'password.current': 'Aktuelles Passwort',
+    'password.new': 'Neues Passwort',
+    'password.new_repeat': 'Neues Passwort wiederholen',
+    'password.error.current_required': 'Bitte aktuelles Passwort eingeben.',
+    'password.error.new_required': 'Bitte neues Passwort eingeben.',
+    'password.error.repeat_required': 'Bitte neues Passwort wiederholen.',
+    'password.error.mismatch': 'Die neuen Passwörter stimmen nicht überein.',
+    'password.error.current_incorrect': 'Das aktuelle Passwort ist falsch.',
+    'password.success': 'Passwort wurde erfolgreich geändert.',
+    
     // === SETTINGS PANEL ===
     'settings.title': 'Einstellungen',
     'settings.section.general': 'Allgemein',
@@ -401,6 +416,7 @@ window.translations = {
     'error.required_fields': 'Erforderliche Felder fehlen.',
     'error.invalid_email': 'Ungültiges E-Mail-Format.',
     'error.password_short': 'Passwort zu kurz.',
+    'error.current_password_incorrect': 'Das aktuelle Passwort ist falsch.',
     'error.access_denied': 'Zugriff verweigert.',
     'error.source_not_found': 'Datenquelle nicht gefunden.',
     'error.invalid_cron': 'Ungültiger Cron-Ausdruck.',
@@ -511,6 +527,9 @@ window.translations = {
     'topbar.language.label': 'Language',
     'topbar.language.de': 'Deutsch',
     'topbar.language.en': 'English',
+    'topbar.profile.title': 'User profile',
+    'topbar.profile.label': 'User profile',
+    'topbar.profile.change_password': 'Change password',
     'topbar.logout.title': 'Sign Out',
     'topbar.logout.label': 'Sign Out',
     
@@ -794,6 +813,18 @@ window.translations = {
     'account.error.username_required': 'Please enter a username.',
     'account.error.password_required': 'Please enter a password.',
     
+    // === PASSWORD CHANGE MODAL ===
+    'password.modal.title': 'Change Password',
+    'password.current': 'Current Password',
+    'password.new': 'New Password',
+    'password.new_repeat': 'Repeat New Password',
+    'password.error.current_required': 'Please enter your current password.',
+    'password.error.new_required': 'Please enter a new password.',
+    'password.error.repeat_required': 'Please repeat the new password.',
+    'password.error.mismatch': 'The new passwords do not match.',
+    'password.error.current_incorrect': 'The current password is incorrect.',
+    'password.success': 'Password was changed successfully.',
+    
     // === SETTINGS PANEL ===
     'settings.title': 'Settings',
     'settings.section.general': 'General',
@@ -861,6 +892,7 @@ window.translations = {
     'error.required_fields': 'Required fields are missing.',
     'error.invalid_email': 'Invalid email format.',
     'error.password_short': 'Password too short.',
+    'error.current_password_incorrect': 'The current password is incorrect.',
     'error.access_denied': 'Access denied.',
     'error.source_not_found': 'Data source not found.',
     'error.invalid_cron': 'Invalid cron expression.',

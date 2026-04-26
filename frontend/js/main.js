@@ -256,6 +256,175 @@ const languageSelector = (() => {
 })();
 
 /* ==========================================================================
+   PROFILE SELECTOR - User profile dropdown functionality
+========================================================================== */
+const profileSelector = (() => {
+  let _isOpen = false;
+  
+  function toggleMenu() {
+    const menu = document.getElementById('profile-menu');
+    const button = document.getElementById('profile-btn');
+    
+    if (!menu || !button) return;
+    
+    _isOpen = !_isOpen;
+    
+    if (_isOpen) {
+      menu.classList.add('is-open');
+      button.setAttribute('aria-expanded', 'true');
+      
+      // Focus first option when opening
+      const firstOption = menu.querySelector('.profile-selector__option');
+      if (firstOption) {
+        setTimeout(() => firstOption.focus(), 0);
+      }
+    } else {
+      menu.classList.remove('is-open');
+      button.setAttribute('aria-expanded', 'false');
+    }
+  }
+  
+  function closeMenu() {
+    const menu = document.getElementById('profile-menu');
+    const button = document.getElementById('profile-btn');
+    
+    if (!menu || !button) return;
+    
+    _isOpen = false;
+    menu.classList.remove('is-open');
+    button.setAttribute('aria-expanded', 'false');
+  }
+  
+  return {
+    toggleMenu,
+    closeMenu,
+  };
+})();
+
+/* ==========================================================================
+   PASSWORD MODAL - Change password functionality
+========================================================================== */
+const passwordModal = (() => {
+  let _modal = null;
+  let _form = null;
+  
+  function open() {
+    _modal = document.getElementById('password-modal');
+    _form = document.getElementById('password-form');
+    
+    if (!_modal || !_form) return;
+    
+    // Reset form
+    _form.reset();
+    setError(null);
+    
+    // Show modal
+    _modal.removeAttribute('hidden');
+    
+    // Focus first field
+    const firstInput = document.getElementById('password-current');
+    if (firstInput) {
+      setTimeout(() => firstInput.focus(), 100);
+    }
+    
+    // Close profile menu
+    profileSelector.closeMenu();
+  }
+  
+  function close() {
+    if (!_modal) return;
+    _modal.setAttribute('hidden', '');
+    _form?.reset();
+    setError(null);
+  }
+  
+  function setError(message) {
+    const errorEl = document.getElementById('password-error');
+    if (!errorEl) return;
+    
+    if (message) {
+      errorEl.textContent = message;
+      errorEl.style.display = 'block';
+    } else {
+      errorEl.textContent = '';
+      errorEl.style.display = 'none';
+    }
+  }
+  
+  function setBusy(busy) {
+    const submitBtn = document.getElementById('password-submit-btn');
+    const spinner = document.getElementById('password-submit-spinner');
+    const label = document.getElementById('password-submit-label');
+    
+    if (!submitBtn) return;
+    
+    submitBtn.disabled = busy;
+    if (spinner) spinner.hidden = !busy;
+    if (label) label.textContent = busy ? window.i18n('loading.saving') : window.i18n('common.save');
+  }
+  
+  async function handleSubmit(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(_form);
+    const currentPassword = formData.get('current_password');
+    const newPassword = formData.get('new_password');
+    const repeatPassword = formData.get('new_password_repeat');
+    
+    // Client-side validation
+    if (!currentPassword) {
+      setError(window.i18n('password.error.current_required'));
+      return;
+    }
+    
+    if (!newPassword) {
+      setError(window.i18n('password.error.new_required'));
+      return;
+    }
+    
+    if (!repeatPassword) {
+      setError(window.i18n('password.error.repeat_required'));
+      return;
+    }
+    
+    if (newPassword !== repeatPassword) {
+      setError(window.i18n('password.error.mismatch'));
+      return;
+    }
+    
+    // Make API request
+    setBusy(true);
+    setError(null);
+    
+    try {
+      const response = await api.changePassword({
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
+      
+      // Success
+      ui.toast(window.i18n('password.success'), 'success');
+      close();
+    } catch (err) {
+      // Check if it's an incorrect password error
+      if (err.message && err.message.includes('incorrect')) {
+        setError(window.i18n('password.error.current_incorrect'));
+      } else {
+        setError(err.message);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+  
+  return {
+    open,
+    close,
+    handleSubmit,
+  };
+})();
+
+/* ==========================================================================
    BOOTSTRAP - Event listeners and app startup
 ========================================================================== */
 
@@ -336,6 +505,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Language selector
   document.getElementById('language-btn')?.addEventListener('click', (e) => {
     e.stopPropagation();
+    profileSelector.closeMenu(); // Close profile menu when opening language menu
     languageSelector.toggleMenu();
   });
   
@@ -393,8 +563,40 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       languageSelector.closeMenu();
+      profileSelector.closeMenu();
+      passwordModal.close();
     }
   });
+  
+  // Profile selector
+  document.getElementById('profile-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    languageSelector.closeMenu(); // Close language menu when opening profile menu
+    profileSelector.toggleMenu();
+  });
+  
+  document.getElementById('change-password-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    passwordModal.open();
+  });
+  
+  // Close profile menu when clicking outside
+  document.addEventListener('click', (e) => {
+    const profileMenu = document.getElementById('profile-menu');
+    const profileBtn = document.getElementById('profile-btn');
+    
+    if (profileMenu && profileBtn &&
+        !profileMenu.contains(e.target) && 
+        !profileBtn.contains(e.target)) {
+      profileSelector.closeMenu();
+    }
+  });
+  
+  // Password modal
+  document.getElementById('password-form')?.addEventListener('submit', passwordModal.handleSubmit);
+  document.getElementById('password-cancel-btn')?.addEventListener('click', () => passwordModal.close());
+  document.getElementById('password-modal')?.querySelector('.modal__backdrop')
+    ?.addEventListener('click', () => passwordModal.close());
 
   // Sidebar navigation
   document.querySelector('.sidebar')?.addEventListener('click', app.handleNavClick);
