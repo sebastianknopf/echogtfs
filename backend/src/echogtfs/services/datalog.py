@@ -86,6 +86,13 @@ async def create_log_entry(
             logger.error(f"[DataLog] Failed to save log file {log_file_path}: {e}")
             raise
         
+        # Get actual file size from disk (ensures we measure the real, uncompressed size)
+        actual_size = log_file_path.stat().st_size
+        logger.debug(
+            f"[DataLog] Content size for data source {data_source_id}: {actual_size} bytes "
+            f"({actual_size / 1024:.2f} KB, {actual_size / (1024 * 1024):.2f} MB)"
+        )
+        
         # Convert headers to JSON strings
         request_headers_json = json.dumps(request_headers) if request_headers else None
         response_headers_json = json.dumps(response_headers) if response_headers else None
@@ -99,7 +106,7 @@ async def create_log_entry(
             response_headers=response_headers_json,
             response_mimetype=response_mimetype,
             status_code=status_code,
-            response_size=len(content_bytes),
+            response_size=actual_size,
             log_file_uuid=log_uuid,
         )
         

@@ -653,7 +653,7 @@ const sources = (() => {
       const inactiveBadge = !source.is_active ? `<span class="badge badge--system">${window.i18n('sources.badge.inactive')}</span>` : '';
       
       // Error badge if the last run had an error (4xx/5xx status code)
-      const errorBadge = source.has_error ? `<span class="badge badge--danger" title="${window.i18n('sources.badge.error')}">${window.i18n('sources.badge.error')}</span>` : '';
+      const errorBadge = source.has_error ? `<span class="badge badge--error" title="${window.i18n('sources.badge.error')}">${window.i18n('sources.badge.error')}</span>` : '';
       
       tr.innerHTML = `
         <td>${ui.esc(source.name)}</td>

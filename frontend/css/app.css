@@ -578,7 +578,9 @@ body {
 .badge--error {
   background: rgba(244, 67, 54, 0.15);
   color: rgb(183, 28, 28);
-  text-transform: none;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  font-weight: 500;
 }
 
 /* JSON syntax highlighting */
