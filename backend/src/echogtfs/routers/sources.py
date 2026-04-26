@@ -507,7 +507,7 @@ async def export_mappings_csv(
 async def list_source_logs(
     source_id: int,
     limit: int = 100,
-    current_user: CurrentPoweruser = Depends(),
+    current_user: CurrentPoweruser,
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -543,7 +543,7 @@ async def list_source_logs(
 async def download_log_file(
     log_id: int,
     background_tasks: BackgroundTasks,
-    current_user: CurrentPoweruser = Depends(),
+    current_user: CurrentPoweruser,
     db: AsyncSession = Depends(get_db),
 ):
     """
