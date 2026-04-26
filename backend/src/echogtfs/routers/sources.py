@@ -569,36 +569,36 @@ async def download_log_file(
     log_entry = result.scalar_one_or_none()
     
     if not log_entry:
-        raise HTTPException(status_code=404, detail=\"Log entry not found\")
+        raise HTTPException(status_code=404, detail="Log entry not found")
     
     # Get log file content
     log_content = await datalog.get_log_content(log_entry.log_file_uuid)
     
     if log_content is None:
-        raise HTTPException(status_code=404, detail=\"Log file not found on disk\")
+        raise HTTPException(status_code=404, detail="Log file not found on disk")
     
     # Determine file extension and media type based on MIME type
-    mime_type = log_entry.response_mimetype or \"text/plain\"
+    mime_type = log_entry.response_mimetype or "text/plain"
     
-    if mime_type == \"application/json\":
-        extension = \"json\"
-        media_type = \"application/json\"
-    elif mime_type == \"application/xml\":
-        extension = \"xml\"
-        media_type = \"application/xml\"
-    elif mime_type.startswith(\"text/\"):
-        extension = \"txt\"
-        media_type = \"text/plain\"
+    if mime_type == "application/json":
+        extension = "json"
+        media_type = "application/json"
+    elif mime_type == "application/xml":
+        extension = "xml"
+        media_type = "application/xml"
+    elif mime_type.startswith("text/"):
+        extension = "txt"
+        media_type = "text/plain"
     else:
-        extension = \"log\"
-        media_type = \"application/octet-stream\"
+        extension = "log"
+        media_type = "application/octet-stream"
     
     # Create filename: log_{log_id}_{timestamp}.{extension}
-    timestamp = log_entry.timestamp.strftime(\"%Y%m%d_%H%M%S\")
-    filename = f\"log_{log_id}_{timestamp}.{extension}\"
+    timestamp = log_entry.timestamp.strftime("%Y%m%d_%H%M%S")
+    filename = f"log_{log_id}_{timestamp}.{extension}"
     
     # Create temporary file
-    temp_file = tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix=f\".{extension}\")
+    temp_file = tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix=f".{extension}")
     temp_file.write(log_content)
     temp_file.close()
     temp_path = temp_file.name
@@ -612,7 +612,7 @@ async def download_log_file(
         media_type=media_type,
         filename=filename,
         headers={
-            \"Content-Disposition\": f\"attachment; filename={filename}\"
+            "Content-Disposition": f"attachment; filename={filename}"
         }
     )
 
