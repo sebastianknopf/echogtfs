@@ -8,12 +8,12 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy Git metadata for setuptools_scm version detection
-COPY .git ./.git
+# Copy everything else for the backend container
+COPY ./.git ./.git
+COPY ./.gitignore ./.gitignore
+COPY ./backend ./backend
+COPY ./gtfs-realtime.proto ./gtfs-realtime.proto
 
-# Restore files from Git HEAD (prevents "dirty" version from manual file copies)
-# This uses the current committed state - tags get clean versions, commits after tags get dev versions
-RUN git config --global --add safe.directory /app && \
-    git reset --hard HEAD
 
 # Install from backend directory BEFORE generating protobuf
 # This ensures setuptools_scm reads clean git state without generated files
@@ -22,8 +22,6 @@ RUN pip install --no-cache-dir ./backend
 # Generate Python code from protobuf definition AFTER installation
 # This prevents the generated file from interfering with setuptools_scm version detection
 RUN protoc --python_out=/usr/local/lib/python3.12/site-packages/echogtfs/ gtfs-realtime.proto && \
-    rm -rf .git
-
-CMD ["echogtfs"]
+   rm -rf .git
 
 CMD ["echogtfs"]
