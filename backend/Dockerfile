@@ -21,7 +21,6 @@ RUN pip install --no-cache-dir ./backend
 
 # Generate Python code from protobuf definition AFTER installation
 # This prevents the generated file from interfering with setuptools_scm version detection
-RUN protoc --python_out=/usr/local/lib/python3.12/site-packages/echogtfs/ gtfs-realtime.proto && \
-   rm -rf .git
+RUN protoc --python_out=/usr/local/lib/python3.12/site-packages/echogtfs/ gtfs-realtime.proto
 
 CMD ["echogtfs"]
