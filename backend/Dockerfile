@@ -7,13 +7,13 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends git protobuf-compiler && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy Git metadata for setuptools_scm version detection
 # Copy everything else for the backend container
-COPY ./.git ./.git
-COPY ./.gitignore ./.gitignore
-COPY ./backend ./backend
-COPY ./gtfs-realtime.proto ./gtfs-realtime.proto
-
+# Copy Git metadata for setuptools_scm version detection
+# Remove the .env file for the container to start, and other untracked files
+# IMPORTANT: Remove ONLY untracked files, everything else will lead to an estimated version
+# during installation in the Docker container!
+COPY . . 
+RUN rm .env && rm -rf venv
 
 # Install from backend directory BEFORE generating protobuf
 # This ensures setuptools_scm reads clean git state without generated files
