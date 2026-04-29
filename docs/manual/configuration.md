@@ -50,6 +50,12 @@ Configure when expired internal alerts should be permanently deleted from the da
 
 **Note:** Only the calendar date is considered for deletion, not the exact time. For example, if an alert expires on April 7 at 5:00 PM and "After 1 day" is configured, it will be deleted on April 8 during the first cleanup run (regardless of time).
 
+### Data Source Log Cleanup
+- **Automatic:** Data source request logs (HTTP request/response data from external data sources) are automatically deleted after **24 hours**.
+- This cleanup runs independently of the alert cleanup settings and cannot be disabled.
+- Both database entries and log files stored on disk are removed during cleanup.
+- This ensures that the system does not accumulate excessive log data over time while retaining recent logs for debugging purposes.
+
 ## GTFS Static Configuration
 - After logging in as an admin, navigate to the **Settings** section.
 - Here you can configure GTFS feed sources and adjust system-wide options.

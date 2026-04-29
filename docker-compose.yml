@@ -34,6 +34,8 @@ services:
       FIRST_SUPERUSER: ${FIRST_SUPERUSER}
       FIRST_SUPERUSER_EMAIL: ${FIRST_SUPERUSER_EMAIL}
       FIRST_SUPERUSER_PASSWORD: ${FIRST_SUPERUSER_PASSWORD}
+    volumes:
+      - datasource_logs:/var/log/echogtfs/datasources
     depends_on:
       database:
         condition: service_healthy
@@ -50,3 +52,4 @@ services:
 
 volumes:
   pgsqldata:
+  datasource_logs:

@@ -4,6 +4,7 @@ Manages cleanup of expired internal service alerts based on configured policy.
 Runs on a scheduled cron job to:
 - Deactivate or delete internal alerts whose last active period has expired
 - Delete old expired alerts after a configured retention period
+- Delete data source logs older than 24 hours (both database entries and files)
 
 External alerts (with data_source_id) are never cleaned up automatically,
 as they are always synchronized from their data sources.
@@ -20,7 +21,8 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from echogtfs.database import AsyncSessionLocal
-from echogtfs.models import AppSetting, ExpiredAlertPolicy, ServiceAlert, ServiceAlertActivePeriod
+from echogtfs.models import AppSetting, ExpiredAlertPolicy, ServiceAlert, ServiceAlertActivePeriod, DataSourceLog
+from echogtfs.services import datalog
 
 logger = logging.getLogger("uvicorn")
 
@@ -85,7 +87,7 @@ async def schedule_cleanup_from_settings(db: AsyncSession | None = None) -> None
 
 async def run_cleanup_task() -> None:
     """
-    Execute cleanup of expired internal service alerts.
+    Execute cleanup of expired internal service alerts and old data source logs.
     Called by the scheduler.
     """
     logger.info("[Cleanup] Starting cleanup task")
@@ -112,12 +114,16 @@ async def run_cleanup_task() -> None:
             else:
                 logger.info("[Cleanup] Delete after days is -1 (never), skipping deletion")
             
+            # Step 3: Delete data source logs older than 24 hours
+            logs_deleted_count = await _delete_old_logs(db)
+            
             await db.commit()
             
             logger.info(
                 f"[Cleanup] Task completed. "
                 f"Expired alerts processed: {expired_count}, "
-                f"Old alerts deleted: {deleted_count}"
+                f"Old alerts deleted: {deleted_count}, "
+                f"Old logs deleted: {logs_deleted_count}"
             )
             
         except Exception as e:
@@ -244,5 +250,51 @@ async def _delete_old_expired_alerts(db: AsyncSession, days: int) -> int:
     )
     
     logger.info(f"[Cleanup] Deleted {count} internal alerts expired for more than {days} days")
+    
+    return count
+
+
+async def _delete_old_logs(db: AsyncSession) -> int:
+    """
+    Delete data source logs older than 24 hours.
+    
+    Removes both database entries and log files from the file system.
+    This cleanup runs independently of data source settings and alert cleanup policies.
+    
+    Returns:
+        Number of logs deleted
+    """
+    # Calculate cutoff timestamp: 24 hours ago
+    cutoff_time = datetime.now(UTC) - timedelta(hours=24)
+    
+    # Find all logs older than 24 hours
+    query = select(DataSourceLog).where(
+        DataSourceLog.timestamp < cutoff_time
+    )
+    
+    result = await db.execute(query)
+    old_logs = result.scalars().all()
+    
+    if not old_logs:
+        logger.info("[Cleanup] No data source logs older than 24 hours found")
+        return 0
+    
+    count = len(old_logs)
+    log_uuids = [log.log_file_uuid for log in old_logs]
+    
+    # Delete log files from file system
+    deleted_files = await datalog.delete_log_files_by_uuids(log_uuids)
+    
+    # Delete database entries
+    await db.execute(
+        delete(DataSourceLog).where(
+            DataSourceLog.timestamp < cutoff_time
+        )
+    )
+    
+    logger.info(
+        f"[Cleanup] Deleted {count} data source logs older than 24 hours "
+        f"({deleted_files} files deleted from disk)"
+    )
     
     return count

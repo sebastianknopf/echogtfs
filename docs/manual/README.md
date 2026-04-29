@@ -5,6 +5,7 @@ Welcome to the official EchoGTFS manual. This guide will help you get started, c
 - [Getting Started](getting_started.md)
 - [Creating Alerts](creating_alerts.md)
 - [Configuring Data Sources](data_sources.md)
+- [Data Source Logging](logging.md)
 - [Adapters](adapters.md)
 - [User Management](user_management.md)
 - [Configuration](configuration.md)
