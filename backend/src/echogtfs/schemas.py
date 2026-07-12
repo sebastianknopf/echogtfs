@@ -4,14 +4,11 @@ from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, field_validator, model_validator
 
+from echogtfs.enum.system import EnrichmentType, ExpiredAlertPolicy, InvalidReferencePolicy, SourceField
 from echogtfs.services.database.models import (
-    InvalidReferencePolicy, 
-    EnrichmentType, 
-    SourceField,
     AlertCause,
     AlertEffect,
     AlertSeverityLevel,
-    ExpiredAlertPolicy,
     PeriodType
 )
 

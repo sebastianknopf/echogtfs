@@ -5,7 +5,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from echogtfs.database import get_db
-from echogtfs.services.database.models import AppSetting, ExpiredAlertPolicy
+from echogtfs.enum.system import ExpiredAlertPolicy
+from echogtfs.services.database.models import AppSetting
 from echogtfs.schemas import AppSettings, PublicAppSettings, ThemeSettings
 from echogtfs.security import CurrentSuperuser, hash_password
 from echogtfs.services.cleanup import schedule_cleanup_from_settings

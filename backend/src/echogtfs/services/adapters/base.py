@@ -270,7 +270,7 @@ class BaseAdapter(ABC):
             alert_dicts: List of alert dictionaries (modified in place)
             enrichments: List of enrichment rules from _load_enrichments()
         """
-        from echogtfs.services.database.models import EnrichmentType, SourceField
+        from echogtfs.enum.system import EnrichmentType, SourceField
         
         # Track which enrichment types can be overridden (default/unknown values)
         default_values = {
@@ -670,9 +670,9 @@ class BaseAdapter(ABC):
             ServiceAlertActivePeriod, 
             ServiceAlertInformedEntity,
             DataSource,
-            InvalidReferencePolicy,
             PeriodType
         )
+        from echogtfs.enum.system import InvalidReferencePolicy
         
         # Load the data source to get its invalid_reference_policy
         result = await db.execute(

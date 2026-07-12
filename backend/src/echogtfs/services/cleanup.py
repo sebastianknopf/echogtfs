@@ -21,7 +21,8 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from echogtfs.database import AsyncSessionLocal
-from echogtfs.services.database.models import AppSetting, ExpiredAlertPolicy, ServiceAlert, ServiceAlertActivePeriod, DataSourceLog
+from echogtfs.enum.system import ExpiredAlertPolicy
+from echogtfs.services.database.models import AppSetting, ServiceAlert, ServiceAlertActivePeriod, DataSourceLog
 from echogtfs.services import datalog
 
 logger = logging.getLogger("uvicorn")
