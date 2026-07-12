@@ -8,6 +8,7 @@ dynamic = ["version"]
 description = "echogtfs – FastAPI backend service"
 requires-python = ">=3.11"
 dependencies = [
+    "alembic>=1.13.0",
     "fastapi>=0.110.0",
     "uvicorn[standard]>=0.29.0",
     "sqlalchemy[asyncio]>=2.0.0",
@@ -29,9 +30,6 @@ echogtfs = "echogtfs.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
-[tool.setuptools.package-data]
-echogtfs = ["migrations/*.sql"]
 
 [tool.setuptools_scm]
 root = ".."
