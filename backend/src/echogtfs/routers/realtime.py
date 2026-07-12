@@ -18,7 +18,8 @@ from sqlalchemy.orm import selectinload
 
 from echogtfs import gtfs_realtime_pb2
 from echogtfs.database import get_db
-from echogtfs.services.database.models import PeriodType, ServiceAlert
+from echogtfs.enum.gtfsrt import PeriodType
+from echogtfs.services.database.models import ServiceAlert
 from echogtfs.routers.settings import _load as load_settings
 from echogtfs.security import verify_password
 

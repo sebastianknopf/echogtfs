@@ -669,9 +669,9 @@ class BaseAdapter(ABC):
             ServiceAlertTranslation, 
             ServiceAlertActivePeriod, 
             ServiceAlertInformedEntity,
-            DataSource,
-            PeriodType
+            DataSource
         )
+        from echogtfs.enum.gtfsrt import PeriodType
         from echogtfs.enum.system import InvalidReferencePolicy
         
         # Load the data source to get its invalid_reference_policy

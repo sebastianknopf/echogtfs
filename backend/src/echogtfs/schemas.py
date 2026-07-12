@@ -4,13 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, field_validator, model_validator
 
+from echogtfs.enum.gtfsrt import AlertCause, AlertEffect, AlertSeverityLevel, PeriodType
 from echogtfs.enum.system import EnrichmentType, ExpiredAlertPolicy, InvalidReferencePolicy, SourceField
-from echogtfs.services.database.models import (
-    AlertCause,
-    AlertEffect,
-    AlertSeverityLevel,
-    PeriodType
-)
 
 _HEX_COLOR = re.compile(r'^#[0-9a-fA-F]{6}$')
 
