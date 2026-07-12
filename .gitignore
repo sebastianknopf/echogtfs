@@ -45,7 +45,6 @@ dmypy.json
 .docker/
 
 # IDE
-.vscode/
 .idea/
 *.swp
 *.swo
