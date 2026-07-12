@@ -27,7 +27,13 @@ class AlembicMigrationService:
 
     def _upgrade_head_sync(self) -> None:
         logger.info("Running Alembic migrations to head")
-        command.upgrade(self._build_config(), "head")
+        
+        try:
+            command.upgrade(self._build_config(), "head")
+        except Exception:
+            logger.exception("Alembic migration failed during startup")
+            raise
+
         logger.info("Alembic migrations complete")
 
     async def upgrade_head(self) -> None:
