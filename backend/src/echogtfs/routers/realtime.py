@@ -7,18 +7,15 @@ if credentials are configured in settings.
 """
 
 import base64
-import json
 import time
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from echogtfs import gtfs_realtime_pb2
 from echogtfs.database import get_db
-from echogtfs.enum.gtfsrt import PeriodType
 from echogtfs.services.database import get_repository
-from echogtfs.services.database.models import ServiceAlert
+from echogtfs.services.gtfsrt.gtfs_realtime_service_alerts_export_service import GtfsRealtimeServiceAlertsExportService
 from echogtfs.routers.settings import _load as load_settings
 from echogtfs.security import verify_password
 
@@ -96,260 +93,6 @@ async def check_gtfs_rt_auth(request: Request, db: AsyncSession = Depends(get_db
         )
 
 
-def _build_feed_message(alerts: list[ServiceAlert]) -> gtfs_realtime_pb2.FeedMessage:
-    """
-    Build a GTFS-RT FeedMessage from ServiceAlert models.
-    
-    Args:
-        alerts: List of ServiceAlert instances with loaded relationships
-        
-    Returns:
-        gtfs_realtime_pb2.FeedMessage ready for serialization
-    """
-    feed = gtfs_realtime_pb2.FeedMessage()
-    
-    # Header
-    feed.header.gtfs_realtime_version = "2.0"
-    feed.header.incrementality = gtfs_realtime_pb2.FeedHeader.FULL_DATASET
-    feed.header.timestamp = int(time.time())
-    
-    # Process alerts (already filtered for active in query)
-    for alert_model in alerts:
-            
-        entity = feed.entity.add()
-        entity.id = str(alert_model.id)
-        
-        alert = entity.alert
-        
-        # Cause and effect (stored as strings in DB)
-        if alert_model.cause:
-            alert.cause = getattr(
-                gtfs_realtime_pb2.Alert.Cause, 
-                alert_model.cause,  # Already a string like "TECHNICAL_PROBLEM"
-                gtfs_realtime_pb2.Alert.Cause.UNKNOWN_CAUSE
-            )
-        
-        if alert_model.effect:
-            alert.effect = getattr(
-                gtfs_realtime_pb2.Alert.Effect,
-                alert_model.effect,  # Already a string like "REDUCED_SERVICE"
-                gtfs_realtime_pb2.Alert.Effect.UNKNOWN_EFFECT
-            )
-        
-        # Severity level (GTFS-RT SeverityLevel enum)
-        if alert_model.severity_level:
-            severity_map = {
-                "UNKNOWN_SEVERITY": gtfs_realtime_pb2.Alert.UNKNOWN_SEVERITY,
-                "INFO": gtfs_realtime_pb2.Alert.INFO,
-                "WARNING": gtfs_realtime_pb2.Alert.WARNING,
-                "SEVERE": gtfs_realtime_pb2.Alert.SEVERE,
-            }
-            alert.severity_level = severity_map.get(
-                alert_model.severity_level,
-                gtfs_realtime_pb2.Alert.UNKNOWN_SEVERITY
-            )
-        
-        # Translations (header and description)
-        for trans in alert_model.translations:
-            if trans.header_text:
-                header = alert.header_text.translation.add()
-                header.text = trans.header_text
-                header.language = trans.language
-            
-            if trans.description_text:
-                desc = alert.description_text.translation.add()
-                desc.text = trans.description_text
-                desc.language = trans.language
-            
-            if trans.url:
-                url = alert.url.translation.add()
-                url.text = trans.url
-                url.language = trans.language
-        
-        # Active periods - distinguish between impact and communication periods
-        for period in alert_model.active_periods:
-            if period.period_type == PeriodType.IMPACT_PERIOD:
-                # Impact periods go in both active_period and impact_period (for backward compatibility)
-                time_range = alert.active_period.add()
-                if period.start_time is not None:
-                    time_range.start = period.start_time
-                if period.end_time is not None:
-                    time_range.end = period.end_time
-                
-                # Also add to impact_period
-                impact_range = alert.impact_period.add()
-                if period.start_time is not None:
-                    impact_range.start = period.start_time
-                if period.end_time is not None:
-                    impact_range.end = period.end_time
-            else:  # COMMUNICATION_PERIOD
-                # Communication periods only go in communication_period
-                comm_range = alert.communication_period.add()
-                if period.start_time is not None:
-                    comm_range.start = period.start_time
-                if period.end_time is not None:
-                    comm_range.end = period.end_time
-        
-        # Informed entities
-        for entity_model in alert_model.informed_entities:
-            informed = alert.informed_entity.add()
-            
-            if entity_model.agency_id:
-                informed.agency_id = entity_model.agency_id
-            if entity_model.route_id:
-                informed.route_id = entity_model.route_id
-            if entity_model.route_type is not None:
-                informed.route_type = entity_model.route_type
-            if entity_model.stop_id:
-                informed.stop_id = entity_model.stop_id
-            if entity_model.direction_id is not None:
-                informed.direction_id = entity_model.direction_id
-            
-            # Only create TripDescriptor if trip_id is present
-            if entity_model.trip_id:
-                informed.trip.trip_id = entity_model.trip_id
-    
-    return feed
-
-
-def _feed_to_dict(feed: gtfs_realtime_pb2.FeedMessage) -> dict:
-    """
-    Convert GTFS-RT FeedMessage to a JSON-serializable dictionary.
-    
-    Args:
-        feed: gtfs_realtime_pb2.FeedMessage
-        
-    Returns:
-        Dictionary representation of the feed
-    """
-    result = {
-        "header": {
-            "gtfs_realtime_version": feed.header.gtfs_realtime_version,
-            "incrementality": gtfs_realtime_pb2.FeedHeader.Incrementality.Name(
-                feed.header.incrementality
-            ),
-            "timestamp": feed.header.timestamp,
-        },
-        "entity": [],
-    }
-    
-    for entity in feed.entity:
-        entity_dict = {"id": entity.id}
-        
-        if entity.HasField("alert"):
-            alert = entity.alert
-            alert_dict = {}
-            
-            # Cause and effect
-            if alert.HasField("cause"):
-                alert_dict["cause"] = gtfs_realtime_pb2.Alert.Cause.Name(alert.cause)
-            if alert.HasField("effect"):
-                alert_dict["effect"] = gtfs_realtime_pb2.Alert.Effect.Name(alert.effect)
-            
-            # Severity level
-            if alert.HasField("severity_level"):
-                severity_names = {
-                    gtfs_realtime_pb2.Alert.UNKNOWN_SEVERITY: "UNKNOWN_SEVERITY",
-                    gtfs_realtime_pb2.Alert.INFO: "INFO",
-                    gtfs_realtime_pb2.Alert.WARNING: "WARNING",
-                    gtfs_realtime_pb2.Alert.SEVERE: "SEVERE",
-                }
-                alert_dict["severity_level"] = severity_names.get(
-                    alert.severity_level, "UNKNOWN_SEVERITY"
-                )
-            
-            # Translations
-            if alert.header_text.translation:
-                alert_dict["header_text"] = {
-                    "translation": [
-                        {"text": t.text, "language": t.language}
-                        for t in alert.header_text.translation
-                    ]
-                }
-            
-            if alert.description_text.translation:
-                alert_dict["description_text"] = {
-                    "translation": [
-                        {"text": t.text, "language": t.language}
-                        for t in alert.description_text.translation
-                    ]
-                }
-            
-            if alert.url.translation:
-                alert_dict["url"] = {
-                    "translation": [
-                        {"text": t.text, "language": t.language}
-                        for t in alert.url.translation
-                    ]
-                }
-            
-            # Active periods
-            if alert.active_period:
-                alert_dict["active_period"] = []
-                for period in alert.active_period:
-                    period_dict = {}
-                    if period.HasField("start"):
-                        period_dict["start"] = period.start
-                    if period.HasField("end"):
-                        period_dict["end"] = period.end
-                    alert_dict["active_period"].append(period_dict)
-            
-            # Impact periods
-            if alert.impact_period:
-                alert_dict["impact_period"] = []
-                for period in alert.impact_period:
-                    period_dict = {}
-                    if period.HasField("start"):
-                        period_dict["start"] = period.start
-                    if period.HasField("end"):
-                        period_dict["end"] = period.end
-                    alert_dict["impact_period"].append(period_dict)
-            
-            # Communication periods
-            if alert.communication_period:
-                alert_dict["communication_period"] = []
-                for period in alert.communication_period:
-                    period_dict = {}
-                    if period.HasField("start"):
-                        period_dict["start"] = period.start
-                    if period.HasField("end"):
-                        period_dict["end"] = period.end
-                    alert_dict["communication_period"].append(period_dict)
-            
-            # Informed entities
-            if alert.informed_entity:
-                alert_dict["informed_entity"] = []
-                for informed in alert.informed_entity:
-                    informed_dict = {}
-                    if informed.HasField("agency_id"):
-                        informed_dict["agency_id"] = informed.agency_id
-                    if informed.HasField("route_id"):
-                        informed_dict["route_id"] = informed.route_id
-                    if informed.HasField("route_type"):
-                        informed_dict["route_type"] = informed.route_type
-                    if informed.HasField("stop_id"):
-                        informed_dict["stop_id"] = informed.stop_id
-                    if informed.HasField("direction_id"):
-                        informed_dict["direction_id"] = informed.direction_id
-                    if informed.HasField("trip"):
-                        trip_dict = {}
-                        if informed.trip.HasField("trip_id"):
-                            trip_dict["trip_id"] = informed.trip.trip_id
-                        if informed.trip.HasField("route_id"):
-                            trip_dict["route_id"] = informed.trip.route_id
-                        if informed.trip.HasField("direction_id"):
-                            trip_dict["direction_id"] = informed.trip.direction_id
-                        if trip_dict:
-                            informed_dict["trip"] = trip_dict
-                    alert_dict["informed_entity"].append(informed_dict)
-            
-            entity_dict["alert"] = alert_dict
-        
-        result["entity"].append(entity_dict)
-    
-    return result
-
-
 @router.get("/{path:path}")
 async def get_service_alerts(
     path: str,
@@ -396,7 +139,7 @@ async def get_service_alerts(
     # Check cache validity
     current_time = time.time()
     cache_valid = (current_time - _feed_cache["timestamp"]) < _feed_cache["ttl"]
-    
+
     # Return cached response if valid
     if cache_valid:
         if (json_format is not None or debug_format is not None) and _feed_cache["json"] is not None:
@@ -409,17 +152,12 @@ async def get_service_alerts(
                 content=_feed_cache["protobuf"],
                 media_type="application/x-protobuf",
             )
-    
-    # Cache miss or expired - load from repository
-    alerts = await get_repository().get_realtime_service_alerts()
-    
-    # Build GTFS-RT feed
-    feed = _build_feed_message(alerts)
-    
-    # Generate both formats and cache them
-    protobuf_content = feed.SerializeToString()
-    json_content = json.dumps(_feed_to_dict(feed), indent=2).encode("utf-8")
-    
+
+    # Cache miss or expired - generate payloads with export service
+    export_service = GtfsRealtimeServiceAlertsExportService(get_repository())
+    protobuf_content = await export_service.export_protobuf()
+    json_content = await export_service.export_json()
+
     # Update cache
     _feed_cache["protobuf"] = protobuf_content
     _feed_cache["json"] = json_content
