@@ -9,62 +9,6 @@ from echogtfs.database import Base
 
 
 # ---------------------------------------------------------------------------
-# GTFS entity tables
-# ---------------------------------------------------------------------------
-
-class GtfsAgency(Base):
-    """Imported GTFS agencies (agency.txt)."""
-    __tablename__ = "gtfs_agencies"
-
-    id:      Mapped[int] = mapped_column(primary_key=True)
-    gtfs_id: Mapped[str] = mapped_column(String(128), unique=True)
-    name:    Mapped[str] = mapped_column(String(255))
-
-
-class GtfsStop(Base):
-    """Imported GTFS stops (stops.txt)."""
-    __tablename__ = "gtfs_stops"
-
-    id:      Mapped[int] = mapped_column(primary_key=True)
-    gtfs_id: Mapped[str] = mapped_column(String(128), unique=True)
-    name:    Mapped[str] = mapped_column(String(255))
-
-
-class GtfsRoute(Base):
-    """Imported GTFS routes (routes.txt)."""
-    __tablename__ = "gtfs_routes"
-
-    id:         Mapped[int] = mapped_column(primary_key=True)
-    gtfs_id:    Mapped[str] = mapped_column(String(128), unique=True)
-    short_name: Mapped[str] = mapped_column(String(128))
-    long_name:  Mapped[str] = mapped_column(String(255))
-
-
-class User(Base):
-    __tablename__ = "sys_users"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    username: Mapped[str] = mapped_column(String(64), unique=True)
-    email: Mapped[str] = mapped_column(String(255), unique=True)
-    hashed_password: Mapped[str] = mapped_column(String(255))
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    is_superuser: Mapped[bool] = mapped_column(Boolean, default=False)
-    is_technical_contact: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-
-
-class AppSetting(Base):
-    """Key-value store for application-wide settings persisted in the database."""
-
-    __tablename__ = "sys_app_settings"
-
-    key: Mapped[str] = mapped_column(String(64), primary_key=True)
-    value: Mapped[str] = mapped_column(String(2048))  # wider for URLs + messages
-
-
-# ---------------------------------------------------------------------------
 # GTFS-RT ServiceAlert enums
 # ---------------------------------------------------------------------------
 
@@ -160,170 +104,32 @@ class ExpiredAlertPolicy(str, Enum):
 
 
 # ---------------------------------------------------------------------------
-# GTFS-RT ServiceAlert tables
+# System models
 # ---------------------------------------------------------------------------
 
-class ServiceAlert(Base):
-    """
-    GTFS-RT Service Alert.
-    
-    Main table for service alerts. Translations and affected entities
-    are stored in separate tables with foreign keys.
-    
-    No foreign keys to GTFS static data - entity references are stored
-    as strings only for search purposes.
-    
-    Alerts can be internal (created in echogtfs UI) or external (imported
-    from data sources). External alerts have a data_source_id and cannot
-    be edited in the UI.
-    """
-    __tablename__ = "realtime_service_alerts"
+class AppSetting(Base):
+    """Key-value store for application-wide settings persisted in the database."""
 
-    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    
-    # Data source relation (NULL = internal alert, created in echogtfs UI)
-    data_source_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("sys_data_sources.id", ondelete="CASCADE"), nullable=True
-    )
-    
-    # Alert metadata
-    cause: Mapped[AlertCause] = mapped_column(String(32), default=AlertCause.UNKNOWN_CAUSE)
-    effect: Mapped[AlertEffect] = mapped_column(String(32), default=AlertEffect.UNKNOWN_EFFECT)
-    severity_level: Mapped[AlertSeverityLevel] = mapped_column(
-        String(32), default=AlertSeverityLevel.UNKNOWN_SEVERITY
-    )
-    source: Mapped[str] = mapped_column(String(128), default="echogtfs")
-    
-    # Status flags
+    __tablename__ = "sys_app_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(String(2048))  # wider for URLs + messages
+
+
+class User(Base):
+    __tablename__ = "sys_users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True)
+    hashed_password: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    
-    # Timestamps
+    is_superuser: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_technical_contact: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
-    
-    # Relationships (with cascade delete)
-    data_source: Mapped["DataSource | None"] = relationship(back_populates="alerts")
-    translations: Mapped[list["ServiceAlertTranslation"]] = relationship(
-        back_populates="alert", cascade="all, delete-orphan"
-    )
-    active_periods: Mapped[list["ServiceAlertActivePeriod"]] = relationship(
-        back_populates="alert", cascade="all, delete-orphan"
-    )
-    informed_entities: Mapped[list["ServiceAlertInformedEntity"]] = relationship(
-        back_populates="alert", cascade="all, delete-orphan"
-    )
-    
-    @property
-    def data_source_name(self) -> str | None:
-        """Return the name of the data source if this is an external alert."""
-        return self.data_source.name if self.data_source else None
 
-
-
-class ServiceAlertTranslation(Base):
-    """
-    Translations for service alert text content.
-    
-    Stores header, description, and URL in multiple languages.
-    One alert can have multiple translations.
-    """
-    __tablename__ = "realtime_service_alert_translations"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    alert_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("realtime_service_alerts.id", ondelete="CASCADE"), index=True
-    )
-    
-    # Language code (ISO 639-1: 'de', 'en', 'fr', etc.)
-    language: Mapped[str] = mapped_column(String(8))
-    
-    # Alert content in this language
-    header_text: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    description_text: Mapped[str | None] = mapped_column(Text, nullable=True)
-    url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
-    
-    # Relationship
-    alert: Mapped["ServiceAlert"] = relationship(back_populates="translations")
-
-
-class ServiceAlertActivePeriod(Base):
-    """
-    Time period during which an alert is active.
-    
-    An alert can have multiple active periods (e.g., same disruption
-    on multiple days). If no periods are defined, the alert is always active.
-    
-    The period_type field distinguishes between:
-    - impact_period: The actual validity period (when the alert affects service)
-    - communication_period: The publication period (when the alert should be shown)
-    """
-    __tablename__ = "realtime_service_alert_active_periods"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    alert_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("realtime_service_alerts.id", ondelete="CASCADE"), index=True
-    )
-    
-    # Period type: impact_period or communication_period
-    period_type: Mapped[PeriodType] = mapped_column(
-        String(32), default=PeriodType.IMPACT_PERIOD
-    )
-    
-    # Unix timestamps (seconds since epoch)
-    # If start is None, active from beginning of time
-    # If end is None, active until end of time
-    start_time: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    end_time: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    
-    # Relationship
-    alert: Mapped["ServiceAlert"] = relationship(back_populates="active_periods")
-
-
-class ServiceAlertInformedEntity(Base):
-    """
-    Entity (route, stop, trip, etc.) that is affected by an alert.
-    
-    References GTFS entities by their IDs (strings), but does NOT use
-    foreign keys to GTFS static tables. This allows alerts to reference
-    entities that may not be in the database or may change over time.
-    
-    Multiple fields can be set to narrow down the affected entity:
-    - route_id only: entire route affected
-    - route_id + stop_id: specific stop on a route
-    - trip_id: specific trip affected
-    - stop_id only: entire stop affected
-    """
-    __tablename__ = "realtime_service_alert_informed_entities"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    alert_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("realtime_service_alerts.id", ondelete="CASCADE"), index=True
-    )
-    
-    # GTFS entity references (NO FOREIGN KEYS - just string IDs for search)
-    agency_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    route_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    route_type: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    stop_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    trip_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    
-    # Optional direction filter (0 or 1)
-    direction_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    
-    # Validation status - marks whether this entity reference is valid
-    is_valid: Mapped[bool] = mapped_column(Boolean, default=True)
-    
-    # Relationship
-    alert: Mapped["ServiceAlert"] = relationship(back_populates="informed_entities")
-
-
-# ---------------------------------------------------------------------------
-# Data Sources
-# ---------------------------------------------------------------------------
 
 class DataSource(Base):
     """
@@ -485,3 +291,194 @@ class DataSourceLog(Base):
     
     # Relationship
     data_source: Mapped["DataSource"] = relationship(back_populates="logs")
+
+# ---------------------------------------------------------------------------
+# GTFS static models
+# ---------------------------------------------------------------------------
+
+class GtfsAgency(Base):
+    """Imported GTFS agencies (agency.txt)."""
+    __tablename__ = "gtfs_agencies"
+
+    id:      Mapped[int] = mapped_column(primary_key=True)
+    gtfs_id: Mapped[str] = mapped_column(String(128), unique=True)
+    name:    Mapped[str] = mapped_column(String(255))
+
+
+class GtfsStop(Base):
+    """Imported GTFS stops (stops.txt)."""
+    __tablename__ = "gtfs_stops"
+
+    id:      Mapped[int] = mapped_column(primary_key=True)
+    gtfs_id: Mapped[str] = mapped_column(String(128), unique=True)
+    name:    Mapped[str] = mapped_column(String(255))
+
+
+class GtfsRoute(Base):
+    """Imported GTFS routes (routes.txt)."""
+    __tablename__ = "gtfs_routes"
+
+    id:         Mapped[int] = mapped_column(primary_key=True)
+    gtfs_id:    Mapped[str] = mapped_column(String(128), unique=True)
+    short_name: Mapped[str] = mapped_column(String(128))
+    long_name:  Mapped[str] = mapped_column(String(255))
+
+# ---------------------------------------------------------------------------
+# GTFS-RT models
+# ---------------------------------------------------------------------------
+
+class ServiceAlert(Base):
+    """
+    GTFS-RT Service Alert.
+    
+    Main table for service alerts. Translations and affected entities
+    are stored in separate tables with foreign keys.
+    
+    No foreign keys to GTFS static data - entity references are stored
+    as strings only for search purposes.
+    
+    Alerts can be internal (created in echogtfs UI) or external (imported
+    from data sources). External alerts have a data_source_id and cannot
+    be edited in the UI.
+    """
+    __tablename__ = "realtime_service_alerts"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    
+    # Data source relation (NULL = internal alert, created in echogtfs UI)
+    data_source_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("sys_data_sources.id", ondelete="CASCADE"), nullable=True
+    )
+    
+    # Alert metadata
+    cause: Mapped[AlertCause] = mapped_column(String(32), default=AlertCause.UNKNOWN_CAUSE)
+    effect: Mapped[AlertEffect] = mapped_column(String(32), default=AlertEffect.UNKNOWN_EFFECT)
+    severity_level: Mapped[AlertSeverityLevel] = mapped_column(
+        String(32), default=AlertSeverityLevel.UNKNOWN_SEVERITY
+    )
+    source: Mapped[str] = mapped_column(String(128), default="echogtfs")
+    
+    # Status flags
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    
+    # Relationships (with cascade delete)
+    data_source: Mapped["DataSource | None"] = relationship(back_populates="alerts")
+    translations: Mapped[list["ServiceAlertTranslation"]] = relationship(
+        back_populates="alert", cascade="all, delete-orphan"
+    )
+    active_periods: Mapped[list["ServiceAlertActivePeriod"]] = relationship(
+        back_populates="alert", cascade="all, delete-orphan"
+    )
+    informed_entities: Mapped[list["ServiceAlertInformedEntity"]] = relationship(
+        back_populates="alert", cascade="all, delete-orphan"
+    )
+    
+    @property
+    def data_source_name(self) -> str | None:
+        """Return the name of the data source if this is an external alert."""
+        return self.data_source.name if self.data_source else None
+    
+
+class ServiceAlertTranslation(Base):
+    """
+    Translations for service alert text content.
+    
+    Stores header, description, and URL in multiple languages.
+    One alert can have multiple translations.
+    """
+    __tablename__ = "realtime_service_alert_translations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    alert_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("realtime_service_alerts.id", ondelete="CASCADE"), index=True
+    )
+    
+    # Language code (ISO 639-1: 'de', 'en', 'fr', etc.)
+    language: Mapped[str] = mapped_column(String(8))
+    
+    # Alert content in this language
+    header_text: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    description_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    
+    # Relationship
+    alert: Mapped["ServiceAlert"] = relationship(back_populates="translations")
+
+
+class ServiceAlertActivePeriod(Base):
+    """
+    Time period during which an alert is active.
+    
+    An alert can have multiple active periods (e.g., same disruption
+    on multiple days). If no periods are defined, the alert is always active.
+    
+    The period_type field distinguishes between:
+    - impact_period: The actual validity period (when the alert affects service)
+    - communication_period: The publication period (when the alert should be shown)
+    """
+    __tablename__ = "realtime_service_alert_active_periods"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    alert_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("realtime_service_alerts.id", ondelete="CASCADE"), index=True
+    )
+    
+    # Period type: impact_period or communication_period
+    period_type: Mapped[PeriodType] = mapped_column(
+        String(32), default=PeriodType.IMPACT_PERIOD
+    )
+    
+    # Unix timestamps (seconds since epoch)
+    # If start is None, active from beginning of time
+    # If end is None, active until end of time
+    start_time: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    end_time: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    
+    # Relationship
+    alert: Mapped["ServiceAlert"] = relationship(back_populates="active_periods")
+
+
+class ServiceAlertInformedEntity(Base):
+    """
+    Entity (route, stop, trip, etc.) that is affected by an alert.
+    
+    References GTFS entities by their IDs (strings), but does NOT use
+    foreign keys to GTFS static tables. This allows alerts to reference
+    entities that may not be in the database or may change over time.
+    
+    Multiple fields can be set to narrow down the affected entity:
+    - route_id only: entire route affected
+    - route_id + stop_id: specific stop on a route
+    - trip_id: specific trip affected
+    - stop_id only: entire stop affected
+    """
+    __tablename__ = "realtime_service_alert_informed_entities"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    alert_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("realtime_service_alerts.id", ondelete="CASCADE"), index=True
+    )
+    
+    # GTFS entity references (NO FOREIGN KEYS - just string IDs for search)
+    agency_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    route_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    route_type: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    stop_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    trip_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    
+    # Optional direction filter (0 or 1)
+    direction_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    
+    # Validation status - marks whether this entity reference is valid
+    is_valid: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    # Relationship
+    alert: Mapped["ServiceAlert"] = relationship(back_populates="informed_entities")
