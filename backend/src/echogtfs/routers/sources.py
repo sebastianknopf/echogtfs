@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from echogtfs.database import get_db
-from echogtfs.models import DataSource, DataSourceMapping, DataSourceEnrichment, ServiceAlert, User, DataSourceLog
+from echogtfs.services.database.models import DataSource, DataSourceMapping, DataSourceEnrichment, ServiceAlert, User, DataSourceLog
 from echogtfs.schemas import DataSourceCreate, DataSourceRead, DataSourceUpdate, DataSourceLogRead
 from echogtfs.security import CurrentPoweruser
 from echogtfs.services.adapters import ADAPTER_REGISTRY
@@ -258,7 +258,7 @@ async def update_source(
         
         # Update all alerts from this source to use the new name
         from sqlalchemy import update
-        from echogtfs.models import ServiceAlert
+        from echogtfs.services.database.models import ServiceAlert
         await db.execute(
             update(ServiceAlert)
             .where(ServiceAlert.source == old_name)

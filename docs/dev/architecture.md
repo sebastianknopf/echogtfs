@@ -62,8 +62,8 @@ echogtfs/
 
 1. `main.py` `lifespan` context manager runs at startup.
 2. SQLAlchemy `Base.metadata.create_all` creates any missing tables.
-3. `run_migrations(engine)` applies all pending numbered SQL migrations.
-4. If the `users` table is empty, a first superuser is created from `FIRST_SUPERUSER*` environment variables.
+3. `AlembicMigrationService` applies all pending numbered SQL migrations.
+4. If the `sys_users` table is empty, a first superuser is created from `FIRST_SUPERUSER*` environment variables.
 5. Scheduled jobs are configured:
    - `schedule_import_from_cron`: Reads the `gtfs_cron` key from the `app_settings` table and registers a GTFS Static feed import job.
    - `schedule_all_data_sources`: Queries all active `DataSource` rows whose `cron` column is set and registers one polling job per data source. Cron expressions are stored per data source in the `data_sources` table, not in `app_settings`.
@@ -88,21 +88,11 @@ Each router file under `routers/` maps to a URL prefix registered in `main.py`:
 
 ### Core Tables
 
-- `users`: Application users with role flags (`is_active`, `is_superuser`, `is_technical_contact`).
-- `service_alerts`: One row per alert. Contains cause, effect, severity, source string, and active flag. Uses a UUID primary key.
-- `service_alert_translations`: Language-tagged header, description, and URL text belonging to an alert.
-- `service_alert_active_periods`: Time windows (Unix timestamps, nullable ends) for an alert.
-- `service_alert_informed_entities`: GTFS entity references (agency, route, stop) that an alert applies to.
-- `data_sources`: Configuration records for external alert import adapters. Each row stores the adapter type, a JSON config blob, an optional cron expression, active flag, invalid-reference policy, and last-run timestamp.
-- `data_source_mappings`: Maps external data source keys to internal GTFS entity IDs (agency, route, stop, trip). Used by adapters to translate source-specific identifiers into GTFS references.
-- `data_source_enrichments`: Pattern-matching rules that automatically derive cause, effect, or severity from alert header/description text. Each rule has an enrichment type, a source field, a key (text or regex pattern), a target value, and a sort order that controls match priority.
-- `data_source_logs`: HTTP request log entries for each adapter run. Stores request URL, headers, response metadata, and status code in the database. The full response body is written to a file in the `datasource_logs` volume referenced by a UUID column.
-- `app_settings`: Key-value pairs for runtime configuration (GTFS feed URL, GTFS cron expression, application language, GTFS-RT credentials, cleanup policy, etc.).
-- `gtfs_agencies`, `gtfs_routes`, `gtfs_stops`: Entities imported from a GTFS Static feed; used for entity name resolution.
+Tables are split into `sys_` tables which are internal application tables, `gtfs_` tables for holding the nominal reference data and `realtime_` tables for the reatime data.
 
 ### Database Migrations
 
-Migrations are plain SQL files in `backend/src/echogtfs/migrations/`. They are named with zero-padded integers (`001.sql`, `002.sql`, ...). The migration runner in `migrations.py` tracks applied versions in the `_migrations` table and applies pending files in order at every application startup. Dollar-quoted `DO $$` blocks are supported.
+Migrations are generated for running with Alembic. All pending migrations are applied during application startup.
 
 ## GTFS-Realtime Feed
 

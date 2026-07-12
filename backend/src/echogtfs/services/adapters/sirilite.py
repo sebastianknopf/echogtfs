@@ -18,7 +18,7 @@ from typing import Any
 
 import httpx
 
-from echogtfs.models import PeriodType, SiriLiteDialect
+from echogtfs.services.database.models import PeriodType, SiriLiteDialect
 from echogtfs.services.adapters.base import BaseAdapter
 from echogtfs.services import datalog
 

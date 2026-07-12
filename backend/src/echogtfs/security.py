@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from echogtfs.config import settings
 from echogtfs.database import get_db
-from echogtfs.models import User
+from echogtfs.services.database.models import User
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 

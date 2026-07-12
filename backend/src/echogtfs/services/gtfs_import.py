@@ -23,7 +23,7 @@ from sqlalchemy import delete, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from echogtfs.database import AsyncSessionLocal
-from echogtfs.models import AppSetting, GtfsAgency, GtfsRoute, GtfsStop
+from echogtfs.services.database.models import AppSetting, GtfsAgency, GtfsRoute, GtfsStop
 
 
 # ---------------------------------------------------------------------------

@@ -158,7 +158,7 @@ class BaseAdapter(ABC):
             db: Database session
             source_id: ID of the data source to load mappings for
         """
-        from echogtfs.models import DataSourceMapping
+        from echogtfs.services.database.models import DataSourceMapping
         
         # Load all mappings for this data source
         result = await db.execute(
@@ -186,7 +186,7 @@ class BaseAdapter(ABC):
             db: Database session
             source_id: ID of the data source to load enrichments for
         """
-        from echogtfs.models import DataSourceEnrichment
+        from echogtfs.services.database.models import DataSourceEnrichment
         
         # Load all enrichments for this data source, sorted by priority
         result = await db.execute(
@@ -270,7 +270,7 @@ class BaseAdapter(ABC):
             alert_dicts: List of alert dictionaries (modified in place)
             enrichments: List of enrichment rules from _load_enrichments()
         """
-        from echogtfs.models import EnrichmentType, SourceField
+        from echogtfs.services.database.models import EnrichmentType, SourceField
         
         # Track which enrichment types can be overridden (default/unknown values)
         default_values = {
@@ -381,7 +381,7 @@ class BaseAdapter(ABC):
         Args:
             db: Database session
         """
-        from echogtfs.models import GtfsAgency, GtfsRoute, GtfsStop
+        from echogtfs.services.database.models import GtfsAgency, GtfsRoute, GtfsStop
         
         logger.info("[Adapter] Loading GTFS entities into memory for validation")
         
@@ -664,7 +664,7 @@ class BaseAdapter(ABC):
             Dictionary with keys 'added', 'updated', 'deleted' containing counts
         """
         # Import models here to avoid circular dependency
-        from echogtfs.models import (
+        from echogtfs.services.database.models import (
             ServiceAlert, 
             ServiceAlertTranslation, 
             ServiceAlertActivePeriod, 

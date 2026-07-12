@@ -11,12 +11,12 @@ from sqlalchemy import select
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from echogtfs.config import settings
-from echogtfs.database import AsyncSessionLocal, Base, engine
+from echogtfs.database import AsyncSessionLocal
 from echogtfs.extensions import limiter
-from echogtfs.migrations import run_migrations
-from echogtfs.models import GtfsAgency, GtfsRoute, GtfsStop, User  # noqa: F401
-from echogtfs.models import ServiceAlert, ServiceAlertTranslation, ServiceAlertActivePeriod, ServiceAlertInformedEntity  # noqa: F401
-from echogtfs.models import DataSource, DataSourceMapping  # noqa: F401
+from echogtfs.services.database.alembic_migration_service import AlembicMigrationService
+from echogtfs.services.database.models import GtfsAgency, GtfsRoute, GtfsStop, User  # noqa: F401
+from echogtfs.services.database.models import ServiceAlert, ServiceAlertTranslation, ServiceAlertActivePeriod, ServiceAlertInformedEntity  # noqa: F401
+from echogtfs.services.database.models import DataSource, DataSourceMapping  # noqa: F401
 from echogtfs.routers.alerts import router as alerts_router
 from echogtfs.routers.auth import router as auth_router
 from echogtfs.routers.gtfs import router as gtfs_router
@@ -62,13 +62,11 @@ class SlidingTokenMiddleware(BaseHTTPMiddleware):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    # Create tables first (base schema)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
     
-    # Then run migrations to modify existing tables
-    await run_migrations(engine)
-
+    # run Alembic migrations to head on startup
+    migration_service: AlembicMigrationService = AlembicMigrationService()
+    await migration_service.upgrade_head()
+    
     # Bootstrap first superuser when the database is empty
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(User).limit(1))

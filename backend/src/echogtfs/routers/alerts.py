@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from echogtfs.database import get_db
-from echogtfs.models import (
+from echogtfs.services.database.models import (
     ServiceAlert,
     ServiceAlertActivePeriod,
     ServiceAlertInformedEntity,

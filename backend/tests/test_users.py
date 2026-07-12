@@ -14,7 +14,7 @@ setup_test_environment()
 
 from fastapi import HTTPException, status
 
-from echogtfs.models import User
+from echogtfs.services.database.models import User
 from echogtfs.routers.users import change_own_password
 from echogtfs.schemas import PasswordChange
 from echogtfs.security import hash_password

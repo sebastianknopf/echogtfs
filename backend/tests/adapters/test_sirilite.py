@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, patch
 from tests.test_config import setup_test_environment
 setup_test_environment()
 
-from echogtfs.models import SiriLiteDialect
+from echogtfs.services.database.models import SiriLiteDialect
 from echogtfs.services.adapters.sirilite import SiriLiteAdapter
 
 
@@ -404,7 +404,7 @@ class TestSiriLiteAdapterAsync(unittest.IsolatedAsyncioTestCase):
     async def test_parse_validity_period_as_impact_period(self):
         """Test that ValidityPeriod is parsed as impact_period (Swiss dialect)."""
         from tests.helpers import MockResponse
-        from echogtfs.models import PeriodType
+        from echogtfs.services.database.models import PeriodType
         from datetime import datetime, timezone, timedelta
         
         config = {
@@ -480,7 +480,7 @@ class TestSiriLiteAdapterAsync(unittest.IsolatedAsyncioTestCase):
     async def test_parse_publication_window_as_communication_period(self):
         """Test that PublicationWindow is parsed as communication_period (Swiss dialect)."""
         from tests.helpers import MockResponse
-        from echogtfs.models import PeriodType
+        from echogtfs.services.database.models import PeriodType
         from datetime import datetime, timezone, timedelta
         
         config = {
@@ -575,7 +575,7 @@ class TestSiriLiteAdapterAsync(unittest.IsolatedAsyncioTestCase):
     async def test_parse_periods_sirisx_dialect(self):
         """Test that both period types are parsed correctly with SIRISX dialect."""
         from tests.helpers import MockResponse
-        from echogtfs.models import PeriodType
+        from echogtfs.services.database.models import PeriodType
         from datetime import datetime, timezone, timedelta
         
         config = {
