@@ -8,6 +8,7 @@ The adapter supports multiple regional dialect variants to handle different
 implementations of the SIRI-Lite standard.
 """
 
+from enum import Enum
 import locale
 import logging
 import re
@@ -19,11 +20,17 @@ from typing import Any
 import httpx
 
 from echogtfs.enum.gtfsrt import PeriodType
-from echogtfs.services.database.models import SiriLiteDialect
 from echogtfs.services.adapters.base import BaseAdapter
 from echogtfs.services import datalog
 
 logger = logging.getLogger("uvicorn")
+
+
+class SiriLiteDialect(str, Enum):
+    """SIRI-Lite dialect variants for different regional implementations."""
+
+    SWISS = "swiss"
+    SIRISX = "sirisx"
 
 
 class SiriLiteAdapter(BaseAdapter):

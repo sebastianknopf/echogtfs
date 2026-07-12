@@ -13,8 +13,7 @@ from unittest.mock import AsyncMock, patch
 from tests.test_config import setup_test_environment
 setup_test_environment()
 
-from echogtfs.services.database.models import SiriLiteDialect
-from echogtfs.services.adapters.sirilite import SiriLiteAdapter
+from echogtfs.services.adapters.sirilite import SiriLiteAdapter, SiriLiteDialect
 
 
 class TestSiriLiteAdapter(unittest.TestCase):

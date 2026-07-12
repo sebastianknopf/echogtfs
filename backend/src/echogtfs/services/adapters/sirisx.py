@@ -6,6 +6,7 @@ is a standard for exchanging information about incidents, disruptions and
 other situations affecting public transport services.
 """
 
+from enum import Enum
 import locale
 import logging
 import re
@@ -18,11 +19,23 @@ from typing import Any
 import httpx
 
 from echogtfs.enum.gtfsrt import PeriodType
-from echogtfs.services.database.models import SiriSxDialect, SiriSxMethod
 from echogtfs.services.adapters.base import BaseAdapter
 from echogtfs.services import datalog
 
 logger = logging.getLogger("uvicorn")
+
+
+class SiriSxMethod(str, Enum):
+    """SIRI-SX request method variants."""
+
+    REQUEST_RESPONSE = "request/response"
+    PUBLISH_SUBSCRIBE = "publish/subscribe"
+
+
+class SiriSxDialect(str, Enum):
+    """SIRI-SX dialect variants."""
+
+    SIRISX = "sirisx"
 
 
 class SiriSxAdapter(BaseAdapter):

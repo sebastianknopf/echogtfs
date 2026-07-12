@@ -1,5 +1,4 @@
 ﻿from datetime import datetime
-from enum import Enum
 import uuid
 
 from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, Uuid, func
@@ -8,23 +7,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from echogtfs.database import Base
 from echogtfs.enum.gtfsrt import AlertCause, AlertEffect, AlertSeverityLevel, PeriodType
 from echogtfs.enum.system import EnrichmentType, ExpiredAlertPolicy, InvalidReferencePolicy, SourceField
-
-
-class SiriLiteDialect(str, Enum):
-    """SIRI-Lite dialect variants for different regional implementations."""
-    SWISS = "swiss"
-    SIRISX = "sirisx"
-
-
-class SiriSxMethod(str, Enum):
-    """SIRI-SX request method variants."""
-    REQUEST_RESPONSE = "request/response"
-    PUBLISH_SUBSCRIBE = "publish/subscribe"
-
-
-class SiriSxDialect(str, Enum):
-    """SIRI-SX dialect variants."""
-    SIRISX = "sirisx"
 
 
 # ---------------------------------------------------------------------------
