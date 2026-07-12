@@ -17,7 +17,7 @@ class GtfsAgency(Base):
     __tablename__ = "gtfs_agencies"
 
     id:      Mapped[int] = mapped_column(primary_key=True)
-    gtfs_id: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    gtfs_id: Mapped[str] = mapped_column(String(128), unique=True)
     name:    Mapped[str] = mapped_column(String(255))
 
 
@@ -26,7 +26,7 @@ class GtfsStop(Base):
     __tablename__ = "gtfs_stops"
 
     id:      Mapped[int] = mapped_column(primary_key=True)
-    gtfs_id: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    gtfs_id: Mapped[str] = mapped_column(String(128), unique=True)
     name:    Mapped[str] = mapped_column(String(255))
 
 
@@ -35,17 +35,17 @@ class GtfsRoute(Base):
     __tablename__ = "gtfs_routes"
 
     id:         Mapped[int] = mapped_column(primary_key=True)
-    gtfs_id:    Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    gtfs_id:    Mapped[str] = mapped_column(String(128), unique=True)
     short_name: Mapped[str] = mapped_column(String(128))
     long_name:  Mapped[str] = mapped_column(String(255))
 
 
 class User(Base):
-    __tablename__ = "users"
+    __tablename__ = "sys_users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True)
     hashed_password: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -58,7 +58,7 @@ class User(Base):
 class AppSetting(Base):
     """Key-value store for application-wide settings persisted in the database."""
 
-    __tablename__ = "app_settings"
+    __tablename__ = "sys_app_settings"
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(String(2048))  # wider for URLs + messages
@@ -177,13 +177,13 @@ class ServiceAlert(Base):
     from data sources). External alerts have a data_source_id and cannot
     be edited in the UI.
     """
-    __tablename__ = "service_alerts"
+    __tablename__ = "realtime_service_alerts"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     
     # Data source relation (NULL = internal alert, created in echogtfs UI)
     data_source_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("data_sources.id", ondelete="CASCADE"), nullable=True, index=True
+        Integer, ForeignKey("sys_data_sources.id", ondelete="CASCADE"), nullable=True
     )
     
     # Alert metadata
@@ -192,10 +192,10 @@ class ServiceAlert(Base):
     severity_level: Mapped[AlertSeverityLevel] = mapped_column(
         String(32), default=AlertSeverityLevel.UNKNOWN_SEVERITY
     )
-    source: Mapped[str] = mapped_column(String(128), default="echogtfs", index=True)
+    source: Mapped[str] = mapped_column(String(128), default="echogtfs")
     
     # Status flags
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
@@ -231,15 +231,15 @@ class ServiceAlertTranslation(Base):
     Stores header, description, and URL in multiple languages.
     One alert can have multiple translations.
     """
-    __tablename__ = "service_alert_translations"
+    __tablename__ = "realtime_service_alert_translations"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     alert_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("service_alerts.id", ondelete="CASCADE"), index=True
+        Uuid, ForeignKey("realtime_service_alerts.id", ondelete="CASCADE"), index=True
     )
     
     # Language code (ISO 639-1: 'de', 'en', 'fr', etc.)
-    language: Mapped[str] = mapped_column(String(8), index=True)
+    language: Mapped[str] = mapped_column(String(8))
     
     # Alert content in this language
     header_text: Mapped[str | None] = mapped_column(String(512), nullable=True)
@@ -261,23 +261,23 @@ class ServiceAlertActivePeriod(Base):
     - impact_period: The actual validity period (when the alert affects service)
     - communication_period: The publication period (when the alert should be shown)
     """
-    __tablename__ = "service_alert_active_periods"
+    __tablename__ = "realtime_service_alert_active_periods"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     alert_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("service_alerts.id", ondelete="CASCADE"), index=True
+        Uuid, ForeignKey("realtime_service_alerts.id", ondelete="CASCADE"), index=True
     )
     
     # Period type: impact_period or communication_period
     period_type: Mapped[PeriodType] = mapped_column(
-        String(32), default=PeriodType.IMPACT_PERIOD, index=True
+        String(32), default=PeriodType.IMPACT_PERIOD
     )
     
     # Unix timestamps (seconds since epoch)
     # If start is None, active from beginning of time
     # If end is None, active until end of time
-    start_time: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
-    end_time: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
+    start_time: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    end_time: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     
     # Relationship
     alert: Mapped["ServiceAlert"] = relationship(back_populates="active_periods")
@@ -297,25 +297,25 @@ class ServiceAlertInformedEntity(Base):
     - trip_id: specific trip affected
     - stop_id only: entire stop affected
     """
-    __tablename__ = "service_alert_informed_entities"
+    __tablename__ = "realtime_service_alert_informed_entities"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     alert_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("service_alerts.id", ondelete="CASCADE"), index=True
+        Uuid, ForeignKey("realtime_service_alerts.id", ondelete="CASCADE"), index=True
     )
     
     # GTFS entity references (NO FOREIGN KEYS - just string IDs for search)
-    agency_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
-    route_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
-    route_type: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    stop_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
-    trip_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    agency_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    route_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    route_type: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    stop_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    trip_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     
     # Optional direction filter (0 or 1)
     direction_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     
     # Validation status - marks whether this entity reference is valid
-    is_valid: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    is_valid: Mapped[bool] = mapped_column(Boolean, default=True)
     
     # Relationship
     alert: Mapped["ServiceAlert"] = relationship(back_populates="informed_entities")
@@ -333,11 +333,11 @@ class DataSource(Base):
     Type-specific configuration is stored as JSON string in the config field.
     Mappings define how GTFS entities map to external data source values.
     """
-    __tablename__ = "data_sources"
+    __tablename__ = "sys_data_sources"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    type: Mapped[str] = mapped_column(String(64), index=True)
+    name: Mapped[str] = mapped_column(String(255), unique=True)
+    type: Mapped[str] = mapped_column(String(64))
     
     # Type-specific configuration stored as JSON string
     config: Mapped[str] = mapped_column(Text, default="{}")
@@ -346,16 +346,16 @@ class DataSource(Base):
     cron: Mapped[str | None] = mapped_column(String(255), nullable=True)
     
     # Active status - inactive sources don't run and their alerts are deleted
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     
     # Policy for handling invalid entity references
     invalid_reference_policy: Mapped[InvalidReferencePolicy] = mapped_column(
-        String(32), default=InvalidReferencePolicy.NOT_SPECIFIED, index=True
+        String(32), default=InvalidReferencePolicy.NOT_SPECIFIED
     )
     
     # Last execution timestamp
     last_run_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True, index=True
+        DateTime(timezone=True), nullable=True
     )
     
     # Timestamps
@@ -393,19 +393,19 @@ class DataSourceMapping(Base):
     No foreign keys to GTFS static tables - entity references are stored
     as strings to allow flexibility and to avoid breaking when GTFS data changes.
     """
-    __tablename__ = "data_source_mappings"
+    __tablename__ = "sys_data_source_mappings"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    data_source_id: Mapped[int] = mapped_column(Integer, ForeignKey("data_sources.id"), index=True)
+    data_source_id: Mapped[int] = mapped_column(Integer, ForeignKey("sys_data_sources.id"), index=True)
     
     # GTFS entity type: "agency", "route", "stop", "trip", etc.
-    entity_type: Mapped[str] = mapped_column(String(32), index=True)
+    entity_type: Mapped[str] = mapped_column(String(32))
     
     # Mapping key-value pair
     # Key: external identifier from data source
     # Value: GTFS entity ID (the ID field, not a separate entity_id column)
-    key: Mapped[str] = mapped_column(String(128), index=True)
-    value: Mapped[str] = mapped_column(String(512), index=True)
+    key: Mapped[str] = mapped_column(String(128))
+    value: Mapped[str] = mapped_column(String(512))
     
     # Relationship
     data_source: Mapped["DataSource"] = relationship(back_populates="mappings")
@@ -422,25 +422,25 @@ class DataSourceEnrichment(Base):
     The key field can contain text or regex patterns to match against the
     specified source field(s). When a match is found, the value is applied.
     """
-    __tablename__ = "data_source_enrichments"
+    __tablename__ = "sys_data_source_enrichments"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     data_source_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("data_sources.id", ondelete="CASCADE"), index=True
+        Integer, ForeignKey("sys_data_sources.id", ondelete="CASCADE"), index=True
     )
     
     # Enrichment configuration
-    enrichment_type: Mapped[EnrichmentType] = mapped_column(String(32), index=True)
-    source_field: Mapped[SourceField] = mapped_column(String(32), index=True)
+    enrichment_type: Mapped[EnrichmentType] = mapped_column(String(32))
+    source_field: Mapped[SourceField] = mapped_column(String(32))
     
     # Pattern matching
     # Key: text or regex pattern to match in the source field
     # Value: the value to assign (e.g., "STRIKE", "NO_SERVICE", "SEVERE")
-    key: Mapped[str] = mapped_column(String(512), index=True)
-    value: Mapped[str] = mapped_column(String(128), index=True)
+    key: Mapped[str] = mapped_column(String(512))
+    value: Mapped[str] = mapped_column(String(128))
     
     # Sort order for priority (lower number = higher priority)
-    sort_order: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
     
     # Relationship
     data_source: Mapped["DataSource"] = relationship(back_populates="enrichments")
@@ -453,16 +453,16 @@ class DataSourceLog(Base):
     Tracks HTTP requests to external data sources with metadata stored
     in the database and full response dumps stored as files.
     """
-    __tablename__ = "data_source_logs"
+    __tablename__ = "sys_data_source_logs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     data_source_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("data_sources.id", ondelete="CASCADE"), index=True
+        Integer, ForeignKey("sys_data_sources.id", ondelete="CASCADE"), index=True
     )
     
     # Request timestamp
     timestamp: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), index=True
+        DateTime(timezone=True), server_default=func.now()
     )
     
     # Request metadata
@@ -476,7 +476,7 @@ class DataSourceLog(Base):
     response_size: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     
     # Reference to log file (UUID filename in named volume)
-    log_file_uuid: Mapped[uuid.UUID] = mapped_column(Uuid, index=True)
+    log_file_uuid: Mapped[uuid.UUID] = mapped_column(Uuid)
     
     # Creation timestamp
     created_at: Mapped[datetime] = mapped_column(
