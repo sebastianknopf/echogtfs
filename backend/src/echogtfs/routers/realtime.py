@@ -12,13 +12,12 @@ import time
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from echogtfs import gtfs_realtime_pb2
 from echogtfs.database import get_db
 from echogtfs.enum.gtfsrt import PeriodType
+from echogtfs.services.database import get_repository
 from echogtfs.services.database.models import ServiceAlert
 from echogtfs.routers.settings import _load as load_settings
 from echogtfs.security import verify_password
@@ -411,21 +410,8 @@ async def get_service_alerts(
                 media_type="application/x-protobuf",
             )
     
-    # Cache miss or expired - load from database
-    # Load only active alerts with their relationships
-    stmt = (
-        select(ServiceAlert)
-        .where(ServiceAlert.is_active == True)
-        .options(
-            selectinload(ServiceAlert.translations),
-            selectinload(ServiceAlert.active_periods),
-            selectinload(ServiceAlert.informed_entities),
-        )
-        .order_by(ServiceAlert.id)
-    )
-    
-    result = await db.execute(stmt)
-    alerts = list(result.scalars().all())
+    # Cache miss or expired - load from repository
+    alerts = await get_repository().get_realtime_service_alerts()
     
     # Build GTFS-RT feed
     feed = _build_feed_message(alerts)

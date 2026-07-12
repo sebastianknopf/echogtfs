@@ -11,9 +11,9 @@ from sqlalchemy import select
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from echogtfs.config import settings
-from echogtfs.database import AsyncSessionLocal
 from echogtfs.extensions import limiter
 from echogtfs.services.database.alembic_migration_service import AlembicMigrationService
+from echogtfs.services.database import SqlAlchemyRepository, set_repository
 from echogtfs.services.database.models import GtfsAgency, GtfsRoute, GtfsStop, User  # noqa: F401
 from echogtfs.services.database.models import ServiceAlert, ServiceAlertTranslation, ServiceAlertActivePeriod, ServiceAlertInformedEntity  # noqa: F401
 from echogtfs.services.database.models import DataSource, DataSourceMapping  # noqa: F401
@@ -66,9 +66,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # run Alembic migrations to head on startup
     migration_service: AlembicMigrationService = AlembicMigrationService()
     await migration_service.upgrade_head()
+
+    repository = SqlAlchemyRepository(settings.database_url, settings.debug)
+    await repository.initialize()
+    set_repository(repository)
     
     # Bootstrap first superuser when the database is empty
-    async with AsyncSessionLocal() as db:
+    async with repository.get_session() as db:
         result = await db.execute(select(User).limit(1))
         if result.first() is None:
             db.add(
@@ -93,6 +97,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await schedule_cleanup_from_settings()
     
     yield
+
+    # Close database repository on shutdown
+    await repository.close()
 
 
 # -- FastAPI app ---------------------------------------------------------------
