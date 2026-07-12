@@ -6,6 +6,8 @@
 
 A lightweight CMS for creating and managing GTFS-RT ServiceAlerts based on existing GTFS feeds. The system allows transit agencies to create real-time service alerts and integrate additional data sources such as SIRI-SX.
 
+> [!NOTE]
+> Initially, EchoGTFS was a prototype tool to generate GTFS ServiceAlerts only. However, in future EchoGTFS might be further developed to be a complete GTFS-RT provision platform with the upcoming versions 2.x.
 
 ## Overview
 
@@ -42,7 +44,7 @@ It provides:
 
 1. **Clone the repository:**
    ```bash
-   git clone <repository-url>
+   git clone `https://github.com/sebastianknopf/echogtfs.git`
    cd echogtfs
    ```
 
@@ -61,27 +63,13 @@ It provides:
 
 4. **Start the application:**
    ```bash
-   docker-compose up -d
+   docker-compose up -d --build
    ```
 
 5. **Access the web interface:**
    - Open your browser at http://localhost (or the configured port)
 
 ## Configuration
-
-### Environment Variables
-
-Key settings in `.env`:
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `SECRET_KEY` | JWT secret key (required) | none |
-| `POSTGRES_PASSWORD` | Database password (required) | none |
-| `FIRST_SUPERUSER` | Initial admin username | `admin` |
-| `FIRST_SUPERUSER_PASSWORD` | Initial admin password (required) | none |
-| `DOCS_ENABLED` | Enable API documentation | `false` |
-| `FRONTEND_PORT` | Web interface port | `80` |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | JWT token lifetime | `30` |
 
 ### GTFS Feed Configuration
 
@@ -91,6 +79,18 @@ After logging in, configure your GTFS data source via the settings interface:
 2. Add your GTFS feed URL or upload a GTFS file
 3. The system will import the static GTFS data
 4. You can now create ServiceAlerts referencing routes, stops, and trips from your GTFS feed
+
+### Accessing GTFS-RT Feeds
+
+ServiceAlerts are available via GTFS-Realtime protocol:
+
+```
+GET /api/realtime/service-alerts.pbf
+```
+
+The endpoint returns protocol buffer formatted GTFS-RT data that can be consumed by trip planners and real-time transit applications. By adding `?json` as query parameter, the output will be in JSON.
+
+You also can configure a different endpoint name in the backend if required.
 
 ## Usage
 
@@ -105,40 +105,9 @@ After logging in, configure your GTFS data source via the settings interface:
    - Define active periods
 4. **Publish** the alert to make it available via the GTFS-RT feed
 
-### Accessing GTFS-RT Feeds
-
-ServiceAlerts are available via GTFS-Realtime protocol:
-
-```
-GET /api/realtime/service-alerts.pbf
-```
-
-The endpoint returns protocol buffer formatted GTFS-RT data that can be consumed by trip planners and real-time transit applications. By adding `?json` as query parameter, the output will be in JSON.
-
-You also can configure a different endpoint name in the backend if required.
-
 ### Integrating Additional Data Sources
 
 The system supports integration of additional alert sources such as SIRI-SX. Configure external sources in the settings interface to automatically import and convert alerts to GTFS-RT format.
-
-## Development
-
-### Local Setup
-
-1. **Install Python dependencies:**
-   ```bash
-   cd backend
-   pip install -e .
-   ```
-
-2. **Set up PostgreSQL database**
-
-3. **Configure environment variables** for local development
-
-4. **Run the backend:**
-   ```bash
-   python -m echogtfs
-   ```
 
 ## Updating
 

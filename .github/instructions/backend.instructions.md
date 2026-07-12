@@ -98,6 +98,7 @@ class TestModuleName(unittest.TestCase):
 ## Code Style
 
 ### Language Requirements
+- **Prefer always object oriented programming** for backend code
 - **All code must be written in English**
   - Variable names, function names, class names in English
   - Comments and docstrings in English
@@ -142,6 +143,7 @@ class TestModuleName(unittest.TestCase):
 ## API Development
 
 ### FastAPI Routers
+- As they hold no state and less of logic, the **routers are developed in functional style** rather than class-based style
 - Each router handles a specific domain (alerts, auth, sources, etc.)
 - Use Pydantic models for request/response validation
 - Apply appropriate authentication decorators
@@ -162,16 +164,6 @@ class TestModuleName(unittest.TestCase):
 
 ## Common Patterns
 
-### Database Sessions
-```python
-from echogtfs.database import SessionLocal
-
-async with SessionLocal() as session:
-    result = await session.execute(select(Model))
-    # ... work with session
-    await session.commit()
-```
-
 ### Logging
 ```python
 import logging
@@ -180,10 +172,3 @@ logger = logging.getLogger("uvicorn")
 logger.info("Information message")
 logger.error("Error message", exc_info=True)
 ```
-
-## Before Committing
-
-- Run tests: `python -m unittest discover`
-- Ensure compatibility with Python >= 3.10
-- Verify no new dependencies were added without approval
-- Check that adapters still behave correctly if modified

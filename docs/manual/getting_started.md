@@ -19,7 +19,7 @@ This section will guide you through the initial setup and basic usage of EchoGTF
    ```
 3. Start the application:
    ```bash
-   docker-compose up -d
+   docker-compose up -d --build
    ```
 4. Access the web interface at [http://localhost](http://localhost) (or your configured port).
 

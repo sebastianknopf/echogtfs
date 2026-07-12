@@ -16,12 +16,10 @@ RUN apt-get update && \
 COPY . .
 RUN rm ./.env && rm -rf ./venv
 
-# Install from backend directory BEFORE generating protobuf
-# This ensures setuptools_scm reads clean git state without generated files
-RUN pip install --no-cache-dir ./backend
+# Install backend in editable mode so Python imports local source under /app/backend/src
+# while still installing dependencies and the echogtfs console script.
+RUN pip install --no-cache-dir -e ./backend
 
-# Generate Python code from protobuf definition AFTER installation
-# This prevents the generated file from interfering with setuptools_scm version detection
-RUN protoc --python_out=/usr/local/lib/python3.12/site-packages/echogtfs/ gtfs-realtime.proto
-
-CMD ["echogtfs"]
+# Generate Python code from protobuf definition into the local source tree.
+# Keeping generated code under /app/backend/src avoids debugger path mismatches.
+RUN protoc --python_out=/app/backend/src/echogtfs/ gtfs-realtime.proto

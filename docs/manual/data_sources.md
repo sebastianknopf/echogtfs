@@ -94,11 +94,11 @@ Suppose you have a data source that always sets `cause=UNKNOWN_CAUSE` and `effec
 
 **Enrichment Rules:**
 ```
-1. Type: cause,   Field: Header, Pattern: "streik",           Value: STRIKE,       Sort: 1
-2. Type: cause,   Field: Header, Pattern: "bauarbeiten",     Value: CONSTRUCTION, Sort: 2
-3. Type: effect,  Field: Both,   Pattern: "ausfall,linie",   Value: NO_SERVICE,   Sort: 3
-4. Type: effect,  Field: Both,   Pattern: "verspätung*",     Value: SIGNIFICANT_DELAYS, Sort: 4
-5. Type: severity, Field: Desc,  Pattern: "schwer*störung", Value: SEVERE,       Sort: 5
+1. Type: cause,      Field: Header,    Pattern: "streik",            Value: STRIKE,                Sort: 1
+2. Type: cause,      Field: Header,    Pattern: "bauarbeiten",       Value: CONSTRUCTION,          Sort: 2
+3. Type: effect,     Field: Both,      Pattern: "ausfall,linie",     Value: NO_SERVICE,            Sort: 3
+4. Type: effect,     Field: Both,      Pattern: "verspätung*",       Value: SIGNIFICANT_DELAYS,    Sort: 4
+5. Type: severity,   Field: Desc,      Pattern: "schwer*störung",    Value: SEVERE,                Sort: 5
 ```
 
 **Input Alert:**

@@ -34,6 +34,7 @@ services:
       FIRST_SUPERUSER: ${FIRST_SUPERUSER}
       FIRST_SUPERUSER_EMAIL: ${FIRST_SUPERUSER_EMAIL}
       FIRST_SUPERUSER_PASSWORD: ${FIRST_SUPERUSER_PASSWORD}
+    command: "echogtfs"
     volumes:
       - datasource_logs:/var/log/echogtfs/datasources
     depends_on:
