@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, field_validator, model_validator
 
-from echogtfs.models import (
+from echogtfs.services.database.models import (
     InvalidReferencePolicy, 
     EnrichmentType, 
     SourceField,

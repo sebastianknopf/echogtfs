@@ -382,7 +382,7 @@ class TestGtfsRtAdapterAsync(unittest.IsolatedAsyncioTestCase):
     async def test_parse_impact_period(self):
         """Test parsing of impact_period field (extended GTFS-RT)."""
         from tests.helpers import MockResponse
-        from echogtfs.models import PeriodType
+        from echogtfs.services.database.models import PeriodType
         
         config = {"endpoint": "https://api.example.com/gtfs-rt"}
         adapter = GtfsRtAdapter(config)
@@ -436,7 +436,7 @@ class TestGtfsRtAdapterAsync(unittest.IsolatedAsyncioTestCase):
     async def test_parse_communication_period(self):
         """Test parsing of communication_period field (extended GTFS-RT)."""
         from tests.helpers import MockResponse
-        from echogtfs.models import PeriodType
+        from echogtfs.services.database.models import PeriodType
         
         config = {"endpoint": "https://api.example.com/gtfs-rt"}
         adapter = GtfsRtAdapter(config)
@@ -490,7 +490,7 @@ class TestGtfsRtAdapterAsync(unittest.IsolatedAsyncioTestCase):
     async def test_parse_mixed_periods(self):
         """Test parsing of both impact_period and communication_period."""
         from tests.helpers import MockResponse
-        from echogtfs.models import PeriodType
+        from echogtfs.services.database.models import PeriodType
         
         config = {"endpoint": "https://api.example.com/gtfs-rt"}
         adapter = GtfsRtAdapter(config)
@@ -552,7 +552,7 @@ class TestGtfsRtAdapterAsync(unittest.IsolatedAsyncioTestCase):
     async def test_backward_compatibility_active_period(self):
         """Test backward compatibility with active_period when new fields are absent."""
         from tests.helpers import MockResponse
-        from echogtfs.models import PeriodType
+        from echogtfs.services.database.models import PeriodType
         
         config = {"endpoint": "https://api.example.com/gtfs-rt"}
         adapter = GtfsRtAdapter(config)
@@ -606,7 +606,7 @@ class TestGtfsRtAdapterAsync(unittest.IsolatedAsyncioTestCase):
     async def test_filter_considers_all_period_types(self):
         """Test that filtering considers all period types (impact_period and communication_period)."""
         from tests.helpers import MockResponse
-        from echogtfs.models import PeriodType
+        from echogtfs.services.database.models import PeriodType
         
         config = {"endpoint": "https://api.example.com/gtfs-rt"}
         adapter = GtfsRtAdapter(config)
@@ -664,7 +664,7 @@ class TestGtfsRtAdapterAsync(unittest.IsolatedAsyncioTestCase):
     async def test_filter_open_begin_alert_always_imported(self):
         """Test that alerts without start_time (OpenBegin) are always imported."""
         from tests.helpers import MockResponse
-        from echogtfs.models import PeriodType
+        from echogtfs.services.database.models import PeriodType
         
         config = {"endpoint": "https://api.example.com/gtfs-rt"}
         adapter = GtfsRtAdapter(config)
@@ -716,7 +716,7 @@ class TestGtfsRtAdapterAsync(unittest.IsolatedAsyncioTestCase):
     async def test_filter_open_end_alert_never_expires(self):
         """Test that alerts without end_time (OpenEnd) never expire."""
         from tests.helpers import MockResponse
-        from echogtfs.models import PeriodType
+        from echogtfs.services.database.models import PeriodType
         
         config = {"endpoint": "https://api.example.com/gtfs-rt"}
         adapter = GtfsRtAdapter(config)

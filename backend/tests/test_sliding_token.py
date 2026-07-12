@@ -19,7 +19,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-for-sliding-token-tests")
 
 from echogtfs.config import settings
 from echogtfs.main import SlidingTokenMiddleware
-from echogtfs.models import User
+from echogtfs.services.database.models import User
 from echogtfs.security import create_access_token
 
 

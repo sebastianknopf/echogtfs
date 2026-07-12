@@ -15,7 +15,7 @@ import httpx
 from google.protobuf.json_format import MessageToDict
 
 from echogtfs import gtfs_realtime_pb2
-from echogtfs.models import PeriodType
+from echogtfs.services.database.models import PeriodType
 from echogtfs.services.adapters.base import BaseAdapter
 from echogtfs.services import datalog
 

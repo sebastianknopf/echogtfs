@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from echogtfs.config import settings
 from echogtfs.database import Base
-from echogtfs import models  # noqa: F401
+from echogtfs.services.database import models  # noqa: F401
 
 config = context.config
 

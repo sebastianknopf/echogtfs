@@ -14,9 +14,9 @@ from echogtfs.config import settings
 from echogtfs.database import AsyncSessionLocal
 from echogtfs.extensions import limiter
 from echogtfs.services.database.alembic_migration_service import AlembicMigrationService
-from echogtfs.models import GtfsAgency, GtfsRoute, GtfsStop, User  # noqa: F401
-from echogtfs.models import ServiceAlert, ServiceAlertTranslation, ServiceAlertActivePeriod, ServiceAlertInformedEntity  # noqa: F401
-from echogtfs.models import DataSource, DataSourceMapping  # noqa: F401
+from echogtfs.services.database.models import GtfsAgency, GtfsRoute, GtfsStop, User  # noqa: F401
+from echogtfs.services.database.models import ServiceAlert, ServiceAlertTranslation, ServiceAlertActivePeriod, ServiceAlertInformedEntity  # noqa: F401
+from echogtfs.services.database.models import DataSource, DataSourceMapping  # noqa: F401
 from echogtfs.routers.alerts import router as alerts_router
 from echogtfs.routers.auth import router as auth_router
 from echogtfs.routers.gtfs import router as gtfs_router

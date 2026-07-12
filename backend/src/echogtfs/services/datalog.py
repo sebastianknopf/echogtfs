@@ -17,7 +17,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from echogtfs.database import AsyncSessionLocal
-from echogtfs.models import DataSourceLog
+from echogtfs.services.database.models import DataSourceLog
 
 logger = logging.getLogger("uvicorn")
 

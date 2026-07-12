@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from echogtfs.database import AsyncSessionLocal
-from echogtfs.models import DataSource
+from echogtfs.services.database.models import DataSource
 from echogtfs.services.adapters import get_adapter
 
 logger = logging.getLogger("uvicorn")

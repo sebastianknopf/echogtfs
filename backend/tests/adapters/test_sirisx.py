@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, patch
 from tests.test_config import setup_test_environment
 setup_test_environment()
 
-from echogtfs.models import SiriSxDialect, SiriSxMethod
+from echogtfs.services.database.models import SiriSxDialect, SiriSxMethod
 from echogtfs.services.adapters.sirisx import SiriSxAdapter
 
 
@@ -416,7 +416,7 @@ class TestSiriSxAdapterAsync(unittest.IsolatedAsyncioTestCase):
     async def test_parse_validity_period_as_impact_period(self):
         """Test that ValidityPeriod is parsed as impact_period."""
         from tests.helpers import MockResponse
-        from echogtfs.models import PeriodType
+        from echogtfs.services.database.models import PeriodType
         from datetime import datetime, timezone, timedelta
         
         config = {
@@ -483,7 +483,7 @@ class TestSiriSxAdapterAsync(unittest.IsolatedAsyncioTestCase):
     async def test_parse_publication_window_as_communication_period(self):
         """Test that PublicationWindow is parsed as communication_period."""
         from tests.helpers import MockResponse
-        from echogtfs.models import PeriodType
+        from echogtfs.services.database.models import PeriodType
         from datetime import datetime, timezone, timedelta
         
         config = {
