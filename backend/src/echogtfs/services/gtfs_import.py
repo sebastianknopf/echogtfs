@@ -23,17 +23,11 @@ from sqlalchemy import delete, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from echogtfs.database import AsyncSessionLocal
+from echogtfs.services.database import get_repository
 from echogtfs.services.database.models import AppSetting, GtfsAgency, GtfsRoute, GtfsStop
 
 
 # ---------------------------------------------------------------------------
-
-# AppSetting keys
-KEY_FEED_URL = "gtfs_feed_url"
-KEY_STATUS   = "gtfs_import_status"
-KEY_TIME     = "gtfs_import_time"
-KEY_MSG      = "gtfs_import_message"
-KEY_CRON     = "gtfs_cron"
 
 STATUS_IDLE    = "idle"
 STATUS_RUNNING = "running"
@@ -58,15 +52,9 @@ def get_scheduler():
         _scheduler.start()
     return _scheduler
 
-async def schedule_import_from_cron(db=None):
+async def schedule_import_from_cron() -> None:
     """Read cron from AppSetting and (re)schedule import job."""
-    from echogtfs.database import AsyncSessionLocal
-    close_db = False
-    if db is None:
-        db = await AsyncSessionLocal().__aenter__()
-        close_db = True
-    row = await db.get(AppSetting, KEY_CRON)
-    cron_expr = row.value if row else None
+    cron_expr = await get_repository().get_app_setting(AppSetting.KEY_GTFS_CRON)
     scheduler = get_scheduler()
     
     # Remove only the GTFS import job, not all jobs
@@ -89,8 +77,6 @@ async def schedule_import_from_cron(db=None):
             logger.error(f"[GTFS] Invalid cron expression: {cron_expr} ({e})")
     else:
         logger.info("[GTFS] Scheduler: No cron expression set, no job scheduled.")
-    if close_db:
-        await db.__aexit__(None, None, None)
 
 
 # ---------------------------------------------------------------------------
@@ -107,15 +93,6 @@ class ImportResult:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
-
-async def _upsert_setting(db: AsyncSession, key: str, value: str) -> None:
-    row = await db.get(AppSetting, key)
-    if row is None:
-        db.add(AppSetting(key=key, value=value))
-    else:
-        row.value = value
-    await db.commit()
-
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
@@ -152,10 +129,10 @@ async def _do_import(db: AsyncSession) -> ImportResult:
     """Download, parse, and persist the GTFS feed. Raises on any error."""
 
     # 1. Read feed URL from settings
-    row = await db.get(AppSetting, KEY_FEED_URL)
-    if row is None or not row.value.strip():
+    feed_url_setting = await get_repository().get_app_setting(AppSetting.KEY_GTFS_FEED_URL)
+    if feed_url_setting is None or not feed_url_setting.strip():
         raise ValueError("Kein GTFS-Feed-URL konfiguriert.")
-    feed_url = row.value.strip()
+    feed_url = feed_url_setting.strip()
 
     # 2. Download ZIP (stream into memory; 300-second timeout covers large feeds)
     buffer = io.BytesIO()
@@ -249,9 +226,10 @@ async def run_import_task() -> None:
     Updates import status keys throughout.
     """
     logger.info("[GTFS] Import task started (run_import_task)")
+    repository = get_repository()
     async with AsyncSessionLocal() as db:
-        await _upsert_setting(db, KEY_STATUS, STATUS_RUNNING)
-        await _upsert_setting(db, KEY_TIME,   _now_iso())
+        await repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_STATUS, STATUS_RUNNING)
+        await repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_TIME, _now_iso())
         try:
             result = await _do_import(db)
             msg = (
@@ -260,11 +238,11 @@ async def run_import_task() -> None:
                 f"{result.routes} Linien importiert"
             )
             logger.info(f"[GTFS] Import successful: {msg}")
-            await _upsert_setting(db, KEY_STATUS, STATUS_SUCCESS)
-            await _upsert_setting(db, KEY_MSG,    msg)
-            await _upsert_setting(db, KEY_TIME,   _now_iso())
+            await repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_STATUS, STATUS_SUCCESS)
+            await repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_MESSAGE, msg)
+            await repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_TIME, _now_iso())
         except Exception as exc:  # noqa: BLE001
             logger.error(f"[GTFS] Import error: {exc}")
-            await _upsert_setting(db, KEY_STATUS, STATUS_ERROR)
-            await _upsert_setting(db, KEY_MSG,    str(exc))
-            await _upsert_setting(db, KEY_TIME,   _now_iso())
+            await repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_STATUS, STATUS_ERROR)
+            await repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_MESSAGE, str(exc))
+            await repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_TIME, _now_iso())

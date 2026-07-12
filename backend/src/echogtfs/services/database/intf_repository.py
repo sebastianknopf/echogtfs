@@ -25,6 +25,21 @@ class RepositoryInterface(ABC):
     async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
         """Yield a managed database session owned by the repository."""
         raise NotImplementedError
+    
+    @abstractmethod
+    async def get_app_setting(self, key: str) -> str | None:
+        """Return app setting value for key or None when setting does not exist."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def set_app_setting(self, key: str, value: str) -> None:
+        """Create or update one app setting value by key."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_all_app_settings(self) -> dict[str, str]:
+        """Return all app settings as key-value mapping."""
+        raise NotImplementedError
 
     @abstractmethod
     async def get_realtime_service_alerts(self) -> list[ServiceAlert]:

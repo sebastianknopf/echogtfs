@@ -22,17 +22,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from echogtfs.database import AsyncSessionLocal
 from echogtfs.enum.system import ExpiredAlertPolicy
+from echogtfs.services.database import get_repository
 from echogtfs.services.database.models import AppSetting, ServiceAlert, ServiceAlertActivePeriod, DataSourceLog
 from echogtfs.services import datalog
 
 logger = logging.getLogger("uvicorn")
 
 _scheduler = None
-
-# AppSetting keys
-KEY_CLEANUP_CRON = "cleanup_cron"
-KEY_CLEANUP_POLICY = "cleanup_expired_policy"
-KEY_CLEANUP_DELETE_DAYS = "cleanup_delete_after_days"
 
 
 def get_scheduler() -> AsyncIOScheduler:
@@ -44,19 +40,12 @@ def get_scheduler() -> AsyncIOScheduler:
     return _scheduler
 
 
-async def schedule_cleanup_from_settings(db: AsyncSession | None = None) -> None:
+async def schedule_cleanup_from_settings() -> None:
     """
     Read cleanup settings from AppSettings and (re)schedule cleanup job.
     Called at application startup and when settings are updated.
     """
-    close_db = False
-    if db is None:
-        db = await AsyncSessionLocal().__aenter__()
-        close_db = True
-    
-    # Load settings
-    cron_row = await db.get(AppSetting, KEY_CLEANUP_CRON)
-    cron_expr = cron_row.value if cron_row else "*/10 * * * *"  # Default: every 10 minutes
+    cron_expr = await get_repository().get_app_setting(AppSetting.KEY_CLEANUP_CRON) or "*/10 * * * *"
     
     scheduler = get_scheduler()
     job_id = "alert_cleanup_cron"
@@ -82,26 +71,22 @@ async def schedule_cleanup_from_settings(db: AsyncSession | None = None) -> None
     else:
         logger.info("[Cleanup] No cron expression set, cleanup job not scheduled")
     
-    if close_db:
-        await db.__aexit__(None, None, None)
-
-
 async def run_cleanup_task() -> None:
     """
     Execute cleanup of expired internal service alerts and old data source logs.
     Called by the scheduler.
     """
     logger.info("[Cleanup] Starting cleanup task")
+    repository = get_repository()
     
     async with AsyncSessionLocal() as db:
         try:
             # Load settings
-            policy_row = await db.get(AppSetting, KEY_CLEANUP_POLICY)
-            policy_str = policy_row.value if policy_row else "deactivate"
+            policy_str = await repository.get_app_setting(AppSetting.KEY_CLEANUP_EXPIRED_POLICY) or "deactivate"
             policy = ExpiredAlertPolicy(policy_str)
             
-            delete_days_row = await db.get(AppSetting, KEY_CLEANUP_DELETE_DAYS)
-            delete_after_days = int(delete_days_row.value) if delete_days_row else -1
+            delete_days_value = await repository.get_app_setting(AppSetting.KEY_CLEANUP_DELETE_AFTER_DAYS)
+            delete_after_days = int(delete_days_value) if delete_days_value is not None else -1
             
             logger.info(f"[Cleanup] Policy: {policy.value}, Delete after days: {delete_after_days}")
             

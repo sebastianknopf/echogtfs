@@ -1,4 +1,5 @@
 ﻿from datetime import datetime
+from typing import ClassVar
 import uuid
 
 from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, Uuid, func
@@ -17,6 +18,43 @@ class AppSetting(Base):
     """Key-value store for application-wide settings persisted in the database."""
 
     __tablename__ = "sys_app_settings"
+
+    KEY_COLOR_PRIMARY: ClassVar[str] = "color_primary"
+    KEY_COLOR_SECONDARY: ClassVar[str] = "color_secondary"
+    KEY_APP_TITLE: ClassVar[str] = "app_title"
+    KEY_APP_LANGUAGE: ClassVar[str] = "app_language"
+
+    KEY_GTFS_RT_PATH: ClassVar[str] = "gtfs_rt_path"
+    KEY_GTFS_RT_USERNAME: ClassVar[str] = "gtfs_rt_username"
+    KEY_GTFS_RT_PASSWORD: ClassVar[str] = "gtfs_rt_password"
+
+    KEY_CLEANUP_CRON: ClassVar[str] = "cleanup_cron"
+    KEY_CLEANUP_EXPIRED_POLICY: ClassVar[str] = "cleanup_expired_policy"
+    KEY_CLEANUP_DELETE_AFTER_DAYS: ClassVar[str] = "cleanup_delete_after_days"
+
+    KEY_GTFS_FEED_URL: ClassVar[str] = "gtfs_feed_url"
+    KEY_GTFS_IMPORT_STATUS: ClassVar[str] = "gtfs_import_status"
+    KEY_GTFS_IMPORT_TIME: ClassVar[str] = "gtfs_import_time"
+    KEY_GTFS_IMPORT_MESSAGE: ClassVar[str] = "gtfs_import_message"
+    KEY_GTFS_CRON: ClassVar[str] = "gtfs_cron"
+
+    ALL_KEYS: ClassVar[tuple[str, ...]] = (
+        KEY_COLOR_PRIMARY,
+        KEY_COLOR_SECONDARY,
+        KEY_APP_TITLE,
+        KEY_APP_LANGUAGE,
+        KEY_GTFS_RT_PATH,
+        KEY_GTFS_RT_USERNAME,
+        KEY_GTFS_RT_PASSWORD,
+        KEY_CLEANUP_CRON,
+        KEY_CLEANUP_EXPIRED_POLICY,
+        KEY_CLEANUP_DELETE_AFTER_DAYS,
+        KEY_GTFS_FEED_URL,
+        KEY_GTFS_IMPORT_STATUS,
+        KEY_GTFS_IMPORT_TIME,
+        KEY_GTFS_IMPORT_MESSAGE,
+        KEY_GTFS_CRON,
+    )
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(String(2048))  # wider for URLs + messages

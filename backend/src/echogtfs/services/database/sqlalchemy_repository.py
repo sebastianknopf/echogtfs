@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
 from echogtfs.services.database.intf_repository import RepositoryInterface
-from echogtfs.services.database.models import ServiceAlert
+from echogtfs.services.database.models import AppSetting, ServiceAlert
 
 
 class SqlAlchemyRepository(RepositoryInterface):
@@ -35,6 +35,29 @@ class SqlAlchemyRepository(RepositoryInterface):
         """Yield a managed session using repository-owned session factory."""
         async with self._session_factory() as db:
             yield db
+
+    async def get_app_setting(self, key: str) -> str | None:
+        """Return one app setting value by key, or None if key is missing."""
+        async with self.get_session() as db:
+            row = await db.get(AppSetting, key)
+            return row.value if row is not None else None
+
+    async def set_app_setting(self, key: str, value: str) -> None:
+        """Create or update one app setting and persist it immediately."""
+        async with self.get_session() as db:
+            row = await db.get(AppSetting, key)
+            if row is None:
+                db.add(AppSetting(key=key, value=value))
+            else:
+                row.value = value
+            await db.commit()
+
+    async def get_all_app_settings(self) -> dict[str, str]:
+        """Return all app settings as a plain key-value mapping."""
+        stmt = select(AppSetting)
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return {row.key: row.value for row in result.scalars().all()}
 
     async def get_realtime_service_alerts(self) -> list[ServiceAlert]:
         """Return active realtime alerts with relationships needed for GTFS-RT export."""

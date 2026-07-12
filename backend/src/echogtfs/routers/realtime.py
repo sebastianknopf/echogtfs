@@ -11,12 +11,10 @@ import time
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from echogtfs.database import get_db
 from echogtfs.services.database import get_repository
+from echogtfs.services.database.models import AppSetting
 from echogtfs.services.gtfsrt.gtfs_realtime_service_alerts_export_service import GtfsRealtimeServiceAlertsExportService
-from echogtfs.routers.settings import _load as load_settings
 from echogtfs.security import verify_password
 
 router = APIRouter()
@@ -42,17 +40,28 @@ def invalidate_gtfs_rt_cache() -> None:
     _feed_cache["timestamp"] = 0
 
 
-async def check_gtfs_rt_auth(request: Request, db: AsyncSession = Depends(get_db)) -> None:
+async def _get_gtfs_rt_settings() -> tuple[str, str, str]:
+    """Load GTFS-RT path and optional basic-auth credentials from repository."""
+    repository = get_repository()
+    rows = await repository.get_all_app_settings()
+    return (
+        rows.get(AppSetting.KEY_GTFS_RT_PATH, "realtime/service-alerts.pbf"),
+        rows.get(AppSetting.KEY_GTFS_RT_USERNAME, ""),
+        rows.get(AppSetting.KEY_GTFS_RT_PASSWORD, ""),
+    )
+
+
+async def check_gtfs_rt_auth(request: Request) -> None:
     """
     Optional Basic Auth for GTFS-RT endpoint.
     
     Checks credentials only if both username and password are configured in settings.
     Raises 401 if auth is required but invalid.
     """
-    settings = await load_settings(db)
+    _, configured_username, hashed_password = await _get_gtfs_rt_settings()
     
     # If no credentials configured, allow access
-    if not settings.gtfs_rt_username or not settings.gtfs_rt_password:
+    if not configured_username or not hashed_password:
         return
     
     # Credentials are configured, require Basic Auth
@@ -68,16 +77,16 @@ async def check_gtfs_rt_auth(request: Request, db: AsyncSession = Depends(get_db
     try:
         encoded = auth_header[6:]  # Remove "Basic " prefix
         decoded = base64.b64decode(encoded).decode("utf-8")
-        username, _, password = decoded.partition(":")
+        provided_username, _, password = decoded.partition(":")
         
-        if username != settings.gtfs_rt_username:
+        if provided_username != configured_username:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials",
                 headers={"WWW-Authenticate": "Basic"},
             )
         
-        if not verify_password(password, settings.gtfs_rt_password):
+        if not verify_password(password, hashed_password):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials",
@@ -97,7 +106,6 @@ async def check_gtfs_rt_auth(request: Request, db: AsyncSession = Depends(get_db
 async def get_service_alerts(
     path: str,
     request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
     _auth: Annotated[None, Depends(check_gtfs_rt_auth)],
     json_format: Annotated[str | None, Query(alias="json")] = None,
     debug_format: Annotated[str | None, Query(alias="debug")] = None,
@@ -114,7 +122,6 @@ async def get_service_alerts(
     Args:
         path: Requested path (must match configured gtfs_rt_path)
         request: HTTP request for auth checking
-        db: Database session
         _auth: Auth dependency (automatically checks if needed)
         json_format: If present (query param ?json), return JSON instead of protobuf
         debug_format: If present (query param ?debug), return JSON instead of protobuf
@@ -122,11 +129,11 @@ async def get_service_alerts(
     Returns:
         Response with either application/x-protobuf or application/json content
     """
-    # Load settings to check if the requested path matches configuration
-    settings = await load_settings(db)
+    # Load configured path from repository settings
+    configured_path_value, _, _ = await _get_gtfs_rt_settings()
     
     # Normalize paths for comparison (remove leading/trailing slashes)
-    configured_path = settings.gtfs_rt_path.strip('/')
+    configured_path = configured_path_value.strip('/')
     requested_path = path.strip('/')
     
     # Return 404 if path doesn't match

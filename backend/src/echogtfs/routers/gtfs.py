@@ -16,21 +16,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from echogtfs.database import get_db
+from echogtfs.services.database import get_repository
 from echogtfs.services.database.models import AppSetting, GtfsAgency, GtfsRoute, GtfsStop
 from echogtfs.schemas import (
     AgencyRead,
-    GtfsFeedConfig,
     GtfsStatusRead,
     RouteRead,
     StopRead,
 )
-from echogtfs.security import CurrentSuperuser, CurrentUser, CurrentPoweruser
+from echogtfs.security import CurrentUser, CurrentPoweruser
 from echogtfs.services.gtfs_import import (
-    KEY_FEED_URL,
-    KEY_MSG,
-    KEY_STATUS,
-    KEY_TIME,
-    KEY_CRON,
     STATUS_IDLE,
     STATUS_RUNNING,
     run_import_task,
@@ -48,24 +43,17 @@ _DB = Annotated[AsyncSession, Depends(get_db)]
 
 
 @router.get("/status", response_model=GtfsStatusRead)
-async def get_status(_: CurrentPoweruser, db: _DB) -> GtfsStatusRead:
+async def get_status(_: CurrentPoweruser) -> GtfsStatusRead:
     """Return current feed URL, cron, and last import state."""
-    rows: dict[str, str] = {}
-    result = await db.execute(
-        select(AppSetting).where(
-            AppSetting.key.in_([KEY_FEED_URL, KEY_STATUS, KEY_TIME, KEY_MSG, KEY_CRON])
-        )
-    )
-    for row in result.scalars():
-        rows[row.key] = row.value
+    rows = await get_repository().get_all_app_settings()
 
-    cron_val = rows.get(KEY_CRON)
+    cron_val = rows.get(AppSetting.KEY_GTFS_CRON)
     return GtfsStatusRead(
-        feed_url=rows.get(KEY_FEED_URL, ""),
+        feed_url=rows.get(AppSetting.KEY_GTFS_FEED_URL, ""),
         cron=cron_val if cron_val not in (None, "") else None,
-        status=rows.get(KEY_STATUS, STATUS_IDLE),
-        imported_at=rows.get(KEY_TIME),
-        message=rows.get(KEY_MSG),
+        status=rows.get(AppSetting.KEY_GTFS_IMPORT_STATUS, STATUS_IDLE),
+        imported_at=rows.get(AppSetting.KEY_GTFS_IMPORT_TIME),
+        message=rows.get(AppSetting.KEY_GTFS_IMPORT_MESSAGE),
     )
 
 
@@ -77,7 +65,6 @@ async def get_status(_: CurrentPoweruser, db: _DB) -> GtfsStatusRead:
 @router.post("/import", status_code=status.HTTP_202_ACCEPTED)
 async def trigger_import(
     _: CurrentPoweruser,
-    db: _DB,
     background_tasks: BackgroundTasks,
 ) -> dict[str, str]:
     """
@@ -85,8 +72,8 @@ async def trigger_import(
     progress.  Returns 409 if an import is already running.
     """
     # Check whether an import is already in progress
-    row = await db.get(AppSetting, KEY_STATUS)
-    if row is not None and row.value == STATUS_RUNNING:
+    status_value = await get_repository().get_app_setting(AppSetting.KEY_GTFS_IMPORT_STATUS)
+    if status_value == STATUS_RUNNING:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Ein Import läuft bereits.",
@@ -109,17 +96,16 @@ class GtfsConfigUpdate(BaseModel):
 @router.put("/feed-url", status_code=200)
 async def update_feed_url(
     _: CurrentPoweruser,
-    db: _DB,
     data: GtfsConfigUpdate,
 ) -> dict[str, str]:
     """Update GTFS feed URL and/or cron expression."""
+    repository = get_repository()
     if data.feed_url:
-        await db.merge(AppSetting(key=KEY_FEED_URL, value=data.feed_url))
+        await repository.set_app_setting(AppSetting.KEY_GTFS_FEED_URL, data.feed_url)
     if data.cron is not None:
-        await db.merge(AppSetting(key=KEY_CRON, value=data.cron))
-    await db.commit()
+        await repository.set_app_setting(AppSetting.KEY_GTFS_CRON, data.cron)
     if data.cron is not None:
-        await schedule_import_from_cron(db)
+        await schedule_import_from_cron()
     return {"feed_url": data.feed_url or "", "cron": data.cron or ""}
 
 
