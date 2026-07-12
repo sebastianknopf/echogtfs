@@ -138,6 +138,10 @@ docker-compose down -v
 docker-compose up -d
 ```
 
+## Development
+
+See [developer docs here](docs/dev/README.md).
+
 ## License
 
 This project is licensed under the Apache 2.0 license. See [LICENSE.md](LICENSE.md) for the full license text.
