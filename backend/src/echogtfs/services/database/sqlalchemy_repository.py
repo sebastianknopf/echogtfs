@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from datetime import datetime
+import uuid
 
-from sqlalchemy import delete, insert, select, text, update
+from sqlalchemy import delete, func, insert, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import selectinload
 
@@ -18,6 +20,7 @@ from echogtfs.services.database.models import (
     GtfsRoute,
     GtfsStop,
     ServiceAlert,
+    ServiceAlertActivePeriod,
     User,
 )
 
@@ -490,6 +493,24 @@ class SqlAlchemyRepository(RepositoryInterface):
             result = await db.execute(stmt)
             return list(result.scalars().all())
 
+    async def list_data_source_log_uuids_before(self, cutoff_time: datetime) -> list[uuid.UUID]:
+        """Return data source log file UUIDs older than cutoff time."""
+        stmt = select(DataSourceLog.log_file_uuid).where(DataSourceLog.timestamp < cutoff_time)
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return [row[0] for row in result.all()]
+
+    async def delete_data_source_logs_before(self, cutoff_time: datetime) -> int:
+        """Delete data source logs older than cutoff time and return affected row count."""
+        stmt = delete(DataSourceLog).where(DataSourceLog.timestamp < cutoff_time)
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            await db.commit()
+
+            return int(result.rowcount or 0)
+    
     async def get_data_source_log_by_id(self, log_id: int) -> DataSourceLog | None:
         """Return one data source log entry by id."""
         stmt = select(DataSourceLog).where(DataSourceLog.id == log_id)
@@ -571,3 +592,72 @@ class SqlAlchemyRepository(RepositoryInterface):
         async with self.get_session() as db:
             result = await db.execute(stmt)
             return list(result.scalars().all())
+    
+    async def list_expired_internal_alert_ids(self, current_timestamp: int, *, only_active: bool) -> list[uuid.UUID]:
+        """Return internal alert ids where all active periods already ended."""
+        subquery = (
+            select(ServiceAlertActivePeriod.alert_id)
+            .group_by(ServiceAlertActivePeriod.alert_id)
+            .having(
+                func.max(ServiceAlertActivePeriod.end_time).isnot(None)
+                & (func.max(ServiceAlertActivePeriod.end_time) < current_timestamp)
+            )
+        )
+
+        stmt = select(ServiceAlert.id).where(
+            ServiceAlert.data_source_id.is_(None),
+            ServiceAlert.id.in_(subquery),
+        )
+        
+        if only_active:
+            stmt = stmt.where(ServiceAlert.is_active == True)
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return [row[0] for row in result.all()]
+
+    async def list_internal_alert_ids_expired_before(self, cutoff_timestamp: int) -> list[uuid.UUID]:
+        """Return internal alert ids where all active periods ended before cutoff timestamp."""
+        subquery = (
+            select(ServiceAlertActivePeriod.alert_id)
+            .group_by(ServiceAlertActivePeriod.alert_id)
+            .having(
+                func.max(ServiceAlertActivePeriod.end_time).isnot(None)
+                & (func.max(ServiceAlertActivePeriod.end_time) < cutoff_timestamp)
+            )
+        )
+
+        stmt = select(ServiceAlert.id).where(
+            ServiceAlert.data_source_id.is_(None),
+            ServiceAlert.id.in_(subquery),
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return [row[0] for row in result.all()]
+
+    async def deactivate_service_alerts(self, alert_ids: list[uuid.UUID]) -> int:
+        """Deactivate service alerts by id and return affected row count."""
+        if not alert_ids:
+            return 0
+
+        stmt = update(ServiceAlert).where(ServiceAlert.id.in_(alert_ids)).values(is_active=False)
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            await db.commit()
+
+            return int(result.rowcount or 0)
+
+    async def delete_service_alerts_by_ids(self, alert_ids: list[uuid.UUID]) -> int:
+        """Delete service alerts by id and return affected row count."""
+        if not alert_ids:
+            return 0
+
+        stmt = delete(ServiceAlert).where(ServiceAlert.id.in_(alert_ids))
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            await db.commit()
+
+            return int(result.rowcount or 0)

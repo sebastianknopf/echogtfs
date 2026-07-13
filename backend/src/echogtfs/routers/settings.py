@@ -5,7 +5,7 @@ from echogtfs.services.database import get_repository
 from echogtfs.services.database.models import AppSetting
 from echogtfs.validation.schemas import AppSettings, PublicAppSettings
 from echogtfs.security import CurrentSuperuser, hash_password
-from echogtfs.services.cleanup import schedule_cleanup_from_settings
+from echogtfs.services.cleanup import CleanupService
 
 try:
     from echogtfs._version import version as __version__
@@ -130,7 +130,7 @@ async def update_settings(
         # else: None means keep existing password
     
     # Re-schedule cleanup job with new settings
-    await schedule_cleanup_from_settings()
+    await CleanupService(repository).schedule_from_settings()
     
     # Return current settings (reload to get actual stored password status)
     return await _load()

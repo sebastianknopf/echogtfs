@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
+from datetime import datetime
+import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -208,6 +210,16 @@ class RepositoryInterface(ABC):
         raise NotImplementedError
     
     @abstractmethod
+    async def list_data_source_log_uuids_before(self, cutoff_time: datetime) -> list[uuid.UUID]:
+        """Return UUIDs of data source log files older than cutoff time."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def delete_data_source_logs_before(self, cutoff_time: datetime) -> int:
+        """Delete data source log rows older than cutoff time and return affected row count."""
+        raise NotImplementedError
+    
+    @abstractmethod
     async def list_gtfs_agencies(self) -> list[GtfsAgency]:
         """Return all GTFS agencies ordered by name."""
         raise NotImplementedError
@@ -236,4 +248,24 @@ class RepositoryInterface(ABC):
     @abstractmethod
     async def get_realtime_service_alerts(self) -> list[ServiceAlert]:
         """Return active realtime service alerts with all required relationships."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_expired_internal_alert_ids(self, current_timestamp: int, *, only_active: bool) -> list[uuid.UUID]:
+        """Return internal alert ids where all active periods ended before current timestamp."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_internal_alert_ids_expired_before(self, cutoff_timestamp: int) -> list[uuid.UUID]:
+        """Return internal alert ids where all active periods ended before cutoff timestamp."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def deactivate_service_alerts(self, alert_ids: list[uuid.UUID]) -> int:
+        """Set is_active=False for the provided alert ids and return affected row count."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def delete_service_alerts_by_ids(self, alert_ids: list[uuid.UUID]) -> int:
+        """Delete service alerts by ids and return affected row count."""
         raise NotImplementedError
