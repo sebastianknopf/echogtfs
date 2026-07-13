@@ -208,6 +208,33 @@ class RepositoryInterface(ABC):
     async def get_data_source_log_by_id(self, log_id: int) -> DataSourceLog | None:
         """Return one data source log entry by id, or None when not found."""
         raise NotImplementedError
+
+    @abstractmethod
+    async def create_data_source_log(
+        self,
+        *,
+        data_source_id: int,
+        timestamp: datetime,
+        request_url: str,
+        request_headers: str | None,
+        response_headers: str | None,
+        response_mimetype: str | None,
+        status_code: int | None,
+        response_size: int,
+        log_file_uuid: uuid.UUID,
+    ) -> DataSourceLog:
+        """Create one data source log entry and return persisted model."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_data_source_log_uuids_for_data_source(self, data_source_id: int) -> list[uuid.UUID]:
+        """Return all log file UUIDs for one data source."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def delete_data_source_logs_for_data_source(self, data_source_id: int) -> int:
+        """Delete all data source log rows for one data source and return affected row count."""
+        raise NotImplementedError
     
     @abstractmethod
     async def list_data_source_log_uuids_before(self, cutoff_time: datetime) -> list[uuid.UUID]:

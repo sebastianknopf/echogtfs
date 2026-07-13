@@ -9,7 +9,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from echogtfs.enum.system import ExpiredAlertPolicy
-from echogtfs.services import datalog
+from echogtfs.services.datalog import DatalogService
 from echogtfs.services.database import RepositoryInterface
 from echogtfs.services.database.models import AppSetting
 
@@ -142,7 +142,7 @@ class CleanupService:
             return 0
 
         count = len(log_uuids)
-        deleted_files = await datalog.delete_log_files_by_uuids(log_uuids)
+        deleted_files = await DatalogService(self._repository).delete_log_files_by_uuids(log_uuids)
         await self._repository.delete_data_source_logs_before(cutoff_time)
 
         logger.info(

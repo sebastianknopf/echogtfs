@@ -17,7 +17,8 @@ from google.protobuf.json_format import MessageToDict
 from echogtfs import gtfs_realtime_pb2
 from echogtfs.enum.gtfsrt import PeriodType
 from echogtfs.services.adapters.base import BaseAdapter
-from echogtfs.services import datalog
+from echogtfs.services.database import get_repository
+from echogtfs.services.datalog import DatalogService
 
 logger = logging.getLogger("uvicorn")
 
@@ -184,7 +185,7 @@ class GtfsRtAdapter(BaseAdapter):
                 try:
                     # Log error response as plain text
                     error_content = response.text if response.text else f"HTTP Error: {error_message}"
-                    await datalog.create_log_entry(
+                    await DatalogService(get_repository()).create_log_entry(
                         data_source_id=source_id,
                         request_url=final_url,
                         response_content=error_content,
@@ -225,7 +226,7 @@ class GtfsRtAdapter(BaseAdapter):
                 )
                 
                 # Log to database and file
-                await datalog.create_log_entry(
+                await DatalogService(get_repository()).create_log_entry(
                     data_source_id=source_id,
                     request_url=final_url,
                     response_content=feed_json,

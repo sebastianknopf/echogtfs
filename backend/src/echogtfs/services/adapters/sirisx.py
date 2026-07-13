@@ -20,7 +20,8 @@ import httpx
 
 from echogtfs.enum.gtfsrt import PeriodType
 from echogtfs.services.adapters.base import BaseAdapter
-from echogtfs.services import datalog
+from echogtfs.services.database import get_repository
+from echogtfs.services.datalog import DatalogService
 
 logger = logging.getLogger("uvicorn")
 
@@ -330,7 +331,7 @@ class SiriSxAdapter(BaseAdapter):
                 try:
                     # Log error response as plain text
                     error_content = response.text if response.text else f"HTTP Error: {error_message}"
-                    await datalog.create_log_entry(
+                    await DatalogService(get_repository()).create_log_entry(
                         data_source_id=source_id,
                         request_url=endpoint_url,
                         response_content=error_content,
@@ -357,7 +358,7 @@ class SiriSxAdapter(BaseAdapter):
                     f"[SiriSxAdapter] Logging request for source {source_id}. "
                     f"XML size: {len(xml_content)} characters"
                 )
-                await datalog.create_log_entry(
+                await DatalogService(get_repository()).create_log_entry(
                     data_source_id=source_id,
                     request_url=endpoint_url,
                     response_content=xml_content,

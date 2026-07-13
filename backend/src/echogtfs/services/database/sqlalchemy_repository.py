@@ -493,6 +493,64 @@ class SqlAlchemyRepository(RepositoryInterface):
             result = await db.execute(stmt)
             return list(result.scalars().all())
 
+    async def get_data_source_log_by_id(self, log_id: int) -> DataSourceLog | None:
+        """Return one data source log entry by id."""
+        stmt = select(DataSourceLog).where(DataSourceLog.id == log_id)
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return result.scalar_one_or_none()
+
+    async def create_data_source_log(
+        self,
+        *,
+        data_source_id: int,
+        timestamp: datetime,
+        request_url: str,
+        request_headers: str | None,
+        response_headers: str | None,
+        response_mimetype: str | None,
+        status_code: int | None,
+        response_size: int,
+        log_file_uuid: uuid.UUID,
+    ) -> DataSourceLog:
+        """Create one data source log entry and return persisted model."""
+        async with self.get_session() as db:
+            log_entry = DataSourceLog(
+                data_source_id=data_source_id,
+                timestamp=timestamp,
+                request_url=request_url,
+                request_headers=request_headers,
+                response_headers=response_headers,
+                response_mimetype=response_mimetype,
+                status_code=status_code,
+                response_size=response_size,
+                log_file_uuid=log_file_uuid,
+            )
+            db.add(log_entry)
+            await db.commit()
+            await db.refresh(log_entry)
+
+            return log_entry
+
+    async def list_data_source_log_uuids_for_data_source(self, data_source_id: int) -> list[uuid.UUID]:
+        """Return data source log file UUIDs for one data source."""
+        stmt = select(DataSourceLog.log_file_uuid).where(DataSourceLog.data_source_id == data_source_id)
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return [row[0] for row in result.all()]
+
+    async def delete_data_source_logs_for_data_source(self, data_source_id: int) -> int:
+        """Delete all data source log rows for one data source and return affected row count."""
+        stmt = delete(DataSourceLog).where(DataSourceLog.data_source_id == data_source_id)
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            await db.commit()
+
+            return int(result.rowcount or 0)
+
     async def list_data_source_log_uuids_before(self, cutoff_time: datetime) -> list[uuid.UUID]:
         """Return data source log file UUIDs older than cutoff time."""
         stmt = select(DataSourceLog.log_file_uuid).where(DataSourceLog.timestamp < cutoff_time)
@@ -510,14 +568,6 @@ class SqlAlchemyRepository(RepositoryInterface):
             await db.commit()
 
             return int(result.rowcount or 0)
-    
-    async def get_data_source_log_by_id(self, log_id: int) -> DataSourceLog | None:
-        """Return one data source log entry by id."""
-        stmt = select(DataSourceLog).where(DataSourceLog.id == log_id)
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return result.scalar_one_or_none()
         
     async def list_gtfs_agencies(self) -> list[GtfsAgency]:
         """Return all GTFS agencies ordered by name."""

@@ -16,7 +16,7 @@ from echogtfs.validation.schemas import DataSourceCreate, DataSourceRead, DataSo
 from echogtfs.security import CurrentPoweruser
 from echogtfs.services.adapters import ADAPTER_REGISTRY
 from echogtfs.services.alert_import import schedule_data_source_import, run_import_task
-from echogtfs.services import datalog
+from echogtfs.services.datalog import DatalogService
 from echogtfs.services.mapping import MappingExportService, MappingImportService, MappingServiceError
 from echogtfs.routers.realtime import invalidate_gtfs_rt_cache
 
@@ -279,7 +279,7 @@ async def delete_source(
     
     # Delete log files before deleting the data source
     # (DB entries will be cascade-deleted automatically)
-    await datalog.delete_logs_for_data_source(source_id)
+    await DatalogService(repository).delete_logs_for_data_source(source_id)
     
     # Remove cron job if exists
     await schedule_data_source_import(source.id, source.name, None)
@@ -502,7 +502,7 @@ async def download_log_file(
         raise HTTPException(status_code=404, detail="Log entry not found")
     
     # Get log file content
-    log_content = await datalog.get_log_content(log_entry.log_file_uuid)
+    log_content = await DatalogService(repository).get_log_content(log_entry.log_file_uuid)
     
     if log_content is None:
         raise HTTPException(status_code=404, detail="Log file not found on disk")
