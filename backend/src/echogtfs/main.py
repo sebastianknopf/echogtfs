@@ -4,7 +4,6 @@ import logging
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import select
@@ -14,9 +13,7 @@ from echogtfs.config import settings
 from echogtfs.extensions import limiter
 from echogtfs.services.database.alembic_migration_service import AlembicMigrationService
 from echogtfs.services.database import SqlAlchemyRepository, set_repository
-from echogtfs.services.database.models import GtfsAgency, GtfsRoute, GtfsStop, User  # noqa: F401
-from echogtfs.services.database.models import ServiceAlert, ServiceAlertTranslation, ServiceAlertActivePeriod, ServiceAlertInformedEntity  # noqa: F401
-from echogtfs.services.database.models import DataSource, DataSourceMapping  # noqa: F401
+from echogtfs.services.database.models import  User  # noqa: F401
 from echogtfs.routers.alerts import router as alerts_router
 from echogtfs.routers.auth import router as auth_router
 from echogtfs.routers.gtfs import router as gtfs_router
