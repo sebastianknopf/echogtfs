@@ -25,7 +25,7 @@ from echogtfs.services.database.models import (
     GtfsRoute,
     GtfsStop,
 )
-from echogtfs.schemas import (
+from echogtfs.validation.schemas import (
     ServiceAlertCreate,
     ServiceAlertListResponse,
     ServiceAlertRead,

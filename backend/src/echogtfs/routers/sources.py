@@ -15,7 +15,7 @@ from sqlalchemy.orm import selectinload
 
 from echogtfs.database import get_db
 from echogtfs.services.database.models import DataSource, DataSourceMapping, DataSourceEnrichment, ServiceAlert, User, DataSourceLog
-from echogtfs.schemas import DataSourceCreate, DataSourceRead, DataSourceUpdate, DataSourceLogRead
+from echogtfs.validation.schemas import DataSourceCreate, DataSourceRead, DataSourceUpdate, DataSourceLogRead
 from echogtfs.security import CurrentPoweruser
 from echogtfs.services.adapters import ADAPTER_REGISTRY
 from echogtfs.services.alert_import import schedule_data_source_import, run_import_task

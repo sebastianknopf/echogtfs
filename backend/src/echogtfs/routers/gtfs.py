@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from echogtfs.database import get_db
 from echogtfs.services.database import get_repository
 from echogtfs.services.database.models import AppSetting, GtfsAgency, GtfsRoute, GtfsStop
-from echogtfs.schemas import (
+from echogtfs.validation.schemas import (
     AgencyRead,
     GtfsStatusRead,
     RouteRead,

@@ -9,7 +9,7 @@ from echogtfs.config import settings
 from echogtfs.database import get_db
 from echogtfs.extensions import limiter
 from echogtfs.services.database.models import User
-from echogtfs.schemas import Token
+from echogtfs.validation.schemas import Token
 from echogtfs.security import create_access_token, verify_password
 
 router = APIRouter()
