@@ -17,7 +17,7 @@ from fastapi import HTTPException, status
 from echogtfs.services.database.models import User
 from echogtfs.routers.users import change_own_password
 from echogtfs.validation.schemas import PasswordChange
-from echogtfs.security import hash_password
+from echogtfs.security import hash_password, verify_password
 
 
 class TestPasswordChange(unittest.TestCase):
@@ -25,7 +25,7 @@ class TestPasswordChange(unittest.TestCase):
     
     def setUp(self):
         """Set up test fixtures."""
-        self.mock_db = AsyncMock()
+        self.mock_repository = AsyncMock()
         
         # Create a test user with a known hashed password
         self.test_password = "current_password_123"
@@ -48,16 +48,16 @@ class TestPasswordChange(unittest.TestCase):
             )
             
             # Execute the password change
-            result = await change_own_password(payload, self.test_user, self.mock_db)
+            result = await change_own_password(payload, self.test_user, self.mock_repository)
             
             # Should return None (204 No Content)
             self.assertIsNone(result)
             
-            # Database commit should be called
-            self.mock_db.commit.assert_awaited_once()
-            
-            # Verify the hashed password was updated
-            self.assertNotEqual(self.test_user.hashed_password, hash_password(self.test_password))
+            # Repository update should be called with a new hash for the new password
+            self.mock_repository.update_user.assert_awaited_once()
+            call_kwargs = self.mock_repository.update_user.await_args.kwargs
+            self.assertNotEqual(call_kwargs["hashed_password"], self.test_user.hashed_password)
+            self.assertTrue(verify_password(payload.new_password, call_kwargs["hashed_password"]))
         
         asyncio.run(run_test())
     
@@ -71,13 +71,13 @@ class TestPasswordChange(unittest.TestCase):
             
             # Should raise 401 Unauthorized
             with self.assertRaises(HTTPException) as context:
-                await change_own_password(payload, self.test_user, self.mock_db)
+                await change_own_password(payload, self.test_user, self.mock_repository)
             
             self.assertEqual(context.exception.status_code, status.HTTP_401_UNAUTHORIZED)
             self.assertEqual(context.exception.detail, "Current password is incorrect")
             
-            # Database commit should NOT be called
-            self.mock_db.commit.assert_not_awaited()
+            # Repository update should NOT be called
+            self.mock_repository.update_user.assert_not_awaited()
         
         asyncio.run(run_test())
     
@@ -90,11 +90,11 @@ class TestPasswordChange(unittest.TestCase):
             )
             
             # Execute the password change
-            result = await change_own_password(payload, self.test_user, self.mock_db)
+            result = await change_own_password(payload, self.test_user, self.mock_repository)
             
             # Should succeed
             self.assertIsNone(result)
-            self.mock_db.commit.assert_awaited_once()
+            self.mock_repository.update_user.assert_awaited_once()
         
         asyncio.run(run_test())
 

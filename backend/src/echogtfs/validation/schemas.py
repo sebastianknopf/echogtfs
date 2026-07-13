@@ -295,6 +295,7 @@ class RouteRead(BaseModel):
     long_name:  str
     model_config = {"from_attributes": True}
 
+
 # ---------------------------------------------------------------------------
 # ServiceAlerts (GTFS-RT)
 # ---------------------------------------------------------------------------

@@ -2,19 +2,16 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from echogtfs.config import settings
-from echogtfs.database import get_db
 from echogtfs.extensions import limiter
-from echogtfs.services.database.models import User
+from echogtfs.services.database import RepositoryInterface, get_repository
 from echogtfs.validation.schemas import Token
 from echogtfs.security import create_access_token, verify_password
 
 router = APIRouter()
 
-_DB = Annotated[AsyncSession, Depends(get_db)]
+_Repo = Annotated[RepositoryInterface, Depends(get_repository)]
 
 
 @router.post("/token", response_model=Token)
@@ -22,11 +19,10 @@ _DB = Annotated[AsyncSession, Depends(get_db)]
 async def login(
     request: Request,  # required by slowapi
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-    db: _DB,
+    repository: _Repo,
 ) -> Token:
     """OAuth2 password-flow token endpoint. Returns a Bearer JWT on success."""
-    result = await db.execute(select(User).where(User.username == form_data.username))
-    user = result.scalar_one_or_none()
+    user = await repository.get_user_by_username(form_data.username)
 
     if user is None or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
@@ -34,6 +30,7 @@ async def login(
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user"
