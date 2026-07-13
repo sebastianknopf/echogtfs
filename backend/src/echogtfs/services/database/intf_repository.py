@@ -5,7 +5,14 @@ from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from echogtfs.services.database.models import ServiceAlert, User
+from echogtfs.services.database.models import (
+    DataSource,
+    DataSourceEnrichment,
+    DataSourceLog,
+    DataSourceMapping,
+    ServiceAlert,
+    User,
+)
 
 
 class RepositoryInterface(ABC):
@@ -92,6 +99,109 @@ class RepositoryInterface(ABC):
     @abstractmethod
     async def delete_user(self, user_id: int) -> bool:
         """Delete one user by id. Returns True when a row was deleted."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_data_sources(self) -> list[DataSource]:
+        """Return all data sources ordered by name with mappings and enrichments loaded."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_data_source_by_id(self, source_id: int) -> DataSource | None:
+        """Return one data source by id with mappings and enrichments, or None when not found."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_data_source_by_name(self, name: str) -> DataSource | None:
+        """Return one data source by name, or None when not found."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def data_source_name_exists(self, name: str, *, exclude_id: int | None = None) -> bool:
+        """Return True when a data source with the given name exists."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def create_data_source(
+        self,
+        *,
+        name: str,
+        source_type: str,
+        config: str,
+        cron: str | None,
+        is_active: bool,
+        invalid_reference_policy: str,
+        mappings: list[dict[str, str]],
+        enrichments: list[dict[str, str | int]],
+    ) -> DataSource:
+        """Create one data source including mappings and enrichments and return it with relationships loaded."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def update_data_source(
+        self,
+        source_id: int,
+        *,
+        name: str | None = None,
+        source_type: str | None = None,
+        config: str | None = None,
+        cron: str | None = None,
+        is_active: bool | None = None,
+        invalid_reference_policy: str | None = None,
+        mappings: list[dict[str, str]] | None = None,
+        enrichments: list[dict[str, str | int]] | None = None,
+    ) -> DataSource | None:
+        """Update one data source and return it with relationships loaded, or None when not found."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def toggle_data_source_active(self, source_id: int) -> DataSource | None:
+        """Toggle active state for one data source and return updated model, or None when not found."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def delete_data_source(self, source_id: int) -> DataSource | None:
+        """Delete one data source by id and return deleted model snapshot, or None when not found."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def delete_alerts_for_data_source(self, source_id: int) -> int:
+        """Delete all alerts for one data source and return deleted row count."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def update_service_alert_source_name(self, old_name: str, new_name: str) -> None:
+        """Rename service alert source text from old_name to new_name."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_data_source_mappings(self, source_id: int, entity_type: str) -> list[DataSourceMapping]:
+        """Return all mappings for one data source and entity type ordered by key."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def replace_data_source_mappings_for_entity_type(
+        self,
+        source_id: int,
+        entity_type: str,
+        mappings: list[dict[str, str]],
+    ) -> int:
+        """Replace mappings for one data source/entity type and return number of inserted rows."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_latest_data_source_log(self, source_id: int) -> DataSourceLog | None:
+        """Return the most recent log entry for one data source, or None when no logs exist."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_data_source_logs(self, source_id: int, limit: int) -> list[DataSourceLog]:
+        """Return recent log entries for one data source ordered by timestamp descending."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_data_source_log_by_id(self, log_id: int) -> DataSourceLog | None:
+        """Return one data source log entry by id, or None when not found."""
         raise NotImplementedError
 
     @abstractmethod
