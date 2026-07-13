@@ -97,6 +97,11 @@ class GtfsFeedConfig(BaseModel):
     cron: str | None = None
 
 
+class GtfsConfigUpdate(BaseModel):
+    feed_url: str | None = None
+    cron: str | None = None
+
+
 class UserCreate(BaseModel):
     username: str
     email: EmailStr

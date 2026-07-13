@@ -12,146 +12,84 @@ Endpoints:
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from echogtfs.database import get_db
-from echogtfs.services.database import get_repository
-from echogtfs.services.database.models import AppSetting, GtfsAgency, GtfsRoute, GtfsStop
-from echogtfs.validation.schemas import (
-    AgencyRead,
-    GtfsStatusRead,
-    RouteRead,
-    StopRead,
-)
+from echogtfs.services.database import RepositoryInterface, get_repository
+from echogtfs.services.database.models import GtfsAgency, GtfsRoute, GtfsStop
 from echogtfs.security import CurrentUser, CurrentPoweruser
-from echogtfs.services.gtfs_import import (
-    STATUS_IDLE,
-    STATUS_RUNNING,
-    run_import_task,
-    schedule_import_from_cron,
+from echogtfs.services.gtfs import (
+    GtfsImportInterface,
+    GtfsImportService,
 )
+from echogtfs.validation.schemas import AgencyRead, GtfsStatusRead, RouteRead, StopRead, GtfsConfigUpdate
+
+def create_gtfs_import_service(repository: _Repo) -> GtfsImportInterface:
+    """Create a GTFS import service instance for the current dependency scope."""
+    return GtfsImportService(repository)
 
 router = APIRouter()
 
-_DB = Annotated[AsyncSession, Depends(get_db)]
-
-
-# ---------------------------------------------------------------------------
-# Status
-# ---------------------------------------------------------------------------
+_Repo = Annotated[RepositoryInterface, Depends(get_repository)]
+_GtfsImport = Annotated[GtfsImportInterface, Depends(create_gtfs_import_service)]
 
 
 @router.get("/status", response_model=GtfsStatusRead)
-async def get_status(_: CurrentPoweruser) -> GtfsStatusRead:
+async def get_status(_: CurrentPoweruser, service: _GtfsImport) -> GtfsStatusRead:
     """Return current feed URL, cron, and last import state."""
-    rows = await get_repository().get_all_app_settings()
+    payload = await service.get_status()
+    return GtfsStatusRead(**payload)
 
-    cron_val = rows.get(AppSetting.KEY_GTFS_CRON)
-    return GtfsStatusRead(
-        feed_url=rows.get(AppSetting.KEY_GTFS_FEED_URL, ""),
-        cron=cron_val if cron_val not in (None, "") else None,
-        status=rows.get(AppSetting.KEY_GTFS_IMPORT_STATUS, STATUS_IDLE),
-        imported_at=rows.get(AppSetting.KEY_GTFS_IMPORT_TIME),
-        message=rows.get(AppSetting.KEY_GTFS_IMPORT_MESSAGE),
-    )
-
-
-
-# ---------------------------------------------------------------------------
-# Trigger import
-# ---------------------------------------------------------------------------
 
 @router.post("/import", status_code=status.HTTP_202_ACCEPTED)
 async def trigger_import(
     _: CurrentPoweruser,
     background_tasks: BackgroundTasks,
+    service: _GtfsImport,
 ) -> dict[str, str]:
     """
     Enqueue a background import.  Returns 202 immediately; poll /status for
     progress.  Returns 409 if an import is already running.
     """
     # Check whether an import is already in progress
-    status_value = await get_repository().get_app_setting(AppSetting.KEY_GTFS_IMPORT_STATUS)
-    if status_value == STATUS_RUNNING:
+    if await service.is_import_running():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Ein Import läuft bereits.",
+            detail="An import is already running.",
         )
 
-    background_tasks.add_task(run_import_task)
-    return {"status": STATUS_RUNNING}
+    background_tasks.add_task(service.run_import_task)
+    return {"status": GtfsImportService.STATUS_RUNNING}
 
-
-# ---------------------------------------------------------------------------
-# Feed URL & Cron config
-# ---------------------------------------------------------------------------
-
-from pydantic import BaseModel
-
-class GtfsConfigUpdate(BaseModel):
-    feed_url: str | None = None
-    cron: str | None = None
 
 @router.put("/feed-url", status_code=200)
 async def update_feed_url(
     _: CurrentPoweruser,
     data: GtfsConfigUpdate,
+    service: _GtfsImport,
 ) -> dict[str, str]:
     """Update GTFS feed URL and/or cron expression."""
-    repository = get_repository()
-    if data.feed_url:
-        await repository.set_app_setting(AppSetting.KEY_GTFS_FEED_URL, data.feed_url)
-    if data.cron is not None:
-        await repository.set_app_setting(AppSetting.KEY_GTFS_CRON, data.cron)
-    if data.cron is not None:
-        await schedule_import_from_cron()
-    return {"feed_url": data.feed_url or "", "cron": data.cron or ""}
+    return await service.update_configuration(feed_url=data.feed_url, cron=data.cron)
 
-
-# ---------------------------------------------------------------------------
-# Entity listing
-# ---------------------------------------------------------------------------
 
 @router.get("/agencies", response_model=list[AgencyRead])
-async def list_agencies(_: CurrentUser, db: _DB) -> list[GtfsAgency]:
-    result = await db.execute(
-        select(GtfsAgency).order_by(GtfsAgency.name)
-    )
-    return list(result.scalars())
+async def list_agencies(_: CurrentUser, repository: _Repo) -> list[GtfsAgency]:
+    return await repository.list_gtfs_agencies()
 
 
 @router.get("/stops", response_model=list[StopRead])
 async def list_stops(
     _: CurrentUser,
-    db: _DB,
+    repository: _Repo,
     q: Annotated[str, Query(max_length=100)] = "",
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> list[GtfsStop]:
-    stmt = select(GtfsStop).order_by(GtfsStop.name)
-    if q:
-        stmt = stmt.where(
-            GtfsStop.gtfs_id.ilike(f"%{q}%") | GtfsStop.name.ilike(f"%{q}%")
-        )
-    stmt = stmt.limit(limit)
-    result = await db.execute(stmt)
-    return list(result.scalars())
+    return await repository.list_gtfs_stops(query=q, limit=limit)
 
 
 @router.get("/routes", response_model=list[RouteRead])
 async def list_routes(
     _: CurrentUser,
-    db: _DB,
+    repository: _Repo,
     q: Annotated[str, Query(max_length=100)] = "",
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> list[GtfsRoute]:
-    stmt = select(GtfsRoute).order_by(GtfsRoute.short_name, GtfsRoute.long_name)
-    if q:
-        stmt = stmt.where(
-            GtfsRoute.gtfs_id.ilike(f"%{q}%")
-            | GtfsRoute.short_name.ilike(f"%{q}%")
-            | GtfsRoute.long_name.ilike(f"%{q}%")
-        )
-    stmt = stmt.limit(limit)
-    result = await db.execute(stmt)
-    return list(result.scalars())
+    return await repository.list_gtfs_routes(query=q, limit=limit)
