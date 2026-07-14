@@ -193,6 +193,21 @@ class SqlAlchemyRepository(RepositoryInterface):
             result = await db.execute(stmt)
             return list(result.scalars().all())
 
+    async def list_active_data_sources_with_cron(self) -> list[DataSource]:
+        """Return active data sources that have a cron expression configured."""
+        stmt = (
+            select(DataSource)
+            .where(
+                DataSource.cron.isnot(None),
+                DataSource.is_active == True,
+            )
+            .order_by(DataSource.name)
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
     async def get_data_source_by_id(self, source_id: int) -> DataSource | None:
         """Return one data source by id with relationships loaded."""
         stmt = (
@@ -388,6 +403,20 @@ class SqlAlchemyRepository(RepositoryInterface):
             refreshed = await db.execute(stmt)
 
             return refreshed.scalar_one_or_none()
+
+    async def update_data_source_last_run_at(self, source_id: int, last_run_at: datetime) -> bool:
+        """Persist the last_run_at timestamp for one data source."""
+        stmt = (
+            update(DataSource)
+            .where(DataSource.id == source_id)
+            .values(last_run_at=last_run_at)
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            await db.commit()
+
+            return bool(result.rowcount)
 
     async def delete_data_source(self, source_id: int) -> DataSource | None:
         """Delete one data source and return deleted model snapshot."""

@@ -112,6 +112,11 @@ class RepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def list_active_data_sources_with_cron(self) -> list[DataSource]:
+        """Return active data sources with a cron expression ordered by name."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def get_data_source_by_id(self, source_id: int) -> DataSource | None:
         """Return one data source by id with mappings and enrichments, or None when not found."""
         raise NotImplementedError
@@ -162,6 +167,11 @@ class RepositoryInterface(ABC):
     @abstractmethod
     async def toggle_data_source_active(self, source_id: int) -> DataSource | None:
         """Toggle active state for one data source and return updated model, or None when not found."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def update_data_source_last_run_at(self, source_id: int, last_run_at: datetime) -> bool:
+        """Persist the last_run_at timestamp for one data source. Returns True when updated."""
         raise NotImplementedError
 
     @abstractmethod

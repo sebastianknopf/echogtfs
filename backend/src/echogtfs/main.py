@@ -7,18 +7,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from echogtfs.config import settings
+from echogtfs.common.config import settings
 from echogtfs.common.security import SlidingTokenMiddleware
 from echogtfs.common.extensions import limiter
 from echogtfs.services.database.alembic_migration_service import AlembicMigrationService
 from echogtfs.services.database import SqlAlchemyRepository, set_repository
+from echogtfs.services.scheduler import DatasourceSchedulerService, set_datasource_scheduler_service
 from echogtfs.services.security import SecurityService, get_security_service, set_security_service
 from echogtfs.routers.alerts import router as alerts_router
 from echogtfs.routers.auth import router as auth_router
 from echogtfs.routers.gtfs import router as gtfs_router
 from echogtfs.routers.realtime import router as realtime_router
 from echogtfs.services.gtfs import GtfsImportService
-from echogtfs.services.alert_import import schedule_all_data_sources
 from echogtfs.services.cleanup import CleanupService
 from echogtfs.routers.settings import router as settings_router
 from echogtfs.routers.sources import router as sources_router
@@ -39,6 +39,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     set_repository(repository)
 
     set_security_service(SecurityService(repository))
+
+    datasource_scheduler_service = DatasourceSchedulerService(repository)
+    set_datasource_scheduler_service(datasource_scheduler_service)
     
     # Bootstrap first superuser when the database is empty
     users = await repository.list_users()
@@ -56,7 +59,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await GtfsImportService(repository).schedule_import_from_cron()
     
     # Schedule all data source alert imports on startup
-    await schedule_all_data_sources()
+    await datasource_scheduler_service.schedule_all_data_sources()
     
     # Schedule cleanup job on startup
     await CleanupService(repository).schedule_from_settings()

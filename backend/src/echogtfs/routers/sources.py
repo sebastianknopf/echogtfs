@@ -12,10 +12,10 @@ from fastapi.responses import StreamingResponse, FileResponse
 
 from echogtfs.services.database import RepositoryInterface, get_repository
 from echogtfs.services.database.models import DataSource
+from echogtfs.services.scheduler import get_datasource_scheduler_service
 from echogtfs.validation.schemas import DataSourceCreate, DataSourceRead, DataSourceUpdate, DataSourceLogRead
 from echogtfs.common.security import CurrentPoweruser
 from echogtfs.services.adapters import ADAPTER_REGISTRY
-from echogtfs.services.alert_import import schedule_data_source_import, run_import_task
 from echogtfs.services.datalog import DatalogService
 from echogtfs.services.mapping import MappingExportService, MappingImportService, MappingServiceError
 
@@ -167,7 +167,7 @@ async def create_source(
     
     # Schedule cron job if active and cron expression is set
     if source.is_active and source.cron:
-        await schedule_data_source_import(source.id, source.name, source.cron)
+        await get_datasource_scheduler_service().schedule_data_source_import(source.id, source.name, source.cron)
     
     return await _enrich_source_with_error_flag(source, repository)
 
@@ -249,10 +249,10 @@ async def update_source(
     
     # Update cron job: only schedule if active, otherwise remove
     if source.is_active and source.cron:
-        await schedule_data_source_import(source.id, source.name, source.cron)
+        await get_datasource_scheduler_service().schedule_data_source_import(source.id, source.name, source.cron)
     else:
         # Remove cron job if inactive or no cron expression
-        await schedule_data_source_import(source.id, source.name, None)
+        await get_datasource_scheduler_service().schedule_data_source_import(source.id, source.name, None)
 
     return await _enrich_source_with_error_flag(source, repository)
 
@@ -276,7 +276,7 @@ async def delete_source(
     await DatalogService(repository).delete_logs_for_data_source(source_id)
     
     # Remove cron job if exists
-    await schedule_data_source_import(source.id, source.name, None)
+    await get_datasource_scheduler_service().schedule_data_source_import(source.id, source.name, None)
     
     await repository.delete_data_source(source_id)
 
@@ -300,7 +300,7 @@ async def run_source_import(
         raise HTTPException(status_code=404, detail="Data source not found")
 
     # Trigger import task asynchronously
-    asyncio.create_task(run_import_task(source_id))
+    asyncio.create_task(get_datasource_scheduler_service().run_import_task(source_id))
     
     return {"message": f"Import for data source '{source.name}' has been triggered"}
 
@@ -343,10 +343,10 @@ async def toggle_source_active(
     # Update cron job: remove if deactivated, add if activated
     if source.is_active and source.cron:
         # Re-schedule the cron job when activating
-        await schedule_data_source_import(source.id, source.name, source.cron)
+        await get_datasource_scheduler_service().schedule_data_source_import(source.id, source.name, source.cron)
     elif not source.is_active:
         # Remove the cron job when deactivating
-        await schedule_data_source_import(source.id, source.name, None)
+        await get_datasource_scheduler_service().schedule_data_source_import(source.id, source.name, None)
     
     source = await repository.get_data_source_by_id(source.id)
     if source is None:

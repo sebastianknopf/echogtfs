@@ -244,7 +244,7 @@ class GtfsRtAdapter(BaseAdapter):
         logger.info(f"[GtfsRtAdapter] Parsed {len(feed.entity)} entities from feed")
         
         # Extract source name from config (used for ID generation)
-        # Note: The actual source name will be set by alert_import.py
+        # Note: The actual source name will be injected by the datasource scheduler service
         source_name = self.config.get("_source_name", "gtfsrt")
         
         alerts = []
