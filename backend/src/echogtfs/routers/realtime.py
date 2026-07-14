@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from echogtfs.services.database import get_repository
 from echogtfs.services.database.models import AppSetting
 from echogtfs.services.gtfsrt.gtfs_realtime_service_alerts_export_service import GtfsRealtimeServiceAlertsExportService
-from echogtfs.security import verify_password
+from echogtfs.common.security import verify_password
 
 router = APIRouter()
 

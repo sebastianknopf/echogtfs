@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from echogtfs.services.database import RepositoryInterface, get_repository
 from echogtfs.services.database.models import User
 from echogtfs.validation.schemas import PasswordChange, UserCreate, UserRead, UserUpdate
-from echogtfs.security import CurrentSuperuser, CurrentUser, hash_password, verify_password
+from echogtfs.common.security import CurrentSuperuser, CurrentUser, hash_password, verify_password
 
 router = APIRouter()
 

@@ -31,7 +31,7 @@ from echogtfs.validation.schemas import (
     ServiceAlertRead,
     ServiceAlertUpdate,
 )
-from echogtfs.security import CurrentUser
+from echogtfs.common.security import CurrentUser
 
 router = APIRouter()
 logger = logging.getLogger("uvicorn")

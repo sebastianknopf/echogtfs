@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse, FileResponse
 from echogtfs.services.database import RepositoryInterface, get_repository
 from echogtfs.services.database.models import DataSource
 from echogtfs.validation.schemas import DataSourceCreate, DataSourceRead, DataSourceUpdate, DataSourceLogRead
-from echogtfs.security import CurrentPoweruser
+from echogtfs.common.security import CurrentPoweruser
 from echogtfs.services.adapters import ADAPTER_REGISTRY
 from echogtfs.services.alert_import import schedule_data_source_import, run_import_task
 from echogtfs.services.datalog import DatalogService

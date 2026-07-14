@@ -7,7 +7,7 @@ from echogtfs.config import settings
 from echogtfs.extensions import limiter
 from echogtfs.services.database import RepositoryInterface, get_repository
 from echogtfs.validation.schemas import Token
-from echogtfs.security import create_access_token, verify_password
+from echogtfs.common.security import create_access_token, verify_password
 
 router = APIRouter()
 

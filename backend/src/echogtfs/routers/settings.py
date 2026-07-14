@@ -4,7 +4,7 @@ from echogtfs.enum.system import ExpiredAlertPolicy
 from echogtfs.services.database import get_repository
 from echogtfs.services.database.models import AppSetting
 from echogtfs.validation.schemas import AppSettings, PublicAppSettings
-from echogtfs.security import CurrentSuperuser, hash_password
+from echogtfs.common.security import CurrentSuperuser, hash_password
 from echogtfs.services.cleanup import CleanupService
 
 try:

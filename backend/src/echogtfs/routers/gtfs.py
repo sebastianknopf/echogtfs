@@ -15,7 +15,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, s
 
 from echogtfs.services.database import RepositoryInterface, get_repository
 from echogtfs.services.database.models import GtfsAgency, GtfsRoute, GtfsStop
-from echogtfs.security import CurrentUser, CurrentPoweruser
+from echogtfs.common.security import CurrentUser, CurrentPoweruser
 from echogtfs.services.gtfs import (
     GtfsImportInterface,
     GtfsImportService,
