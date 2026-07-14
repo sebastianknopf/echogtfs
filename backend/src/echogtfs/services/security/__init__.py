@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from echogtfs.services.security.intf_security_service import SecurityServiceInterface
+from echogtfs.services.security.intf_security import SecurityServiceInterface
 from echogtfs.services.security.security_service import SecurityService
 
 _security_service: SecurityServiceInterface | None = None

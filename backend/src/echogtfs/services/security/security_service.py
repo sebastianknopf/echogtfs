@@ -9,7 +9,7 @@ from fastapi import HTTPException, Request, status
 from echogtfs.common.config import settings
 from echogtfs.services.database import RepositoryInterface
 from echogtfs.services.database.models import User
-from echogtfs.services.security.intf_security_service import SecurityServiceInterface
+from echogtfs.services.security.intf_security import SecurityServiceInterface
 
 
 class SecurityService(SecurityServiceInterface):
