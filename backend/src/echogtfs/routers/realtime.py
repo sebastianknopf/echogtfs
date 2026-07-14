@@ -7,7 +7,6 @@ if credentials are configured in settings.
 """
 
 import base64
-import time
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -19,31 +18,12 @@ from echogtfs.security import verify_password
 
 router = APIRouter()
 
-# Simple in-memory cache for GTFS-RT feed
-_feed_cache = {
-    "protobuf": None,
-    "json": None,
-    "timestamp": 0,
-    "ttl": 30,  # Cache TTL in seconds
-}
-
-
-def invalidate_gtfs_rt_cache() -> None:
-    """
-    Invalidate the GTFS-RT feed cache.
-    
-    Call this function whenever alerts are created, updated, or deleted
-    to ensure clients get fresh data immediately.
-    """
-    _feed_cache["protobuf"] = None
-    _feed_cache["json"] = None
-    _feed_cache["timestamp"] = 0
-
 
 async def _get_gtfs_rt_settings() -> tuple[str, str, str]:
     """Load GTFS-RT path and optional basic-auth credentials from repository."""
     repository = get_repository()
     rows = await repository.get_all_app_settings()
+    
     return (
         rows.get(AppSetting.KEY_GTFS_RT_PATH, "realtime/service-alerts.pbf"),
         rows.get(AppSetting.KEY_GTFS_RT_USERNAME, ""),
@@ -142,42 +122,22 @@ async def get_service_alerts(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Not found"
         )
-    
-    # Check cache validity
-    current_time = time.time()
-    cache_valid = (current_time - _feed_cache["timestamp"]) < _feed_cache["ttl"]
 
-    # Return cached response if valid
-    if cache_valid:
-        if (json_format is not None or debug_format is not None) and _feed_cache["json"] is not None:
-            return Response(
-                content=_feed_cache["json"],
-                media_type="application/json",
-            )
-        elif (json_format is None and debug_format is None) and _feed_cache["protobuf"] is not None:
-            return Response(
-                content=_feed_cache["protobuf"],
-                media_type="application/x-protobuf",
-            )
-
-    # Cache miss or expired - generate payloads with export service
+    # define export service instance
     export_service = GtfsRealtimeServiceAlertsExportService(get_repository())
-    protobuf_content = await export_service.export_protobuf()
-    json_content = await export_service.export_json()
-
-    # Update cache
-    _feed_cache["protobuf"] = protobuf_content
-    _feed_cache["json"] = json_content
-    _feed_cache["timestamp"] = current_time
     
     # Return as JSON or protobuf
     # If ?json or ?debug is present (even without value), return JSON
     if json_format is not None or debug_format is not None:
+        json_content = await export_service.export_json()
+        
         return Response(
             content=json_content,
             media_type="application/json",
         )
     else:
+        protobuf_content = await export_service.export_protobuf()
+        
         return Response(
             content=protobuf_content,
             media_type="application/x-protobuf",

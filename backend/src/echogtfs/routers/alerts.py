@@ -32,7 +32,6 @@ from echogtfs.validation.schemas import (
     ServiceAlertUpdate,
 )
 from echogtfs.security import CurrentUser
-from echogtfs.routers.realtime import invalidate_gtfs_rt_cache
 
 router = APIRouter()
 logger = logging.getLogger("uvicorn")
@@ -421,9 +420,6 @@ async def create_alert(
     entity_names = await _load_gtfs_entity_names(db)
     _enrich_alerts_with_entity_names([alert_dict], entity_names)
     
-    # Invalidate GTFS-RT cache since alerts changed
-    invalidate_gtfs_rt_cache()
-    
     return alert_dict
 
 
@@ -556,9 +552,6 @@ async def update_alert(
     entity_names = await _load_gtfs_entity_names(db)
     _enrich_alerts_with_entity_names([alert_dict], entity_names)
     
-    # Invalidate GTFS-RT cache
-    invalidate_gtfs_rt_cache()
-    
     return alert_dict
 
 
@@ -589,9 +582,6 @@ async def delete_alert(
     
     await db.delete(alert)
     await db.commit()
-    
-    # Invalidate GTFS-RT cache
-    invalidate_gtfs_rt_cache()
 
 
 @router.post("/{alert_id}/toggle-active", response_model=ServiceAlertRead)
@@ -629,9 +619,6 @@ async def toggle_alert_active(
     
     await db.commit()
     await db.refresh(alert)
-    
-    # Invalidate GTFS-RT cache
-    invalidate_gtfs_rt_cache()
     
     # Reload with relationships
     stmt = (

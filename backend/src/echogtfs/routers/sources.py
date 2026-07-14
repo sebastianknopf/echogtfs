@@ -18,7 +18,6 @@ from echogtfs.services.adapters import ADAPTER_REGISTRY
 from echogtfs.services.alert_import import schedule_data_source_import, run_import_task
 from echogtfs.services.datalog import DatalogService
 from echogtfs.services.mapping import MappingExportService, MappingImportService, MappingServiceError
-from echogtfs.routers.realtime import invalidate_gtfs_rt_cache
 
 router = APIRouter()
 logger = logging.getLogger("uvicorn")
@@ -197,7 +196,6 @@ async def update_source(
         await repository.update_service_alert_source_name(old_name, source_data.name)
     
     # Handle is_active changes
-    cache_invalidation_required = False
     if source_data.is_active is not None:
         old_status = source.is_active
 
@@ -209,7 +207,6 @@ async def update_source(
                 f"Deactivated data source {source_id} '{source.name}': "
                 f"Deleted {deleted_count} associated alerts"
             )
-            cache_invalidation_required = True
 
     source = await repository.update_data_source(
         source_id,
@@ -256,9 +253,6 @@ async def update_source(
     else:
         # Remove cron job if inactive or no cron expression
         await schedule_data_source_import(source.id, source.name, None)
-
-    if cache_invalidation_required:
-        invalidate_gtfs_rt_cache()
 
     return await _enrich_source_with_error_flag(source, repository)
 
@@ -353,9 +347,6 @@ async def toggle_source_active(
     elif not source.is_active:
         # Remove the cron job when deactivating
         await schedule_data_source_import(source.id, source.name, None)
-    
-    # Invalidate GTFS-RT cache
-    invalidate_gtfs_rt_cache()
     
     source = await repository.get_data_source_by_id(source.id)
     if source is None:
