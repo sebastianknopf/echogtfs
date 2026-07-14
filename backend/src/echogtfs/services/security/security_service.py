@@ -6,7 +6,7 @@ import bcrypt
 import jwt
 from fastapi import HTTPException, Request, status
 
-from echogtfs.config import settings
+from echogtfs.common.config import settings
 from echogtfs.services.database import RepositoryInterface
 from echogtfs.services.database.models import User
 from echogtfs.services.security.intf_security_service import SecurityServiceInterface

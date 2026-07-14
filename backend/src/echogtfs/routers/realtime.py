@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from echogtfs.services.database import get_repository
 from echogtfs.services.database.models import AppSetting
 from echogtfs.services.gtfsrt.gtfs_realtime_service_alerts_export_service import GtfsRealtimeServiceAlertsExportService
-from echogtfs.common.security import verify_password
+from echogtfs.services.security import get_security_service
 
 router = APIRouter()
 
@@ -66,7 +66,7 @@ async def check_gtfs_rt_auth(request: Request) -> None:
                 headers={"WWW-Authenticate": "Basic"},
             )
         
-        if not verify_password(password, hashed_password):
+        if not get_security_service().verify_password(password, hashed_password):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials",

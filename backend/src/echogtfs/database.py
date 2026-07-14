@@ -3,7 +3,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
-from echogtfs.config import settings
+from echogtfs.common.config import settings
 
 engine = create_async_engine(settings.database_url, echo=settings.debug)
 

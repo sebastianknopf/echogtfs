@@ -8,11 +8,11 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from echogtfs.config import settings
-from echogtfs.common.security import SlidingTokenMiddleware, hash_password
-from echogtfs.extensions import limiter
+from echogtfs.common.security import SlidingTokenMiddleware
+from echogtfs.common.extensions import limiter
 from echogtfs.services.database.alembic_migration_service import AlembicMigrationService
 from echogtfs.services.database import SqlAlchemyRepository, set_repository
-from echogtfs.services.security import SecurityService, set_security_service
+from echogtfs.services.security import SecurityService, get_security_service, set_security_service
 from echogtfs.routers.alerts import router as alerts_router
 from echogtfs.routers.auth import router as auth_router
 from echogtfs.routers.gtfs import router as gtfs_router
@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await repository.create_user(
             username=settings.first_superuser,
             email=settings.first_superuser_email,
-            hashed_password=hash_password(settings.first_superuser_password),
+            hashed_password=get_security_service().hash_password(settings.first_superuser_password),
             is_active=True,
             is_superuser=True,
         )

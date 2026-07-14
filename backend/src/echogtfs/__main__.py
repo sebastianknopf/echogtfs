@@ -1,6 +1,6 @@
 import uvicorn
 
-from echogtfs.config import settings
+from echogtfs.common.config import settings
 
 
 def main() -> None:

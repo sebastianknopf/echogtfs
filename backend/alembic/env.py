@@ -7,7 +7,7 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from echogtfs.config import settings
+from echogtfs.common.config import settings
 from echogtfs.database import Base
 from echogtfs.services.database import models  # noqa: F401
 

@@ -5,7 +5,7 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 
-from echogtfs.config import settings
+from echogtfs.common.config import settings
 
 logger = logging.getLogger(__name__)
 

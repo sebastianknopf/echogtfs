@@ -4,8 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from echogtfs.services.database import RepositoryInterface, get_repository
 from echogtfs.services.database.models import User
+from echogtfs.services.security import get_security_service
 from echogtfs.validation.schemas import PasswordChange, UserCreate, UserRead, UserUpdate
-from echogtfs.common.security import CurrentSuperuser, CurrentUser, hash_password, verify_password
+from echogtfs.common.security import CurrentSuperuser, CurrentUser
 
 router = APIRouter()
 
@@ -22,7 +23,10 @@ async def change_own_password(
     payload: PasswordChange, current_user: CurrentUser, repository: _Repo
 ) -> None:
     """Change password for the currently authenticated user. Requires current password verification."""
-    if not verify_password(payload.current_password, current_user.hashed_password):
+    if not get_security_service().verify_password(
+        payload.current_password,
+        current_user.hashed_password,
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Current password is incorrect",
@@ -30,7 +34,7 @@ async def change_own_password(
     
     await repository.update_user(
         current_user.id,
-        hashed_password=hash_password(payload.new_password),
+        hashed_password=get_security_service().hash_password(payload.new_password),
     )
 
 
@@ -41,7 +45,11 @@ async def update_me(
     user = await repository.update_user(
         current_user.id,
         email=payload.email,
-        hashed_password=hash_password(payload.password) if payload.password is not None else None,
+        hashed_password=(
+            get_security_service().hash_password(payload.password)
+            if payload.password is not None
+            else None
+        ),
     )
 
     if user is None:
@@ -69,7 +77,7 @@ async def register(
     return await repository.create_user(
         username=payload.username,
         email=payload.email,
-        hashed_password=hash_password(payload.password),
+        hashed_password=get_security_service().hash_password(payload.password),
     )
 
 
@@ -119,7 +127,11 @@ async def update_user(
     user = await repository.update_user(
         user_id,
         email=payload.email,
-        hashed_password=hash_password(payload.password) if payload.password is not None else None,
+        hashed_password=(
+            get_security_service().hash_password(payload.password)
+            if payload.password is not None
+            else None
+        ),
         is_active=payload.is_active,
         is_superuser=payload.is_superuser,
         is_technical_contact=payload.is_technical_contact,
