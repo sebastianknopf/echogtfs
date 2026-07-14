@@ -22,13 +22,17 @@ from echogtfs.services.gtfs import (
 )
 from echogtfs.validation.schemas import AgencyRead, GtfsStatusRead, RouteRead, StopRead, GtfsConfigUpdate
 
-def create_gtfs_import_service(repository: _Repo) -> GtfsImportInterface:
-    """Create a GTFS import service instance for the current dependency scope."""
-    return GtfsImportService(repository)
 
 router = APIRouter()
 
 _Repo = Annotated[RepositoryInterface, Depends(get_repository)]
+
+
+def create_gtfs_import_service(repository: _Repo) -> GtfsImportInterface:
+    """Create a GTFS import service instance for the current dependency scope."""
+    return GtfsImportService(repository)
+
+
 _GtfsImport = Annotated[GtfsImportInterface, Depends(create_gtfs_import_service)]
 
 
