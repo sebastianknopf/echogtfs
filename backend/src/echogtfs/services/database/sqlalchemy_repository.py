@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any
 import uuid
 
-from sqlalchemy import delete, func, insert, select, text, update
+from sqlalchemy import case, delete, func, insert, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import selectinload
 
@@ -810,6 +810,233 @@ class SqlAlchemyRepository(RepositoryInterface):
         async with self.get_session() as db:
             result = await db.execute(stmt)
             return list(result.scalars().all())
+
+    async def list_service_alerts_paginated(
+        self,
+        *,
+        page: int,
+        limit: int,
+        sort: str,
+        search: str,
+        is_active: bool | None,
+        has_data_source: bool | None,
+    ) -> tuple[list[ServiceAlert], int]:
+        """Return paginated service alerts and total count with required relationships loaded."""
+        page = max(1, page)
+        limit = max(1, min(100, limit))
+        offset = (page - 1) * limit
+        normalized_sort = sort.lower() if sort in ["newest", "oldest"] else "newest"
+
+        subq = (
+            select(
+                ServiceAlertActivePeriod.alert_id,
+                func.min(ServiceAlertActivePeriod.start_time).label("first_start"),
+            )
+            .group_by(ServiceAlertActivePeriod.alert_id)
+            .subquery()
+        )
+
+        where_conditions = []
+        trimmed_search = search.strip()
+        if trimmed_search:
+            search_pattern = f"%{trimmed_search}%"
+            where_conditions.append(
+                ServiceAlert.id.in_(
+                    select(ServiceAlertTranslation.alert_id)
+                    .where(ServiceAlertTranslation.header_text.ilike(search_pattern))
+                    .distinct()
+                )
+            )
+
+        if is_active is not None:
+            where_conditions.append(ServiceAlert.is_active == is_active)
+
+        if has_data_source is not None:
+            if has_data_source:
+                where_conditions.append(ServiceAlert.data_source_id.is_not(None))
+            else:
+                where_conditions.append(ServiceAlert.data_source_id.is_(None))
+
+        count_stmt = select(func.count(ServiceAlert.id))
+        if where_conditions:
+            count_stmt = count_stmt.where(*where_conditions)
+
+        sort_expr = subq.c.first_start.desc() if normalized_sort == "newest" else subq.c.first_start.asc()
+
+        stmt = select(ServiceAlert).outerjoin(subq, ServiceAlert.id == subq.c.alert_id)
+        if where_conditions:
+            stmt = stmt.where(*where_conditions)
+
+        stmt = stmt.options(
+            selectinload(ServiceAlert.translations),
+            selectinload(ServiceAlert.active_periods),
+            selectinload(ServiceAlert.informed_entities),
+            selectinload(ServiceAlert.data_source),
+        ).order_by(
+            case((subq.c.first_start.is_(None), 0), else_=1),
+            sort_expr.nulls_last(),
+        ).offset(offset).limit(limit)
+
+        async with self.get_session() as db:
+            count_result = await db.execute(count_stmt)
+            total = int(count_result.scalar_one())
+
+            result = await db.execute(stmt)
+            items = list(result.scalars().all())
+            return items, total
+
+    async def get_service_alert_by_id_with_relations(self, alert_id: uuid.UUID) -> ServiceAlert | None:
+        """Return one service alert by id with required relationships loaded."""
+        stmt = (
+            select(ServiceAlert)
+            .where(ServiceAlert.id == alert_id)
+            .options(
+                selectinload(ServiceAlert.data_source),
+                selectinload(ServiceAlert.translations),
+                selectinload(ServiceAlert.active_periods),
+                selectinload(ServiceAlert.informed_entities),
+            )
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return result.scalar_one_or_none()
+
+    async def create_internal_service_alert(
+        self,
+        *,
+        cause: str,
+        effect: str,
+        severity_level: str,
+        is_active: bool,
+        translations: list[dict[str, Any]],
+        active_periods: list[dict[str, Any]],
+        informed_entities: list[dict[str, Any]],
+    ) -> ServiceAlert:
+        """Create one internal service alert and return it with relationships loaded."""
+        async with self.get_session() as db:
+            alert = ServiceAlert(
+                cause=cause,
+                effect=effect,
+                severity_level=severity_level,
+                is_active=is_active,
+            )
+            db.add(alert)
+            await db.flush()
+
+            for translation_data in translations:
+                db.add(ServiceAlertTranslation(alert_id=alert.id, **translation_data))
+
+            for period_data in active_periods:
+                db.add(ServiceAlertActivePeriod(alert_id=alert.id, **period_data))
+
+            for entity_data in informed_entities:
+                db.add(ServiceAlertInformedEntity(alert_id=alert.id, **entity_data))
+
+            await db.commit()
+
+            stmt = (
+                select(ServiceAlert)
+                .where(ServiceAlert.id == alert.id)
+                .options(
+                    selectinload(ServiceAlert.data_source),
+                    selectinload(ServiceAlert.translations),
+                    selectinload(ServiceAlert.active_periods),
+                    selectinload(ServiceAlert.informed_entities),
+                )
+            )
+            result = await db.execute(stmt)
+            return result.scalar_one()
+
+    async def update_service_alert(
+        self,
+        alert_id: uuid.UUID,
+        *,
+        cause: str | None = None,
+        effect: str | None = None,
+        severity_level: str | None = None,
+        is_active: bool | None = None,
+        translations: list[dict[str, Any]] | None = None,
+        active_periods: list[dict[str, Any]] | None = None,
+        informed_entities: list[dict[str, Any]] | None = None,
+    ) -> ServiceAlert | None:
+        """Update one service alert and optionally replace child rows."""
+        stmt = (
+            select(ServiceAlert)
+            .where(ServiceAlert.id == alert_id)
+            .options(
+                selectinload(ServiceAlert.data_source),
+                selectinload(ServiceAlert.translations),
+                selectinload(ServiceAlert.active_periods),
+                selectinload(ServiceAlert.informed_entities),
+            )
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            alert = result.scalar_one_or_none()
+            if alert is None:
+                return None
+
+            if cause is not None:
+                alert.cause = cause
+            if effect is not None:
+                alert.effect = effect
+            if severity_level is not None:
+                alert.severity_level = severity_level
+            if is_active is not None:
+                alert.is_active = is_active
+
+            if translations is not None:
+                await db.execute(
+                    delete(ServiceAlertTranslation).where(ServiceAlertTranslation.alert_id == alert_id)
+                )
+                for translation_data in translations:
+                    db.add(ServiceAlertTranslation(alert_id=alert_id, **translation_data))
+
+            if active_periods is not None:
+                await db.execute(
+                    delete(ServiceAlertActivePeriod).where(ServiceAlertActivePeriod.alert_id == alert_id)
+                )
+                for period_data in active_periods:
+                    db.add(ServiceAlertActivePeriod(alert_id=alert_id, **period_data))
+
+            if informed_entities is not None:
+                await db.execute(
+                    delete(ServiceAlertInformedEntity).where(ServiceAlertInformedEntity.alert_id == alert_id)
+                )
+                for entity_data in informed_entities:
+                    db.add(ServiceAlertInformedEntity(alert_id=alert_id, **entity_data))
+
+            await db.commit()
+
+            refreshed = await db.execute(stmt)
+            return refreshed.scalar_one_or_none()
+
+    async def toggle_service_alert_active(self, alert_id: uuid.UUID) -> ServiceAlert | None:
+        """Toggle the is_active flag for one service alert and return updated model."""
+        stmt = (
+            select(ServiceAlert)
+            .where(ServiceAlert.id == alert_id)
+            .options(
+                selectinload(ServiceAlert.data_source),
+                selectinload(ServiceAlert.translations),
+                selectinload(ServiceAlert.active_periods),
+                selectinload(ServiceAlert.informed_entities),
+            )
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            alert = result.scalar_one_or_none()
+            if alert is None:
+                return None
+
+            alert.is_active = not alert.is_active
+            await db.commit()
+
+            refreshed = await db.execute(stmt)
+            return refreshed.scalar_one_or_none()
 
     async def list_service_alerts_by_ids(self, alert_ids: list[uuid.UUID]) -> list[ServiceAlert]:
         """Return alerts by IDs."""

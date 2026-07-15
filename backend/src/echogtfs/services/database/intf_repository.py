@@ -334,6 +334,61 @@ class RepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def list_service_alerts_paginated(
+        self,
+        *,
+        page: int,
+        limit: int,
+        sort: str,
+        search: str,
+        is_active: bool | None,
+        has_data_source: bool | None,
+    ) -> tuple[list[ServiceAlert], int]:
+        """Return paginated service alerts with total count and required relationships loaded."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_service_alert_by_id_with_relations(self, alert_id: uuid.UUID) -> ServiceAlert | None:
+        """Return one service alert by id with all required relationships, or None when not found."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def create_internal_service_alert(
+        self,
+        *,
+        cause: str,
+        effect: str,
+        severity_level: str,
+        is_active: bool,
+        translations: list[dict[str, Any]],
+        active_periods: list[dict[str, Any]],
+        informed_entities: list[dict[str, Any]],
+    ) -> ServiceAlert:
+        """Create one internal service alert including child records and return it with relationships loaded."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def update_service_alert(
+        self,
+        alert_id: uuid.UUID,
+        *,
+        cause: str | None = None,
+        effect: str | None = None,
+        severity_level: str | None = None,
+        is_active: bool | None = None,
+        translations: list[dict[str, Any]] | None = None,
+        active_periods: list[dict[str, Any]] | None = None,
+        informed_entities: list[dict[str, Any]] | None = None,
+    ) -> ServiceAlert | None:
+        """Update one service alert and optionally replace child records. Returns None when not found."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def toggle_service_alert_active(self, alert_id: uuid.UUID) -> ServiceAlert | None:
+        """Toggle the is_active flag for one service alert and return updated model, or None when not found."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def list_service_alerts_by_ids(self, alert_ids: list[uuid.UUID]) -> list[ServiceAlert]:
         """Return service alerts by ids."""
         raise NotImplementedError
