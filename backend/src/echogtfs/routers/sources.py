@@ -15,7 +15,7 @@ from echogtfs.services.database.models import DataSource
 from echogtfs.services.scheduler import get_datasource_scheduler_service
 from echogtfs.validation.schemas import DataSourceCreate, DataSourceRead, DataSourceUpdate, DataSourceLogRead
 from echogtfs.common.security import CurrentPoweruser
-from echogtfs.services.adapters import ADAPTER_REGISTRY
+from echogtfs.datasources import DATASOURCE_REGISTRY
 from echogtfs.services.datalog import DatalogService
 from echogtfs.services.mapping import MappingExportService, MappingImportService, MappingServiceError
 
@@ -78,7 +78,7 @@ async def list_adapter_types(current_user: CurrentPoweruser):
         List of adapter type definitions with config field schemas
     """
     adapter_types = []
-    for adapter_name, adapter_class in ADAPTER_REGISTRY.items():
+    for adapter_name, adapter_class in DATASOURCE_REGISTRY.items():
         adapter_types.append({
             "type": adapter_name,
             "config_schema": adapter_class.get_config_schema(),

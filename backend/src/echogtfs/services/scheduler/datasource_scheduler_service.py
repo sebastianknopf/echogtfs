@@ -40,10 +40,10 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
         return cls._scheduler
 
     @staticmethod
-    def _get_adapter(source_type: str, config: dict[str, object]):
-        from echogtfs.services.adapters import get_adapter
+    def _get_datasource(source_type: str, config: dict[str, object]):
+        from echogtfs.datasources import get_datasource
 
-        return get_adapter(source_type, config)
+        return get_datasource(source_type, config)
 
     async def schedule_all_data_sources(self) -> None:
         """Load active cron-configured data sources and register their jobs."""
@@ -124,11 +124,9 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
 
         try:
             config = json.loads(source.config)
-            adapter = self._get_adapter(source.type, config)
+            datasource = self._get_datasource(source.type, config)
 
-            async with self._repository.get_session() as db:
-                stats = await adapter.sync_alerts(db, source.id, source.name)
-                await db.commit()
+            stats = await datasource.sync_alerts(self._repository, source.id, source.name)
 
             logger.info(
                 "[DatasourceScheduler] Import task completed for '%s': created=%s, updated=%s, deleted=%s",
@@ -145,16 +143,6 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
                 exc_info=True,
             )
 
-            try:
-                async with self._repository.get_session() as db:
-                    await db.rollback()
-            except Exception as rollback_exc:  # noqa: BLE001
-                logger.error(
-                    "[DatasourceScheduler] Failed to rollback import session for '%s': %s",
-                    source.name,
-                    rollback_exc,
-                    exc_info=True,
-                )
         finally:
             timestamp = datetime.now(UTC)
 

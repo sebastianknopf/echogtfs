@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import datetime
+from typing import Any
 import uuid
 
 from sqlalchemy import delete, func, insert, select, text, update
@@ -21,6 +22,8 @@ from echogtfs.services.database.models import (
     GtfsStop,
     ServiceAlert,
     ServiceAlertActivePeriod,
+    ServiceAlertInformedEntity,
+    ServiceAlertTranslation,
     User,
 )
 
@@ -740,3 +743,161 @@ class SqlAlchemyRepository(RepositoryInterface):
             await db.commit()
 
             return int(result.rowcount or 0)
+
+    async def get_data_source_invalid_reference_policy(self, source_id: int) -> str:
+        """Return invalid reference policy configured for a data source."""
+        stmt = select(DataSource.invalid_reference_policy).where(DataSource.id == source_id)
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            policy = result.scalar_one_or_none()
+            if policy is None:
+                raise ValueError(f"Data source {source_id} not found")
+            return policy.value if hasattr(policy, "value") else str(policy)
+
+    async def list_data_source_mappings_grouped(self, source_id: int) -> dict[str, dict[str, str]]:
+        """Return mappings grouped by entity type for one data source."""
+        stmt = select(DataSourceMapping).where(DataSourceMapping.data_source_id == source_id)
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            mappings = result.scalars().all()
+
+            grouped: dict[str, dict[str, str]] = {}
+            for mapping in mappings:
+                grouped.setdefault(mapping.entity_type, {})[mapping.key] = mapping.value
+            return grouped
+
+    async def list_data_source_enrichments(self, source_id: int) -> list[dict[str, Any]]:
+        """Return enrichments for one data source sorted by sort_order."""
+        stmt = (
+            select(DataSourceEnrichment)
+            .where(DataSourceEnrichment.data_source_id == source_id)
+            .order_by(DataSourceEnrichment.sort_order)
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            enrichments = result.scalars().all()
+
+            return [
+                {
+                    "enrichment_type": enrichment.enrichment_type,
+                    "source_field": enrichment.source_field,
+                    "key": enrichment.key,
+                    "value": enrichment.value,
+                }
+                for enrichment in enrichments
+            ]
+
+    async def list_gtfs_entity_ids(self) -> dict[str, set[str]]:
+        """Return GTFS IDs for agency, route, and stop as sets."""
+        async with self.get_session() as db:
+            agencies_result = await db.execute(select(GtfsAgency.gtfs_id))
+            routes_result = await db.execute(select(GtfsRoute.gtfs_id))
+            stops_result = await db.execute(select(GtfsStop.gtfs_id))
+
+            return {
+                "agency": {row[0] for row in agencies_result.fetchall()},
+                "route": {row[0] for row in routes_result.fetchall()},
+                "stop": {row[0] for row in stops_result.fetchall()},
+            }
+
+    async def list_service_alerts_for_data_source(self, source_id: int) -> list[ServiceAlert]:
+        """Return alerts linked to one data source."""
+        stmt = select(ServiceAlert).where(ServiceAlert.data_source_id == source_id)
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
+    async def list_service_alerts_by_ids(self, alert_ids: list[uuid.UUID]) -> list[ServiceAlert]:
+        """Return alerts by IDs."""
+        if not alert_ids:
+            return []
+
+        stmt = select(ServiceAlert).where(ServiceAlert.id.in_(alert_ids))
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
+    async def delete_service_alerts_for_data_source_by_ids(
+        self,
+        source_id: int,
+        alert_ids: list[uuid.UUID],
+    ) -> int:
+        """Delete alerts by IDs only for the given data source."""
+        if not alert_ids:
+            return 0
+
+        stmt = delete(ServiceAlert).where(
+            ServiceAlert.data_source_id == source_id,
+            ServiceAlert.id.in_(alert_ids),
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            await db.commit()
+            return int(result.rowcount or 0)
+
+    async def upsert_service_alert_from_sync(
+        self,
+        *,
+        alert_id: uuid.UUID,
+        source_id: int,
+        source_name: str,
+        cause: str,
+        effect: str,
+        severity_level: str,
+        is_active_on_create: bool,
+        translations: list[dict[str, Any]],
+        active_periods: list[dict[str, Any]],
+        informed_entities: list[dict[str, Any]],
+    ) -> str:
+        """Create or update a synchronized alert and replace child records."""
+        async with self.get_session() as db:
+            existing = await db.get(ServiceAlert, alert_id)
+
+            action = "updated"
+            if existing is None:
+                action = "created"
+                existing = ServiceAlert(
+                    id=alert_id,
+                    cause=cause,
+                    effect=effect,
+                    severity_level=severity_level,
+                    source=source_name,
+                    data_source_id=source_id,
+                    is_active=is_active_on_create,
+                )
+                db.add(existing)
+                await db.flush()
+            else:
+                existing.cause = cause
+                existing.effect = effect
+                existing.severity_level = severity_level
+                existing.source = source_name
+                existing.data_source_id = source_id
+
+            await db.execute(
+                delete(ServiceAlertTranslation).where(ServiceAlertTranslation.alert_id == alert_id)
+            )
+            await db.execute(
+                delete(ServiceAlertActivePeriod).where(ServiceAlertActivePeriod.alert_id == alert_id)
+            )
+            await db.execute(
+                delete(ServiceAlertInformedEntity).where(ServiceAlertInformedEntity.alert_id == alert_id)
+            )
+
+            for translation_data in translations:
+                db.add(ServiceAlertTranslation(alert_id=alert_id, **translation_data))
+
+            for period_data in active_periods:
+                db.add(ServiceAlertActivePeriod(alert_id=alert_id, **period_data))
+
+            for entity_data in informed_entities:
+                db.add(ServiceAlertInformedEntity(alert_id=alert_id, **entity_data))
+
+            await db.commit()
+            return action

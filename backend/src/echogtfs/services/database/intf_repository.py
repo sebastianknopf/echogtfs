@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from datetime import datetime
+from typing import Any
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -305,4 +306,61 @@ class RepositoryInterface(ABC):
     @abstractmethod
     async def delete_service_alerts_by_ids(self, alert_ids: list[uuid.UUID]) -> int:
         """Delete service alerts by ids and return affected row count."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_data_source_invalid_reference_policy(self, source_id: int) -> str:
+        """Return invalid reference policy for a data source."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_data_source_mappings_grouped(self, source_id: int) -> dict[str, dict[str, str]]:
+        """Return all data source mappings grouped by entity type."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_data_source_enrichments(self, source_id: int) -> list[dict[str, Any]]:
+        """Return enrichment rules for a data source ordered by priority."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_gtfs_entity_ids(self) -> dict[str, set[str]]:
+        """Return GTFS entity IDs as sets for agency, route, and stop."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_service_alerts_for_data_source(self, source_id: int) -> list[ServiceAlert]:
+        """Return all service alerts currently linked to one data source."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_service_alerts_by_ids(self, alert_ids: list[uuid.UUID]) -> list[ServiceAlert]:
+        """Return service alerts by ids."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def delete_service_alerts_for_data_source_by_ids(
+        self,
+        source_id: int,
+        alert_ids: list[uuid.UUID],
+    ) -> int:
+        """Delete service alerts by ids only when they belong to a specific data source."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def upsert_service_alert_from_sync(
+        self,
+        *,
+        alert_id: uuid.UUID,
+        source_id: int,
+        source_name: str,
+        cause: str,
+        effect: str,
+        severity_level: str,
+        is_active_on_create: bool,
+        translations: list[dict[str, Any]],
+        active_periods: list[dict[str, Any]],
+        informed_entities: list[dict[str, Any]],
+    ) -> str:
+        """Create or update one synchronized alert and replace child records."""
         raise NotImplementedError

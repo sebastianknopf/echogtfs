@@ -1,9 +1,4 @@
-"""
-Base adapter for external data sources.
-
-All data source adapters must inherit from BaseAdapter and implement
-the required methods for fetching and transforming service alerts.
-"""
+"""Base datasource implementation for external data feeds."""
 
 from abc import ABC, abstractmethod
 import logging
@@ -11,27 +6,27 @@ import re
 import uuid
 from typing import Any
 
-from sqlalchemy import delete, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from echogtfs.datasources.intf_datasource import DatasourceInterface
+from echogtfs.services.database.intf_repository import RepositoryInterface
 
 logger = logging.getLogger("uvicorn")
 
 
-class BaseAdapter(ABC):
+class DatasourceBase(DatasourceInterface):
     """
-    Abstract base class for data source adapters.
+    Abstract base class for data sources.
     
     Each adapter handles fetching data from a specific external format
     and transforming it into the ServiceAlert database structure.
     """
     
-    # Each adapter must define its configuration schema
+    # Each datasource must define its configuration schema
     # List of dicts with keys: name, type, label, required, placeholder, help_text
     CONFIG_SCHEMA: list[dict[str, Any]] = []
     
     def __init__(self, config: dict[str, Any]):
         """
-        Initialize the adapter with configuration.
+        Initialize the datasource with configuration.
         
         Args:
             config: Configuration dictionary containing at minimum:
@@ -44,7 +39,7 @@ class BaseAdapter(ABC):
     @abstractmethod
     def _validate_config(self) -> None:
         """
-        Validate the adapter configuration.
+        Validate the datasource configuration.
         
         Raises:
             ValueError: If required configuration fields are missing or invalid
@@ -129,14 +124,18 @@ class BaseAdapter(ABC):
         unique_name = f"{source_name}-{original_id}"
         return uuid.uuid5(namespace, unique_name)
     
-    def get_adapter_type(self) -> str:
+    def get_datasource_type(self) -> str:
         """
-        Get the type identifier of this adapter.
+        Get the type identifier of this datasource.
         
         Returns:
-            Adapter type string (e.g., "sirilite", "gtfsrt")
+            Datasource type string (e.g., "sirilite", "gtfsrt")
         """
-        return self.__class__.__name__.replace("Adapter", "").lower()
+        return self.__class__.__name__.replace("Datasource", "").lower()
+
+    # Backward-compatible alias used by existing log messages.
+    def get_adapter_type(self) -> str:
+        return self.get_datasource_type()
     
     @classmethod
     def get_config_schema(cls) -> list[dict[str, Any]]:
@@ -148,7 +147,11 @@ class BaseAdapter(ABC):
         """
         return [dict(field) for field in cls.CONFIG_SCHEMA]
     
-    async def _load_mappings(self, db: AsyncSession, source_id: int) -> dict[str, dict[str, str]]:
+    async def _load_mappings(
+        self,
+        repository: RepositoryInterface,
+        source_id: int,
+    ) -> dict[str, dict[str, str]]:
         """Load mappings for the specified data source.
         
         Returns a nested dictionary: {entity_type: {external_key: gtfs_value}}
@@ -158,25 +161,13 @@ class BaseAdapter(ABC):
             db: Database session
             source_id: ID of the data source to load mappings for
         """
-        from echogtfs.services.database.models import DataSourceMapping
-        
-        # Load all mappings for this data source
-        result = await db.execute(
-            select(DataSourceMapping).where(DataSourceMapping.data_source_id == source_id)
-        )
-        mappings = result.scalars().all()
-        
-        # Structure mappings by entity type
-        structured_mappings = {}
-        for mapping in mappings:
-            entity_type = mapping.entity_type
-            if entity_type not in structured_mappings:
-                structured_mappings[entity_type] = {}
-            structured_mappings[entity_type][mapping.key] = mapping.value
-        
-        return structured_mappings
+        return await repository.list_data_source_mappings_grouped(source_id)
     
-    async def _load_enrichments(self, db: AsyncSession, source_id: int) -> list[dict[str, Any]]:
+    async def _load_enrichments(
+        self,
+        repository: RepositoryInterface,
+        source_id: int,
+    ) -> list[dict[str, Any]]:
         """Load enrichments for the specified data source.
         
         Returns a list of enrichment rules sorted by priority (sort_order).
@@ -186,27 +177,7 @@ class BaseAdapter(ABC):
             db: Database session
             source_id: ID of the data source to load enrichments for
         """
-        from echogtfs.services.database.models import DataSourceEnrichment
-        
-        # Load all enrichments for this data source, sorted by priority
-        result = await db.execute(
-            select(DataSourceEnrichment)
-            .where(DataSourceEnrichment.data_source_id == source_id)
-            .order_by(DataSourceEnrichment.sort_order)
-        )
-        enrichments = result.scalars().all()
-        
-        # Convert to list of dictionaries
-        enrichment_list = []
-        for enrichment in enrichments:
-            enrichment_list.append({
-                "enrichment_type": enrichment.enrichment_type,
-                "source_field": enrichment.source_field,
-                "key": enrichment.key,
-                "value": enrichment.value,
-            })
-        
-        return enrichment_list
+        return await repository.list_data_source_enrichments(source_id)
     
     def _match_enrichment_pattern(self, text: str, pattern: str) -> bool:
         """
@@ -368,7 +339,10 @@ class BaseAdapter(ABC):
                     if all(enriched_types.values()):
                         break
     
-    async def _load_gtfs_entities(self, db: AsyncSession) -> dict[str, set[str]]:
+    async def _load_gtfs_entities(
+        self,
+        repository: RepositoryInterface,
+    ) -> dict[str, set[str]]:
         """Load all GTFS entity IDs into memory for fast validation.
         
         Returns a dictionary with sets of valid IDs:
@@ -381,30 +355,11 @@ class BaseAdapter(ABC):
         Args:
             db: Database session
         """
-        from echogtfs.services.database.models import GtfsAgency, GtfsRoute, GtfsStop
-        
-        logger.info("[Adapter] Loading GTFS entities into memory for validation")
-        
-        gtfs_entities = {
-            "agency": set(),
-            "route": set(),
-            "stop": set()
-        }
-        
-        # Load agencies
-        result = await db.execute(select(GtfsAgency.gtfs_id))
-        gtfs_entities["agency"] = {row[0] for row in result.fetchall()}
-        
-        # Load routes
-        result = await db.execute(select(GtfsRoute.gtfs_id))
-        gtfs_entities["route"] = {row[0] for row in result.fetchall()}
-        
-        # Load stops
-        result = await db.execute(select(GtfsStop.gtfs_id))
-        gtfs_entities["stop"] = {row[0] for row in result.fetchall()}
+        logger.info("[Datasource] Loading GTFS entities into memory for validation")
+        gtfs_entities = await repository.list_gtfs_entity_ids()
         
         logger.info(
-            f"[Adapter] Loaded {len(gtfs_entities['agency'])} agencies, "
+            f"[Datasource] Loaded {len(gtfs_entities['agency'])} agencies, "
             f"{len(gtfs_entities['route'])} routes, {len(gtfs_entities['stop'])} stops"
         )
         
@@ -639,7 +594,7 @@ class BaseAdapter(ABC):
     
     async def sync_alerts(
         self, 
-        db: AsyncSession, 
+        repository: RepositoryInterface,
         source_id: int, 
         source_name: str
     ) -> dict[str, int]:
@@ -663,23 +618,9 @@ class BaseAdapter(ABC):
         Returns:
             Dictionary with keys 'added', 'updated', 'deleted' containing counts
         """
-        # Import models here to avoid circular dependency
-        from echogtfs.services.database.models import (
-            ServiceAlert, 
-            ServiceAlertTranslation, 
-            ServiceAlertActivePeriod, 
-            ServiceAlertInformedEntity,
-            DataSource
-        )
-        from echogtfs.enum.gtfsrt import PeriodType
         from echogtfs.enum.system import InvalidReferencePolicy
-        
-        # Load the data source to get its invalid_reference_policy
-        result = await db.execute(
-            select(DataSource).where(DataSource.id == source_id)
-        )
-        data_source = result.scalar_one()
-        policy = data_source.invalid_reference_policy
+
+        policy = await repository.get_data_source_invalid_reference_policy(source_id)
         
         # Convert string to enum if needed (database stores as string)
         if isinstance(policy, str):
@@ -701,10 +642,10 @@ class BaseAdapter(ABC):
         logger.info(f"[{self.get_adapter_type()}] Fetched {total_fetched} alerts from source")
         
         # Load mappings for this data source
-        mappings = await self._load_mappings(db, source_id)
+        mappings = await self._load_mappings(repository, source_id)
         
         # Load enrichments for this data source
-        enrichments = await self._load_enrichments(db, source_id)
+        enrichments = await self._load_enrichments(repository, source_id)
         
         # Apply enrichments to alerts (before validation, as they may affect cause/effect/severity)
         if enrichments:
@@ -714,25 +655,25 @@ class BaseAdapter(ABC):
             self._apply_enrichments(alert_dicts, enrichments)
         
         # Load GTFS entities for validation
-        gtfs_entities = await self._load_gtfs_entities(db)
+        gtfs_entities = await self._load_gtfs_entities(repository)
         
         # Get IDs of alerts from the feed
         incoming_alert_ids = {alert_data["id"] for alert_data in alert_dicts}
         
         # Get existing alerts from this data source
-        result = await db.execute(
-            select(ServiceAlert).where(ServiceAlert.data_source_id == source_id)
-        )
-        existing_alerts = {alert.id: alert for alert in result.scalars().all()}
+        existing_alerts = {
+            alert.id: alert
+            for alert in await repository.list_service_alerts_for_data_source(source_id)
+        }
         existing_alert_ids = set(existing_alerts.keys())
         
         # Also check if any incoming alerts exist in DB with different/null data_source_id
         # This handles migration scenarios and prevents duplicate key errors
         if incoming_alert_ids:
-            result_by_id = await db.execute(
-                select(ServiceAlert).where(ServiceAlert.id.in_(incoming_alert_ids))
-            )
-            alerts_by_id = {alert.id: alert for alert in result_by_id.scalars().all()}
+            alerts_by_id = {
+                alert.id: alert
+                for alert in await repository.list_service_alerts_by_ids(list(incoming_alert_ids))
+            }
             
             # Merge into existing_alerts - alerts with matching IDs should be updated
             for alert_id, alert in alerts_by_id.items():
@@ -761,8 +702,9 @@ class BaseAdapter(ABC):
         
         # Delete alerts that are no longer in the feed
         if alerts_to_delete:
-            await db.execute(
-                delete(ServiceAlert).where(ServiceAlert.id.in_(alerts_to_delete))
+            await repository.delete_service_alerts_for_data_source_by_ids(
+                source_id,
+                list(alerts_to_delete),
             )
         
         # Process incoming alerts
@@ -917,62 +859,20 @@ class BaseAdapter(ABC):
                 continue
             
             if alert_id in alerts_to_update:
-                # UPDATE existing alert (preserve is_active field - never overwrite)
-                existing_alert = existing_alerts[alert_id]
-                
                 logger.debug(f"[{self.get_adapter_type()}] Updating alert {alert_id}")
                 stats_updated += 1
-                
-                # Update main alert fields (except is_active)
-                existing_alert.cause = alert_data["cause"]
-                existing_alert.effect = alert_data["effect"]
-                existing_alert.severity_level = alert_data["severity_level"]
-                existing_alert.source = alert_data["source"]
-                existing_alert.data_source_id = source_id  # Ensure data_source_id is set
-                
-                # is_active is intentionally NOT updated to preserve manual user changes
-                
-                # Delete and recreate child objects (translations, periods, entities)
-                # This is simpler than trying to update each one individually
-                await db.execute(
-                    delete(ServiceAlertTranslation).where(
-                        ServiceAlertTranslation.alert_id == alert_id
-                    )
+                await repository.upsert_service_alert_from_sync(
+                    alert_id=alert_id,
+                    source_id=source_id,
+                    source_name=source_name,
+                    cause=alert_data["cause"],
+                    effect=alert_data["effect"],
+                    severity_level=alert_data["severity_level"],
+                    is_active_on_create=False,
+                    translations=translations_data,
+                    active_periods=periods_data,
+                    informed_entities=entities_to_create,
                 )
-                await db.execute(
-                    delete(ServiceAlertActivePeriod).where(
-                        ServiceAlertActivePeriod.alert_id == alert_id
-                    )
-                )
-                await db.execute(
-                    delete(ServiceAlertInformedEntity).where(
-                        ServiceAlertInformedEntity.alert_id == alert_id
-                    )
-                )
-                
-                # Create new translations
-                for trans_data in translations_data:
-                    translation = ServiceAlertTranslation(
-                        alert_id=alert_id,
-                        **trans_data
-                    )
-                    db.add(translation)
-                
-                # Create new active periods
-                for period_data in periods_data:
-                    period = ServiceAlertActivePeriod(
-                        alert_id=alert_id,
-                        **period_data
-                    )
-                    db.add(period)
-                
-                # Create new informed entities (using validated and filtered list)
-                for entity_data in entities_to_create:
-                    entity = ServiceAlertInformedEntity(
-                        alert_id=alert_id,
-                        **entity_data
-                    )
-                    db.add(entity)
             else:
                 # INSERT new alert
                 logger.debug(f"[{self.get_adapter_type()}] Creating new alert {alert_id}")
@@ -983,34 +883,19 @@ class BaseAdapter(ABC):
                     stats_created_inactive += 1
                 
                 stats_created += 1
-                
-                alert = ServiceAlert(**alert_data)
-                db.add(alert)
-                await db.flush()  # Ensure the alert is persisted before adding children
-                
-                # Create translations
-                for trans_data in translations_data:
-                    translation = ServiceAlertTranslation(
-                        alert_id=alert.id,
-                        **trans_data
-                    )
-                    db.add(translation)
-                
-                # Create active periods
-                for period_data in periods_data:
-                    period = ServiceAlertActivePeriod(
-                        alert_id=alert.id,
-                        **period_data
-                    )
-                    db.add(period)
-                
-                # Create informed entities (using validated and filtered list)
-                for entity_data in entities_to_create:
-                    entity = ServiceAlertInformedEntity(
-                        alert_id=alert.id,
-                        **entity_data
-                    )
-                    db.add(entity)
+
+                await repository.upsert_service_alert_from_sync(
+                    alert_id=alert_id,
+                    source_id=source_id,
+                    source_name=source_name,
+                    cause=alert_data["cause"],
+                    effect=alert_data["effect"],
+                    severity_level=alert_data["severity_level"],
+                    is_active_on_create=alert_data.get("is_active", True),
+                    translations=translations_data,
+                    active_periods=periods_data,
+                    informed_entities=entities_to_create,
+                )
         
         # Delete alerts that were discarded due to policy
         if policy_based_deletes:
@@ -1018,9 +903,7 @@ class BaseAdapter(ABC):
                 f"[{self.get_adapter_type()}] Deleting {len(policy_based_deletes)} existing alerts "
                 f"due to invalid reference policy"
             )
-            await db.execute(
-                delete(ServiceAlert).where(ServiceAlert.id.in_(policy_based_deletes))
-            )
+            await repository.delete_service_alerts_by_ids(list(policy_based_deletes))
             # Add to total delete count
             stats_deleted += len(policy_based_deletes)
         
