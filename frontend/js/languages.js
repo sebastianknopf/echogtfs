@@ -465,6 +465,9 @@ window.translations = {
     'adapter.gtfsrt.token.label': 'API Token (optional)',
     'adapter.gtfsrt.token.placeholder': 'Bearer-Token oder API-Key',
     'adapter.gtfsrt.token.help_text': 'Authentifizierungs-Token für die API (falls erforderlich)',
+    'adapter.gtfsrt.dialect.label': 'Dialekt',
+    'adapter.gtfsrt.dialect.help_text': 'GTFS-Realtime Implementierungsvariante',
+    'adapter.gtfsrt.dialect.option.gtfsrt_servicealerts': 'GTFS-RT ServiceAlerts',
     
     // SIRI-Lite Adapter
     'adapter.sirilite.endpoint.label': 'Endpoint URL',
@@ -961,6 +964,9 @@ window.translations = {
     'adapter.gtfsrt.token.label': 'API Token (optional)',
     'adapter.gtfsrt.token.placeholder': 'Bearer token or API key',
     'adapter.gtfsrt.token.help_text': 'Authentication token for the API (if required)',
+    'adapter.gtfsrt.dialect.label': 'Dialect',
+    'adapter.gtfsrt.dialect.help_text': 'GTFS-Realtime implementation variant',
+    'adapter.gtfsrt.dialect.option.gtfsrt_servicealerts': 'GTFS-RT ServiceAlerts',
     
     // SIRI-Lite Adapter
     'adapter.sirilite.endpoint.label': 'Endpoint URL',
