@@ -293,6 +293,27 @@ async def create_alert(
     return alert_dict
 
 
+@router.post("/{alert_id}/toggle-active", response_model=ServiceAlertRead)
+async def toggle_alert_active(
+    alert_id: UUID,
+    _: CurrentUser,
+    repository: _Repo,
+) -> ServiceAlertRead:
+    """
+    Toggle the is_active flag of a service alert (requires authentication).
+    This is the only operation allowed on external alerts from data sources.
+    """
+    alert = await repository.toggle_service_alert_active(alert_id)
+    
+    if not alert:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Alert not found"
+        )
+    
+    return alert
+
+
 @router.patch("/{alert_id}", response_model=ServiceAlertRead)
 async def update_alert(
     alert_id: UUID,
@@ -412,24 +433,3 @@ async def delete_alert(
         )
     
     await repository.delete_service_alerts_by_ids([alert_id])
-
-
-@router.post("/{alert_id}/toggle-active", response_model=ServiceAlertRead)
-async def toggle_alert_active(
-    alert_id: UUID,
-    _: CurrentUser,
-    repository: _Repo,
-) -> ServiceAlertRead:
-    """
-    Toggle the is_active flag of a service alert (requires authentication).
-    This is the only operation allowed on external alerts from data sources.
-    """
-    alert = await repository.toggle_service_alert_active(alert_id)
-    
-    if not alert:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Alert not found"
-        )
-    
-    return alert

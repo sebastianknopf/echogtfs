@@ -69,7 +69,7 @@ async def _enrich_source_with_error_flag(source: DataSource, repository: Reposit
 
 
 @router.get("/adapter-types")
-async def list_adapter_types(current_user: CurrentPoweruser):
+async def list_adapter_types(_: CurrentPoweruser):
     """
     List all available adapter types with their configuration schemas.
     Requires poweruser or admin role.
@@ -89,7 +89,7 @@ async def list_adapter_types(current_user: CurrentPoweruser):
 
 @router.get("/", response_model=List[DataSourceRead])
 async def list_sources(
-    current_user: CurrentPoweruser,
+    _: CurrentPoweruser,
     repository: _Repo,
 ):
     """
@@ -110,7 +110,7 @@ async def list_sources(
 @router.get("/{source_id}", response_model=DataSourceRead)
 async def get_source(
     source_id: int,
-    current_user: CurrentPoweruser,
+    _: CurrentPoweruser,
     repository: _Repo,
 ):
     """
@@ -124,10 +124,149 @@ async def get_source(
     return await _enrich_source_with_error_flag(source, repository)
 
 
+@router.get("/{source_id}/mappings/{entity_type}/export")
+async def export_mappings_csv(
+    source_id: int,
+    entity_type: str,
+    _: CurrentPoweruser,
+    repository: _Repo,
+):
+    """
+    Export mappings for a specific data source and entity type as CSV.
+    Requires poweruser or admin role.
+    
+    Returns:
+        CSV file with key;value format (no header, semicolon-separated, UTF-8 encoded)
+    """
+    export_service = MappingExportService()
+    try:
+        csv_stream = await export_service.export_csv_stream(repository, source_id, entity_type)
+    except MappingServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+    # Create filename
+    filename = f"mappings-{source_id}-{entity_type}.csv"
+    
+    # Return as streaming response with UTF-8 encoding
+    return StreamingResponse(
+        csv_stream,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}"
+        }
+    )
+
+
+@router.get("/{source_id}/logs", response_model=List[DataSourceLogRead])
+async def list_source_logs(
+    source_id: int,
+    _: CurrentPoweruser,
+    repository: _Repo,
+    limit: int = 100,
+):
+    """
+    List recent log entries for a specific data source.
+    Requires poweruser or admin role.
+    
+    Args:
+        source_id: ID of the data source
+        limit: Maximum number of log entries to return (default: 100, max: 1000)
+    
+    Returns:
+        List of log entries, ordered by timestamp descending (newest first)
+    """
+    # Validate limit
+    if limit < 1 or limit > 1000:
+        raise HTTPException(status_code=400, detail="Limit must be between 1 and 1000")
+    
+    # Check if source exists
+    if await repository.get_data_source_by_id(source_id) is None:
+        raise HTTPException(status_code=404, detail="Data source not found")
+
+    logs = await repository.list_data_source_logs(source_id, limit=limit)
+    
+    return logs
+
+
+@router.get("/logs/{log_id}/download")
+async def download_log_file(
+    log_id: int,
+    background_tasks: BackgroundTasks,
+    _: CurrentPoweruser,
+    repository: _Repo,
+):
+    """
+    Download the log file for a specific log entry.
+    Requires poweruser or admin role.
+    
+    The file extension and content type are determined by the log's MIME type:
+    - application/json -> .json
+    - application/xml -> .xml
+    - text/plain -> .txt
+    - Other types -> .log
+    
+    Args:
+        log_id: ID of the log entry
+    
+    Returns:
+        File download response with appropriate content type
+    """
+    # Get log entry
+    log_entry = await repository.get_data_source_log_by_id(log_id)
+    
+    if not log_entry:
+        raise HTTPException(status_code=404, detail="Log entry not found")
+    
+    # Get log file content
+    log_content = await DatalogService(repository).get_log_content(log_entry.log_file_uuid)
+    
+    if log_content is None:
+        raise HTTPException(status_code=404, detail="Log file not found on disk")
+    
+    # Determine file extension and media type based on MIME type
+    mime_type = log_entry.response_mimetype or "text/plain"
+    
+    if mime_type == "application/json":
+        extension = "json"
+        media_type = "application/json"
+    elif mime_type == "application/xml":
+        extension = "xml"
+        media_type = "application/xml"
+    elif mime_type.startswith("text/"):
+        extension = "txt"
+        media_type = "text/plain"
+    else:
+        extension = "log"
+        media_type = "application/octet-stream"
+    
+    # Create filename: log_{log_id}_{timestamp}.{extension}
+    timestamp = log_entry.timestamp.strftime("%Y%m%d_%H%M%S")
+    filename = f"log_{log_id}_{timestamp}.{extension}"
+    
+    # Create temporary file
+    temp_file = tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix=f".{extension}")
+    temp_file.write(log_content)
+    temp_file.close()
+    temp_path = temp_file.name
+    
+    # Add background task to delete temporary file after response is sent
+    background_tasks.add_task(os.unlink, temp_path)
+    
+    # Return file response with proper headers
+    return FileResponse(
+        path=temp_path,
+        media_type=media_type,
+        filename=filename,
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}"
+        }
+    )
+
+
 @router.post("/", response_model=DataSourceRead, status_code=201)
 async def create_source(
     source_data: DataSourceCreate,
-    current_user: CurrentPoweruser,
+    _: CurrentPoweruser,
     repository: _Repo,
 ):
     """
@@ -172,11 +311,129 @@ async def create_source(
     return await _enrich_source_with_error_flag(source, repository)
 
 
+@router.post("/{source_id}/run", status_code=202)
+async def run_source_import(
+    source_id: int,
+    _: CurrentPoweruser,
+    repository: _Repo,
+):
+    """
+    Manually trigger an import for a specific data source.
+    Requires poweruser or admin role.
+    
+    Returns:
+        Accepted response - import runs in background
+    """
+    # Check if source exists
+    source = await repository.get_data_source_by_id(source_id)
+    if not source:
+        raise HTTPException(status_code=404, detail="Data source not found")
+
+    # Trigger import task asynchronously
+    asyncio.create_task(get_datasource_scheduler_service().run_import_task(source_id))
+    
+    return {"message": f"Import for data source '{source.name}' has been triggered"}
+
+
+@router.post("/{source_id}/toggle-active", response_model=DataSourceRead)
+async def toggle_source_active(
+    source_id: int,
+    _: CurrentPoweruser,
+    repository: _Repo,
+) -> DataSourceRead:
+    """
+    Toggle the is_active flag of a data source (requires poweruser/admin).
+    When deactivating, all alerts from this source will be deleted.
+    
+    Returns:
+        Updated data source
+    """
+    source = await repository.get_data_source_by_id(source_id)
+    
+    if not source:
+        raise HTTPException(
+            status_code=404,
+            detail="Data source not found"
+        )
+    
+    old_status = source.is_active
+    source = await repository.toggle_data_source_active(source_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail="Data source not found")
+    
+    # If deactivating, delete all alerts from this source
+    if old_status and not source.is_active:
+        deleted_count = await repository.delete_alerts_for_data_source(source_id)
+
+        logger.info(
+            f"Deactivated data source {source_id} '{source.name}': "
+            f"Deleted {deleted_count} associated alerts"
+        )
+    
+    # Update cron job: remove if deactivated, add if activated
+    if source.is_active and source.cron:
+        # Re-schedule the cron job when activating
+        await get_datasource_scheduler_service().schedule_data_source_import(source.id, source.name, source.cron)
+    elif not source.is_active:
+        # Remove the cron job when deactivating
+        await get_datasource_scheduler_service().schedule_data_source_import(source.id, source.name, None)
+    
+    source = await repository.get_data_source_by_id(source.id)
+    if source is None:
+        raise HTTPException(status_code=404, detail="Data source not found")
+
+    return await _enrich_source_with_error_flag(source, repository)
+
+
+@router.post("/{source_id}/mappings/{entity_type}/import")
+async def import_mappings_csv(
+    source_id: int,
+    entity_type: str,
+    _: CurrentPoweruser,
+    repository: _Repo,
+    file: UploadFile = File(...),
+):
+    """
+    Import mappings for a specific data source and entity type from CSV.
+    Requires poweruser or admin role.
+    
+    This is a full dump import - all existing mappings for this entity type
+    will be deleted and replaced with the uploaded data.
+    
+    Expected format: key;value (semicolon-separated, no header, UTF-8 encoded)
+    
+    Args:
+        source_id: ID of the data source
+        entity_type: Type of entity (agency, route, stop, etc.)
+        file: CSV file upload
+        
+    Returns:
+        Success message with count of imported mappings
+    """
+    import_service = MappingImportService()
+    try:
+        inserted_count = await import_service.import_csv_stream(
+            repository=repository,
+            source_id=source_id,
+            entity_type=entity_type,
+            stream=file.file,
+            filename=file.filename,
+        )
+    except MappingServiceError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    
+    return {
+        "message": f"Successfully imported {inserted_count} mappings",
+        "count": inserted_count,
+        "entity_type": entity_type
+    }
+
+
 @router.patch("/{source_id}", response_model=DataSourceRead)
 async def update_source(
     source_id: int,
     source_data: DataSourceUpdate,
-    current_user: CurrentPoweruser,
+    _: CurrentPoweruser,
     repository: _Repo,
 ):
     """
@@ -260,7 +517,7 @@ async def update_source(
 @router.delete("/{source_id}", status_code=204)
 async def delete_source(
     source_id: int,
-    current_user: CurrentPoweruser,
+    _: CurrentPoweruser,
     repository: _Repo,
 ):
     """
@@ -279,260 +536,3 @@ async def delete_source(
     await get_datasource_scheduler_service().schedule_data_source_import(source.id, source.name, None)
     
     await repository.delete_data_source(source_id)
-
-
-@router.post("/{source_id}/run", status_code=202)
-async def run_source_import(
-    source_id: int,
-    current_user: CurrentPoweruser,
-    repository: _Repo,
-):
-    """
-    Manually trigger an import for a specific data source.
-    Requires poweruser or admin role.
-    
-    Returns:
-        Accepted response - import runs in background
-    """
-    # Check if source exists
-    source = await repository.get_data_source_by_id(source_id)
-    if not source:
-        raise HTTPException(status_code=404, detail="Data source not found")
-
-    # Trigger import task asynchronously
-    asyncio.create_task(get_datasource_scheduler_service().run_import_task(source_id))
-    
-    return {"message": f"Import for data source '{source.name}' has been triggered"}
-
-
-@router.post("/{source_id}/toggle-active", response_model=DataSourceRead)
-async def toggle_source_active(
-    source_id: int,
-    current_user: CurrentPoweruser,
-    repository: _Repo,
-) -> DataSourceRead:
-    """
-    Toggle the is_active flag of a data source (requires poweruser/admin).
-    When deactivating, all alerts from this source will be deleted.
-    
-    Returns:
-        Updated data source
-    """
-    source = await repository.get_data_source_by_id(source_id)
-    
-    if not source:
-        raise HTTPException(
-            status_code=404,
-            detail="Data source not found"
-        )
-    
-    old_status = source.is_active
-    source = await repository.toggle_data_source_active(source_id)
-    if source is None:
-        raise HTTPException(status_code=404, detail="Data source not found")
-    
-    # If deactivating, delete all alerts from this source
-    if old_status and not source.is_active:
-        deleted_count = await repository.delete_alerts_for_data_source(source_id)
-
-        logger.info(
-            f"Deactivated data source {source_id} '{source.name}': "
-            f"Deleted {deleted_count} associated alerts"
-        )
-    
-    # Update cron job: remove if deactivated, add if activated
-    if source.is_active and source.cron:
-        # Re-schedule the cron job when activating
-        await get_datasource_scheduler_service().schedule_data_source_import(source.id, source.name, source.cron)
-    elif not source.is_active:
-        # Remove the cron job when deactivating
-        await get_datasource_scheduler_service().schedule_data_source_import(source.id, source.name, None)
-    
-    source = await repository.get_data_source_by_id(source.id)
-    if source is None:
-        raise HTTPException(status_code=404, detail="Data source not found")
-
-    return await _enrich_source_with_error_flag(source, repository)
-
-
-@router.get("/{source_id}/mappings/{entity_type}/export")
-async def export_mappings_csv(
-    source_id: int,
-    entity_type: str,
-    current_user: CurrentPoweruser,
-    repository: _Repo,
-):
-    """
-    Export mappings for a specific data source and entity type as CSV.
-    Requires poweruser or admin role.
-    
-    Returns:
-        CSV file with key;value format (no header, semicolon-separated, UTF-8 encoded)
-    """
-    export_service = MappingExportService()
-    try:
-        csv_stream = await export_service.export_csv_stream(repository, source_id, entity_type)
-    except MappingServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
-
-    # Create filename
-    filename = f"mappings-{source_id}-{entity_type}.csv"
-    
-    # Return as streaming response with UTF-8 encoding
-    return StreamingResponse(
-        csv_stream,
-        media_type="text/csv; charset=utf-8",
-        headers={
-            "Content-Disposition": f"attachment; filename={filename}"
-        }
-    )
-
-
-@router.post("/{source_id}/mappings/{entity_type}/import")
-async def import_mappings_csv(
-    source_id: int,
-    entity_type: str,
-    current_user: CurrentPoweruser,
-    repository: _Repo,
-    file: UploadFile = File(...),
-):
-    """
-    Import mappings for a specific data source and entity type from CSV.
-    Requires poweruser or admin role.
-    
-    This is a full dump import - all existing mappings for this entity type
-    will be deleted and replaced with the uploaded data.
-    
-    Expected format: key;value (semicolon-separated, no header, UTF-8 encoded)
-    
-    Args:
-        source_id: ID of the data source
-        entity_type: Type of entity (agency, route, stop, etc.)
-        file: CSV file upload
-        
-    Returns:
-        Success message with count of imported mappings
-    """
-    import_service = MappingImportService()
-    try:
-        inserted_count = await import_service.import_csv_stream(
-            repository=repository,
-            source_id=source_id,
-            entity_type=entity_type,
-            stream=file.file,
-            filename=file.filename,
-        )
-    except MappingServiceError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
-    
-    return {
-        "message": f"Successfully imported {inserted_count} mappings",
-        "count": inserted_count,
-        "entity_type": entity_type
-    }
-
-
-@router.get("/{source_id}/logs", response_model=List[DataSourceLogRead])
-async def list_source_logs(
-    source_id: int,
-    current_user: CurrentPoweruser,
-    repository: _Repo,
-    limit: int = 100,
-):
-    """
-    List recent log entries for a specific data source.
-    Requires poweruser or admin role.
-    
-    Args:
-        source_id: ID of the data source
-        limit: Maximum number of log entries to return (default: 100, max: 1000)
-    
-    Returns:
-        List of log entries, ordered by timestamp descending (newest first)
-    """
-    # Validate limit
-    if limit < 1 or limit > 1000:
-        raise HTTPException(status_code=400, detail="Limit must be between 1 and 1000")
-    
-    # Check if source exists
-    if await repository.get_data_source_by_id(source_id) is None:
-        raise HTTPException(status_code=404, detail="Data source not found")
-
-    logs = await repository.list_data_source_logs(source_id, limit=limit)
-    
-    return logs
-
-
-@router.get("/logs/{log_id}/download")
-async def download_log_file(
-    log_id: int,
-    background_tasks: BackgroundTasks,
-    current_user: CurrentPoweruser,
-    repository: _Repo,
-):
-    """
-    Download the log file for a specific log entry.
-    Requires poweruser or admin role.
-    
-    The file extension and content type are determined by the log's MIME type:
-    - application/json -> .json
-    - application/xml -> .xml
-    - text/plain -> .txt
-    - Other types -> .log
-    
-    Args:
-        log_id: ID of the log entry
-    
-    Returns:
-        File download response with appropriate content type
-    """
-    # Get log entry
-    log_entry = await repository.get_data_source_log_by_id(log_id)
-    
-    if not log_entry:
-        raise HTTPException(status_code=404, detail="Log entry not found")
-    
-    # Get log file content
-    log_content = await DatalogService(repository).get_log_content(log_entry.log_file_uuid)
-    
-    if log_content is None:
-        raise HTTPException(status_code=404, detail="Log file not found on disk")
-    
-    # Determine file extension and media type based on MIME type
-    mime_type = log_entry.response_mimetype or "text/plain"
-    
-    if mime_type == "application/json":
-        extension = "json"
-        media_type = "application/json"
-    elif mime_type == "application/xml":
-        extension = "xml"
-        media_type = "application/xml"
-    elif mime_type.startswith("text/"):
-        extension = "txt"
-        media_type = "text/plain"
-    else:
-        extension = "log"
-        media_type = "application/octet-stream"
-    
-    # Create filename: log_{log_id}_{timestamp}.{extension}
-    timestamp = log_entry.timestamp.strftime("%Y%m%d_%H%M%S")
-    filename = f"log_{log_id}_{timestamp}.{extension}"
-    
-    # Create temporary file
-    temp_file = tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix=f".{extension}")
-    temp_file.write(log_content)
-    temp_file.close()
-    temp_path = temp_file.name
-    
-    # Add background task to delete temporary file after response is sent
-    background_tasks.add_task(os.unlink, temp_path)
-    
-    # Return file response with proper headers
-    return FileResponse(
-        path=temp_path,
-        media_type=media_type,
-        filename=filename,
-        headers={
-            "Content-Disposition": f"attachment; filename={filename}"
-        }
-    )

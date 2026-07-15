@@ -18,6 +18,21 @@ async def read_me(current_user: CurrentUser) -> User:
     return current_user
 
 
+@router.get("/", response_model=list[UserRead])
+async def list_users(_: CurrentSuperuser, repository: _Repo) -> list[User]:
+    return await repository.list_users()
+
+
+@router.get("/{user_id}", response_model=UserRead)
+async def get_user(user_id: int, _: CurrentSuperuser, repository: _Repo) -> User:
+    user = await repository.get_user_by_id(user_id)
+
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    return user
+
+
 @router.post("/me/password", status_code=status.HTTP_204_NO_CONTENT)
 async def change_own_password(
     payload: PasswordChange, current_user: CurrentUser, repository: _Repo
@@ -38,31 +53,6 @@ async def change_own_password(
     )
 
 
-@router.put("/me", response_model=UserRead)
-async def update_me(
-    payload: UserUpdate, current_user: CurrentUser, repository: _Repo
-) -> User:
-    user = await repository.update_user(
-        current_user.id,
-        email=payload.email,
-        hashed_password=(
-            get_security_service().hash_password(payload.password)
-            if payload.password is not None
-            else None
-        ),
-    )
-
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    
-    return user
-
-
-@router.get("/", response_model=list[UserRead])
-async def list_users(_: CurrentSuperuser, repository: _Repo) -> list[User]:
-    return await repository.list_users()
-
-
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
 async def register(
     payload: UserCreate, _: CurrentSuperuser, repository: _Repo
@@ -81,9 +71,19 @@ async def register(
     )
 
 
-@router.get("/{user_id}", response_model=UserRead)
-async def get_user(user_id: int, _: CurrentSuperuser, repository: _Repo) -> User:
-    user = await repository.get_user_by_id(user_id)
+@router.put("/me", response_model=UserRead)
+async def update_me(
+    payload: UserUpdate, current_user: CurrentUser, repository: _Repo
+) -> User:
+    user = await repository.update_user(
+        current_user.id,
+        email=payload.email,
+        hashed_password=(
+            get_security_service().hash_password(payload.password)
+            if payload.password is not None
+            else None
+        ),
+    )
 
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
