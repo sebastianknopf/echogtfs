@@ -194,6 +194,11 @@ class RepositoryInterface(ABC):
     async def list_data_source_mappings(self, source_id: int, entity_type: str) -> list[DataSourceMapping]:
         """Return all mappings for one data source and entity type ordered by key."""
         raise NotImplementedError
+    
+    @abstractmethod
+    async def list_data_source_mappings_grouped(self, source_id: int) -> dict[str, dict[str, str]]:
+        """Return all data source mappings grouped by entity type."""
+        raise NotImplementedError
 
     @abstractmethod
     async def replace_data_source_mappings_for_entity_type(
@@ -203,6 +208,11 @@ class RepositoryInterface(ABC):
         mappings: list[dict[str, str]],
     ) -> int:
         """Replace mappings for one data source/entity type and return number of inserted rows."""
+        raise NotImplementedError
+    
+    @abstractmethod
+    async def list_data_source_enrichments(self, source_id: int) -> list[dict[str, Any]]:
+        """Return enrichment rules for a data source ordered by priority."""
         raise NotImplementedError
 
     @abstractmethod
@@ -255,6 +265,11 @@ class RepositoryInterface(ABC):
     @abstractmethod
     async def delete_data_source_logs_before(self, cutoff_time: datetime) -> int:
         """Delete data source log rows older than cutoff time and return affected row count."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_gtfs_entity_ids(self) -> dict[str, set[str]]:
+        """Return GTFS entity IDs as sets for agency, route, and stop."""
         raise NotImplementedError
     
     @abstractmethod
@@ -309,26 +324,6 @@ class RepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_data_source_invalid_reference_policy(self, source_id: int) -> str:
-        """Return invalid reference policy for a data source."""
-        raise NotImplementedError
-
-    @abstractmethod
-    async def list_data_source_mappings_grouped(self, source_id: int) -> dict[str, dict[str, str]]:
-        """Return all data source mappings grouped by entity type."""
-        raise NotImplementedError
-
-    @abstractmethod
-    async def list_data_source_enrichments(self, source_id: int) -> list[dict[str, Any]]:
-        """Return enrichment rules for a data source ordered by priority."""
-        raise NotImplementedError
-
-    @abstractmethod
-    async def list_gtfs_entity_ids(self) -> dict[str, set[str]]:
-        """Return GTFS entity IDs as sets for agency, route, and stop."""
-        raise NotImplementedError
-
-    @abstractmethod
     async def list_service_alerts_for_data_source(self, source_id: int) -> list[ServiceAlert]:
         """Return all service alerts currently linked to one data source."""
         raise NotImplementedError
@@ -353,7 +348,7 @@ class RepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def create_internal_service_alert(
+    async def create_service_alert(
         self,
         *,
         cause: str,
@@ -364,7 +359,7 @@ class RepositoryInterface(ABC):
         active_periods: list[dict[str, Any]],
         informed_entities: list[dict[str, Any]],
     ) -> ServiceAlert:
-        """Create one internal service alert including child records and return it with relationships loaded."""
+        """Create one service alert including child records and return it with relationships loaded. This method is typically used for generating internal service alerts."""
         raise NotImplementedError
 
     @abstractmethod
@@ -417,5 +412,5 @@ class RepositoryInterface(ABC):
         active_periods: list[dict[str, Any]],
         informed_entities: list[dict[str, Any]],
     ) -> str:
-        """Create or update one synchronized alert and replace child records."""
+        """Create or update one synchronized alert and replace child records. This method is typically used for syncing service alerts from external sources."""
         raise NotImplementedError

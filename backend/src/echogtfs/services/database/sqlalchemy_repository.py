@@ -470,6 +470,19 @@ class SqlAlchemyRepository(RepositoryInterface):
             result = await db.execute(stmt)
             return list(result.scalars().all())
 
+    async def list_data_source_mappings_grouped(self, source_id: int) -> dict[str, dict[str, str]]:
+        """Return mappings grouped by entity type for one data source."""
+        stmt = select(DataSourceMapping).where(DataSourceMapping.data_source_id == source_id)
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            mappings = result.scalars().all()
+
+            grouped: dict[str, dict[str, str]] = {}
+            for mapping in mappings:
+                grouped.setdefault(mapping.entity_type, {})[mapping.key] = mapping.value
+            return grouped
+
     async def replace_data_source_mappings_for_entity_type(
         self,
         source_id: int,
@@ -498,6 +511,28 @@ class SqlAlchemyRepository(RepositoryInterface):
             await db.commit()
 
             return len(mappings)
+
+    async def list_data_source_enrichments(self, source_id: int) -> list[dict[str, Any]]:
+        """Return enrichments for one data source sorted by sort_order."""
+        stmt = (
+            select(DataSourceEnrichment)
+            .where(DataSourceEnrichment.data_source_id == source_id)
+            .order_by(DataSourceEnrichment.sort_order)
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            enrichments = result.scalars().all()
+
+            return [
+                {
+                    "enrichment_type": enrichment.enrichment_type,
+                    "source_field": enrichment.source_field,
+                    "key": enrichment.key,
+                    "value": enrichment.value,
+                }
+                for enrichment in enrichments
+            ]
 
     async def get_latest_data_source_log(self, source_id: int) -> DataSourceLog | None:
         """Return latest log entry for a data source."""
@@ -600,6 +635,19 @@ class SqlAlchemyRepository(RepositoryInterface):
             await db.commit()
 
             return int(result.rowcount or 0)
+
+    async def list_gtfs_entity_ids(self) -> dict[str, set[str]]:
+        """Return GTFS IDs for agency, route, and stop as sets."""
+        async with self.get_session() as db:
+            agencies_result = await db.execute(select(GtfsAgency.gtfs_id))
+            routes_result = await db.execute(select(GtfsRoute.gtfs_id))
+            stops_result = await db.execute(select(GtfsStop.gtfs_id))
+
+            return {
+                "agency": {row[0] for row in agencies_result.fetchall()},
+                "route": {row[0] for row in routes_result.fetchall()},
+                "stop": {row[0] for row in stops_result.fetchall()},
+            }
         
     async def list_gtfs_agencies(self) -> list[GtfsAgency]:
         """Return all GTFS agencies ordered by name."""
@@ -755,54 +803,6 @@ class SqlAlchemyRepository(RepositoryInterface):
                 raise ValueError(f"Data source {source_id} not found")
             return policy.value if hasattr(policy, "value") else str(policy)
 
-    async def list_data_source_mappings_grouped(self, source_id: int) -> dict[str, dict[str, str]]:
-        """Return mappings grouped by entity type for one data source."""
-        stmt = select(DataSourceMapping).where(DataSourceMapping.data_source_id == source_id)
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            mappings = result.scalars().all()
-
-            grouped: dict[str, dict[str, str]] = {}
-            for mapping in mappings:
-                grouped.setdefault(mapping.entity_type, {})[mapping.key] = mapping.value
-            return grouped
-
-    async def list_data_source_enrichments(self, source_id: int) -> list[dict[str, Any]]:
-        """Return enrichments for one data source sorted by sort_order."""
-        stmt = (
-            select(DataSourceEnrichment)
-            .where(DataSourceEnrichment.data_source_id == source_id)
-            .order_by(DataSourceEnrichment.sort_order)
-        )
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            enrichments = result.scalars().all()
-
-            return [
-                {
-                    "enrichment_type": enrichment.enrichment_type,
-                    "source_field": enrichment.source_field,
-                    "key": enrichment.key,
-                    "value": enrichment.value,
-                }
-                for enrichment in enrichments
-            ]
-
-    async def list_gtfs_entity_ids(self) -> dict[str, set[str]]:
-        """Return GTFS IDs for agency, route, and stop as sets."""
-        async with self.get_session() as db:
-            agencies_result = await db.execute(select(GtfsAgency.gtfs_id))
-            routes_result = await db.execute(select(GtfsRoute.gtfs_id))
-            stops_result = await db.execute(select(GtfsStop.gtfs_id))
-
-            return {
-                "agency": {row[0] for row in agencies_result.fetchall()},
-                "route": {row[0] for row in routes_result.fetchall()},
-                "stop": {row[0] for row in stops_result.fetchall()},
-            }
-
     async def list_service_alerts_for_data_source(self, source_id: int) -> list[ServiceAlert]:
         """Return alerts linked to one data source."""
         stmt = select(ServiceAlert).where(ServiceAlert.data_source_id == source_id)
@@ -902,7 +902,7 @@ class SqlAlchemyRepository(RepositoryInterface):
             result = await db.execute(stmt)
             return result.scalar_one_or_none()
 
-    async def create_internal_service_alert(
+    async def create_service_alert(
         self,
         *,
         cause: str,

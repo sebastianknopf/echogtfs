@@ -258,7 +258,7 @@ async def create_alert(
         entity_payload["is_valid"] = _validate_entity(entity_payload, entity_ids)
         informed_entities.append(entity_payload)
 
-    alert = await repository.create_internal_service_alert(
+    alert = await repository.create_service_alert(
         cause=payload.cause,
         effect=payload.effect,
         severity_level=payload.severity_level,
