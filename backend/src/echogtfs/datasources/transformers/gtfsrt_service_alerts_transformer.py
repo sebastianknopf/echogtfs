@@ -189,6 +189,7 @@ class GtfsRtServiceAlertsTransformer(ServiceAlertsTransformerInterface):
             )
 
         logger.info("[GtfsRtTransformer] Transformed %s valid alerts", len(alerts))
+
         return alerts
 
     def _map_cause(self, gtfs_cause: int) -> str:
@@ -206,6 +207,7 @@ class GtfsRtServiceAlertsTransformer(ServiceAlertsTransformerInterface):
             11: "POLICE_ACTIVITY",
             12: "MEDICAL_EMERGENCY",
         }
+
         return cause_mapping.get(gtfs_cause, "UNKNOWN_CAUSE")
 
     def _map_effect(self, gtfs_effect: int) -> str:
@@ -222,6 +224,7 @@ class GtfsRtServiceAlertsTransformer(ServiceAlertsTransformerInterface):
             10: "NO_EFFECT",
             11: "ACCESSIBILITY_ISSUE",
         }
+
         return effect_mapping.get(gtfs_effect, "UNKNOWN_EFFECT")
 
     def _map_severity(self, gtfs_severity: int) -> str:
@@ -231,4 +234,5 @@ class GtfsRtServiceAlertsTransformer(ServiceAlertsTransformerInterface):
             3: "WARNING",
             4: "SEVERE",
         }
+        
         return severity_mapping.get(gtfs_severity, "UNKNOWN_SEVERITY")

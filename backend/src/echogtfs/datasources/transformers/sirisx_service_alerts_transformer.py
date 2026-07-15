@@ -59,6 +59,7 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                     source_name,
                     current_timestamp,
                 )
+
                 if alert:
                     alerts.append(alert)
             except Exception as exc:
@@ -66,6 +67,7 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                 situation_number = (
                     situation_number_elem.text if situation_number_elem is not None else "unknown"
                 )
+
                 logger.error(
                     f"[SiriSxTransformer] Error parsing situation {situation_number}: {exc}"
                 )
@@ -76,6 +78,7 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
             filtered_by_participant,
             filtered_out_of_window,
         )
+
         return alerts
 
     def _parse_situation_element_sirisx(
@@ -88,6 +91,7 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         if situation_number_elem is None:
             logger.warning("[SiriSxTransformer] Skipping situation without SituationNumber")
             return None
+        
         situation_number = situation_number_elem.text
 
         alert_id = self._make_unique_id(situation_number, source_name)
@@ -181,10 +185,12 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                 if passenger_info is not None:
                     all_passenger_infos.append(passenger_info)
                     perspectives = passenger_info.findall("siri:Perspective", self._siri_ns)
+                    
                     for perspective in perspectives:
                         if perspective.text == "general":
                             selected_action = passenger_info
                             break
+                    
                     if selected_action is not None:
                         break
 
@@ -204,6 +210,7 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                     selected_textual_content = None
                     for tc in textual_contents:
                         size_elem = tc.find("siri:TextualContentSize", self._siri_ns)
+                        
                         if size_elem is not None and size_elem.text == "L":
                             selected_textual_content = tc
                             break
@@ -228,29 +235,36 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                 "[SiriSxTransformer] Skipping situation %s: no summary available",
                 situation_number,
             )
+
             return None
 
         for summary_elem in summary_elements:
             lang = self._get_language_with_fallback(summary_elem, situation)
             header = self._strip_html(summary_elem.text or "")
+            
             if lang not in translations_dict:
                 translations_dict[lang] = {"description_parts": []}
+            
             translations_dict[lang]["header_text"] = header
 
         for detail_elem in detail_elements:
             lang = self._get_language_with_fallback(detail_elem, situation)
             description = self._strip_html(detail_elem.text or "")
+            
             if description:
                 if lang not in translations_dict:
                     translations_dict[lang] = {"description_parts": []}
+                
                 translations_dict[lang]["description_parts"].append(description)
 
         for desc_elem in description_elements:
             lang = self._get_language_with_fallback(desc_elem, situation)
             description = self._strip_html(desc_elem.text or "")
+            
             if description:
                 if lang not in translations_dict:
                     translations_dict[lang] = {"description_parts": []}
+                
                 translations_dict[lang]["description_parts"].append(description)
 
         url_value = None
@@ -289,6 +303,7 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
     def _strip_html(self, text: str) -> str:
         if not text:
             return ""
+        
         clean_text = re.sub(r"<[^>]+>", "", text)
         clean_text = clean_text.replace("&lt;", "<")
         clean_text = clean_text.replace("&gt;", ">")
@@ -301,6 +316,7 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         clean_text = clean_text.replace("\r", " ")
         clean_text = clean_text.replace("\t", " ")
         clean_text = re.sub(r" +", " ", clean_text)
+
         return clean_text.strip()
 
     def _extract_from_textual_content(
@@ -464,6 +480,7 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                     "trip_id": None,
                     "direction_id": None,
                 }
+
                 operator_ref = affected_line.find(".//siri:OperatorRef", self._siri_ns)
                 if operator_ref is not None and operator_ref.text:
                     entity["agency_id"] = operator_ref.text
@@ -490,6 +507,7 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                             "trip_id": None,
                             "direction_id": None,
                         }
+
                         operator_ref = affected_line.find(".//siri:OperatorRef", self._siri_ns)
                         if operator_ref is not None and operator_ref.text:
                             entity["agency_id"] = operator_ref.text
@@ -527,6 +545,7 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                             "trip_id": None,
                             "direction_id": None,
                         }
+
                         operator_ref = affected_line.find(".//siri:OperatorRef", self._siri_ns)
                         if operator_ref is not None and operator_ref.text:
                             entity["agency_id"] = operator_ref.text
@@ -553,12 +572,14 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
             vehicle_journeys = vehicle_journeys_container.findall(
                 "siri:AffectedVehicleJourney", self._siri_ns
             )
+
             for vehicle_journey in vehicle_journeys:
                 journey_ref = vehicle_journey.find("siri:VehicleJourneyRef", self._siri_ns)
                 if journey_ref is None or not journey_ref.text:
                     journey_ref = vehicle_journey.find(
                         "siri:DatedVehicleJourneyRef", self._siri_ns
                     )
+                    
                 if journey_ref is None or not journey_ref.text:
                     continue
 

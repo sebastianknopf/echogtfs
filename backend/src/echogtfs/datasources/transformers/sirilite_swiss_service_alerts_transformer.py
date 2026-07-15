@@ -66,6 +66,7 @@ class SiriLiteSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
             filtered_by_participant,
             filtered_out_of_window,
         )
+
         return alerts
 
     def _matches_participant_filter(self, situation: ET.Element) -> bool:
@@ -115,6 +116,7 @@ class SiriLiteSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
 
                     if start_time > current_timestamp and start_time <= max_future_start:
                         return True
+                    
                 except (ValueError, AttributeError) as exc:
                     logger.warning(
                         f"[SiriLiteSwissTransformer] Failed to parse PublicationWindow times: {exc}"
@@ -170,6 +172,7 @@ class SiriLiteSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
 
             start_time = None
             end_time = None
+
             if start_elem is not None:
                 try:
                     start_time = int(
@@ -231,6 +234,7 @@ class SiriLiteSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                 if perspective.text == "general":
                     selected_passenger_info = passenger_info
                     break
+
             if selected_passenger_info is not None:
                 break
 
@@ -259,6 +263,7 @@ class SiriLiteSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                     lang = summary_text.get("{http://www.w3.org/XML/1998/namespace}lang", "de").lower()
                     if lang not in translations_dict:
                         translations_dict[lang] = {"description_parts": []}
+
                     translations_dict[lang]["header_text"] = summary_text.text or ""
 
             content_sections = [
@@ -284,6 +289,7 @@ class SiriLiteSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                     lang = text_elem.get("{http://www.w3.org/XML/1998/namespace}lang", "de").lower()
                     if lang not in translations_dict:
                         translations_dict[lang] = {"description_parts": []}
+
                     translations_dict[lang]["description_parts"].append(text)
 
             info_link = selected_textual_content.find("siri:InfoLink", self._siri_ns)
@@ -309,6 +315,7 @@ class SiriLiteSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
             translation.get("header_text") or translation.get("description_text")
             for translation in translations
         )
+
         if not has_meaningful_text:
             return []
 
@@ -456,6 +463,7 @@ class SiriLiteSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         vehicle_journeys = vehicle_journeys_container.findall(
             "siri:AffectedVehicleJourney", self._siri_ns
         )
+
         for vehicle_journey in vehicle_journeys:
             journey_ref = vehicle_journey.find("siri:VehicleJourneyRef", self._siri_ns)
             if journey_ref is None or not journey_ref.text:
@@ -525,6 +533,7 @@ class SiriLiteSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
             "verysevere": "SEVERE",
             "noimpact": "INFO",
         }
+
         return severity_mapping.get(siri_severity.lower(), "UNKNOWN_SEVERITY")
 
     def _map_cause_swiss(self, siri_cause: str | None) -> str:
@@ -543,4 +552,5 @@ class SiriLiteSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
             "staffsickness": "OTHER_CAUSE",
             "equipmentfailure": "TECHNICAL_PROBLEM",
         }
+        
         return cause_mapping.get(siri_cause.lower(), "UNKNOWN_CAUSE")
