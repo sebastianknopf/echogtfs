@@ -2,7 +2,6 @@
 
 from abc import ABC, abstractmethod
 import logging
-import re
 import uuid
 from typing import Any
 
@@ -10,6 +9,10 @@ from echogtfs.datasources.intf_datasource import DatasourceInterface
 from echogtfs.services.database import get_repository
 from echogtfs.services.datalog import DatalogService
 from echogtfs.services.database.intf_repository import RepositoryInterface
+from echogtfs.services.enrichment.entity_enrichtment_service import EntityEnrichmentService
+from echogtfs.services.enrichment.intf_entity_enrichment import EntityEnrichmentInterface
+from echogtfs.services.mapping.identifier_mapping_service import IdentifierMappingService
+from echogtfs.services.mapping.intf_identifier_mapping import IdentifierMappingInterface
 
 logger = logging.getLogger("uvicorn")
 
@@ -36,6 +39,8 @@ class DatasourceBase(DatasourceInterface):
                     Additional fields depend on the specific adapter.
         """
         self.config = config
+        self._entity_enrichment_service: EntityEnrichmentInterface = EntityEnrichmentService()
+        self._identifier_mapping_service: IdentifierMappingInterface = IdentifierMappingService()
         self._validate_config()
     
     @abstractmethod
@@ -189,198 +194,6 @@ class DatasourceBase(DatasourceInterface):
             )
 
     
-    async def _load_mappings(
-        self,
-        repository: RepositoryInterface,
-        source_id: int,
-    ) -> dict[str, dict[str, str]]:
-        """Load mappings for the specified data source.
-        
-        Returns a nested dictionary: {entity_type: {external_key: gtfs_value}}
-        For example: {"agency": {"external_id_1": "gtfs_agency_1"}, "route": {"ext_route_1": "gtfs_route_1"}}
-        
-        Args:
-            db: Database session
-            source_id: ID of the data source to load mappings for
-        """
-        return await repository.list_data_source_mappings_grouped(source_id)
-    
-    async def _load_enrichments(
-        self,
-        repository: RepositoryInterface,
-        source_id: int,
-    ) -> list[dict[str, Any]]:
-        """Load enrichments for the specified data source.
-        
-        Returns a list of enrichment rules sorted by priority (sort_order).
-        Each enrichment is a dict with: enrichment_type, source_field, key, value.
-        
-        Args:
-            db: Database session
-            source_id: ID of the data source to load enrichments for
-        """
-        return await repository.list_data_source_enrichments(source_id)
-    
-    def _match_enrichment_pattern(self, text: str, pattern: str) -> bool:
-        """
-        Check if text matches the enrichment pattern using regex-light rules.
-        
-        Rules:
-        - Case-insensitive matching
-        - '*' is treated as a wildcard (matches any characters)
-        - Implicit wildcards at start and end (pattern is always wrapped in *)
-        - Comma-separated values in pattern are AND conditions (all must match)
-        
-        Args:
-            text: The text to check (header or description)
-            pattern: The pattern to match (can contain * wildcards and commas)
-            
-        Returns:
-            True if text matches pattern, False otherwise
-        """
-        if not text or not pattern:
-            return False
-        
-        # Normalize text to lowercase for case-insensitive matching
-        text_lower = text.lower()
-        
-        # Split pattern by comma for AND conditions
-        # Each part must be found in the text (after trimming whitespace)
-        pattern_parts = [part.strip() for part in pattern.split(',') if part.strip()]
-        
-        # All parts must match (AND condition)
-        for part in pattern_parts:
-            # Normalize pattern part to lowercase
-            part_lower = part.lower()
-            
-            # Convert pattern to regex:
-            # - Escape special regex characters except *
-            # - Replace * with .*
-            # - Add implicit wildcards at start and end
-            regex_pattern = re.escape(part_lower).replace(r'\*', '.*')
-            regex_pattern = f'.*{regex_pattern}.*'
-            
-            # Check if this part matches
-            if not re.search(regex_pattern, text_lower):
-                return False
-        
-        # All parts matched
-        return True
-    
-    def _apply_enrichments(
-        self, 
-        alert_dicts: list[dict[str, Any]], 
-        enrichments: list[dict[str, Any]]
-    ) -> None:
-        """
-        Apply enrichments to alert dictionaries.
-        
-        Enrichments are pattern-based rules that extract cause, effect, or severity
-        from alert header/description text. They are processed in priority order
-        (sort_order), and the first match for each enrichment type wins.
-        
-        Args:
-            alert_dicts: List of normalized record dictionaries (modified in place)
-            enrichments: List of enrichment rules from _load_enrichments()
-        """
-        from echogtfs.enum.system import EnrichmentType, SourceField
-        
-        # Track which enrichment types can be overridden (default/unknown values)
-        default_values = {
-            "cause": {"UNKNOWN_CAUSE", "OTHER_CAUSE"},
-            "effect": {"UNKNOWN_EFFECT", "OTHER_EFFECT"},
-            "severity": {"UNKNOWN_SEVERITY", "INFO"},
-        }
-        
-        for alert_data in alert_dicts:
-            # Track which enrichment types have been set for this record
-            enriched_types = {
-                "cause": False,
-                "effect": False,
-                "severity": False,
-            }
-            
-            # Check current values - only override if they're default/unknown
-            current_cause = alert_data.get("cause", "UNKNOWN_CAUSE")
-            current_effect = alert_data.get("effect", "UNKNOWN_EFFECT")
-            current_severity = alert_data.get("severity_level", "UNKNOWN_SEVERITY")
-            
-            # Determine which types can be enriched
-            can_enrich_cause = current_cause in default_values["cause"]
-            can_enrich_effect = current_effect in default_values["effect"]
-            can_enrich_severity = current_severity in default_values["severity"]
-            
-            # Extract all header and description texts from translations
-            headers = []
-            descriptions = []
-            for translation in alert_data.get("translations", []):
-                if translation.get("header_text"):
-                    headers.append(translation["header_text"])
-                if translation.get("description_text"):
-                    descriptions.append(translation["description_text"])
-            
-            # Process enrichments in priority order (already sorted by sort_order)
-            for enrichment in enrichments:
-                enrichment_type = enrichment["enrichment_type"]
-                source_field = enrichment["source_field"]
-                pattern = enrichment["key"]
-                value = enrichment["value"]
-                
-                # Skip if this enrichment type has already been set
-                if enrichment_type == EnrichmentType.CAUSE:
-                    if enriched_types["cause"] or not can_enrich_cause:
-                        continue
-                elif enrichment_type == EnrichmentType.EFFECT:
-                    if enriched_types["effect"] or not can_enrich_effect:
-                        continue
-                elif enrichment_type == EnrichmentType.SEVERITY:
-                    if enriched_types["severity"] or not can_enrich_severity:
-                        continue
-                
-                # Determine which texts to search based on source_field
-                texts_to_search = []
-                if source_field == SourceField.HEADER:
-                    texts_to_search = headers
-                elif source_field == SourceField.DESCRIPTION:
-                    texts_to_search = descriptions
-                elif source_field == SourceField.HEADER_DESCRIPTION:
-                    texts_to_search = headers + descriptions
-                
-                # Check if pattern matches any of the texts
-                matched = False
-                for text in texts_to_search:
-                    if self._match_enrichment_pattern(text, pattern):
-                        matched = True
-                        break
-                
-                # Apply enrichment if matched
-                if matched:
-                    if enrichment_type == EnrichmentType.CAUSE:
-                        alert_data["cause"] = value
-                        enriched_types["cause"] = True
-                        logger.debug(
-                            f"[{self.get_adapter_type()}] Enriched record {alert_data['id']}: "
-                            f"cause={value} (matched pattern: {pattern})"
-                        )
-                    elif enrichment_type == EnrichmentType.EFFECT:
-                        alert_data["effect"] = value
-                        enriched_types["effect"] = True
-                        logger.debug(
-                            f"[{self.get_adapter_type()}] Enriched record {alert_data['id']}: "
-                            f"effect={value} (matched pattern: {pattern})"
-                        )
-                    elif enrichment_type == EnrichmentType.SEVERITY:
-                        alert_data["severity_level"] = value
-                        enriched_types["severity"] = True
-                        logger.debug(
-                            f"[{self.get_adapter_type()}] Enriched record {alert_data['id']}: "
-                            f"severity_level={value} (matched pattern: {pattern})"
-                        )
-                    
-                    # If all types have been enriched, we can stop processing for this record
-                    if all(enriched_types.values()):
-                        break
-    
     async def _load_gtfs_entities(
         self,
         repository: RepositoryInterface,
@@ -521,86 +334,6 @@ class DatasourceBase(DatasourceInterface):
         
         return cleaned_entity, has_any_valid_reference
     
-    def _apply_mapping_with_wildcard(
-        self, 
-        original_value: str, 
-        mappings: dict[str, str]
-    ) -> str:
-        """
-        Apply mapping with wildcard support.
-        
-        First tries exact match, then checks for wildcard patterns.
-        A mapping key like "de:vpe:04701*" will match any value starting with "de:vpe:04701".
-        
-        Args:
-            original_value: The value to map
-            mappings: Dictionary of mapping key -> mapped value
-            
-        Returns:
-            Mapped value if found, otherwise original_value
-        """
-        # Try exact match first
-        if original_value in mappings:
-            return mappings[original_value]
-        
-        # Try wildcard matching
-        for mapping_key, mapping_value in mappings.items():
-            if '*' in mapping_key:
-                # Check if it's a prefix pattern (e.g., "prefix*")
-                if mapping_key.endswith('*'):
-                    prefix = mapping_key[:-1]  # Remove the trailing *
-                    if original_value.startswith(prefix):
-                        return mapping_value
-                # Support wildcard anywhere in the pattern for future extensibility
-                else:
-                    # Convert to regex pattern (escape special chars except *)
-                    pattern = re.escape(mapping_key).replace(r'\*', '.*')
-                    if re.fullmatch(pattern, original_value):
-                        return mapping_value
-        
-        # No match found, return original
-        return original_value
-    
-    def _apply_entity_mappings(self, entity_data: dict[str, Any], mappings: dict[str, dict[str, str]]) -> dict[str, Any]:
-        """Apply mappings to informed entity data.
-        
-        Supports wildcard patterns in mapping keys. A key like "de:vpe:04701*" will
-        match any value starting with "de:vpe:04701".
-        
-        Args:
-            entity_data: Dictionary with entity fields (agency_id, route_id, stop_id, etc.)
-            mappings: Loaded mappings from _load_mappings()
-        
-        Returns:
-            Updated entity data with mapped values (if mappings exist)
-        """
-        # Create a copy to avoid modifying the original
-        mapped_entity = entity_data.copy()
-        
-        # Apply mappings for each supported entity type
-        if "agency_id" in mapped_entity and mapped_entity["agency_id"]:
-            original_value = mapped_entity["agency_id"]
-            mapped_entity["agency_id"] = self._apply_mapping_with_wildcard(
-                original_value, 
-                mappings.get("agency", {})
-            )
-        
-        if "route_id" in mapped_entity and mapped_entity["route_id"]:
-            original_value = mapped_entity["route_id"]
-            mapped_entity["route_id"] = self._apply_mapping_with_wildcard(
-                original_value, 
-                mappings.get("route", {})
-            )
-        
-        if "stop_id" in mapped_entity and mapped_entity["stop_id"]:
-            original_value = mapped_entity["stop_id"]
-            mapped_entity["stop_id"] = self._apply_mapping_with_wildcard(
-                original_value, 
-                mappings.get("stop", {})
-            )
-        
-        return mapped_entity
-    
     def _deduplicate_entities(self, entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """
         Remove duplicate informed entities from a list.
@@ -731,18 +464,28 @@ class DatasourceBase(DatasourceInterface):
         alert_dicts = records
         total_fetched = len(alert_dicts)
 
-        # Load mappings for this data source
-        mappings = await self._load_mappings(repository, source_id)
-        
-        # Load enrichments for this data source
-        enrichments = await self._load_enrichments(repository, source_id)
-        
-        # Apply enrichments before validation, as they may affect cause/effect/severity
-        if enrichments:
+        # Load mappings and enrichments once per pipeline run.
+        await self._identifier_mapping_service.initialize(repository, source_id)
+        await self._entity_enrichment_service.initialize(repository, source_id)
+
+        mapping_count = self._identifier_mapping_service.get_loaded_mapping_count()
+        if mapping_count > 0:
             logger.info(
-                f"[{self.get_adapter_type()}] Applying {len(enrichments)} enrichment rules to records"
+                f"[{self.get_adapter_type()}] Loaded {mapping_count} mapping entries"
             )
-            self._apply_enrichments(alert_dicts, enrichments)
+        
+        # Apply enrichments before validation, as they may affect cause/effect/severity.
+        enrichment_count = self._entity_enrichment_service.get_loaded_enrichment_count()
+        if enrichment_count > 0:
+            logger.info(
+                f"[{self.get_adapter_type()}] Applying {enrichment_count} enrichment rules to records"
+            )
+
+            for alert_data in alert_dicts:
+                self._entity_enrichment_service.apply_enrichment(
+                    alert_data,
+                    self.get_adapter_type(),
+                )
         
         # Load GTFS entities for validation
         gtfs_entities = await self._load_gtfs_entities(repository)
@@ -772,7 +515,6 @@ class DatasourceBase(DatasourceInterface):
                     existing_alert_ids.add(alert_id)
         
         # Determine which alerts to add, update, or delete
-        alerts_to_add = incoming_alert_ids - existing_alert_ids
         alerts_to_update = incoming_alert_ids & existing_alert_ids
         # Only delete alerts that belong to this data source
         alerts_to_delete = {
@@ -817,13 +559,16 @@ class DatasourceBase(DatasourceInterface):
             
             for entity_data in entities_data:
                 # Apply mappings to entity data
-                mapped_entity_data = self._apply_entity_mappings(entity_data, mappings)
+                mapped_entity_data = self._identifier_mapping_service.apply_mapping(
+                    entity_data,
+                )
                 
                 # For DISCARD_INVALID_ELEMENTS policy, validate and clean individual fields
                 if policy == InvalidReferencePolicy.DISCARD_INVALID_ELEMENTS:
                     cleaned_entity, has_valid_ref = self._validate_and_clean_entity_elements(
                         mapped_entity_data, gtfs_entities
                     )
+                    
                     # Mark as valid if at least one reference is valid
                     # Unless already explicitly marked as invalid (e.g., trip references)
                     if "is_valid" not in mapped_entity_data:
