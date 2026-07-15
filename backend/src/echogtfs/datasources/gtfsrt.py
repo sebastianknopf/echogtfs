@@ -77,14 +77,12 @@ class GtfsRealtimeDatasource(DatasourceBase):
             if not isinstance(self.config["token"], str):
                 raise ValueError("'token' must be a string")
 
-    async def fetch_alerts(self) -> list[dict[str, Any]]:
+    async def _fetch_records(self) -> dict[str, Any] | list[dict[str, Any]]:
         """Fetch GTFS-RT feed and transform entities into internal alert dicts."""
         from echogtfs.services.database import get_repository
         from echogtfs.services.datalog import DatalogService
 
         dialect = GtfsRtDialect(self.config["dialect"])
-        if dialect != GtfsRtDialect.GTFSRT_SERVICEALERTS:
-            raise ValueError(f"Unknown GTFS-RT dialect: {dialect}")
 
         endpoint = self.config["endpoint"]
         token = self.config.get("token", "").strip()
@@ -156,10 +154,19 @@ class GtfsRealtimeDatasource(DatasourceBase):
                     exc_info=True,
                 )
 
-        transformer = GtfsRtServiceAlertsTransformer(make_unique_id=self._make_unique_id)
-        return transformer.transform(
+        if dialect == GtfsRtDialect.GTFSRT_SERVICEALERTS:
+            transformer = GtfsRtServiceAlertsTransformer(make_unique_id=self._make_unique_id)
+        else:
+            raise ValueError(f"Unknown GTFS-RT dialect: {dialect}")
+
+        records = transformer.transform(
             {
                 "feed": feed,
                 "source_name": self.config.get("_source_name", "gtfsrt"),
             }
         )
+
+        return {
+            "record_type": "service_alerts",
+            "records": records,
+        }

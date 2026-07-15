@@ -1,4 +1,4 @@
-"""Datasource contract for external service alert imports."""
+"""Datasource contract for external realtime-data imports."""
 
 from __future__ import annotations
 
@@ -18,17 +18,17 @@ class DatasourceInterface(ABC):
         """Validate datasource-specific configuration values."""
 
     @abstractmethod
-    async def fetch_alerts(self) -> list[dict[str, Any]]:
-        """Fetch and transform external alerts into internal alert dictionaries."""
+    async def _fetch_records(self) -> dict[str, Any] | list[dict[str, Any]]:
+        """Fetch and transform external realtime payloads into dialect-defined records."""
 
     @abstractmethod
-    async def sync_alerts(
+    async def sync_records(
         self,
         repository: RepositoryInterface,
         source_id: int,
         source_name: str,
     ) -> dict[str, int]:
-        """Synchronize alerts from datasource into the database."""
+        """Synchronize datasource records into the database."""
 
     @abstractmethod
     def get_datasource_type(self) -> str:

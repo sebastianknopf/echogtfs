@@ -126,7 +126,7 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
             config = json.loads(source.config)
             datasource = self._get_datasource(source.type, config)
 
-            stats = await datasource.sync_alerts(self._repository, source.id, source.name)
+            stats = await datasource.sync_records(self._repository, source.id, source.name)
 
             logger.info(
                 "[DatasourceScheduler] Import task completed for '%s': created=%s, updated=%s, deleted=%s",

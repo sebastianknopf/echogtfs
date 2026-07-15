@@ -1,4 +1,4 @@
-"""SIRI-SX datasource for service-alert import."""
+"""SIRI-SX datasource for realtime data import."""
 
 from __future__ import annotations
 
@@ -138,7 +138,7 @@ class SiriSxDatasource(DatasourceBase):
         xml_string = ET.tostring(siri, encoding="unicode", method="xml")
         return f'<?xml version="1.0" encoding="UTF-8"?>{xml_string}'
 
-    async def fetch_alerts(self) -> list[dict[str, Any]]:
+    async def _fetch_records(self) -> dict[str, Any] | list[dict[str, Any]]:
         from echogtfs.services.database import get_repository
         from echogtfs.services.datalog import DatalogService
 
@@ -206,9 +206,13 @@ class SiriSxDatasource(DatasourceBase):
             make_unique_id=self._make_unique_id,
             filter_value=self.config.get("filter", ""),
         )
-        return transformer.transform(
+        records = transformer.transform(
             {
                 "root": root,
                 "source_name": self.config.get("_source_name", "sirisx"),
             }
         )
+        return {
+            "record_type": "service_alerts",
+            "records": records,
+        }

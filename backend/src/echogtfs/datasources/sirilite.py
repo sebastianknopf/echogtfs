@@ -1,4 +1,4 @@
-"""SIRI-Lite datasource for service-alert import."""
+"""SIRI-Lite datasource for realtime data import."""
 
 from __future__ import annotations
 
@@ -85,7 +85,7 @@ class SiriLiteDatasource(DatasourceBase):
             if not isinstance(self.config["filter"], str):
                 raise ValueError("'filter' must be a string")
 
-    async def fetch_alerts(self) -> list[dict[str, Any]]:
+    async def _fetch_records(self) -> dict[str, Any] | list[dict[str, Any]]:
         root = await self._fetch_and_parse_xml()
         source_name = self.config.get("_source_name", "sirilite")
         filter_value = self.config.get("filter", "")
@@ -96,13 +96,21 @@ class SiriLiteDatasource(DatasourceBase):
                 make_unique_id=self._make_unique_id,
                 filter_value=filter_value,
             )
-            return transformer.transform({"root": root, "source_name": source_name})
+            records = transformer.transform({"root": root, "source_name": source_name})
+            return {
+                "record_type": "service_alerts",
+                "records": records,
+            }
 
         transformer = SiriSxServiceAlertsTransformer(
             make_unique_id=self._make_unique_id,
             filter_value=filter_value,
         )
-        return transformer.transform({"root": root, "source_name": source_name})
+        records = transformer.transform({"root": root, "source_name": source_name})
+        return {
+            "record_type": "service_alerts",
+            "records": records,
+        }
 
     async def _fetch_and_parse_xml(self) -> ET.Element:
         from echogtfs.services.database import get_repository

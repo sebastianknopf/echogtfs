@@ -16,8 +16,8 @@ class DatasourceBase(DatasourceInterface):
     """
     Abstract base class for data sources.
     
-    Each adapter handles fetching data from a specific external format
-    and transforming it into the ServiceAlert database structure.
+    Each datasource handles fetching data from a specific external format
+    and transforming it into internal persistence records.
     """
     
     # Each datasource must define its configuration schema
@@ -47,18 +47,27 @@ class DatasourceBase(DatasourceInterface):
         pass
     
     @abstractmethod
-    async def fetch_alerts(self) -> list[dict[str, Any]]:
+    async def _fetch_records(self) -> dict[str, Any] | list[dict[str, Any]]:
         """
-        Fetch service alerts from the external data source.
+        Fetch realtime records from the external data source.
         
         Returns:
-            List of dictionaries representing ServiceAlert data ready for
-            database insertion. Each dictionary should have the structure:
+            Dialect-defined record payload ready for synchronization.
+            Recommended envelope structure:
+            {
+                "record_type": "service_alerts",
+                "records": [ ... ]
+            }
+
+            For backward compatibility, returning only a list of records is also supported
+            and treated as "service_alerts".
+
+            For ServiceAlerts, each dictionary should have the structure:
             {
                 "cause": "MAINTENANCE",
                 "effect": "DETOUR",
                 "severity_level": "WARNING",
-                "source": "adapter_name",
+                "source": "datasource_name",
                 "is_active": True,
                 "translations": [
                     {
@@ -103,13 +112,13 @@ class DatasourceBase(DatasourceInterface):
     
     def _make_unique_id(self, original_id: str, source_name: str) -> uuid.UUID:
         """
-        Create a unique UUID for an alert based on its original ID and source.
+        Create a unique UUID for a datasource record based on its original ID and source.
         
         If the original ID is already a UUID, return it as-is.
         Otherwise, create a deterministic UUID using namespace UUID5.
         
         Args:
-            original_id: Original alert ID from external feed
+            original_id: Original record ID from external feed
             source_name: Name of the data source
             
         Returns:
@@ -140,7 +149,7 @@ class DatasourceBase(DatasourceInterface):
     @classmethod
     def get_config_schema(cls) -> list[dict[str, Any]]:
         """
-        Get the configuration schema for this adapter.
+        Get the configuration schema for this datasource.
         
         Returns:
             List of configuration field definitions
@@ -238,7 +247,7 @@ class DatasourceBase(DatasourceInterface):
         (sort_order), and the first match for each enrichment type wins.
         
         Args:
-            alert_dicts: List of alert dictionaries (modified in place)
+            alert_dicts: List of normalized record dictionaries (modified in place)
             enrichments: List of enrichment rules from _load_enrichments()
         """
         from echogtfs.enum.system import EnrichmentType, SourceField
@@ -251,7 +260,7 @@ class DatasourceBase(DatasourceInterface):
         }
         
         for alert_data in alert_dicts:
-            # Track which enrichment types have been set for this alert
+            # Track which enrichment types have been set for this record
             enriched_types = {
                 "cause": False,
                 "effect": False,
@@ -317,25 +326,25 @@ class DatasourceBase(DatasourceInterface):
                         alert_data["cause"] = value
                         enriched_types["cause"] = True
                         logger.debug(
-                            f"[{self.get_adapter_type()}] Enriched alert {alert_data['id']}: "
+                            f"[{self.get_adapter_type()}] Enriched record {alert_data['id']}: "
                             f"cause={value} (matched pattern: {pattern})"
                         )
                     elif enrichment_type == EnrichmentType.EFFECT:
                         alert_data["effect"] = value
                         enriched_types["effect"] = True
                         logger.debug(
-                            f"[{self.get_adapter_type()}] Enriched alert {alert_data['id']}: "
+                            f"[{self.get_adapter_type()}] Enriched record {alert_data['id']}: "
                             f"effect={value} (matched pattern: {pattern})"
                         )
                     elif enrichment_type == EnrichmentType.SEVERITY:
                         alert_data["severity_level"] = value
                         enriched_types["severity"] = True
                         logger.debug(
-                            f"[{self.get_adapter_type()}] Enriched alert {alert_data['id']}: "
+                            f"[{self.get_adapter_type()}] Enriched record {alert_data['id']}: "
                             f"severity_level={value} (matched pattern: {pattern})"
                         )
                     
-                    # If all types have been enriched, we can stop processing for this alert
+                    # If all types have been enriched, we can stop processing for this record
                     if all(enriched_types.values()):
                         break
     
@@ -591,66 +600,114 @@ class DatasourceBase(DatasourceInterface):
                 deduplicated.append(entity)
         
         return deduplicated
+
+    def _normalize_fetched_payload(
+        self,
+        fetched_payload: dict[str, Any] | list[dict[str, Any]],
+    ) -> tuple[str, list[dict[str, Any]]]:
+        """Normalize fetched datasource payload into (record_type, records)."""
+        if isinstance(fetched_payload, list):
+            return "service_alerts", fetched_payload
+
+        if isinstance(fetched_payload, dict):
+            record_type = fetched_payload.get("record_type")
+            records = fetched_payload.get("records")
+
+            if not isinstance(record_type, str):
+                raise ValueError("Fetched payload is missing string field 'record_type'")
+
+            if not isinstance(records, list):
+                raise ValueError("Fetched payload is missing list field 'records'")
+
+            return record_type, records
+
+        raise ValueError(
+            "Fetched payload must be either a list[dict] or a dict with 'record_type' and 'records'"
+        )
     
-    async def sync_alerts(
+    async def sync_records(
         self, 
         repository: RepositoryInterface,
         source_id: int, 
         source_name: str
     ) -> dict[str, int]:
         """
-        Synchronize alerts from the external data source to the database.
+        Synchronize records from the external data source to the database.
         
-        This method orchestrates the complete sync process:
-        1. Fetches alerts from the external source (via fetch_alerts)
-        2. Loads GTFS entities for validation
-        3. Compares with existing alerts in the database
-        4. Validates entities according to data source policy
-        5. Updates existing alerts (preserving is_active flag)
-        6. Inserts new alerts
-        7. Deletes alerts that no longer exist in the source
+        This method orchestrates the generic sync process:
+        1. Fetches dialect-defined records from the external source (via _fetch_records)
+        2. Detects record type from fetched payload
+        3. Dispatches to the corresponding record-type synchronizer
         
         Args:
-            db: Database session
             source_id: Database ID of the data source
             source_name: Name of the data source (for logging and deterministic IDs)
             
         Returns:
             Dictionary with keys 'added', 'updated', 'deleted' containing counts
         """
-        from echogtfs.enum.system import InvalidReferencePolicy
-
-        policy = await repository.get_data_source_invalid_reference_policy(source_id)
-        
-        # Convert string to enum if needed (database stores as string)
-        if isinstance(policy, str):
-            policy = InvalidReferencePolicy(policy)
-        
-        logger.info(
-            f"[{self.get_adapter_type()}] Starting import from '{source_name}' "
-            f"(policy: {policy.value})"
-        )
+        logger.info(f"[{self.get_adapter_type()}] Starting import from '{source_name}'")
         
         # Inject source_name and source_id into config so adapters can use them
         self.config["_source_name"] = source_name
         self.config["_source_id"] = source_id
         
-        # Fetch alerts from external source
-        alert_dicts = await self.fetch_alerts()
+        # Fetch records from external source.
+        # Record shape and record type are defined by the selected dialect transformer.
+        fetched_payload = await self._fetch_records()
+        record_type, records = self._normalize_fetched_payload(fetched_payload)
+
+        logger.info(
+            f"[{self.get_adapter_type()}] Fetched {len(records)} records from source "
+            f"(record_type={record_type})"
+        )
+
+        if record_type == "service_alerts":
+            return await self._sync_service_alert_records(
+                repository=repository,
+                source_id=source_id,
+                source_name=source_name,
+                records=records,
+            )
+
+        raise NotImplementedError(
+            f"Record type '{record_type}' is not supported by sync_records yet"
+        )
+
+    async def _sync_service_alert_records(
+        self,
+        repository: RepositoryInterface,
+        source_id: int,
+        source_name: str,
+        records: list[dict[str, Any]],
+    ) -> dict[str, int]:
+        """Synchronize service-alert records into the database."""
+        from echogtfs.enum.system import InvalidReferencePolicy
+
+        policy = await repository.get_data_source_invalid_reference_policy(source_id)
+
+        # Convert string to enum if needed (database stores as string)
+        if isinstance(policy, str):
+            policy = InvalidReferencePolicy(policy)
+
+        logger.info(
+            f"[{self.get_adapter_type()}] Synchronizing service-alert records from '{source_name}' "
+            f"(policy: {policy.value})"
+        )
+
+        alert_dicts = records
         total_fetched = len(alert_dicts)
-        
-        logger.info(f"[{self.get_adapter_type()}] Fetched {total_fetched} alerts from source")
-        
+
         # Load mappings for this data source
         mappings = await self._load_mappings(repository, source_id)
         
         # Load enrichments for this data source
         enrichments = await self._load_enrichments(repository, source_id)
         
-        # Apply enrichments to alerts (before validation, as they may affect cause/effect/severity)
+        # Apply enrichments before validation, as they may affect cause/effect/severity
         if enrichments:
             logger.info(
-                f"[{self.get_adapter_type()}] Applying {len(enrichments)} enrichment rules to alerts"
+                f"[{self.get_adapter_type()}] Applying {len(enrichments)} enrichment rules to records"
             )
             self._apply_enrichments(alert_dicts, enrichments)
         
