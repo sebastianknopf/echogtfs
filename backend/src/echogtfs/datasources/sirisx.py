@@ -132,6 +132,7 @@ class SiriSxDatasource(DatasourceBase):
             "SituationExchangeRequest",
             attrib={"version": "2.0"},
         )
+
         sx_timestamp = ET.SubElement(situation_exchange, "RequestTimestamp")
         sx_timestamp.text = timestamp
 
@@ -139,6 +140,26 @@ class SiriSxDatasource(DatasourceBase):
         return f'<?xml version="1.0" encoding="UTF-8"?>{xml_string}'
 
     async def _fetch_records(self) -> dict[str, Any] | list[dict[str, Any]]:
+        root = await self._fetch_and_parse_xml()
+        source_name = self.config.get("_source_name", "sirilite")
+        
+        dialect = SiriSxDialect(self.config["dialect"])
+        if dialect == SiriSxDialect.SIRISX:
+            transformer = SiriSxServiceAlertsTransformer(
+                make_unique_id=self._make_unique_id,
+                filter_value=self.config.get("filter", ""),
+            )
+        else:
+            raise ValueError(f"Unknown SIRI-SX dialect: {dialect}")
+        
+        records = transformer.transform({"root": root, "source_name": source_name})
+
+        return {
+            "record_type": "service_alerts",
+            "records": records,
+        }
+    
+    async def _fetch_and_parse_xml(self) -> ET.Element:
         from echogtfs.services.database import get_repository
         from echogtfs.services.datalog import DatalogService
 
@@ -152,17 +173,21 @@ class SiriSxDatasource(DatasourceBase):
 
         response = None
         try:
+            logger.info(f"[SiriSxDatasource] Fetching SIRI-SX feed from {endpoint_url}")
+            
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
                     endpoint_url,
                     content=xml_payload,
                     headers={"Content-Type": "application/xml; charset=utf-8"},
                 )
+
                 response.raise_for_status()
                 xml_content = response.text
         except httpx.HTTPError as exc:
             logger.error(f"[SiriSxDatasource] HTTP error fetching feed: {exc}")
             source_id = self.config.get("_source_id")
+            
             if source_id and response is not None:
                 try:
                     error_content = response.text if response.text else f"HTTP Error: {exc}"
@@ -179,6 +204,7 @@ class SiriSxDatasource(DatasourceBase):
                     logger.warning(
                         f"[SiriSxDatasource] Failed to log error request: {log_error}"
                     )
+
             raise ValueError(f"Failed to fetch SIRI-SX feed: {exc}")
 
         source_id = self.config.get("_source_id")
@@ -197,22 +223,7 @@ class SiriSxDatasource(DatasourceBase):
                 logger.error(f"[SiriSxDatasource] Failed to log request: {exc}", exc_info=True)
 
         try:
-            root = ET.fromstring(xml_content)
+            return ET.fromstring(xml_content)
         except ET.ParseError as exc:
             logger.error(f"[SiriSxDatasource] Failed to parse XML: {exc}")
             raise ValueError(f"Failed to parse SIRI-SX XML: {exc}")
-
-        transformer = SiriSxServiceAlertsTransformer(
-            make_unique_id=self._make_unique_id,
-            filter_value=self.config.get("filter", ""),
-        )
-        records = transformer.transform(
-            {
-                "root": root,
-                "source_name": self.config.get("_source_name", "sirisx"),
-            }
-        )
-        return {
-            "record_type": "service_alerts",
-            "records": records,
-        }

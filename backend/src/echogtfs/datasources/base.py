@@ -131,6 +131,7 @@ class DatasourceBase(DatasourceInterface):
         # This ensures the same alert from the same source always gets the same UUID
         namespace = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')  # DNS namespace
         unique_name = f"{source_name}-{original_id}"
+
         return uuid.uuid5(namespace, unique_name)
     
     def get_datasource_type(self) -> str:
@@ -960,7 +961,9 @@ class DatasourceBase(DatasourceInterface):
                 f"[{self.get_adapter_type()}] Deleting {len(policy_based_deletes)} existing alerts "
                 f"due to invalid reference policy"
             )
+
             await repository.delete_service_alerts_by_ids(list(policy_based_deletes))
+            
             # Add to total delete count
             stats_deleted += len(policy_based_deletes)
         

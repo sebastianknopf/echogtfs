@@ -68,6 +68,7 @@ class GtfsRealtimeDatasource(DatasourceBase):
             GtfsRtDialect(self.config["dialect"])
         except ValueError:
             valid_dialects = [dialect.value for dialect in GtfsRtDialect]
+
             raise ValueError(
                 f"Invalid dialect '{self.config['dialect']}'. "
                 f"Valid options: {', '.join(valid_dialects)}"
@@ -109,9 +110,11 @@ class GtfsRealtimeDatasource(DatasourceBase):
         except httpx.HTTPError as exc:
             logger.error(f"[GtfsRealtimeDatasource] HTTP error fetching feed: {exc}")
             source_id = self.config.get("_source_id")
+            
             if source_id and response is not None:
                 try:
                     error_content = response.text if response.text else f"HTTP Error: {exc}"
+
                     await DatalogService(get_repository()).create_log_entry(
                         data_source_id=source_id,
                         request_url=final_url,
@@ -125,6 +128,7 @@ class GtfsRealtimeDatasource(DatasourceBase):
                     logger.warning(
                         f"[GtfsRealtimeDatasource] Failed to log error request: {log_error}"
                     )
+
             raise ValueError(f"Failed to fetch GTFS-RT feed: {exc}")
 
         feed = gtfs_realtime_pb2.FeedMessage()
@@ -139,6 +143,7 @@ class GtfsRealtimeDatasource(DatasourceBase):
             try:
                 feed_dict = MessageToDict(feed, preserving_proto_field_name=True)
                 feed_json = json.dumps(feed_dict, indent=2, ensure_ascii=False)
+                
                 await DatalogService(get_repository()).create_log_entry(
                     data_source_id=source_id,
                     request_url=final_url,

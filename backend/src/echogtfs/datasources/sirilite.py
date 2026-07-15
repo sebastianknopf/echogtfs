@@ -96,17 +96,16 @@ class SiriLiteDatasource(DatasourceBase):
                 make_unique_id=self._make_unique_id,
                 filter_value=filter_value,
             )
-            records = transformer.transform({"root": root, "source_name": source_name})
-            return {
-                "record_type": "service_alerts",
-                "records": records,
-            }
+        elif dialect == SiriLiteDialect.SIRISX:
+            transformer = SiriSxServiceAlertsTransformer(
+                make_unique_id=self._make_unique_id,
+                filter_value=filter_value,
+            )
+        else:
+            raise ValueError(f"Unknown SIRI Lite dialect: {dialect}")
 
-        transformer = SiriSxServiceAlertsTransformer(
-            make_unique_id=self._make_unique_id,
-            filter_value=filter_value,
-        )
         records = transformer.transform({"root": root, "source_name": source_name})
+            
         return {
             "record_type": "service_alerts",
             "records": records,
@@ -134,9 +133,11 @@ class SiriLiteDatasource(DatasourceBase):
         except httpx.HTTPError as exc:
             logger.error(f"[SiriLiteDatasource] HTTP error fetching feed: {exc}")
             source_id = self.config.get("_source_id")
+            
             if source_id and response is not None:
                 try:
                     error_content = response.text if response.text else f"HTTP Error: {exc}"
+                    
                     await DatalogService(get_repository()).create_log_entry(
                         data_source_id=source_id,
                         request_url=str(response.url),
