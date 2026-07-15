@@ -8,8 +8,8 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from echogtfs.common.config import settings
-from echogtfs.database import Base
-from echogtfs.services.database import models  # noqa: F401
+from echogtfs.services.database.models import Base
+
 
 config = context.config
 

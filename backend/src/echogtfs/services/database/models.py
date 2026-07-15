@@ -3,9 +3,8 @@ from typing import ClassVar
 import uuid
 
 from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, Uuid, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from echogtfs.database import Base
 from echogtfs.enum.gtfsrt import AlertCause, AlertEffect, AlertSeverityLevel, PeriodType
 from echogtfs.enum.system import EnrichmentType, ExpiredAlertPolicy, InvalidReferencePolicy, SourceField
 
@@ -13,6 +12,11 @@ from echogtfs.enum.system import EnrichmentType, ExpiredAlertPolicy, InvalidRefe
 # ---------------------------------------------------------------------------
 # System models
 # ---------------------------------------------------------------------------
+
+class Base(DeclarativeBase):
+    """Base class for all SQLAlchemy models."""
+    pass
+
 
 class AppSetting(Base):
     """Key-value store for application-wide settings persisted in the database."""
