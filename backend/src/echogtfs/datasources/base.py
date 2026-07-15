@@ -7,6 +7,8 @@ import uuid
 from typing import Any
 
 from echogtfs.datasources.intf_datasource import DatasourceInterface
+from echogtfs.services.database import get_repository
+from echogtfs.services.datalog import DatalogService
 from echogtfs.services.database.intf_repository import RepositoryInterface
 
 logger = logging.getLogger("uvicorn")
@@ -156,6 +158,36 @@ class DatasourceBase(DatasourceInterface):
             List of configuration field definitions
         """
         return [dict(field) for field in cls.CONFIG_SCHEMA]
+    
+    async def _log_request(
+        self,
+        source_id: int | None,
+        request_url: str,
+        request_headers: dict[str, str] | None,
+        response_headers: dict[str, str] | None,
+        response_status_code: int | None,
+        response_content: str | None,
+        response_content_type: str | None
+    ) -> None:
+        if not source_id:
+            return
+
+        try:
+            await DatalogService(get_repository()).create_log_entry(
+                data_source_id=source_id,
+                request_url=request_url,
+                response_content=response_content,
+                request_headers=dict(request_headers) if request_headers else None,
+                response_headers=dict(response_headers) if response_headers else None,
+                response_mimetype=response_content_type,
+                status_code=response_status_code,
+            )
+        except Exception as exc:
+            logger.error(
+                f"[{self.get_adapter_type()}] Failed to log request: {exc}",
+                exc_info=True,
+            )
+
     
     async def _load_mappings(
         self,
@@ -963,7 +995,7 @@ class DatasourceBase(DatasourceInterface):
             )
 
             await repository.delete_service_alerts_by_ids(list(policy_based_deletes))
-            
+
             # Add to total delete count
             stats_deleted += len(policy_based_deletes)
         

@@ -104,7 +104,22 @@ class SiriLiteDatasource(DatasourceBase):
         else:
             raise ValueError(f"Unknown SIRI Lite dialect: {dialect}")
 
-        records = transformer.transform({"root": root, "source_name": source_name})
+        try:
+            records = transformer.transform({"root": root, "source_name": source_name})
+        except Exception as exc:
+            logger.error(f"[SiriLiteDatasource] Failed to transform payload: {exc}", exc_info=True)
+            
+            await self._log_request(
+                source_id=self.config.get("_source_id"),
+                request_url=self.config.get("endpoint", ""),
+                request_headers=None,
+                response_headers=None,
+                response_status_code=500,
+                response_content=str(exc),
+                response_content_type="text/plain",
+            )
+
+            raise ValueError(f"Failed to transform SIRI-Lite payload: {exc}") from exc
             
         return {
             "record_type": "service_alerts",
@@ -112,9 +127,6 @@ class SiriLiteDatasource(DatasourceBase):
         }
 
     async def _fetch_and_parse_xml(self) -> ET.Element:
-        from echogtfs.services.database import get_repository
-        from echogtfs.services.datalog import DatalogService
-
         endpoint = self.config["endpoint"]
         token = self.config.get("token", "").strip()
 
@@ -125,54 +137,51 @@ class SiriLiteDatasource(DatasourceBase):
         logger.info(f"[SiriLiteDatasource] Fetching SIRI-Lite feed from {endpoint}")
 
         response = None
+        final_url = endpoint
         try:
             async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
                 response = await client.get(endpoint, headers=headers)
+                final_url = str(response.url)
                 response.raise_for_status()
                 xml_content = response.text
         except httpx.HTTPError as exc:
             logger.error(f"[SiriLiteDatasource] HTTP error fetching feed: {exc}")
-            source_id = self.config.get("_source_id")
             
-            if source_id and response is not None:
-                try:
-                    error_content = response.text if response.text else f"HTTP Error: {exc}"
-                    
-                    await DatalogService(get_repository()).create_log_entry(
-                        data_source_id=source_id,
-                        request_url=str(response.url),
-                        response_content=error_content,
-                        request_headers=dict(headers) if headers else None,
-                        response_headers=dict(response.headers) if response.headers else None,
-                        response_mimetype="text/plain",
-                        status_code=response.status_code if hasattr(response, "status_code") else None,
-                    )
-                except Exception as log_error:
-                    logger.warning(
-                        f"[SiriLiteDatasource] Failed to log error request: {log_error}"
-                    )
-            raise ValueError(f"Failed to fetch SIRI-Lite feed: {exc}")
+            await self._log_request(
+                source_id=self.config.get("_source_id"),
+                request_url=final_url,
+                request_headers=headers,
+                response_headers=dict(response.headers) if response and response.headers else None,
+                response_status_code=response.status_code if response is not None else 404,
+                response_content=str(exc),
+                response_content_type="text/plain",
+            )
 
-        source_id = self.config.get("_source_id")
-        if source_id:
-            try:
-                await DatalogService(get_repository()).create_log_entry(
-                    data_source_id=source_id,
-                    request_url=str(response.url),
-                    response_content=xml_content,
-                    request_headers=dict(headers) if headers else None,
-                    response_headers=dict(response.headers),
-                    response_mimetype="application/xml",
-                    status_code=response.status_code,
-                )
-            except Exception as exc:
-                logger.error(
-                    f"[SiriLiteDatasource] Failed to log request: {exc}",
-                    exc_info=True,
-                )
+            raise ValueError(f"Failed to fetch SIRI-Lite feed: {exc}") from exc
+
+        await self._log_request(
+            source_id=self.config.get("_source_id"),
+            request_url=final_url,
+            request_headers=headers,
+            response_headers=dict(response.headers) if response and response.headers else None,
+            response_status_code=response.status_code if response is not None else 404,
+            response_content=xml_content,
+            response_content_type="application/xml",
+        )
 
         try:
             return ET.fromstring(xml_content)
         except ET.ParseError as exc:
             logger.error(f"[SiriLiteDatasource] Failed to parse XML: {exc}")
-            raise ValueError(f"Failed to parse SIRI-Lite XML: {exc}")
+            
+            await self._log_request(
+                source_id=self.config.get("_source_id"),
+                request_url=final_url,
+                request_headers=headers,
+                response_headers=dict(response.headers) if response and response.headers else None,
+                response_status_code=500,
+                response_content=str(exc),
+                response_content_type="text/plain",
+            )
+
+            raise ValueError(f"Failed to parse SIRI-Lite XML: {exc}") from exc

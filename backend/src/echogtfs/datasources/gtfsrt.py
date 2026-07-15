@@ -80,8 +80,8 @@ class GtfsRealtimeDatasource(DatasourceBase):
 
     async def _fetch_records(self) -> dict[str, Any] | list[dict[str, Any]]:
         """Fetch GTFS-RT feed and transform entities into internal alert dicts."""
-        from echogtfs.services.database import get_repository
-        from echogtfs.services.datalog import DatalogService
+
+        source_name = self.config.get("_source_name", "gtfsrt")
 
         dialect = GtfsRtDialect(self.config["dialect"])
 
@@ -109,67 +109,66 @@ class GtfsRealtimeDatasource(DatasourceBase):
                 protobuf_data = response.content
         except httpx.HTTPError as exc:
             logger.error(f"[GtfsRealtimeDatasource] HTTP error fetching feed: {exc}")
-            source_id = self.config.get("_source_id")
-            
-            if source_id and response is not None:
-                try:
-                    error_content = response.text if response.text else f"HTTP Error: {exc}"
-
-                    await DatalogService(get_repository()).create_log_entry(
-                        data_source_id=source_id,
-                        request_url=final_url,
-                        response_content=error_content,
-                        request_headers=dict(headers) if headers else None,
-                        response_headers=dict(response.headers) if response.headers else None,
-                        response_mimetype="text/plain",
-                        status_code=response.status_code if hasattr(response, "status_code") else None,
-                    )
-                except Exception as log_error:
-                    logger.warning(
-                        f"[GtfsRealtimeDatasource] Failed to log error request: {log_error}"
-                    )
-
-            raise ValueError(f"Failed to fetch GTFS-RT feed: {exc}")
+            await self._log_request(
+                source_id=self.config.get("_source_id"),
+                request_url=final_url,
+                request_headers=headers,
+                response_headers=dict(response.headers) if response and response.headers else None,
+                response_status_code=response.status_code if response is not None else 404,
+                response_content=str(exc),
+                response_content_type="text/plain",
+            )
+            raise ValueError(f"Failed to fetch GTFS-RT feed: {exc}") from exc
 
         feed = gtfs_realtime_pb2.FeedMessage()
         try:
             feed.ParseFromString(protobuf_data)
         except Exception as exc:
             logger.error(f"[GtfsRealtimeDatasource] Failed to parse protobuf: {exc}")
-            raise ValueError(f"Failed to parse GTFS-RT protobuf: {exc}")
+            await self._log_request(
+                source_id=self.config.get("_source_id"),
+                request_url=final_url,
+                request_headers=headers,
+                response_headers=dict(response.headers) if response and response.headers else None,
+                response_status_code=500,
+                response_content=str(exc),
+                response_content_type="text/plain",
+            )
+            raise ValueError(f"Failed to parse GTFS-RT protobuf: {exc}") from exc
 
-        source_id = self.config.get("_source_id")
-        if source_id:
-            try:
-                feed_dict = MessageToDict(feed, preserving_proto_field_name=True)
-                feed_json = json.dumps(feed_dict, indent=2, ensure_ascii=False)
-                
-                await DatalogService(get_repository()).create_log_entry(
-                    data_source_id=source_id,
-                    request_url=final_url,
-                    response_content=feed_json,
-                    request_headers=dict(headers) if headers else None,
-                    response_headers=dict(response.headers),
-                    response_mimetype="application/json",
-                    status_code=response.status_code,
-                )
-            except Exception as exc:
-                logger.error(
-                    f"[GtfsRealtimeDatasource] Failed to log request: {exc}",
-                    exc_info=True,
-                )
+        await self._log_request(
+            source_id=self.config.get("_source_id"),
+            request_url=final_url,
+            request_headers=headers,
+            response_headers=dict(response.headers) if response and response.headers else None,
+            response_status_code=response.status_code if response is not None else 404,
+            response_content=json.dumps(
+                MessageToDict(feed, preserving_proto_field_name=True),
+                indent=2,
+                ensure_ascii=False,
+            ),
+            response_content_type="application/json",
+        )
 
         if dialect == GtfsRtDialect.GTFSRT_SERVICEALERTS:
             transformer = GtfsRtServiceAlertsTransformer(make_unique_id=self._make_unique_id)
         else:
             raise ValueError(f"Unknown GTFS-RT dialect: {dialect}")
 
-        records = transformer.transform(
-            {
-                "feed": feed,
-                "source_name": self.config.get("_source_name", "gtfsrt"),
-            }
-        )
+        try:
+            records = transformer.transform({"feed": feed, "source_name": source_name})
+        except Exception as exc:
+            logger.error(f"[GtfsRealtimeDatasource] Failed to transform payload: {exc}", exc_info=True)
+            await self._log_request(
+                source_id=self.config.get("_source_id"),
+                request_url=final_url,
+                request_headers=headers,
+                response_headers=dict(response.headers) if response and response.headers else None,
+                response_status_code=500,
+                response_content=str(exc),
+                response_content_type="text/plain",
+            )
+            raise ValueError(f"Failed to transform GTFS-RT payload: {exc}") from exc
 
         return {
             "record_type": "service_alerts",

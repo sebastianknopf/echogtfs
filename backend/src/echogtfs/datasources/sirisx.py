@@ -141,7 +141,7 @@ class SiriSxDatasource(DatasourceBase):
 
     async def _fetch_records(self) -> dict[str, Any] | list[dict[str, Any]]:
         root = await self._fetch_and_parse_xml()
-        source_name = self.config.get("_source_name", "sirilite")
+        source_name = self.config.get("_source_name", "sirisx")
         
         dialect = SiriSxDialect(self.config["dialect"])
         if dialect == SiriSxDialect.SIRISX:
@@ -152,7 +152,22 @@ class SiriSxDatasource(DatasourceBase):
         else:
             raise ValueError(f"Unknown SIRI-SX dialect: {dialect}")
         
-        records = transformer.transform({"root": root, "source_name": source_name})
+        try:
+            records = transformer.transform({"root": root, "source_name": source_name})
+        except Exception as exc:
+            logger.error(f"[SiriSxDatasource] Failed to transform payload: {exc}", exc_info=True)
+            
+            await self._log_request(
+                source_id=self.config.get("_source_id"),
+                request_url=self.config.get("endpoint", ""),
+                request_headers={"Content-Type": "application/xml; charset=utf-8"},
+                response_headers=None,
+                response_status_code=500,
+                response_content=str(exc),
+                response_content_type="text/plain",
+            )
+
+            raise ValueError(f"Failed to transform SIRI-SX payload: {exc}") from exc
 
         return {
             "record_type": "service_alerts",
@@ -160,9 +175,6 @@ class SiriSxDatasource(DatasourceBase):
         }
     
     async def _fetch_and_parse_xml(self) -> ET.Element:
-        from echogtfs.services.database import get_repository
-        from echogtfs.services.datalog import DatalogService
-
         if self.config.get("method") == SiriSxMethod.PUBLISH_SUBSCRIBE.value:
             raise NotImplementedError(
                 "Method 'publish/subscribe' is not yet supported. Please use 'request/response' instead."
@@ -172,6 +184,7 @@ class SiriSxDatasource(DatasourceBase):
         xml_payload = self._build_request_xml()
 
         response = None
+        request_headers = {"Content-Type": "application/xml; charset=utf-8"}
         try:
             logger.info(f"[SiriSxDatasource] Fetching SIRI-SX feed from {endpoint_url}")
             
@@ -179,51 +192,49 @@ class SiriSxDatasource(DatasourceBase):
                 response = await client.post(
                     endpoint_url,
                     content=xml_payload,
-                    headers={"Content-Type": "application/xml; charset=utf-8"},
+                    headers=request_headers,
                 )
 
                 response.raise_for_status()
                 xml_content = response.text
         except httpx.HTTPError as exc:
             logger.error(f"[SiriSxDatasource] HTTP error fetching feed: {exc}")
-            source_id = self.config.get("_source_id")
             
-            if source_id and response is not None:
-                try:
-                    error_content = response.text if response.text else f"HTTP Error: {exc}"
-                    await DatalogService(get_repository()).create_log_entry(
-                        data_source_id=source_id,
-                        request_url=endpoint_url,
-                        response_content=error_content,
-                        request_headers={"Content-Type": "application/xml; charset=utf-8"},
-                        response_headers=dict(response.headers) if response.headers else None,
-                        response_mimetype="text/plain",
-                        status_code=response.status_code if hasattr(response, "status_code") else None,
-                    )
-                except Exception as log_error:
-                    logger.warning(
-                        f"[SiriSxDatasource] Failed to log error request: {log_error}"
-                    )
+            await self._log_request(
+                source_id=self.config.get("_source_id"),
+                request_url=endpoint_url,
+                request_headers=request_headers,
+                response_headers=dict(response.headers) if response and response.headers else None,
+                response_status_code=response.status_code if response is not None else 404,
+                response_content=str(exc),
+                response_content_type="text/plain",
+            )
 
-            raise ValueError(f"Failed to fetch SIRI-SX feed: {exc}")
+            raise ValueError(f"Failed to fetch SIRI-SX feed: {exc}") from exc
 
-        source_id = self.config.get("_source_id")
-        if source_id:
-            try:
-                await DatalogService(get_repository()).create_log_entry(
-                    data_source_id=source_id,
-                    request_url=endpoint_url,
-                    response_content=xml_content,
-                    request_headers={"Content-Type": "application/xml; charset=utf-8"},
-                    response_headers=dict(response.headers),
-                    response_mimetype="application/xml",
-                    status_code=response.status_code,
-                )
-            except Exception as exc:
-                logger.error(f"[SiriSxDatasource] Failed to log request: {exc}", exc_info=True)
+        await self._log_request(
+            source_id=self.config.get("_source_id"),
+            request_url=endpoint_url,
+            request_headers=request_headers,
+            response_headers=dict(response.headers) if response and response.headers else None,
+            response_status_code=response.status_code if response is not None else 404,
+            response_content=xml_content,
+            response_content_type="application/xml",
+        )
 
         try:
             return ET.fromstring(xml_content)
         except ET.ParseError as exc:
             logger.error(f"[SiriSxDatasource] Failed to parse XML: {exc}")
-            raise ValueError(f"Failed to parse SIRI-SX XML: {exc}")
+            
+            await self._log_request(
+                source_id=self.config.get("_source_id"),
+                request_url=endpoint_url,
+                request_headers=request_headers,
+                response_headers=dict(response.headers) if response and response.headers else None,
+                response_status_code=500,
+                response_content=str(exc),
+                response_content_type="text/plain",
+            )
+
+            raise ValueError(f"Failed to parse SIRI-SX XML: {exc}") from exc
