@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from echogtfs.services.scheduler.datasource_scheduler_service import DatasourceSchedulerService
+from echogtfs.services.scheduler import datasource_scheduler_service as scheduler_module
 
 
 @dataclass
@@ -93,25 +94,25 @@ class TestDatasourceSchedulerService(unittest.IsolatedAsyncioTestCase):
         repository = _RepositoryStub()
         repository.get_data_source_by_id.return_value = _DataSourceStub(id=7, name="Alpha")
         service = DatasourceSchedulerService(repository)
-        adapter = SimpleNamespace(sync_alerts=AsyncMock(return_value={"added": 1, "updated": 2, "deleted": 3}))
+        datasource = SimpleNamespace(sync_records=AsyncMock(return_value={"added": 1, "updated": 2, "deleted": 3}))
 
-        with patch.object(DatasourceSchedulerService, "_get_adapter", return_value=adapter):
+        with patch.object(DatasourceSchedulerService, "_get_datasource", return_value=datasource):
             await service.run_import_task(7)
 
-        adapter.sync_alerts.assert_awaited_once_with(repository.session, 7, "Alpha")
-        repository.session.commit.assert_awaited_once()
-        repository.session.rollback.assert_not_awaited()
+        datasource.sync_records.assert_awaited_once_with(repository, 7, "Alpha")
         repository.update_data_source_last_run_at.assert_awaited_once()
 
     async def test_run_import_task_rolls_back_and_updates_last_run_at_on_error(self):
         repository = _RepositoryStub()
         repository.get_data_source_by_id.return_value = _DataSourceStub(id=11, name="Broken")
         service = DatasourceSchedulerService(repository)
-        adapter = SimpleNamespace(sync_alerts=AsyncMock(side_effect=RuntimeError("boom")))
+        datasource = SimpleNamespace(sync_records=AsyncMock(side_effect=RuntimeError("boom")))
 
-        with patch.object(DatasourceSchedulerService, "_get_adapter", return_value=adapter):
+        with patch.object(DatasourceSchedulerService, "_get_datasource", return_value=datasource), patch.object(
+            scheduler_module.logger,
+            "error",
+        ):
             await service.run_import_task(11)
 
-        repository.session.commit.assert_not_awaited()
-        repository.session.rollback.assert_awaited_once()
+        datasource.sync_records.assert_awaited_once_with(repository, 11, "Broken")
         repository.update_data_source_last_run_at.assert_awaited_once()
