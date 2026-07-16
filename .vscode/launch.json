@@ -22,6 +22,19 @@
       ],
       "justMyCode": false,
       "subProcess": true
+    },
+    {
+      "name": "Debug (Tests)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "unittest",
+      "args": [
+        "discover"
+      ],
+      "cwd": "${workspaceFolder}/backend",
+      "justMyCode": false,
+      "subProcess": true,
+      "console": "integratedTerminal"
     }
   ]
 }

@@ -30,8 +30,8 @@ class TestGtfsRtServiceAlertsTransformer(unittest.TestCase):
         header.text = "Header"
         period = gtfs_realtime_pb2.TimeRange()
         valid_alert.active_period.append(period)
-        period.start = int(time.time()) - 60
-        period.end = int(time.time()) + 3600
+        period.start = int(time.time()) - 7200
+        period.end = int(time.time()) + 60
         informed = gtfs_realtime_pb2.EntitySelector()
         valid_alert.informed_entity.append(informed)
         informed.route_id = "R1"
@@ -42,8 +42,8 @@ class TestGtfsRtServiceAlertsTransformer(unittest.TestCase):
         expired_alert = expired_entity.alert
         old_period = gtfs_realtime_pb2.TimeRange()
         expired_alert.active_period.append(old_period)
-        old_period.start = int(time.time()) - 7200
-        old_period.end = int(time.time()) - 3600
+        old_period.start = int(time.time()) - 10800
+        old_period.end = int(time.time()) - 7200
 
         transformer = GtfsRtServiceAlertsTransformer(
             make_unique_id=lambda original, source: f"{source}-{original}"
