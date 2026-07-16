@@ -22,7 +22,7 @@ class TestSiriliteDatasource(unittest.IsolatedAsyncioTestCase):
         root = ET.fromstring("<root />")
 
         with patch.object(datasource, "_fetch_and_parse_xml", AsyncMock(return_value=root)), patch(
-            "echogtfs.datasources.sirilite.SiriLiteSwissServiceAlertsTransformer"
+            "echogtfs.datasources.sirilite.SwissServiceAlertsTransformer"
         ) as transformer_cls:
             transformer_cls.return_value.transform.return_value = [{"id": "b"}]
             payload = await datasource._fetch_records()
@@ -35,7 +35,7 @@ class TestSiriliteDatasource(unittest.IsolatedAsyncioTestCase):
         root = ET.fromstring("<root />")
 
         with patch.object(datasource, "_fetch_and_parse_xml", AsyncMock(return_value=root)), patch(
-            "echogtfs.datasources.sirilite.SiriLiteSwissServiceAlertsTransformer"
+            "echogtfs.datasources.sirilite.SwissServiceAlertsTransformer"
         ) as transformer_cls, patch.object(sirilite_module.logger, "error"):
             transformer_cls.return_value.transform.side_effect = RuntimeError("transform failed")
             with self.assertRaises(ValueError):

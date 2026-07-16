@@ -16,7 +16,7 @@ from echogtfs.enum.gtfsrt import PeriodType
 logger = logging.getLogger("uvicorn")
 
 
-class SiriLiteSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
+class SwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
     """Transforms SIRI-Lite Swiss XML into service-alert dictionaries."""
 
     def __init__(
@@ -56,12 +56,12 @@ class SiriLiteSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                     alerts.append(alert)
             except Exception as exc:
                 logger.error(
-                    f"[SiriLiteSwissTransformer] Error processing situation: {exc}",
+                    f"[SwissServiceAlertsTransformer] Error processing situation: {exc}",
                     exc_info=True,
                 )
 
         logger.info(
-            "[SiriLiteSwissTransformer] Processed %s alerts (filtered: %s participant, %s window)",
+            "[SwissServiceAlertsTransformer] Processed %s alerts (filtered: %s participant, %s window)",
             len(alerts),
             filtered_by_participant,
             filtered_out_of_window,

@@ -6,8 +6,8 @@ from echogtfs.datasources.transformers.intf_service_alerts_transformer import (
 from echogtfs.datasources.transformers.gtfsrt_service_alerts_transformer import (
     GtfsRtServiceAlertsTransformer,
 )
-from echogtfs.datasources.transformers.sirilite_swiss_service_alerts_transformer import (
-    SiriLiteSwissServiceAlertsTransformer,
+from echogtfs.datasources.transformers.swiss_service_alerts_transformer import (
+    SwissServiceAlertsTransformer,
 )
 from echogtfs.datasources.transformers.sirisx_service_alerts_transformer import (
     SiriSxServiceAlertsTransformer,
@@ -16,6 +16,6 @@ from echogtfs.datasources.transformers.sirisx_service_alerts_transformer import 
 __all__ = [
     "ServiceAlertsTransformerInterface",
     "GtfsRtServiceAlertsTransformer",
-    "SiriLiteSwissServiceAlertsTransformer",
+    "SwissServiceAlertsTransformer",
     "SiriSxServiceAlertsTransformer",
 ]

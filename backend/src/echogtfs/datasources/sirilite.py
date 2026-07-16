@@ -11,7 +11,7 @@ import httpx
 
 from echogtfs.datasources.base import DatasourceBase
 from echogtfs.datasources.transformers import (
-    SiriLiteSwissServiceAlertsTransformer,
+    SwissServiceAlertsTransformer,
     SiriSxServiceAlertsTransformer,
 )
 
@@ -92,7 +92,7 @@ class SiriLiteDatasource(DatasourceBase):
 
         dialect = SiriLiteDialect(self.config["dialect"])
         if dialect == SiriLiteDialect.SWISS:
-            transformer = SiriLiteSwissServiceAlertsTransformer(
+            transformer = SwissServiceAlertsTransformer(
                 make_unique_id=self._make_unique_id,
                 filter_value=filter_value,
             )
