@@ -2,7 +2,7 @@
 
 ## Overview
 
-EchoGTFS is a self-hosted, containerized web application for creating and managing GTFS-Realtime ServiceAlerts. It combines a manually authored alert workflow with an automated import pipeline that can pull alerts from external data sources (GTFS-RT feeds, SIRI SX, SIRI Lite). The resulting alerts are published as a standards-compliant GTFS-Realtime feed.
+EchoGTFS is a self-hosted, containerized web application for creating and managing GTFS-Realtime data. It combines a manually authored data with an automated import pipeline that can pull data from external data sources (GTFS-RT feeds, SIRI SX, SIRI Lite). The resulting data are published as a standards-compliant GTFS-Realtime feed.
 
 ## Container Layout
 
@@ -19,24 +19,9 @@ All runtime configuration is injected via environment variables. The canonical s
 ```
 echogtfs/
   backend/
-    src/echogtfs/          # All Python application code
-      routers/             # FastAPI route handlers (one file per resource)
-      services/            # Business logic: import, cleanup, scheduling
-        adapters/          # External data source adapters
-      migrations/          # Numbered SQL migration files (001.sql, ...)
-      main.py              # Application entry point, middleware registration
-      config.py            # Pydantic Settings configuration model
-      database.py          # SQLAlchemy async engine and session factory
-      models.py            # SQLAlchemy ORM models
-      schemas.py           # Pydantic request/response schemas
-      security.py          # Password hashing, JWT, FastAPI dependencies
-      migrations.py        # Migration runner
-    tests/                 # unittest-based test suite
+    src/echogtfs/          # Code base for backend
   frontend/
-    index.html             # Single HTML file; all views rendered here
-    js/                    # ES6 JavaScript modules (no bundler)
-    css/app.css            # All styles; single stylesheet
-    nginx.conf             # NGINX configuration
+    index.html             # Code base for frontend
 ```
 
 ## Backend Technology Stack
@@ -50,18 +35,17 @@ echogtfs/
 - slowapi: Rate limiting (wraps limits library)
 - APScheduler: Cron-based job scheduling for GTFS imports and data source polling
 - httpx: Async HTTP client used by adapters
-- google.protobuf: Protobuf serialization for GTFS-RT output
+- google.protobuf: Protobuf serialization for GTFS-RT output (locally compiled with `protoc`)
 
 ## Frontend Technology Stack
 
+- NGINX for serving static files and proxying `/api`
 - Vanilla JavaScript (ES6+), no framework, no build step
 - HTML5 single-page application with multiple view divs
-- NGINX for serving static files and proxying `/api`
 
 ## Application Startup Sequence
 
 1. `main.py` `lifespan` context manager runs at startup.
-2. SQLAlchemy `Base.metadata.create_all` creates any missing tables.
 3. `AlembicMigrationService` applies all pending numbered SQL migrations.
 4. If the `sys_users` table is empty, a first superuser is created from `FIRST_SUPERUSER*` environment variables.
 5. Scheduled jobs are configured:
@@ -78,11 +62,33 @@ Each router file under `routers/` maps to a URL prefix registered in `main.py`:
 |---|---|---|
 | `auth.py` | `/api/auth` | OAuth2 password-flow login, returns JWT |
 | `alerts.py` | `/api/alerts` | ServiceAlert CRUD |
+| `sources.py` | `/api/sources` | External data source CRUD and manual trigger |
+| `users.py` | `/api/users` | User management (superuser only) |
+| `settings.py` | `/api/settings` | Application settings key-value store |
 | `gtfs.py` | `/api/gtfs` | GTFS Static feed management and entity lookup |
 | `realtime.py` | `/api/realtime` | GTFS-RT protobuf and JSON feed output |
-| `sources.py` | `/api/sources` | External data source CRUD and manual trigger |
-| `settings.py` | `/api/settings` | Application settings key-value store |
-| `users.py` | `/api/users` | User management (superuser only) |
+
+The API routers are meant to have as less logic as possible and only do the I/O networking stuff, mainly communication to the frontend, but also provision of GTFS-RT data.
+
+## Services
+Services are meant to encapsulate all the logic which is not a) direct database access and b) not networking or API related code. All services are located in `backend/src/echogtfs/services` and the corresponding sub-directories.
+
+### Single-Instance Services
+Most services are instantiated when they're used in the code. Some special services are meant to be single-instance services used globally around the whole python process. These services are currently:
+
+- `SecurityService` (related for security related issues)
+- `DatasourceSchedulerService` (responsible for scheduling datasources by their cron job)
+
+The single instance services are initialized in the `main.py` module during the startup sequence of the application and also used across other modules and services.
+
+Other services initialized in `main.py` are:
+
+- `AlembicMigrationService` (responsible for running the Alembic migrations)
+- `SqlAlchemyRepository` (responsible for database access (not really a service, but also located in the services package))
+- `GtfsImportService` (responsible for loading and updating the GTFS static nominal data)
+- `CleanupService` (responsible for cleanup of **internal** deprecated GTFS-RT entities and datasource logs)
+
+Those services are not designed as single-instance service but only used by `main.py`.
 
 ## Data Model
 
@@ -94,23 +100,19 @@ Tables are split into `sys_` tables which are internal application tables, `gtfs
 
 Migrations are generated for running with Alembic. All pending migrations are applied during application startup.
 
+## External Data Sources
+
+External datasources live in `backend/src/echogtfs/datasources` and inherit from `DatasourceBase` (`base.py`). The `DatasourceBase` encapsulates all main logic for calling the mapping service, the enrichment service and the finally the matching if the entities could not be matched to a GTFS entity by ID.
+
+The specific datasource implementation encapsulates source related specifics like request / response patterns, content and I/O handling, and datasource related parameters.
+
+For reading and parsing the external data, the transformers are implemented in `backend/src/echogtfs/datasources/transformers`. There's one transformer interface for each GTFS-RT entity and several specific transformer implementations. The transformers are kept as generic as possible, however, proprietary transformers may be required to include arbitrary data.
+
 ## GTFS-Realtime Feed
 
-The `/api/realtime/feed` endpoint is the public output endpoint. It serializes active `ServiceAlert` rows into a GTFS-RT `FeedMessage` protobuf using the generated `gtfs_realtime_pb2` module (from `gtfs-realtime.proto`). The endpoint also supports a `?format=json` query parameter for JSON output. A simple in-memory cache (TTL 30 seconds) reduces database load; the cache is invalidated on every alert write operation.
+The `/api/realtime/feed` endpoint is the public output endpoint. It serializes realtime data to GTFS-RT compliant protobuf stream. The endpoint also supports a `?format=json` query parameter for JSON output. 
 
 Optional Basic Auth can be enabled for the realtime endpoint by storing `gtfs_rt_username` and `gtfs_rt_password` in `app_settings`.
-
-## External Data Source Adapters
-
-Adapters live in `services/adapters/` and inherit from `BaseAdapter` (defined in `base.py`). Each adapter implements:
-
-- `CONFIG_SCHEMA`: A list of field descriptor dicts describing required and optional configuration fields.
-- `_validate_config()`: Raises `ValueError` on missing or invalid configuration.
-- `fetch_alerts()`: Fetches and returns raw alert data from the external source.
-- `transform()`: Converts raw data into the internal `ServiceAlert` schema.
-- `import_alerts()`: Persists transformed alerts to the database.
-
-APScheduler runs polling jobs for each active data source on a configurable interval.
 
 ## Frontend Single-Page Application
 
