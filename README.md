@@ -2,8 +2,6 @@
 
 # echogtfs
 
-**Looking for the full documentation?** [Read the EchoGTFS Manual](docs/manual/README.md)
-
 A lightweight CMS for creating and managing GTFS-RT ServiceAlerts based on existing GTFS feeds. The system allows transit agencies to create real-time service alerts and integrate additional data sources such as SIRI-SX.
 
 > [!NOTE]
@@ -36,7 +34,7 @@ It provides:
 ## Prerequisites
 
 - Docker and Docker Compose
-- An existing GTFS feed (static)
+- An existing GTFS static feed
 
 ## Installation
 
@@ -67,9 +65,9 @@ It provides:
    ```
 
 5. **Access the web interface:**
-   - Open your browser at http://localhost (or the configured port)
+   - Open your browser at http://localhost (or the configured port or via a reverse proxy on a public server)
 
-## Configuration
+## Initial Setup
 
 ### GTFS Feed Configuration
 
@@ -78,7 +76,6 @@ After logging in, configure your GTFS data source via the settings interface:
 1. Navigate to **Settings**
 2. Add your GTFS feed URL or upload a GTFS file
 3. The system will import the static GTFS data
-4. You can now create ServiceAlerts referencing routes, stops, and trips from your GTFS feed
 
 ### Accessing GTFS-RT Feeds
 
@@ -117,24 +114,6 @@ To update to the latest version:
 git pull
 docker-compose down
 docker-compose build
-docker-compose up -d
-```
-
-## Troubleshooting
-
-**Database connection issues:**
-```bash
-docker-compose logs database
-```
-
-**Backend service issues:**
-```bash
-docker-compose logs backend
-```
-
-**Reset and restart:**
-```bash
-docker-compose down -v
 docker-compose up -d
 ```
 
