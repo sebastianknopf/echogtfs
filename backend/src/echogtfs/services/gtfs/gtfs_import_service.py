@@ -144,13 +144,18 @@ class GtfsImportService(GtfsImportInterface):
 
         try:
             result = await self._import_feed()
+            agencies_count = int(result.get("agencies", 0))
+            stops_count = int(result.get("stops", 0))
+            routes_count = int(result.get("routes", 0))
+            trips_count = int(result.get("trips", 0))
+            stop_times_count = int(result.get("stop_times", 0))
 
             message = (
-                f"{result['agencies']} agencies, "
-                f"{result['stops']} stops, "
-                f"{result['routes']} routes, "
-                f"{result['trips']} trips, "
-                f"{result['stop_times']} stop_times imported"
+                f"{agencies_count} agencies, "
+                f"{stops_count} stops, "
+                f"{routes_count} routes, "
+                f"{trips_count} trips, "
+                f"{stop_times_count} stop_times imported"
             )
 
             logger.info("[GTFS] Import successful: %s", message)
