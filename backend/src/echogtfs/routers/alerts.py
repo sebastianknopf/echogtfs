@@ -11,9 +11,9 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from echogtfs.services.database import get_gtfs_repository, get_repository
+from echogtfs.services.database import get_gtfs_repository, get_system_repository
 from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
-from echogtfs.services.database.intf_repository import RepositoryInterface
+from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
 from echogtfs.validation.schemas import (
     ServiceAlertCreate,
     ServiceAlertListResponse,
@@ -25,7 +25,7 @@ from echogtfs.common.security import CurrentUser
 router = APIRouter()
 logger = logging.getLogger("uvicorn")
 
-_Repo = Annotated[RepositoryInterface, Depends(get_repository)]
+_Repo = Annotated[SystemRepositoryInterface, Depends(get_system_repository)]
 _GtfsRepo = Annotated[GtfsRepositoryInterface, Depends(get_gtfs_repository)]
 
 

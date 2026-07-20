@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
-from echogtfs.services.database.intf_repository import RepositoryInterface
+from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
 
 
 class DatasourceInterface(ABC):
@@ -25,7 +25,7 @@ class DatasourceInterface(ABC):
     @abstractmethod
     async def sync_records(
         self,
-        repository: RepositoryInterface,
+        repository: SystemRepositoryInterface,
         gtfs_repository: GtfsRepositoryInterface,
         source_id: int,
         source_name: str,

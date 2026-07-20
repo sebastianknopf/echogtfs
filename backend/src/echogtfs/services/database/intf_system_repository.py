@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from echogtfs.services.database.models import (
     DataSource,
-    DataSourceEnrichment,
     DataSourceLog,
     DataSourceMapping,
     ServiceAlert,
@@ -18,7 +17,7 @@ from echogtfs.services.database.models import (
 )
 
 
-class RepositoryInterface(ABC):
+class SystemRepositoryInterface(ABC):
     """Interface for database repositories."""
 
     @abstractmethod

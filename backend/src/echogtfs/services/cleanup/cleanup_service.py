@@ -10,7 +10,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from echogtfs.enum.system import ExpiredAlertPolicy
 from echogtfs.services.datalog import DatalogService
-from echogtfs.services.database import RepositoryInterface
+from echogtfs.services.database import SystemRepositoryInterface
 from echogtfs.services.database.models import AppSetting
 
 logger = logging.getLogger("uvicorn")
@@ -21,7 +21,7 @@ class CleanupService:
 
     _scheduler: AsyncIOScheduler | None = None
 
-    def __init__(self, repository: RepositoryInterface):
+    def __init__(self, repository: SystemRepositoryInterface):
         self._repository = repository
 
     @classmethod

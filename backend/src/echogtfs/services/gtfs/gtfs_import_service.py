@@ -13,7 +13,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
-from echogtfs.services.database.intf_repository import RepositoryInterface
+from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
 from echogtfs.services.database.models import AppSetting
 from echogtfs.services.gtfs.intf_gtfs_import import GtfsImportInterface
 
@@ -30,7 +30,7 @@ class GtfsImportService(GtfsImportInterface):
 
     _scheduler: AsyncIOScheduler | None = None
 
-    def __init__(self, repository: RepositoryInterface, gtfs_repository: GtfsRepositoryInterface):
+    def __init__(self, repository: SystemRepositoryInterface, gtfs_repository: GtfsRepositoryInterface):
         self._repository = repository
         self._gtfs_repository = gtfs_repository
 

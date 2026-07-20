@@ -1,6 +1,6 @@
 from collections.abc import Iterator
 
-from echogtfs.services.database import RepositoryInterface
+from echogtfs.services.database import SystemRepositoryInterface
 from echogtfs.services.mapping.mapping_service_error import MappingServiceError
 
 
@@ -9,7 +9,7 @@ class MappingExportService:
 
     async def export_csv_stream(
         self,
-        repository: RepositoryInterface,
+        repository: SystemRepositoryInterface,
         source_id: int,
         entity_type: str,
     ) -> Iterator[bytes]:

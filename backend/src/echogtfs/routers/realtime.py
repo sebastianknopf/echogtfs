@@ -11,7 +11,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
-from echogtfs.services.database import get_repository
+from echogtfs.services.database import get_system_repository
 from echogtfs.services.database.models import AppSetting
 from echogtfs.services.gtfsrt.gtfs_realtime_service_alerts_export_service import GtfsRealtimeServiceAlertsExportService
 from echogtfs.services.security import get_security_service
@@ -21,7 +21,7 @@ router = APIRouter()
 
 async def _get_gtfs_rt_settings() -> tuple[str, str, str]:
     """Load GTFS-RT path and optional basic-auth credentials from repository."""
-    repository = get_repository()
+    repository = get_system_repository()
     rows = await repository.get_all_app_settings()
     
     return (
@@ -124,7 +124,7 @@ async def get_service_alerts(
         )
 
     # define export service instance
-    export_service = GtfsRealtimeServiceAlertsExportService(get_repository())
+    export_service = GtfsRealtimeServiceAlertsExportService(get_system_repository())
     
     # Return as JSON or protobuf
     # If ?json or ?debug is present (even without value), return JSON

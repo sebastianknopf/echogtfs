@@ -13,9 +13,9 @@ from echogtfs.common.extensions import limiter
 from echogtfs.services.database.alembic_migration_service import AlembicMigrationService
 from echogtfs.services.database import (
     GtfsRepository,
-    SqlAlchemyRepository,
+    SystemRepository,
     set_gtfs_repository,
-    set_repository,
+    set_system_repository,
 )
 from echogtfs.services.scheduler import DatasourceSchedulerService, set_datasource_scheduler_service
 from echogtfs.services.security import SecurityService, get_security_service, set_security_service
@@ -39,9 +39,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     migration_service: AlembicMigrationService = AlembicMigrationService()
     await migration_service.upgrade_head()
 
-    repository = SqlAlchemyRepository(settings.database_url, settings.debug)
+    repository = SystemRepository(settings.database_url, settings.debug)
     await repository.initialize()
-    set_repository(repository)
+    set_system_repository(repository)
 
     gtfs_repository = GtfsRepository(settings.database_url, settings.debug)
     await gtfs_repository.initialize()

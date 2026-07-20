@@ -13,9 +13,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 
-from echogtfs.services.database import get_gtfs_repository, get_repository
+from echogtfs.services.database import get_gtfs_repository, get_system_repository
 from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
-from echogtfs.services.database.intf_repository import RepositoryInterface
+from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
 from echogtfs.services.database.models import GtfsAgency, GtfsRoute, GtfsStop
 from echogtfs.common.security import CurrentUser, CurrentPoweruser
 from echogtfs.services.gtfs import (
@@ -27,7 +27,7 @@ from echogtfs.validation.schemas import AgencyRead, GtfsStatusRead, RouteRead, S
 
 router = APIRouter()
 
-_Repo = Annotated[RepositoryInterface, Depends(get_repository)]
+_Repo = Annotated[SystemRepositoryInterface, Depends(get_system_repository)]
 _GtfsRepo = Annotated[GtfsRepositoryInterface, Depends(get_gtfs_repository)]
 
 

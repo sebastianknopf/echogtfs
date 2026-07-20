@@ -10,7 +10,7 @@ from typing import Annotated, List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
 from fastapi.responses import StreamingResponse, FileResponse
 
-from echogtfs.services.database import RepositoryInterface, get_repository
+from echogtfs.services.database import SystemRepositoryInterface, get_system_repository
 from echogtfs.services.database.models import DataSource
 from echogtfs.services.scheduler import get_datasource_scheduler_service
 from echogtfs.validation.schemas import DataSourceCreate, DataSourceRead, DataSourceUpdate, DataSourceLogRead
@@ -22,10 +22,10 @@ from echogtfs.services.mapping import MappingExportService, MappingImportService
 router = APIRouter()
 logger = logging.getLogger("uvicorn")
 
-_Repo = Annotated[RepositoryInterface, Depends(get_repository)]
+_Repo = Annotated[SystemRepositoryInterface, Depends(get_system_repository)]
 
 
-async def _enrich_source_with_error_flag(source: DataSource, repository: RepositoryInterface) -> DataSourceRead:
+async def _enrich_source_with_error_flag(source: DataSource, repository: SystemRepositoryInterface) -> DataSourceRead:
     """
     Convert a DataSource model to DataSourceRead schema with error flag.
     

@@ -5,13 +5,13 @@ from fastapi.security import OAuth2PasswordRequestForm
 
 from echogtfs.common.config import settings
 from echogtfs.common.extensions import limiter
-from echogtfs.services.database import RepositoryInterface, get_repository
+from echogtfs.services.database import SystemRepositoryInterface, get_system_repository
 from echogtfs.services.security import get_security_service
 from echogtfs.validation.schemas import Token
 
 router = APIRouter()
 
-_Repo = Annotated[RepositoryInterface, Depends(get_repository)]
+_Repo = Annotated[SystemRepositoryInterface, Depends(get_system_repository)]
 
 
 @router.post("/token", response_model=Token)

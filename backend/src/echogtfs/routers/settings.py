@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from echogtfs.enum.system import ExpiredAlertPolicy
-from echogtfs.services.database import get_repository
+from echogtfs.services.database import get_system_repository
 from echogtfs.services.database.models import AppSetting
 from echogtfs.services.security import get_security_service
 from echogtfs.validation.schemas import AppSettings, PublicAppSettings
@@ -30,7 +30,7 @@ DEFAULTS = AppSettings(
 
 
 async def _load() -> AppSettings:
-    repository = get_repository()
+    repository = get_system_repository()
     rows = await repository.get_all_app_settings()
     
     # Initialize defaults in database if not present
@@ -94,7 +94,7 @@ async def update_settings(
     payload: AppSettings, _: CurrentSuperuser
 ) -> AppSettings:
     """Admin only: persists app settings."""
-    repository = get_repository()
+    repository = get_system_repository()
 
     await repository.set_app_setting(AppSetting.KEY_COLOR_PRIMARY, payload.color_primary)
     await repository.set_app_setting(AppSetting.KEY_COLOR_SECONDARY, payload.color_secondary)

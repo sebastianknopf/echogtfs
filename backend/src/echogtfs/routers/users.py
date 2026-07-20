@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from echogtfs.services.database import RepositoryInterface, get_repository
+from echogtfs.services.database import SystemRepositoryInterface, get_system_repository
 from echogtfs.services.database.models import User
 from echogtfs.services.security import get_security_service
 from echogtfs.validation.schemas import PasswordChange, UserCreate, UserRead, UserUpdate
@@ -10,7 +10,7 @@ from echogtfs.common.security import CurrentSuperuser, CurrentUser
 
 router = APIRouter()
 
-_Repo = Annotated[RepositoryInterface, Depends(get_repository)]
+_Repo = Annotated[SystemRepositoryInterface, Depends(get_system_repository)]
 
 
 @router.get("/me", response_model=UserRead)

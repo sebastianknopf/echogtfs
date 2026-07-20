@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from echogtfs.services.database.intf_repository import RepositoryInterface
+from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
 from echogtfs.services.mapping.intf_identifier_mapping import IdentifierMappingInterface
 
 
@@ -15,7 +15,7 @@ class IdentifierMappingService(IdentifierMappingInterface):
 
     async def initialize(
         self,
-        repository: RepositoryInterface,
+        repository: SystemRepositoryInterface,
         source_id: int,
     ) -> None:
         """Load mappings grouped by entity type for one data source."""

@@ -7,7 +7,7 @@ import uuid
 from sqlalchemy import case, delete, func, select, update
 from sqlalchemy.orm import selectinload
 
-from echogtfs.services.database.intf_repository import RepositoryInterface
+from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
 from echogtfs.services.database.models import (
     AppSetting,
     DataSource,
@@ -23,7 +23,7 @@ from echogtfs.services.database.models import (
 from echogtfs.services.database.base import RepositoryBase
 
 
-class SqlAlchemyRepository(RepositoryBase, RepositoryInterface):
+class SystemRepository(RepositoryBase, SystemRepositoryInterface):
     """SQLAlchemy-based repository for database access."""
 
     async def get_app_setting(self, key: str) -> str | None:

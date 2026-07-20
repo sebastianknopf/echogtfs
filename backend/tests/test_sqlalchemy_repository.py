@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from echogtfs.services.database.sqlalchemy_repository import SqlAlchemyRepository
+from echogtfs.services.database.system_repository import SystemRepository
 
 
 class TestSqlAlchemyRepository(unittest.IsolatedAsyncioTestCase):
@@ -29,10 +29,10 @@ class TestSqlAlchemyRepository(unittest.IsolatedAsyncioTestCase):
             def __call__(self):
                 return _FakeSession()
 
-        with patch("echogtfs.services.database.repository_base.create_async_engine", return_value=fake_engine), patch(
-            "echogtfs.services.database.repository_base.async_sessionmaker", return_value=_Factory()
+        with patch("echogtfs.services.database.base.create_async_engine", return_value=fake_engine), patch(
+            "echogtfs.services.database.base.async_sessionmaker", return_value=_Factory()
         ):
-            repository = SqlAlchemyRepository("sqlite+aiosqlite://")
+            repository = SystemRepository("sqlite+aiosqlite://")
             await repository.initialize()
             await repository.close()
 

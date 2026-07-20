@@ -6,10 +6,10 @@ import uuid
 from typing import Any
 
 from echogtfs.datasources.intf_datasource import DatasourceInterface
-from echogtfs.services.database import get_repository
+from echogtfs.services.database import get_system_repository
 from echogtfs.services.datalog import DatalogService
 from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
-from echogtfs.services.database.intf_repository import RepositoryInterface
+from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
 from echogtfs.services.enrichment.entity_enrichtment_service import EntityEnrichmentService
 from echogtfs.services.enrichment.intf_entity_enrichment import EntityEnrichmentInterface
 from echogtfs.services.mapping.identifier_mapping_service import IdentifierMappingService
@@ -179,7 +179,7 @@ class DatasourceBase(DatasourceInterface):
             return
 
         try:
-            await DatalogService(get_repository()).create_log_entry(
+            await DatalogService(get_system_repository()).create_log_entry(
                 data_source_id=source_id,
                 request_url=request_url,
                 response_content=response_content,
@@ -394,7 +394,7 @@ class DatasourceBase(DatasourceInterface):
     
     async def sync_records(
         self, 
-        repository: RepositoryInterface,
+        repository: SystemRepositoryInterface,
         gtfs_repository: GtfsRepositoryInterface,
         source_id: int, 
         source_name: str
@@ -445,7 +445,7 @@ class DatasourceBase(DatasourceInterface):
 
     async def _sync_service_alert_records(
         self,
-        repository: RepositoryInterface,
+        repository: SystemRepositoryInterface,
         gtfs_repository: GtfsRepositoryInterface,
         source_id: int,
         source_name: str,
