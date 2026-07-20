@@ -9,13 +9,15 @@ import tempfile
 import zipfile
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from echogtfs.common.config import settings
 from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
 from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
 from echogtfs.services.database.models import AppSetting
@@ -50,6 +52,12 @@ class GtfsImportService(GtfsImportInterface):
     def __init__(self, repository: SystemRepositoryInterface, gtfs_repository: GtfsRepositoryInterface):
         self._repository = repository
         self._gtfs_repository = gtfs_repository
+        
+        timezone_name = getattr(settings, "timezone", "UTC")
+        if not isinstance(timezone_name, str) or not timezone_name.strip():
+            timezone_name = "UTC"
+        
+        self._server_timezone = self._resolve_timezone(timezone_name)
 
     @classmethod
     def _get_scheduler(cls) -> AsyncIOScheduler:
@@ -181,7 +189,10 @@ class GtfsImportService(GtfsImportInterface):
 
         try:
             with zipfile.ZipFile(zip_path) as zip_file:
-                agencies = self._map_agencies(self._iter_csv_rows(zip_file, "agency.txt"))
+                agency_rows = list(self._iter_csv_rows(zip_file, "agency.txt"))
+                agencies = self._map_agencies(agency_rows)
+                feed_timezone = self._extract_feed_timezone(agency_rows)
+                service_date = datetime.now(feed_timezone).date()
                 stops = self._map_stops(self._iter_csv_rows(zip_file, "stops.txt"))
                 routes = self._map_routes(self._iter_csv_rows(zip_file, "routes.txt"))
 
@@ -200,6 +211,8 @@ class GtfsImportService(GtfsImportInterface):
                     stop_ids=stop_ids,
                     trip_windows=trip_windows,
                     persist=False,
+                    service_date=service_date,
+                    feed_timezone=feed_timezone,
                 )
 
                 trip_rows = self._derive_trip_rows(trip_meta, trip_windows)
@@ -217,6 +230,8 @@ class GtfsImportService(GtfsImportInterface):
                     stop_ids=stop_ids,
                     trip_windows={},
                     persist=True,
+                    service_date=service_date,
+                    feed_timezone=feed_timezone,
                 )
 
             return {
@@ -304,6 +319,8 @@ class GtfsImportService(GtfsImportInterface):
         stop_ids: set[str],
         trip_windows: dict[str, _TripWindow],
         persist: bool,
+        service_date: date,
+        feed_timezone: ZoneInfo,
     ) -> int:
         batch: list[dict[str, str | int | datetime]] = []
         total = 0
@@ -314,6 +331,9 @@ class GtfsImportService(GtfsImportInterface):
                 trip_meta=trip_meta,
                 stop_ids=stop_ids,
                 trip_windows=trip_windows,
+                service_date=service_date,
+                feed_timezone=feed_timezone,
+                target_timezone=self._server_timezone,
             )
             
             if stop_time_row is None:
@@ -343,6 +363,9 @@ class GtfsImportService(GtfsImportInterface):
         trip_meta: dict[str, tuple[str, int]],
         stop_ids: set[str],
         trip_windows: dict[str, _TripWindow],
+        service_date: date,
+        feed_timezone: ZoneInfo,
+        target_timezone: ZoneInfo,
     ) -> dict[str, str | int | datetime] | None:
         trip_id = row.get("trip_id") or ""
         stop_id = row.get("stop_id") or ""
@@ -357,8 +380,18 @@ class GtfsImportService(GtfsImportInterface):
         arrival_time_raw = row.get("arrival_time") or ""
         departure_time_raw = row.get("departure_time") or ""
 
-        arrival_time = GtfsImportService._parse_gtfs_time(arrival_time_raw)
-        departure_time = GtfsImportService._parse_gtfs_time(departure_time_raw)
+        arrival_time = GtfsImportService._parse_gtfs_time(
+            arrival_time_raw,
+            service_date=service_date,
+            feed_timezone=feed_timezone,
+            target_timezone=target_timezone,
+        )
+        departure_time = GtfsImportService._parse_gtfs_time(
+            departure_time_raw,
+            service_date=service_date,
+            feed_timezone=feed_timezone,
+            target_timezone=target_timezone,
+        )
 
         if arrival_time is None and departure_time is None:
             return None
@@ -461,7 +494,13 @@ class GtfsImportService(GtfsImportInterface):
             return None
 
     @staticmethod
-    def _parse_gtfs_time(value: str) -> datetime | None:
+    def _parse_gtfs_time(
+        value: str,
+        *,
+        service_date: date,
+        feed_timezone: ZoneInfo,
+        target_timezone: ZoneInfo,
+    ) -> datetime | None:
         if not value:
             return None
 
@@ -479,8 +518,31 @@ class GtfsImportService(GtfsImportInterface):
         if minutes < 0 or minutes > 59 or seconds < 0 or seconds > 59 or hours < 0:
             return None
 
-        base = datetime(1970, 1, 1, tzinfo=UTC)
-        return base + timedelta(hours=hours, minutes=minutes, seconds=seconds)
+        base = datetime.combine(service_date, datetime.min.time(), tzinfo=feed_timezone)
+        feed_timestamp = base + timedelta(hours=hours, minutes=minutes, seconds=seconds)
+        return feed_timestamp.astimezone(target_timezone)
+
+    @staticmethod
+    def _resolve_timezone(timezone_name: str) -> ZoneInfo:
+        try:
+            return ZoneInfo(timezone_name)
+        except ZoneInfoNotFoundError:
+            logger.warning("[GTFS] Unknown TIMEZONE '%s'. Falling back to UTC", timezone_name)
+            return ZoneInfo("UTC")
+
+    def _extract_feed_timezone(self, agency_rows: Iterable[dict[str, str]]) -> ZoneInfo:
+        for row in agency_rows:
+            timezone_name = (
+                row.get("agency_timezone")
+                or row.get("agency.timezone")
+                or row.get("timezone")
+                or ""
+            ).strip()
+
+            if timezone_name:
+                return self._resolve_timezone(timezone_name)
+
+        return self._server_timezone
 
     @staticmethod
     def _now_iso() -> str:

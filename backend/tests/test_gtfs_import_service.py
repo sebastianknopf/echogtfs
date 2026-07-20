@@ -4,10 +4,11 @@ import io
 import sys
 import unittest
 import zipfile
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -75,6 +76,9 @@ class TestGtfsImportService(unittest.IsolatedAsyncioTestCase):
             trip_meta={"T1": ("R1", 0)},
             stop_ids={"S1"},
             trip_windows=trip_windows,
+            service_date=date(2026, 7, 20),
+            feed_timezone=ZoneInfo("UTC"),
+            target_timezone=ZoneInfo("UTC"),
         )
 
         self.assertIsNotNone(mapped)
@@ -116,8 +120,59 @@ class TestGtfsImportService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(trips[0]["end_time"], end_arrival)
 
     def test_parse_gtfs_time_supports_values_beyond_24_hours(self):
-        value = GtfsImportService._parse_gtfs_time("25:10:05")
+        value = GtfsImportService._parse_gtfs_time(
+            "25:10:05",
+            service_date=date(2026, 7, 20),
+            feed_timezone=ZoneInfo("UTC"),
+            target_timezone=ZoneInfo("UTC"),
+        )
 
         self.assertIsNotNone(value)
         assert value is not None
-        self.assertEqual(value, datetime(1970, 1, 2, 1, 10, 5, tzinfo=UTC))
+        self.assertEqual(value, datetime(2026, 7, 21, 1, 10, 5, tzinfo=UTC))
+
+    def test_parse_gtfs_time_converts_feed_timezone_to_server_timezone(self):
+        value = GtfsImportService._parse_gtfs_time(
+            "08:00:00",
+            service_date=date(2026, 7, 20),
+            feed_timezone=ZoneInfo("Europe/Zurich"),
+            target_timezone=ZoneInfo("UTC"),
+        )
+
+        self.assertIsNotNone(value)
+        assert value is not None
+        self.assertEqual(value, datetime(2026, 7, 20, 6, 0, 0, tzinfo=UTC))
+
+    async def test_import_stop_times_uses_configured_timezone_for_conversion(self):
+        repo = SimpleNamespace()
+        gtfs_repo = SimpleNamespace(insert_gtfs_stop_times=AsyncMock())
+
+        with patch("echogtfs.services.gtfs.gtfs_import_service.settings", SimpleNamespace(timezone="Europe/Berlin")):
+            service = GtfsImportService(repo, gtfs_repo)
+
+        mem = io.BytesIO()
+        with zipfile.ZipFile(mem, "w") as zf:
+            zf.writestr(
+                "stop_times.txt",
+                "trip_id,stop_id,stop_sequence,arrival_time,departure_time\n"
+                "T1,S1,1,08:00:00,08:05:00\n",
+            )
+        mem.seek(0)
+
+        with zipfile.ZipFile(mem) as zf:
+            total = await service._import_stop_times(
+                zf,
+                trip_meta={"T1": ("R1", 0)},
+                stop_ids={"S1"},
+                trip_windows={},
+                persist=True,
+                service_date=date(2026, 7, 20),
+                feed_timezone=ZoneInfo("UTC"),
+            )
+
+        self.assertEqual(total, 1)
+        gtfs_repo.insert_gtfs_stop_times.assert_awaited_once()
+        inserted_batch = gtfs_repo.insert_gtfs_stop_times.await_args.args[0]
+        inserted = inserted_batch[0]
+        self.assertEqual(inserted["arrival_time"], datetime(2026, 7, 20, 10, 0, 0, tzinfo=ZoneInfo("Europe/Berlin")))
+        self.assertEqual(inserted["departure_time"], datetime(2026, 7, 20, 10, 5, 0, tzinfo=ZoneInfo("Europe/Berlin")))

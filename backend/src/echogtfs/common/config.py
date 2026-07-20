@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
     debug: bool = False
+    timezone: str = "UTC"
 
     # JWT – no default: startup fails explicitly if SECRET_KEY is not set
     secret_key: str
