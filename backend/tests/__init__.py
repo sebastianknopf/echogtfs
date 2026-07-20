@@ -1,13 +1,8 @@
-"""
-echogtfs test suite.
+"""Backend unittest package for discovery from the backend root."""
 
-Run all tests with:
-    python -m unittest discover
+import warnings
 
-Run specific test module:
-    python -m unittest tests.test_adapters_base
-    python -m unittest tests.test_adapters_gtfsrt
-    python -m unittest tests.test_adapters_sirilite
-    python -m unittest tests.test_adapters_sirisx
-    python -m unittest tests.test_security
-"""
+warnings.filterwarnings(
+	"ignore",
+	message=".*HMAC key is .* below the minimum recommended length.*",
+)

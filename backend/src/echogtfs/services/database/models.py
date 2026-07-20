@@ -1,116 +1,64 @@
 ﻿from datetime import datetime
-from enum import Enum
+from typing import ClassVar
 import uuid
 
 from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, Uuid, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from echogtfs.database import Base
-
-
-# ---------------------------------------------------------------------------
-# GTFS-RT ServiceAlert enums
-# ---------------------------------------------------------------------------
-
-class AlertCause(str, Enum):
-    """GTFS-RT Alert cause enum."""
-    UNKNOWN_CAUSE = "UNKNOWN_CAUSE"
-    OTHER_CAUSE = "OTHER_CAUSE"
-    TECHNICAL_PROBLEM = "TECHNICAL_PROBLEM"
-    STRIKE = "STRIKE"
-    DEMONSTRATION = "DEMONSTRATION"
-    ACCIDENT = "ACCIDENT"
-    HOLIDAY = "HOLIDAY"
-    WEATHER = "WEATHER"
-    MAINTENANCE = "MAINTENANCE"
-    CONSTRUCTION = "CONSTRUCTION"
-    POLICE_ACTIVITY = "POLICE_ACTIVITY"
-    MEDICAL_EMERGENCY = "MEDICAL_EMERGENCY"
-
-
-class SiriLiteDialect(str, Enum):
-    """SIRI-Lite dialect variants for different regional implementations."""
-    SWISS = "swiss"
-    SIRISX = "sirisx"
-
-
-class SiriSxMethod(str, Enum):
-    """SIRI-SX request method variants."""
-    REQUEST_RESPONSE = "request/response"
-    PUBLISH_SUBSCRIBE = "publish/subscribe"
-
-
-class SiriSxDialect(str, Enum):
-    """SIRI-SX dialect variants."""
-    SIRISX = "sirisx"
-
-
-class AlertEffect(str, Enum):
-    """GTFS-RT Alert effect enum."""
-    NO_SERVICE = "NO_SERVICE"
-    REDUCED_SERVICE = "REDUCED_SERVICE"
-    SIGNIFICANT_DELAYS = "SIGNIFICANT_DELAYS"
-    DETOUR = "DETOUR"
-    ADDITIONAL_SERVICE = "ADDITIONAL_SERVICE"
-    MODIFIED_SERVICE = "MODIFIED_SERVICE"
-    OTHER_EFFECT = "OTHER_EFFECT"
-    UNKNOWN_EFFECT = "UNKNOWN_EFFECT"
-    STOP_MOVED = "STOP_MOVED"
-    NO_EFFECT = "NO_EFFECT"
-    ACCESSIBILITY_ISSUE = "ACCESSIBILITY_ISSUE"
-
-
-class AlertSeverityLevel(str, Enum):
-    """GTFS-RT Alert severity level enum (SeverityLevel)."""
-    UNKNOWN_SEVERITY = "UNKNOWN_SEVERITY"
-    INFO = "INFO"
-    WARNING = "WARNING"
-    SEVERE = "SEVERE"
-
-
-class PeriodType(str, Enum):
-    """Type of validity period for service alerts."""
-    IMPACT_PERIOD = "impact_period"  # Actual validity period (when alert affects service)
-    COMMUNICATION_PERIOD = "communication_period"  # Publication period (when alert should be shown)
-
-
-class InvalidReferencePolicy(str, Enum):
-    """Policy for handling alerts with invalid entity references."""
-    DISCARD_ALERT = "discard_alert"  # Discard entire alert if any reference is invalid
-    KEEP_ALERT = "keep_alert"  # Keep entire alert even if references are invalid
-    DISCARD_INVALID = "discard_invalid"  # Discard only invalid references, keep alert
-    DISCARD_INVALID_ELEMENTS = "discard_invalid_elements"  # Discard invalid fields within references
-    NOT_SPECIFIED = "not_specified"  # No specific policy defined
-
-
-class EnrichmentType(str, Enum):
-    """Type of enrichment that can be extracted from alert text."""
-    CAUSE = "cause"
-    EFFECT = "effect"
-    SEVERITY = "severity"
-
-
-class SourceField(str, Enum):
-    """Source field to extract enrichment values from."""
-    HEADER = "header"
-    DESCRIPTION = "description"
-    HEADER_DESCRIPTION = "header_description"  # Match in either header or description
-
-
-class ExpiredAlertPolicy(str, Enum):
-    """Policy for handling expired alerts during cleanup."""
-    DEACTIVATE = "deactivate"  # Set is_active=False for expired alerts
-    DELETE = "delete"  # Delete expired alerts from database
+from echogtfs.enum.gtfsrt import AlertCause, AlertEffect, AlertSeverityLevel, PeriodType
+from echogtfs.enum.system import EnrichmentType, ExpiredAlertPolicy, InvalidReferencePolicy, SourceField
 
 
 # ---------------------------------------------------------------------------
 # System models
 # ---------------------------------------------------------------------------
 
+class Base(DeclarativeBase):
+    """Base class for all SQLAlchemy models."""
+    pass
+
+
 class AppSetting(Base):
     """Key-value store for application-wide settings persisted in the database."""
 
     __tablename__ = "sys_app_settings"
+
+    KEY_COLOR_PRIMARY: ClassVar[str] = "color_primary"
+    KEY_COLOR_SECONDARY: ClassVar[str] = "color_secondary"
+    KEY_APP_TITLE: ClassVar[str] = "app_title"
+    KEY_APP_LANGUAGE: ClassVar[str] = "app_language"
+
+    KEY_GTFS_RT_PATH: ClassVar[str] = "gtfs_rt_path"
+    KEY_GTFS_RT_USERNAME: ClassVar[str] = "gtfs_rt_username"
+    KEY_GTFS_RT_PASSWORD: ClassVar[str] = "gtfs_rt_password"
+
+    KEY_CLEANUP_CRON: ClassVar[str] = "cleanup_cron"
+    KEY_CLEANUP_EXPIRED_POLICY: ClassVar[str] = "cleanup_expired_policy"
+    KEY_CLEANUP_DELETE_AFTER_DAYS: ClassVar[str] = "cleanup_delete_after_days"
+
+    KEY_GTFS_FEED_URL: ClassVar[str] = "gtfs_feed_url"
+    KEY_GTFS_IMPORT_STATUS: ClassVar[str] = "gtfs_import_status"
+    KEY_GTFS_IMPORT_TIME: ClassVar[str] = "gtfs_import_time"
+    KEY_GTFS_IMPORT_MESSAGE: ClassVar[str] = "gtfs_import_message"
+    KEY_GTFS_CRON: ClassVar[str] = "gtfs_cron"
+
+    ALL_KEYS: ClassVar[tuple[str, ...]] = (
+        KEY_COLOR_PRIMARY,
+        KEY_COLOR_SECONDARY,
+        KEY_APP_TITLE,
+        KEY_APP_LANGUAGE,
+        KEY_GTFS_RT_PATH,
+        KEY_GTFS_RT_USERNAME,
+        KEY_GTFS_RT_PASSWORD,
+        KEY_CLEANUP_CRON,
+        KEY_CLEANUP_EXPIRED_POLICY,
+        KEY_CLEANUP_DELETE_AFTER_DAYS,
+        KEY_GTFS_FEED_URL,
+        KEY_GTFS_IMPORT_STATUS,
+        KEY_GTFS_IMPORT_TIME,
+        KEY_GTFS_IMPORT_MESSAGE,
+        KEY_GTFS_CRON,
+    )
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(String(2048))  # wider for URLs + messages

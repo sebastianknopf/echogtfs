@@ -1,4 +1,4 @@
-# Localization (i18n)
+# Localization
 
 ## Overview
 

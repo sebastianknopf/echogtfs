@@ -2,62 +2,29 @@
 from contextlib import asynccontextmanager
 import logging
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from sqlalchemy import select
-from starlette.middleware.base import BaseHTTPMiddleware
 
-from echogtfs.config import settings
-from echogtfs.database import AsyncSessionLocal
-from echogtfs.extensions import limiter
+from echogtfs.common.config import settings
+from echogtfs.common.security import SlidingTokenMiddleware
+from echogtfs.common.extensions import limiter
 from echogtfs.services.database.alembic_migration_service import AlembicMigrationService
-from echogtfs.services.database.models import GtfsAgency, GtfsRoute, GtfsStop, User  # noqa: F401
-from echogtfs.services.database.models import ServiceAlert, ServiceAlertTranslation, ServiceAlertActivePeriod, ServiceAlertInformedEntity  # noqa: F401
-from echogtfs.services.database.models import DataSource, DataSourceMapping  # noqa: F401
+from echogtfs.services.database import SqlAlchemyRepository, set_repository
+from echogtfs.services.scheduler import DatasourceSchedulerService, set_datasource_scheduler_service
+from echogtfs.services.security import SecurityService, get_security_service, set_security_service
 from echogtfs.routers.alerts import router as alerts_router
 from echogtfs.routers.auth import router as auth_router
 from echogtfs.routers.gtfs import router as gtfs_router
 from echogtfs.routers.realtime import router as realtime_router
-from echogtfs.services.gtfs_import import schedule_import_from_cron
-from echogtfs.services.alert_import import schedule_all_data_sources
-from echogtfs.services.cleanup import schedule_cleanup_from_settings
+from echogtfs.services.gtfs import GtfsImportService
+from echogtfs.services.cleanup import CleanupService
 from echogtfs.routers.settings import router as settings_router
 from echogtfs.routers.sources import router as sources_router
 from echogtfs.routers.users import router as users_router
-from echogtfs.security import create_access_token, hash_password
 
 logger = logging.getLogger("uvicorn.error")
-
-
-# -- Sliding Token Middleware --------------------------------------------------
-
-class SlidingTokenMiddleware(BaseHTTPMiddleware):
-    """
-    Middleware that issues a new JWT token on every successful authenticated request.
-    This implements a "sliding session" pattern where the session automatically
-    extends with user activity, expiring only after a period of inactivity.
-    """
-    async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
-        
-        # Only issue new token for successful responses (2xx status codes)
-        if 200 <= response.status_code < 300:
-            # Check if user was authenticated for this request
-            # Use getattr with default to safely access request.state.user
-            user = getattr(request.state, "user", None)
-            if user is not None:
-                # Generate new token with extended expiration
-                new_token = create_access_token(user.username)
-                # Add new token to response header for frontend to update
-                response.headers["X-New-Token"] = new_token
-                logger.info(f"[SlidingToken] Issued new token for user: {user.username}")
-            else:
-                logger.debug(f"[SlidingToken] No user in request.state for {request.url.path}")
-        
-        return response
 
 
 @asynccontextmanager
@@ -66,33 +33,41 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # run Alembic migrations to head on startup
     migration_service: AlembicMigrationService = AlembicMigrationService()
     await migration_service.upgrade_head()
+
+    repository = SqlAlchemyRepository(settings.database_url, settings.debug)
+    await repository.initialize()
+    set_repository(repository)
+
+    set_security_service(SecurityService(repository))
+
+    datasource_scheduler_service = DatasourceSchedulerService(repository)
+    set_datasource_scheduler_service(datasource_scheduler_service)
     
     # Bootstrap first superuser when the database is empty
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(select(User).limit(1))
-        if result.first() is None:
-            db.add(
-                User(
-                    username=settings.first_superuser,
-                    email=settings.first_superuser_email,
-                    hashed_password=hash_password(settings.first_superuser_password),
-                    is_active=True,
-                    is_superuser=True,
-                )
-            )
-            await db.commit()
+    users = await repository.list_users()
+    if not users:
+        await repository.create_user(
+            username=settings.first_superuser,
+            email=settings.first_superuser_email,
+            hashed_password=get_security_service().hash_password(settings.first_superuser_password),
+            is_active=True,
+            is_superuser=True,
+        )
 
 
     # Schedule GTFS import cron on startup
-    await schedule_import_from_cron()
+    await GtfsImportService(repository).schedule_import_from_cron()
     
     # Schedule all data source alert imports on startup
-    await schedule_all_data_sources()
+    await datasource_scheduler_service.schedule_all_data_sources()
     
     # Schedule cleanup job on startup
-    await schedule_cleanup_from_settings()
+    await CleanupService(repository).schedule_from_settings()
     
     yield
+
+    # Close database repository on shutdown
+    await repository.close()
 
 
 # -- FastAPI app ---------------------------------------------------------------

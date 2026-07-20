@@ -7,14 +7,15 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from echogtfs.config import settings
-from echogtfs.database import Base
-from echogtfs.services.database import models  # noqa: F401
+from echogtfs.common.config import settings
+from echogtfs.services.database.models import Base
+
 
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # Keep existing application loggers (e.g. uvicorn) active during migrations.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 config.set_main_option("sqlalchemy.url", settings.database_url)
 

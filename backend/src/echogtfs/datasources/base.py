@@ -1,0 +1,760 @@
+"""Base datasource implementation for external data feeds."""
+
+from abc import ABC, abstractmethod
+import logging
+import uuid
+from typing import Any
+
+from echogtfs.datasources.intf_datasource import DatasourceInterface
+from echogtfs.services.database import get_repository
+from echogtfs.services.datalog import DatalogService
+from echogtfs.services.database.intf_repository import RepositoryInterface
+from echogtfs.services.enrichment.entity_enrichtment_service import EntityEnrichmentService
+from echogtfs.services.enrichment.intf_entity_enrichment import EntityEnrichmentInterface
+from echogtfs.services.mapping.identifier_mapping_service import IdentifierMappingService
+from echogtfs.services.mapping.intf_identifier_mapping import IdentifierMappingInterface
+
+logger = logging.getLogger("uvicorn")
+
+
+class DatasourceBase(DatasourceInterface):
+    """
+    Abstract base class for data sources.
+    
+    Each datasource handles fetching data from a specific external format
+    and transforming it into internal persistence records.
+    """
+    
+    # Each datasource must define its configuration schema
+    # List of dicts with keys: name, type, label, required, placeholder, help_text
+    CONFIG_SCHEMA: list[dict[str, Any]] = []
+    
+    def __init__(self, config: dict[str, Any]):
+        """
+        Initialize the datasource with configuration.
+        
+        Args:
+            config: Configuration dictionary containing at minimum:
+                    - endpoint: URL endpoint for the data source
+                    Additional fields depend on the specific adapter.
+        """
+        self.config = config
+        self._entity_enrichment_service: EntityEnrichmentInterface = EntityEnrichmentService()
+        self._identifier_mapping_service: IdentifierMappingInterface = IdentifierMappingService()
+        self._validate_config()
+    
+    @abstractmethod
+    def _validate_config(self) -> None:
+        """
+        Validate the datasource configuration.
+        
+        Raises:
+            ValueError: If required configuration fields are missing or invalid
+        """
+        pass
+    
+    @abstractmethod
+    async def _fetch_records(self) -> dict[str, Any] | list[dict[str, Any]]:
+        """
+        Fetch realtime records from the external data source.
+        
+        Returns:
+            Dialect-defined record payload ready for synchronization.
+            Recommended envelope structure:
+            {
+                "record_type": "service_alerts",
+                "records": [ ... ]
+            }
+
+            For backward compatibility, returning only a list of records is also supported
+            and treated as "service_alerts".
+
+            For ServiceAlerts, each dictionary should have the structure:
+            {
+                "cause": "MAINTENANCE",
+                "effect": "DETOUR",
+                "severity_level": "WARNING",
+                "source": "datasource_name",
+                "is_active": True,
+                "translations": [
+                    {
+                        "language": "de-DE",
+                        "header_text": "...",
+                        "description_text": "...",
+                        "url": "..."
+                    }
+                ],
+                "active_periods": [
+                    {
+                        "start_time": 1234567890,
+                        "end_time": 1234567999
+                    }
+                ],
+                "informed_entities": [
+                    {
+                        "route_id": "123",
+                        "stop_id": "456",
+                        ...
+                    }
+                ]
+            }
+        """
+        pass
+    
+    def _is_uuid(self, value: str) -> bool:
+        """
+        Check if a string is a valid UUID.
+        
+        Args:
+            value: String to check
+            
+        Returns:
+            True if value is a valid UUID, False otherwise
+        """
+        try:
+            uuid.UUID(value)
+            return True
+        except (ValueError, AttributeError):
+            return False
+    
+    def _make_unique_id(self, original_id: str, source_name: str) -> uuid.UUID:
+        """
+        Create a unique UUID for a datasource record based on its original ID and source.
+        
+        If the original ID is already a UUID, return it as-is.
+        Otherwise, create a deterministic UUID using namespace UUID5.
+        
+        Args:
+            original_id: Original record ID from external feed
+            source_name: Name of the data source
+            
+        Returns:
+            UUID object
+        """
+        if self._is_uuid(original_id):
+            return uuid.UUID(original_id)
+        
+        # Create a deterministic UUID using namespace and source+ID combination
+        # This ensures the same alert from the same source always gets the same UUID
+        namespace = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')  # DNS namespace
+        unique_name = f"{source_name}-{original_id}"
+
+        return uuid.uuid5(namespace, unique_name)
+    
+    def get_datasource_type(self) -> str:
+        """
+        Get the type identifier of this datasource.
+        
+        Returns:
+            Datasource type string (e.g., "sirilite", "gtfsrt")
+        """
+        return self.__class__.__name__.replace("Datasource", "").lower()
+
+    # Backward-compatible alias used by existing log messages.
+    def get_adapter_type(self) -> str:
+        return self.get_datasource_type()
+    
+    @classmethod
+    def get_config_schema(cls) -> list[dict[str, Any]]:
+        """
+        Get the configuration schema for this datasource.
+        
+        Returns:
+            List of configuration field definitions
+        """
+        return [dict(field) for field in cls.CONFIG_SCHEMA]
+    
+    async def _log_request(
+        self,
+        source_id: int | None,
+        request_url: str,
+        request_headers: dict[str, str] | None,
+        response_headers: dict[str, str] | None,
+        response_status_code: int | None,
+        response_content: str | None,
+        response_content_type: str | None
+    ) -> None:
+        if not source_id:
+            return
+
+        try:
+            await DatalogService(get_repository()).create_log_entry(
+                data_source_id=source_id,
+                request_url=request_url,
+                response_content=response_content,
+                request_headers=dict(request_headers) if request_headers else None,
+                response_headers=dict(response_headers) if response_headers else None,
+                response_mimetype=response_content_type,
+                status_code=response_status_code,
+            )
+        except Exception as exc:
+            logger.error(
+                f"[{self.get_adapter_type()}] Failed to log request: {exc}",
+                exc_info=True,
+            )
+
+    
+    async def _load_gtfs_entities(
+        self,
+        repository: RepositoryInterface,
+    ) -> dict[str, set[str]]:
+        """Load all GTFS entity IDs into memory for fast validation.
+        
+        Returns a dictionary with sets of valid IDs:
+        {
+            "agency": {"agency_1", "agency_2", ...},
+            "route": {"route_1", "route_2", ...},
+            "stop": {"stop_1", "stop_2", ...}
+        }
+        
+        Args:
+            db: Database session
+        """
+        logger.info("[Datasource] Loading GTFS entities into memory for validation")
+        gtfs_entities = await repository.list_gtfs_entity_ids()
+        
+        logger.info(
+            f"[Datasource] Loaded {len(gtfs_entities['agency'])} agencies, "
+            f"{len(gtfs_entities['route'])} routes, {len(gtfs_entities['stop'])} stops"
+        )
+        
+        return gtfs_entities
+    
+    def _validate_entity(
+        self, 
+        entity_data: dict[str, Any], 
+        gtfs_entities: dict[str, set[str]]
+    ) -> bool:
+        """Validate if an informed entity references valid GTFS entities.
+        
+        Args:
+            entity_data: Dictionary with entity fields (agency_id, route_id, stop_id)
+            gtfs_entities: Dictionary of valid GTFS IDs from _load_gtfs_entities()
+        
+        Returns:
+            True if all referenced entities are valid, False otherwise
+        """
+        # Trip references are not managed/validated - if only trip_id is set,
+        # mark the entity as invalid (trip_id without other references)
+        has_trip_id = bool(entity_data.get("trip_id"))
+        has_agency_id = bool(entity_data.get("agency_id"))
+        has_route_id = bool(entity_data.get("route_id"))
+        has_stop_id = bool(entity_data.get("stop_id"))
+        
+        # If only trip_id is set (without agency, route, or stop), mark as invalid
+        # direction_id and route_type are just qualifiers, not primary references
+        if has_trip_id and not has_agency_id and not has_route_id and not has_stop_id:
+            logger.debug(
+                f"[{self.get_adapter_type()}] Entity has only trip_id without other references - "
+                f"marking as invalid (trip references not managed): trip_id={entity_data.get('trip_id')}"
+            )
+            return False
+        
+        # Check each entity type that is specified
+        if entity_data.get("agency_id"):
+            if entity_data["agency_id"] not in gtfs_entities["agency"]:
+                return False
+        
+        if entity_data.get("route_id"):
+            if entity_data["route_id"] not in gtfs_entities["route"]:
+                return False
+        
+        if entity_data.get("stop_id"):
+            if entity_data["stop_id"] not in gtfs_entities["stop"]:
+                return False
+        
+        # If no entities are specified or all specified entities are valid
+        return True
+    
+    def _validate_and_clean_entity_elements(
+        self, 
+        entity_data: dict[str, Any], 
+        gtfs_entities: dict[str, set[str]]
+    ) -> tuple[dict[str, Any], bool]:
+        """Validate and clean individual fields within an informed entity.
+        
+        Removes invalid entity references (agency_id, route_id, stop_id) from the entity
+        while keeping valid ones. This is used by DISCARD_INVALID_ELEMENTS policy.
+        
+        Args:
+            entity_data: Dictionary with entity fields (agency_id, route_id, stop_id, etc.)
+            gtfs_entities: Dictionary of valid GTFS IDs from _load_gtfs_entities()
+        
+        Returns:
+            Tuple of (cleaned_entity_data, has_any_valid_reference)
+            - cleaned_entity_data: Entity with invalid fields removed
+            - has_any_valid_reference: True if at least one valid reference remains
+        """
+        # Create a copy to avoid modifying the original
+        cleaned_entity = entity_data.copy()
+        has_any_valid_reference = False
+        removed_fields = []
+        
+        # If entity is already marked as invalid (e.g., trip references),
+        # don't clean it further - just return it as-is
+        if entity_data.get("is_valid") is False:
+            return cleaned_entity, False
+        
+        # Check and clean agency_id
+        if cleaned_entity.get("agency_id"):
+            if cleaned_entity["agency_id"] not in gtfs_entities["agency"]:
+                removed_fields.append(f"agency_id={cleaned_entity['agency_id']}")
+                cleaned_entity["agency_id"] = None
+            else:
+                has_any_valid_reference = True
+        
+        # Check and clean route_id
+        if cleaned_entity.get("route_id"):
+            if cleaned_entity["route_id"] not in gtfs_entities["route"]:
+                removed_fields.append(f"route_id={cleaned_entity['route_id']}")
+                cleaned_entity["route_id"] = None
+            else:
+                has_any_valid_reference = True
+        
+        # Check and clean stop_id
+        if cleaned_entity.get("stop_id"):
+            if cleaned_entity["stop_id"] not in gtfs_entities["stop"]:
+                removed_fields.append(f"stop_id={cleaned_entity['stop_id']}")
+                cleaned_entity["stop_id"] = None
+            else:
+                has_any_valid_reference = True
+        
+        # Trip references are not managed - if only trip_id remains after cleaning,
+        # this entity has no valid references (trip_id alone is not sufficient)
+        if cleaned_entity.get("trip_id") and not has_any_valid_reference:
+            removed_fields.append(f"trip_id={cleaned_entity['trip_id']} (not managed)")
+            cleaned_entity["trip_id"] = None
+        
+        # Log removed fields
+        if removed_fields:
+            logger.debug(
+                f"[{self.get_adapter_type()}] Removed invalid fields from entity: "
+                f"{', '.join(removed_fields)}"
+            )
+        
+        return cleaned_entity, has_any_valid_reference
+    
+    def _deduplicate_entities(self, entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """
+        Remove duplicate informed entities from a list.
+        
+        Two entities are considered duplicates if they have the same values for:
+        agency_id, route_id, route_type, stop_id, trip_id, and direction_id.
+        
+        Args:
+            entities: List of entity dictionaries
+            
+        Returns:
+            List with duplicates removed (preserving order, keeping first occurrence)
+        """
+        seen = set()
+        deduplicated = []
+        
+        for entity in entities:
+            # Create a tuple of relevant fields for comparison (excluding is_valid)
+            entity_key = (
+                entity.get("agency_id"),
+                entity.get("route_id"),
+                entity.get("route_type"),
+                entity.get("stop_id"),
+                entity.get("trip_id"),
+                entity.get("direction_id"),
+            )
+            
+            if entity_key not in seen:
+                seen.add(entity_key)
+                deduplicated.append(entity)
+        
+        return deduplicated
+
+    def _normalize_fetched_payload(
+        self,
+        fetched_payload: dict[str, Any] | list[dict[str, Any]],
+    ) -> tuple[str, list[dict[str, Any]]]:
+        """Normalize fetched datasource payload into (record_type, records)."""
+        if isinstance(fetched_payload, list):
+            return "service_alerts", fetched_payload
+
+        if isinstance(fetched_payload, dict):
+            record_type = fetched_payload.get("record_type")
+            records = fetched_payload.get("records")
+
+            if not isinstance(record_type, str):
+                raise ValueError("Fetched payload is missing string field 'record_type'")
+
+            if not isinstance(records, list):
+                raise ValueError("Fetched payload is missing list field 'records'")
+
+            return record_type, records
+
+        raise ValueError(
+            "Fetched payload must be either a list[dict] or a dict with 'record_type' and 'records'"
+        )
+    
+    async def sync_records(
+        self, 
+        repository: RepositoryInterface,
+        source_id: int, 
+        source_name: str
+    ) -> dict[str, int]:
+        """
+        Synchronize records from the external data source to the database.
+        
+        This method orchestrates the generic sync process:
+        1. Fetches dialect-defined records from the external source (via _fetch_records)
+        2. Detects record type from fetched payload
+        3. Dispatches to the corresponding record-type synchronizer
+        
+        Args:
+            source_id: Database ID of the data source
+            source_name: Name of the data source (for logging and deterministic IDs)
+            
+        Returns:
+            Dictionary with keys 'added', 'updated', 'deleted' containing counts
+        """
+        logger.info(f"[{self.get_adapter_type()}] Starting import from '{source_name}'")
+        
+        # Inject source_name and source_id into config so adapters can use them
+        self.config["_source_name"] = source_name
+        self.config["_source_id"] = source_id
+        
+        # Fetch records from external source.
+        # Record shape and record type are defined by the selected dialect transformer.
+        fetched_payload = await self._fetch_records()
+        record_type, records = self._normalize_fetched_payload(fetched_payload)
+
+        logger.info(
+            f"[{self.get_adapter_type()}] Fetched {len(records)} records from source "
+            f"(record_type={record_type})"
+        )
+
+        if record_type == "service_alerts":
+            return await self._sync_service_alert_records(
+                repository=repository,
+                source_id=source_id,
+                source_name=source_name,
+                records=records,
+            )
+
+        raise NotImplementedError(
+            f"Record type '{record_type}' is not supported by sync_records yet"
+        )
+
+    async def _sync_service_alert_records(
+        self,
+        repository: RepositoryInterface,
+        source_id: int,
+        source_name: str,
+        records: list[dict[str, Any]],
+    ) -> dict[str, int]:
+        """Synchronize service-alert records into the database."""
+        from echogtfs.enum.system import InvalidReferencePolicy
+
+        policy = await repository.get_data_source_invalid_reference_policy(source_id)
+
+        # Convert string to enum if needed (database stores as string)
+        if isinstance(policy, str):
+            policy = InvalidReferencePolicy(policy)
+
+        logger.info(
+            f"[{self.get_adapter_type()}] Synchronizing service-alert records from '{source_name}' "
+            f"(policy: {policy.value})"
+        )
+
+        alert_dicts = records
+        total_fetched = len(alert_dicts)
+
+        # Load mappings and enrichments once per pipeline run.
+        await self._identifier_mapping_service.initialize(repository, source_id)
+        await self._entity_enrichment_service.initialize(repository, source_id)
+
+        mapping_count = self._identifier_mapping_service.get_loaded_mapping_count()
+        if mapping_count > 0:
+            logger.info(
+                f"[{self.get_adapter_type()}] Loaded {mapping_count} mapping entries"
+            )
+        
+        # Apply enrichments before validation, as they may affect cause/effect/severity.
+        enrichment_count = self._entity_enrichment_service.get_loaded_enrichment_count()
+        if enrichment_count > 0:
+            logger.info(
+                f"[{self.get_adapter_type()}] Applying {enrichment_count} enrichment rules to records"
+            )
+
+            for alert_data in alert_dicts:
+                self._entity_enrichment_service.apply_enrichment(
+                    alert_data,
+                    self.get_adapter_type(),
+                )
+        
+        # Load GTFS entities for validation
+        gtfs_entities = await self._load_gtfs_entities(repository)
+        
+        # Get IDs of alerts from the feed
+        incoming_alert_ids = {alert_data["id"] for alert_data in alert_dicts}
+        
+        # Get existing alerts from this data source
+        existing_alerts = {
+            alert.id: alert
+            for alert in await repository.list_service_alerts_for_data_source(source_id)
+        }
+        existing_alert_ids = set(existing_alerts.keys())
+        
+        # Also check if any incoming alerts exist in DB with different/null data_source_id
+        # This handles migration scenarios and prevents duplicate key errors
+        if incoming_alert_ids:
+            alerts_by_id = {
+                alert.id: alert
+                for alert in await repository.list_service_alerts_by_ids(list(incoming_alert_ids))
+            }
+            
+            # Merge into existing_alerts - alerts with matching IDs should be updated
+            for alert_id, alert in alerts_by_id.items():
+                if alert_id not in existing_alerts:
+                    existing_alerts[alert_id] = alert
+                    existing_alert_ids.add(alert_id)
+        
+        # Determine which alerts to add, update, or delete
+        alerts_to_update = incoming_alert_ids & existing_alert_ids
+        # Only delete alerts that belong to this data source
+        alerts_to_delete = {
+            aid for aid, alert in existing_alerts.items() 
+            if alert.data_source_id == source_id and aid not in incoming_alert_ids
+        }
+        
+        # Track alerts that should be deleted due to policy (will be added during processing)
+        policy_based_deletes = set()
+        
+        # Statistics tracking
+        stats_created = 0
+        stats_created_inactive = 0
+        stats_updated = 0
+        stats_deleted = len(alerts_to_delete)
+        stats_policy_discarded = 0
+        
+        # Delete alerts that are no longer in the feed
+        if alerts_to_delete:
+            await repository.delete_service_alerts_for_data_source_by_ids(
+                source_id,
+                list(alerts_to_delete),
+            )
+        
+        # Process incoming alerts
+        for alert_data in alert_dicts:
+            alert_id = alert_data["id"]
+            
+            # Override source with data source name
+            alert_data["source"] = source_name
+            alert_data["data_source_id"] = source_id
+            
+            # Extract nested data
+            translations_data = alert_data.pop("translations", [])
+            periods_data = alert_data.pop("active_periods", [])
+            entities_data = alert_data.pop("informed_entities", [])
+            
+            # Apply mappings to all entities and validate them
+            # For DISCARD_INVALID_ELEMENTS policy, also clean individual fields
+            validated_entities = []
+            has_invalid_entity = False
+            
+            for entity_data in entities_data:
+                # Apply mappings to entity data
+                mapped_entity_data = self._identifier_mapping_service.apply_mapping(
+                    entity_data,
+                )
+                
+                # For DISCARD_INVALID_ELEMENTS policy, validate and clean individual fields
+                if policy == InvalidReferencePolicy.DISCARD_INVALID_ELEMENTS:
+                    cleaned_entity, has_valid_ref = self._validate_and_clean_entity_elements(
+                        mapped_entity_data, gtfs_entities
+                    )
+                    
+                    # Mark as valid if at least one reference is valid
+                    # Unless already explicitly marked as invalid (e.g., trip references)
+                    if "is_valid" not in mapped_entity_data:
+                        cleaned_entity["is_valid"] = has_valid_ref
+                    else:
+                        cleaned_entity["is_valid"] = mapped_entity_data["is_valid"]
+                    
+                    if not cleaned_entity["is_valid"]:
+                        has_invalid_entity = True
+                        logger.debug(
+                            f"[{self.get_adapter_type()}] Entity has no valid references in alert {alert_id}: "
+                            f"{mapped_entity_data}"
+                        )
+                    
+                    validated_entities.append(cleaned_entity)
+                else:
+                    # Standard validation for other policies
+                    # Check if entity already has is_valid flag set (e.g., trip references)
+                    if "is_valid" in mapped_entity_data:
+                        is_valid = mapped_entity_data["is_valid"]
+                    else:
+                        is_valid = self._validate_entity(mapped_entity_data, gtfs_entities)
+                        # Mark entity as valid/invalid
+                        mapped_entity_data["is_valid"] = is_valid
+                    
+                    if not is_valid:
+                        has_invalid_entity = True
+                        logger.debug(
+                            f"[{self.get_adapter_type()}] Invalid entity reference in alert {alert_id}: "
+                            f"{mapped_entity_data}"
+                        )
+                    
+                    validated_entities.append(mapped_entity_data)
+            
+            # Apply invalid reference policy
+            should_skip_alert = False
+            should_deactivate_alert = False
+            entities_to_create = validated_entities
+            
+            if has_invalid_entity:
+                if policy == InvalidReferencePolicy.DISCARD_ALERT:
+                    # Discard entire alert if any reference is invalid
+                    logger.debug(
+                        f"[{self.get_adapter_type()}] Discarding alert {alert_id} "
+                        f"due to invalid references (policy: {policy.value})"
+                    )
+                    should_skip_alert = True
+                    stats_policy_discarded += 1
+                    
+                    # If the alert already exists, mark it for deletion
+                    if alert_id in existing_alert_ids:
+                        policy_based_deletes.add(alert_id)
+                
+                elif policy == InvalidReferencePolicy.DISCARD_INVALID:
+                    # Keep only valid entities
+                    entities_to_create = [e for e in validated_entities if e["is_valid"]]
+                    
+                    # If no valid entities remain, deactivate the alert
+                    if not entities_to_create:
+                        should_deactivate_alert = True
+                        logger.debug(
+                            f"[{self.get_adapter_type()}] Deactivating alert {alert_id} "
+                            f"- all entity references were invalid (policy: {policy.value})"
+                        )
+                    else:
+                        logger.debug(
+                            f"[{self.get_adapter_type()}] Removed {len(validated_entities) - len(entities_to_create)} "
+                            f"invalid entities from alert {alert_id} (policy: {policy.value})"
+                        )
+                
+                elif policy == InvalidReferencePolicy.DISCARD_INVALID_ELEMENTS:
+                    # Keep only entities that have at least one valid reference
+                    # (invalid fields within entities have already been cleaned)
+                    entities_to_create = [e for e in validated_entities if e["is_valid"]]
+                    
+                    # If no valid entities remain, deactivate the alert
+                    if not entities_to_create:
+                        should_deactivate_alert = True
+                        logger.debug(
+                            f"[{self.get_adapter_type()}] Deactivating alert {alert_id} "
+                            f"- all entities had only invalid references (policy: {policy.value})"
+                        )
+                    else:
+                        logger.debug(
+                            f"[{self.get_adapter_type()}] Cleaned {len(validated_entities) - len(entities_to_create)} "
+                            f"entities with no valid references from alert {alert_id} (policy: {policy.value})"
+                        )
+                
+                elif policy == InvalidReferencePolicy.KEEP_ALERT:
+                    # Keep all entities but deactivate the alert
+                    should_deactivate_alert = True
+                    logger.debug(
+                        f"[{self.get_adapter_type()}] Deactivating alert {alert_id} "
+                        f"due to invalid references (policy: {policy.value})"
+                    )
+                
+                # policy == InvalidReferencePolicy.NOT_SPECIFIED:
+                # Pass through without changes
+            
+            # Deduplicate entities - remove duplicates that may have been created
+            # through mapping or policy application
+            if entities_to_create:
+                original_count = len(entities_to_create)
+                entities_to_create = self._deduplicate_entities(entities_to_create)
+                duplicates_removed = original_count - len(entities_to_create)
+                
+                if duplicates_removed > 0:
+                    logger.debug(
+                        f"[{self.get_adapter_type()}] Removed {duplicates_removed} duplicate "
+                        f"entities from alert {alert_id}"
+                    )
+            
+            # Check if alert has no entities at all (either none provided or all removed by policy)
+            # Deactivate such alerts as they have no meaningful content
+            if not entities_to_create and not should_skip_alert:
+                should_deactivate_alert = True
+                logger.debug(
+                    f"[{self.get_adapter_type()}] Deactivating alert {alert_id} - no valid entities"
+                )
+            
+            # Skip this alert if policy dictates
+            if should_skip_alert:
+                continue
+            
+            if alert_id in alerts_to_update:
+                logger.debug(f"[{self.get_adapter_type()}] Updating alert {alert_id}")
+                stats_updated += 1
+                await repository.upsert_service_alert_from_sync(
+                    alert_id=alert_id,
+                    source_id=source_id,
+                    source_name=source_name,
+                    cause=alert_data["cause"],
+                    effect=alert_data["effect"],
+                    severity_level=alert_data["severity_level"],
+                    is_active_on_create=False,
+                    translations=translations_data,
+                    active_periods=periods_data,
+                    informed_entities=entities_to_create,
+                )
+            else:
+                # INSERT new alert
+                logger.debug(f"[{self.get_adapter_type()}] Creating new alert {alert_id}")
+                
+                # Set is_active based on policy
+                if should_deactivate_alert:
+                    alert_data["is_active"] = False
+                    stats_created_inactive += 1
+                
+                stats_created += 1
+
+                await repository.upsert_service_alert_from_sync(
+                    alert_id=alert_id,
+                    source_id=source_id,
+                    source_name=source_name,
+                    cause=alert_data["cause"],
+                    effect=alert_data["effect"],
+                    severity_level=alert_data["severity_level"],
+                    is_active_on_create=alert_data.get("is_active", True),
+                    translations=translations_data,
+                    active_periods=periods_data,
+                    informed_entities=entities_to_create,
+                )
+        
+        # Delete alerts that were discarded due to policy
+        if policy_based_deletes:
+            logger.debug(
+                f"[{self.get_adapter_type()}] Deleting {len(policy_based_deletes)} existing alerts "
+                f"due to invalid reference policy"
+            )
+
+            await repository.delete_service_alerts_by_ids(list(policy_based_deletes))
+
+            # Add to total delete count
+            stats_deleted += len(policy_based_deletes)
+        
+        # Log final statistics
+        logger.info(
+            f"[{self.get_adapter_type()}] Import completed for '{source_name}': "
+            f"fetched={total_fetched}, created={stats_created} "
+            f"(inactive={stats_created_inactive}), updated={stats_updated}, "
+            f"deleted={stats_deleted}, policy_discarded={stats_policy_discarded}"
+        )
+        
+        return {
+            "added": stats_created,
+            "updated": stats_updated,
+            "deleted": stats_deleted,
+        }
+

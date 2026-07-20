@@ -6,10 +6,9 @@ EchoGTFS uses JWT Bearer tokens for all authenticated API endpoints. Tokens are 
 
 ## Relevant Files
 
-- `backend/src/echogtfs/security.py`: Password hashing, JWT creation, and FastAPI dependency functions.
+- `backend/src/echogtfs/services/security/security_service.py`: Single-instance service for all security related stuff.
+- `backend/src/echogtfs/common/security.py`: Common utility functions and user-access functions.
 - `backend/src/echogtfs/routers/auth.py`: Login endpoint.
-- `backend/src/echogtfs/main.py`: `SlidingTokenMiddleware` registration.
-- `backend/src/echogtfs/config.py`: JWT configuration values.
 - `frontend/js/core.js`: API client; token storage and injection, sliding token update, 401 handling.
 
 ## Configuration
@@ -20,7 +19,7 @@ All JWT parameters are set via environment variables:
 |---|---|---|
 | `SECRET_KEY` | (required, no default) | HMAC signing key for JWTs. Must be set explicitly; startup fails otherwise. |
 | `ALGORITHM` | `HS256` | JWT signing algorithm. |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Initial token expiry in minutes. |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Token expiry in minutes. |
 | `LOGIN_RATE_LIMIT` | `10/minute` | Rate limit applied to the login endpoint. |
 
 ## Token Lifecycle
@@ -37,7 +36,7 @@ The endpoint is rate-limited by `slowapi` using the `LOGIN_RATE_LIMIT` setting.
 
 ### Signing and Claims
 
-Tokens are created by `create_access_token(subject)` in `security.py`. The JWT payload contains:
+The JWT payload contains:
 
 - `sub`: the username string.
 - `exp`: expiry timestamp (UTC).
@@ -56,7 +55,7 @@ Tokens are signed with HMAC-SHA256 (or the configured algorithm) using `SECRET_K
 
 ### Sliding Session
 
-`SlidingTokenMiddleware` is a Starlette `BaseHTTPMiddleware` registered in `main.py`. After every successful (2xx) authenticated response it:
+`SlidingTokenMiddleware` is a Starlette `BaseHTTPMiddleware`. After every successful (2xx) authenticated response it:
 
 1. Reads `request.state.user` (set by `get_current_user`).
 2. Calls `create_access_token(user.username)` to create a fresh token with a new expiry.
