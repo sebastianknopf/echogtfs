@@ -248,8 +248,7 @@ class GtfsAgency(Base):
     """Imported GTFS agencies (agency.txt)."""
     __tablename__ = "gtfs_agencies"
 
-    id:      Mapped[int] = mapped_column(primary_key=True)
-    gtfs_id: Mapped[str] = mapped_column(String(128), unique=True)
+    gtfs_id: Mapped[str] = mapped_column(String(128), primary_key=True)
     name:    Mapped[str] = mapped_column(String(255))
 
 
@@ -257,8 +256,7 @@ class GtfsStop(Base):
     """Imported GTFS stops (stops.txt)."""
     __tablename__ = "gtfs_stops"
 
-    id:      Mapped[int] = mapped_column(primary_key=True)
-    gtfs_id: Mapped[str] = mapped_column(String(128), unique=True)
+    gtfs_id: Mapped[str] = mapped_column(String(128), primary_key=True)
     name:    Mapped[str] = mapped_column(String(255))
 
     start_trips: Mapped[list["GtfsTrip"]] = relationship(
@@ -276,8 +274,7 @@ class GtfsRoute(Base):
     """Imported GTFS routes (routes.txt)."""
     __tablename__ = "gtfs_routes"
 
-    id:         Mapped[int] = mapped_column(primary_key=True)
-    gtfs_id:    Mapped[str] = mapped_column(String(128), unique=True)
+    gtfs_id:    Mapped[str] = mapped_column(String(128), primary_key=True)
     short_name: Mapped[str] = mapped_column(String(128))
     long_name:  Mapped[str] = mapped_column(String(255))
 

@@ -1,0 +1,51 @@
+"""Use gtfs_id as primary key for static GTFS tables.
+
+Revision ID: 0004_gtfs_static_ids_to_gtfs_id_pk
+Revises: 0003_gtfs_trips_stop_times
+Create Date: 2026-07-20 00:00:00.000000
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+
+
+# revision identifiers, used by Alembic.
+revision: str = "0004_gtfs_static_ids_to_gtfs_id_pk"
+down_revision: Union[str, None] = "0003_gtfs_trips_stop_times"
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    op.execute("ALTER TABLE gtfs_agencies DROP CONSTRAINT IF EXISTS gtfs_agencies_pkey")
+    op.execute("ALTER TABLE gtfs_agencies ADD CONSTRAINT gtfs_agencies_pkey PRIMARY KEY (gtfs_id)")
+    op.execute("ALTER TABLE gtfs_agencies DROP CONSTRAINT IF EXISTS gtfs_agencies_gtfs_id_key")
+    op.execute("ALTER TABLE gtfs_agencies DROP COLUMN IF EXISTS id")
+
+    op.execute("ALTER TABLE gtfs_stops DROP CONSTRAINT IF EXISTS gtfs_stops_pkey")
+    op.execute("ALTER TABLE gtfs_stops ADD CONSTRAINT gtfs_stops_pkey PRIMARY KEY (gtfs_id)")
+    op.execute("ALTER TABLE gtfs_stops DROP CONSTRAINT IF EXISTS gtfs_stops_gtfs_id_key")
+    op.execute("ALTER TABLE gtfs_stops DROP COLUMN IF EXISTS id")
+
+    op.execute("ALTER TABLE gtfs_routes DROP CONSTRAINT IF EXISTS gtfs_routes_pkey")
+    op.execute("ALTER TABLE gtfs_routes ADD CONSTRAINT gtfs_routes_pkey PRIMARY KEY (gtfs_id)")
+    op.execute("ALTER TABLE gtfs_routes DROP CONSTRAINT IF EXISTS gtfs_routes_gtfs_id_key")
+    op.execute("ALTER TABLE gtfs_routes DROP COLUMN IF EXISTS id")
+
+
+def downgrade() -> None:
+    op.execute("ALTER TABLE gtfs_agencies ADD COLUMN IF NOT EXISTS id SERIAL")
+    op.execute("ALTER TABLE gtfs_agencies DROP CONSTRAINT IF EXISTS gtfs_agencies_pkey")
+    op.execute("ALTER TABLE gtfs_agencies ADD CONSTRAINT gtfs_agencies_pkey PRIMARY KEY (id)")
+    op.execute("ALTER TABLE gtfs_agencies ADD CONSTRAINT gtfs_agencies_gtfs_id_key UNIQUE (gtfs_id)")
+
+    op.execute("ALTER TABLE gtfs_stops ADD COLUMN IF NOT EXISTS id SERIAL")
+    op.execute("ALTER TABLE gtfs_stops DROP CONSTRAINT IF EXISTS gtfs_stops_pkey")
+    op.execute("ALTER TABLE gtfs_stops ADD CONSTRAINT gtfs_stops_pkey PRIMARY KEY (id)")
+    op.execute("ALTER TABLE gtfs_stops ADD CONSTRAINT gtfs_stops_gtfs_id_key UNIQUE (gtfs_id)")
+
+    op.execute("ALTER TABLE gtfs_routes ADD COLUMN IF NOT EXISTS id SERIAL")
+    op.execute("ALTER TABLE gtfs_routes DROP CONSTRAINT IF EXISTS gtfs_routes_pkey")
+    op.execute("ALTER TABLE gtfs_routes ADD CONSTRAINT gtfs_routes_pkey PRIMARY KEY (id)")
+    op.execute("ALTER TABLE gtfs_routes ADD CONSTRAINT gtfs_routes_gtfs_id_key UNIQUE (gtfs_id)")
