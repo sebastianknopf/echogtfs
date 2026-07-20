@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import os
 import sys
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -50,3 +52,32 @@ class TestCleanupService(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(count, 0)
         repo.list_internal_alert_ids_expired_before.assert_not_awaited()
+
+    async def test_schedule_from_settings_uses_timezone_from_environment(self):
+        class _FakeScheduler:
+            def __init__(self) -> None:
+                self.jobs: dict[str, object] = {}
+
+            def get_job(self, job_id: str) -> object | None:
+                return self.jobs.get(job_id)
+
+            def remove_job(self, job_id: str) -> None:
+                self.jobs.pop(job_id, None)
+
+            def add_job(self, func, trigger, id, replace_existing) -> None:
+                self.jobs[id] = trigger
+
+        repo = SimpleNamespace(get_app_setting=AsyncMock(return_value="*/10 * * * *"))
+        scheduler = _FakeScheduler()
+        CleanupService._scheduler = scheduler
+
+        with patch.dict(os.environ, {"TIMEZONE": "Europe/Berlin"}, clear=False):
+            service = CleanupService(repo)
+            with patch(
+                "echogtfs.services.cleanup.cleanup_service.CronTrigger.from_crontab",
+                return_value="trigger",
+            ) as from_crontab_mock:
+                await service.schedule_from_settings()
+
+        from_crontab_mock.assert_called_once()
+        self.assertEqual(from_crontab_mock.call_args.kwargs["timezone"], ZoneInfo("Europe/Berlin"))

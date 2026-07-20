@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 import unittest
 from contextlib import asynccontextmanager
@@ -7,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -119,3 +121,20 @@ class TestDatasourceSchedulerService(unittest.IsolatedAsyncioTestCase):
 
         datasource.sync_records.assert_awaited_once_with(repository, gtfs_repository, 11, "Broken")
         repository.update_data_source_last_run_at.assert_awaited_once()
+
+    async def test_schedule_data_source_import_uses_timezone_from_environment(self):
+        repository = _RepositoryStub()
+        gtfs_repository = SimpleNamespace()
+        scheduler = _FakeScheduler()
+        DatasourceSchedulerService._scheduler = scheduler
+
+        with patch.dict(os.environ, {"TIMEZONE": "Europe/Berlin"}, clear=False):
+            service = DatasourceSchedulerService(repository, gtfs_repository)
+            with patch(
+                "echogtfs.services.scheduler.datasource_scheduler_service.CronTrigger.from_crontab",
+                return_value="trigger",
+            ) as from_crontab_mock:
+                await service.schedule_data_source_import(1, "Alpha", "*/5 * * * *")
+
+        from_crontab_mock.assert_called_once()
+        self.assertEqual(from_crontab_mock.call_args.kwargs["timezone"], ZoneInfo("Europe/Berlin"))

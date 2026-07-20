@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import os
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -23,6 +25,17 @@ class CleanupService:
 
     def __init__(self, repository: SystemRepositoryInterface):
         self._repository = repository
+        self._scheduler_timezone = self._resolve_scheduler_timezone()
+
+    @staticmethod
+    def _resolve_scheduler_timezone() -> ZoneInfo:
+        timezone_name = os.getenv("TIMEZONE", "UTC").strip() or "UTC"
+
+        try:
+            return ZoneInfo(timezone_name)
+        except ZoneInfoNotFoundError:
+            logger.warning("[Cleanup] Unknown TIMEZONE '%s'. Falling back to UTC", timezone_name)
+            return ZoneInfo("UTC")
 
     @classmethod
     def _get_scheduler(cls) -> AsyncIOScheduler:
@@ -49,7 +62,7 @@ class CleanupService:
                 
                 scheduler.add_job(
                     self.run_cleanup_task,
-                    CronTrigger.from_crontab(cron_expr),
+                    CronTrigger.from_crontab(cron_expr, timezone=self._scheduler_timezone),
                     id=job_id,
                     replace_existing=True,
                 )

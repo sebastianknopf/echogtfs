@@ -132,7 +132,7 @@ class GtfsImportService(GtfsImportInterface):
 
                 scheduler.add_job(
                     self.run_import_task,
-                    CronTrigger.from_crontab(cron_expr),
+                    CronTrigger.from_crontab(cron_expr, timezone=self._server_timezone),
                     id=job_id,
                     replace_existing=True,
                 )

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -40,6 +42,20 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
     ):
         self._repository = repository
         self._gtfs_repository = gtfs_repository
+        self._scheduler_timezone = self._resolve_scheduler_timezone()
+
+    @staticmethod
+    def _resolve_scheduler_timezone() -> ZoneInfo:
+        timezone_name = os.getenv("TIMEZONE", "UTC").strip() or "UTC"
+
+        try:
+            return ZoneInfo(timezone_name)
+        except ZoneInfoNotFoundError:
+            logger.warning(
+                "[DatasourceScheduler] Unknown TIMEZONE '%s'. Falling back to UTC",
+                timezone_name,
+            )
+            return ZoneInfo("UTC")
 
     @classmethod
     def _get_scheduler(cls) -> AsyncIOScheduler:
@@ -96,7 +112,7 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
             try:
                 scheduler.add_job(
                     self.run_import_task,
-                    CronTrigger.from_crontab(cron_expr),
+                    CronTrigger.from_crontab(cron_expr, timezone=self._scheduler_timezone),
                     args=[source_id],
                     id=job_id,
                     replace_existing=True,

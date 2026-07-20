@@ -176,3 +176,34 @@ class TestGtfsImportService(unittest.IsolatedAsyncioTestCase):
         inserted = inserted_batch[0]
         self.assertEqual(inserted["arrival_time"], datetime(2026, 7, 20, 10, 0, 0, tzinfo=ZoneInfo("Europe/Berlin")))
         self.assertEqual(inserted["departure_time"], datetime(2026, 7, 20, 10, 5, 0, tzinfo=ZoneInfo("Europe/Berlin")))
+
+    async def test_schedule_import_from_cron_uses_server_timezone(self):
+        repo = SimpleNamespace(get_app_setting=AsyncMock(return_value="*/15 * * * *"))
+        gtfs_repo = SimpleNamespace()
+
+        class _FakeScheduler:
+            def __init__(self) -> None:
+                self.job: object | None = None
+
+            def get_job(self, _job_id: str) -> object | None:
+                return self.job
+
+            def remove_job(self, _job_id: str) -> None:
+                self.job = None
+
+            def add_job(self, func, trigger, id, replace_existing) -> None:
+                self.job = trigger
+
+        with patch("echogtfs.services.gtfs.gtfs_import_service.settings", SimpleNamespace(timezone="Europe/Berlin")):
+            service = GtfsImportService(repo, gtfs_repo)
+
+        GtfsImportService._scheduler = _FakeScheduler()
+
+        with patch(
+            "echogtfs.services.gtfs.gtfs_import_service.CronTrigger.from_crontab",
+            return_value="trigger",
+        ) as from_crontab_mock:
+            await service.schedule_import_from_cron()
+
+        from_crontab_mock.assert_called_once()
+        self.assertEqual(from_crontab_mock.call_args.kwargs["timezone"], ZoneInfo("Europe/Berlin"))
