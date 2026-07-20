@@ -13,9 +13,6 @@ from echogtfs.services.database.models import (
     DataSourceEnrichment,
     DataSourceLog,
     DataSourceMapping,
-    GtfsAgency,
-    GtfsRoute,
-    GtfsStop,
     ServiceAlert,
     User,
 )
@@ -265,37 +262,6 @@ class RepositoryInterface(ABC):
     @abstractmethod
     async def delete_data_source_logs_before(self, cutoff_time: datetime) -> int:
         """Delete data source log rows older than cutoff time and return affected row count."""
-        raise NotImplementedError
-
-    @abstractmethod
-    async def list_gtfs_entity_ids(self) -> dict[str, set[str]]:
-        """Return GTFS entity IDs as sets for agency, route, and stop."""
-        raise NotImplementedError
-    
-    @abstractmethod
-    async def list_gtfs_agencies(self) -> list[GtfsAgency]:
-        """Return all GTFS agencies ordered by name."""
-        raise NotImplementedError
-
-    @abstractmethod
-    async def list_gtfs_stops(self, *, query: str, limit: int) -> list[GtfsStop]:
-        """Return GTFS stops filtered by query and limited by max rows."""
-        raise NotImplementedError
-
-    @abstractmethod
-    async def list_gtfs_routes(self, *, query: str, limit: int) -> list[GtfsRoute]:
-        """Return GTFS routes filtered by query and limited by max rows."""
-        raise NotImplementedError
-
-    @abstractmethod
-    async def replace_gtfs_static_data(
-        self,
-        *,
-        agencies: list[dict[str, str]],
-        stops: list[dict[str, str]],
-        routes: list[dict[str, str]],
-    ) -> None:
-        """Atomically replace all imported GTFS agencies, stops, and routes."""
         raise NotImplementedError
 
     @abstractmethod

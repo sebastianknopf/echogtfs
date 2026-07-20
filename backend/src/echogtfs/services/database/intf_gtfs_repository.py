@@ -1,0 +1,58 @@
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from collections.abc import AsyncGenerator
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from echogtfs.services.database.models import GtfsAgency, GtfsRoute, GtfsStop
+
+
+class GtfsRepositoryInterface(ABC):
+    """Interface for GTFS static-table repository operations."""
+
+    @abstractmethod
+    async def initialize(self) -> None:
+        """Initialize repository resources and validate connectivity."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def close(self) -> None:
+        """Close repository resources."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
+        """Yield a managed database session owned by the repository."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_gtfs_entity_ids(self) -> dict[str, set[str]]:
+        """Return GTFS entity IDs as sets for agency, route, and stop."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_gtfs_agencies(self) -> list[GtfsAgency]:
+        """Return all GTFS agencies ordered by name."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_gtfs_stops(self, *, query: str, limit: int) -> list[GtfsStop]:
+        """Return GTFS stops filtered by query and limited by max rows."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_gtfs_routes(self, *, query: str, limit: int) -> list[GtfsRoute]:
+        """Return GTFS routes filtered by query and limited by max rows."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def replace_gtfs_static_data(
+        self,
+        *,
+        agencies: list[dict[str, str]],
+        stops: list[dict[str, str]],
+        routes: list[dict[str, str]],
+    ) -> None:
+        """Atomically replace all imported GTFS agencies, stops, and routes."""
+        raise NotImplementedError

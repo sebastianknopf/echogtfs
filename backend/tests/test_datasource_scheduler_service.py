@@ -76,6 +76,7 @@ class TestDatasourceSchedulerService(unittest.IsolatedAsyncioTestCase):
 
     async def test_schedule_all_data_sources_replaces_existing_alert_jobs(self):
         repository = _RepositoryStub()
+        gtfs_repository = SimpleNamespace()
         repository.list_active_data_sources_with_cron.return_value = [
             _DataSourceStub(id=1, name="Alpha", cron="*/5 * * * *"),
             _DataSourceStub(id=2, name="Beta", cron="0 * * * *"),
@@ -83,7 +84,7 @@ class TestDatasourceSchedulerService(unittest.IsolatedAsyncioTestCase):
         scheduler = _FakeScheduler([SimpleNamespace(id="alert_import_9"), SimpleNamespace(id="other_job")])
         DatasourceSchedulerService._scheduler = scheduler
 
-        service = DatasourceSchedulerService(repository)
+        service = DatasourceSchedulerService(repository, gtfs_repository)
 
         await service.schedule_all_data_sources()
 
@@ -92,20 +93,22 @@ class TestDatasourceSchedulerService(unittest.IsolatedAsyncioTestCase):
 
     async def test_run_import_task_commits_and_updates_last_run_at_on_success(self):
         repository = _RepositoryStub()
+        gtfs_repository = SimpleNamespace()
         repository.get_data_source_by_id.return_value = _DataSourceStub(id=7, name="Alpha")
-        service = DatasourceSchedulerService(repository)
+        service = DatasourceSchedulerService(repository, gtfs_repository)
         datasource = SimpleNamespace(sync_records=AsyncMock(return_value={"added": 1, "updated": 2, "deleted": 3}))
 
         with patch.object(DatasourceSchedulerService, "_get_datasource", return_value=datasource):
             await service.run_import_task(7)
 
-        datasource.sync_records.assert_awaited_once_with(repository, 7, "Alpha")
+        datasource.sync_records.assert_awaited_once_with(repository, gtfs_repository, 7, "Alpha")
         repository.update_data_source_last_run_at.assert_awaited_once()
 
     async def test_run_import_task_rolls_back_and_updates_last_run_at_on_error(self):
         repository = _RepositoryStub()
+        gtfs_repository = SimpleNamespace()
         repository.get_data_source_by_id.return_value = _DataSourceStub(id=11, name="Broken")
-        service = DatasourceSchedulerService(repository)
+        service = DatasourceSchedulerService(repository, gtfs_repository)
         datasource = SimpleNamespace(sync_records=AsyncMock(side_effect=RuntimeError("boom")))
 
         with patch.object(DatasourceSchedulerService, "_get_datasource", return_value=datasource), patch.object(
@@ -114,5 +117,5 @@ class TestDatasourceSchedulerService(unittest.IsolatedAsyncioTestCase):
         ):
             await service.run_import_task(11)
 
-        datasource.sync_records.assert_awaited_once_with(repository, 11, "Broken")
+        datasource.sync_records.assert_awaited_once_with(repository, gtfs_repository, 11, "Broken")
         repository.update_data_source_last_run_at.assert_awaited_once()

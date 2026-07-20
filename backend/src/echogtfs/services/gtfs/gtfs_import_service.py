@@ -12,7 +12,8 @@ import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from echogtfs.services.database import RepositoryInterface
+from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
+from echogtfs.services.database.intf_repository import RepositoryInterface
 from echogtfs.services.database.models import AppSetting
 from echogtfs.services.gtfs.intf_gtfs_import import GtfsImportInterface
 
@@ -29,8 +30,9 @@ class GtfsImportService(GtfsImportInterface):
 
     _scheduler: AsyncIOScheduler | None = None
 
-    def __init__(self, repository: RepositoryInterface):
+    def __init__(self, repository: RepositoryInterface, gtfs_repository: GtfsRepositoryInterface):
         self._repository = repository
+        self._gtfs_repository = gtfs_repository
 
     @classmethod
     def _get_scheduler(cls) -> AsyncIOScheduler:
@@ -169,7 +171,7 @@ class GtfsImportService(GtfsImportInterface):
         stops = self._map_stops(stop_rows)
         routes = self._map_routes(route_rows)
 
-        await self._repository.replace_gtfs_static_data(
+        await self._gtfs_repository.replace_gtfs_static_data(
             agencies=agencies,
             stops=stops,
             routes=routes,

@@ -16,7 +16,8 @@ from echogtfs.services.gtfs.gtfs_import_service import GtfsImportService
 class TestGtfsImportService(unittest.IsolatedAsyncioTestCase):
     async def test_run_import_task_success_sets_status(self):
         repo = SimpleNamespace(set_app_setting=AsyncMock())
-        service = GtfsImportService(repo)
+        gtfs_repo = SimpleNamespace(replace_gtfs_static_data=AsyncMock())
+        service = GtfsImportService(repo, gtfs_repo)
 
         with patch.object(service, "_import_feed", AsyncMock(return_value={"agencies": 1, "stops": 2, "routes": 3})):
             await service.run_import_task()
@@ -42,7 +43,8 @@ class TestGtfsImportService(unittest.IsolatedAsyncioTestCase):
 
     async def test_import_feed_raises_when_feed_url_missing(self):
         repo = SimpleNamespace(get_all_app_settings=AsyncMock(return_value={}))
-        service = GtfsImportService(repo)
+        gtfs_repo = SimpleNamespace(replace_gtfs_static_data=AsyncMock())
+        service = GtfsImportService(repo, gtfs_repo)
 
         with self.assertRaises(ValueError):
             await service._import_feed()

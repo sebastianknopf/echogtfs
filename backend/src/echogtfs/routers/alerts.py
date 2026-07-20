@@ -11,7 +11,9 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from echogtfs.services.database import RepositoryInterface, get_repository
+from echogtfs.services.database import get_gtfs_repository, get_repository
+from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
+from echogtfs.services.database.intf_repository import RepositoryInterface
 from echogtfs.validation.schemas import (
     ServiceAlertCreate,
     ServiceAlertListResponse,
@@ -24,9 +26,10 @@ router = APIRouter()
 logger = logging.getLogger("uvicorn")
 
 _Repo = Annotated[RepositoryInterface, Depends(get_repository)]
+_GtfsRepo = Annotated[GtfsRepositoryInterface, Depends(get_gtfs_repository)]
 
 
-async def _load_gtfs_entity_names(repository: RepositoryInterface) -> dict[str, dict[str, str]]:
+async def _load_gtfs_entity_names(repository: GtfsRepositoryInterface) -> dict[str, dict[str, str]]:
     """
     Load all GTFS entity IDs and names into memory for fast resolution.
     
@@ -71,7 +74,7 @@ async def _load_gtfs_entity_names(repository: RepositoryInterface) -> dict[str, 
     return entity_names
 
 
-async def _load_gtfs_entity_ids(repository: RepositoryInterface) -> dict[str, set[str]]:
+async def _load_gtfs_entity_ids(repository: GtfsRepositoryInterface) -> dict[str, set[str]]:
     """
     Load all GTFS entity IDs into memory for validation.
     
@@ -158,6 +161,7 @@ def _enrich_alerts_with_entity_names(
 @router.get("/", response_model=ServiceAlertListResponse)
 async def list_alerts(
     repository: _Repo,
+    gtfs_repository: _GtfsRepo,
     page: int = 1,
     limit: int = 20,
     sort: str = "newest",
@@ -203,7 +207,7 @@ async def list_alerts(
     )
     
     # Load GTFS entity names and enrich alert dicts
-    entity_names = await _load_gtfs_entity_names(repository)
+    entity_names = await _load_gtfs_entity_names(gtfs_repository)
     response_dict = response.model_dump()
     _enrich_alerts_with_entity_names(response_dict["items"], entity_names)
     
@@ -211,7 +215,7 @@ async def list_alerts(
 
 
 @router.get("/{alert_id}", response_model=ServiceAlertRead)
-async def get_alert(alert_id: UUID, repository: _Repo) -> ServiceAlertRead:
+async def get_alert(alert_id: UUID, repository: _Repo, gtfs_repository: _GtfsRepo) -> ServiceAlertRead:
     """
     Get a single service alert by ID (public endpoint).
     """
@@ -227,7 +231,7 @@ async def get_alert(alert_id: UUID, repository: _Repo) -> ServiceAlertRead:
     alert_read = ServiceAlertRead.model_validate(alert)
     alert_dict = alert_read.model_dump()
     
-    entity_names = await _load_gtfs_entity_names(repository)
+    entity_names = await _load_gtfs_entity_names(gtfs_repository)
     _enrich_alerts_with_entity_names([alert_dict], entity_names)
     
     return alert_dict
@@ -238,12 +242,13 @@ async def create_alert(
     payload: ServiceAlertCreate,
     _: CurrentUser,
     repository: _Repo,
+    gtfs_repository: _GtfsRepo,
 ) -> ServiceAlertRead:
     """
     Create a new service alert (requires authentication).
     """
     # Load GTFS entity IDs for validation
-    entity_ids = await _load_gtfs_entity_ids(repository)
+    entity_ids = await _load_gtfs_entity_ids(gtfs_repository)
 
     informed_entities = []
     for entity_data in payload.informed_entities:
@@ -287,7 +292,7 @@ async def create_alert(
     alert_read = ServiceAlertRead.model_validate(alert)
     alert_dict = alert_read.model_dump()
     
-    entity_names = await _load_gtfs_entity_names(repository)
+    entity_names = await _load_gtfs_entity_names(gtfs_repository)
     _enrich_alerts_with_entity_names([alert_dict], entity_names)
     
     return alert_dict
@@ -320,6 +325,7 @@ async def update_alert(
     payload: ServiceAlertUpdate,
     _: CurrentUser,
     repository: _Repo,
+    gtfs_repository: _GtfsRepo,
 ) -> ServiceAlertRead:
     """
     Update an existing service alert (requires authentication).
@@ -366,7 +372,7 @@ async def update_alert(
 
     informed_entities_data = None
     if payload.informed_entities is not None:
-        entity_ids = await _load_gtfs_entity_ids(repository)
+        entity_ids = await _load_gtfs_entity_ids(gtfs_repository)
         informed_entities_data = []
         for entity_data in payload.informed_entities:
             entity_payload = {
@@ -401,7 +407,7 @@ async def update_alert(
     alert_read = ServiceAlertRead.model_validate(alert)
     alert_dict = alert_read.model_dump()
     
-    entity_names = await _load_gtfs_entity_names(repository)
+    entity_names = await _load_gtfs_entity_names(gtfs_repository)
     _enrich_alerts_with_entity_names([alert_dict], entity_names)
     
     return alert_dict

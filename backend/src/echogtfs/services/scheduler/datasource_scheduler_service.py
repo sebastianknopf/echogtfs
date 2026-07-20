@@ -11,6 +11,7 @@ from apscheduler.triggers.cron import CronTrigger
 from echogtfs.services.scheduler.intf_datasource_scheduler import DatasourceSchedulerInterface
 
 if TYPE_CHECKING:
+    from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
     from echogtfs.services.database.intf_repository import RepositoryInterface
 
 logger = logging.getLogger("uvicorn")
@@ -22,14 +23,23 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
     _instance: DatasourceSchedulerService | None = None
     _scheduler: AsyncIOScheduler | None = None
 
-    def __new__(cls, repository: RepositoryInterface) -> DatasourceSchedulerService:
+    def __new__(
+        cls,
+        repository: RepositoryInterface,
+        gtfs_repository: GtfsRepositoryInterface,
+    ) -> DatasourceSchedulerService:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
 
         return cls._instance
 
-    def __init__(self, repository: RepositoryInterface):
+    def __init__(
+        self,
+        repository: RepositoryInterface,
+        gtfs_repository: GtfsRepositoryInterface,
+    ):
         self._repository = repository
+        self._gtfs_repository = gtfs_repository
 
     @classmethod
     def _get_scheduler(cls) -> AsyncIOScheduler:
@@ -126,7 +136,12 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
             config = json.loads(source.config)
             datasource = self._get_datasource(source.type, config)
 
-            stats = await datasource.sync_records(self._repository, source.id, source.name)
+            stats = await datasource.sync_records(
+                self._repository,
+                self._gtfs_repository,
+                source.id,
+                source.name,
+            )
 
             logger.info(
                 "[DatasourceScheduler] Import task completed for '%s': created=%s, updated=%s, deleted=%s",

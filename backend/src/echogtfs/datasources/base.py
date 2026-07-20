@@ -8,6 +8,7 @@ from typing import Any
 from echogtfs.datasources.intf_datasource import DatasourceInterface
 from echogtfs.services.database import get_repository
 from echogtfs.services.datalog import DatalogService
+from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
 from echogtfs.services.database.intf_repository import RepositoryInterface
 from echogtfs.services.enrichment.entity_enrichtment_service import EntityEnrichmentService
 from echogtfs.services.enrichment.intf_entity_enrichment import EntityEnrichmentInterface
@@ -196,7 +197,7 @@ class DatasourceBase(DatasourceInterface):
     
     async def _load_gtfs_entities(
         self,
-        repository: RepositoryInterface,
+        repository: GtfsRepositoryInterface,
     ) -> dict[str, set[str]]:
         """Load all GTFS entity IDs into memory for fast validation.
         
@@ -394,6 +395,7 @@ class DatasourceBase(DatasourceInterface):
     async def sync_records(
         self, 
         repository: RepositoryInterface,
+        gtfs_repository: GtfsRepositoryInterface,
         source_id: int, 
         source_name: str
     ) -> dict[str, int]:
@@ -431,6 +433,7 @@ class DatasourceBase(DatasourceInterface):
         if record_type == "service_alerts":
             return await self._sync_service_alert_records(
                 repository=repository,
+                gtfs_repository=gtfs_repository,
                 source_id=source_id,
                 source_name=source_name,
                 records=records,
@@ -443,6 +446,7 @@ class DatasourceBase(DatasourceInterface):
     async def _sync_service_alert_records(
         self,
         repository: RepositoryInterface,
+        gtfs_repository: GtfsRepositoryInterface,
         source_id: int,
         source_name: str,
         records: list[dict[str, Any]],
@@ -488,7 +492,7 @@ class DatasourceBase(DatasourceInterface):
                 )
         
         # Load GTFS entities for validation
-        gtfs_entities = await self._load_gtfs_entities(repository)
+        gtfs_entities = await self._load_gtfs_entities(gtfs_repository)
         
         # Get IDs of alerts from the feed
         incoming_alert_ids = {alert_data["id"] for alert_data in alert_dicts}

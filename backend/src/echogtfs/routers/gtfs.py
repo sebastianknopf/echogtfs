@@ -13,7 +13,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 
-from echogtfs.services.database import RepositoryInterface, get_repository
+from echogtfs.services.database import get_gtfs_repository, get_repository
+from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
+from echogtfs.services.database.intf_repository import RepositoryInterface
 from echogtfs.services.database.models import GtfsAgency, GtfsRoute, GtfsStop
 from echogtfs.common.security import CurrentUser, CurrentPoweruser
 from echogtfs.services.gtfs import (
@@ -26,11 +28,12 @@ from echogtfs.validation.schemas import AgencyRead, GtfsStatusRead, RouteRead, S
 router = APIRouter()
 
 _Repo = Annotated[RepositoryInterface, Depends(get_repository)]
+_GtfsRepo = Annotated[GtfsRepositoryInterface, Depends(get_gtfs_repository)]
 
 
-def create_gtfs_import_service(repository: _Repo) -> GtfsImportInterface:
+def create_gtfs_import_service(repository: _Repo, gtfs_repository: _GtfsRepo) -> GtfsImportInterface:
     """Create a GTFS import service instance for the current dependency scope."""
-    return GtfsImportService(repository)
+    return GtfsImportService(repository, gtfs_repository)
 
 
 _GtfsImport = Annotated[GtfsImportInterface, Depends(create_gtfs_import_service)]
@@ -44,14 +47,14 @@ async def get_status(_: CurrentPoweruser, service: _GtfsImport) -> GtfsStatusRea
 
 
 @router.get("/agencies", response_model=list[AgencyRead])
-async def list_agencies(_: CurrentUser, repository: _Repo) -> list[GtfsAgency]:
+async def list_agencies(_: CurrentUser, repository: _GtfsRepo) -> list[GtfsAgency]:
     return await repository.list_gtfs_agencies()
 
 
 @router.get("/stops", response_model=list[StopRead])
 async def list_stops(
     _: CurrentUser,
-    repository: _Repo,
+    repository: _GtfsRepo,
     q: Annotated[str, Query(max_length=100)] = "",
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> list[GtfsStop]:
@@ -61,7 +64,7 @@ async def list_stops(
 @router.get("/routes", response_model=list[RouteRead])
 async def list_routes(
     _: CurrentUser,
-    repository: _Repo,
+    repository: _GtfsRepo,
     q: Annotated[str, Query(max_length=100)] = "",
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> list[GtfsRoute]:

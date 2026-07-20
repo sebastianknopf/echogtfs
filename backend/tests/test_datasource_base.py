@@ -35,6 +35,13 @@ class _RepositoryStub:
         self.upsert_service_alert_from_sync = AsyncMock()
 
 
+class _GtfsRepositoryStub:
+    def __init__(self):
+        self.list_gtfs_entity_ids = AsyncMock(
+            return_value={"agency": {"a1"}, "route": {"r1"}, "stop": {"s1"}}
+        )
+
+
 class TestDatasourceBaseHelpers(unittest.TestCase):
     def setUp(self):
         self.datasource = _TestDatasource({})
@@ -99,6 +106,7 @@ class TestDatasourceBaseHelpers(unittest.TestCase):
 class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
     async def test_sync_service_alert_records_applies_policy_and_upserts(self):
         repository = _RepositoryStub()
+        gtfs_repository = _GtfsRepositoryStub()
         datasource = _TestDatasource({})
         datasource._identifier_mapping_service = SimpleNamespace(
             initialize=AsyncMock(),
@@ -126,6 +134,7 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
 
         result = await datasource._sync_service_alert_records(
             repository=repository,
+            gtfs_repository=gtfs_repository,
             source_id=2,
             source_name="Demo",
             records=records,

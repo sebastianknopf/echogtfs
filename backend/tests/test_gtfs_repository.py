@@ -8,10 +8,13 @@ from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from echogtfs.services.database.sqlalchemy_repository import SqlAlchemyRepository
+from echogtfs.services.database.gtfs_repository import GtfsRepository
 
 
-class TestSqlAlchemyRepository(unittest.IsolatedAsyncioTestCase):
+class TestGtfsRepository(unittest.IsolatedAsyncioTestCase):
+    def tearDown(self) -> None:
+        GtfsRepository._instance = None
+
     async def test_repository_initializes_and_closes_engine(self):
         fake_engine = SimpleNamespace(dispose=AsyncMock())
 
@@ -32,8 +35,17 @@ class TestSqlAlchemyRepository(unittest.IsolatedAsyncioTestCase):
         with patch("echogtfs.services.database.repository_base.create_async_engine", return_value=fake_engine), patch(
             "echogtfs.services.database.repository_base.async_sessionmaker", return_value=_Factory()
         ):
-            repository = SqlAlchemyRepository("sqlite+aiosqlite://")
+            repository = GtfsRepository("sqlite+aiosqlite://")
             await repository.initialize()
             await repository.close()
 
         fake_engine.dispose.assert_awaited_once()
+
+    async def test_repository_is_single_instance(self):
+        with patch("echogtfs.services.database.repository_base.create_async_engine"), patch(
+            "echogtfs.services.database.repository_base.async_sessionmaker"
+        ):
+            first = GtfsRepository("sqlite+aiosqlite://")
+            second = GtfsRepository("sqlite+aiosqlite://")
+
+        self.assertIs(first, second)

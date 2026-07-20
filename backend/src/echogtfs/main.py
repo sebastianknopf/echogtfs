@@ -11,7 +11,12 @@ from echogtfs.common.config import settings
 from echogtfs.common.security import SlidingTokenMiddleware
 from echogtfs.common.extensions import limiter
 from echogtfs.services.database.alembic_migration_service import AlembicMigrationService
-from echogtfs.services.database import SqlAlchemyRepository, set_repository
+from echogtfs.services.database import (
+    GtfsRepository,
+    SqlAlchemyRepository,
+    set_gtfs_repository,
+    set_repository,
+)
 from echogtfs.services.scheduler import DatasourceSchedulerService, set_datasource_scheduler_service
 from echogtfs.services.security import SecurityService, get_security_service, set_security_service
 from echogtfs.routers.alerts import router as alerts_router
@@ -38,9 +43,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await repository.initialize()
     set_repository(repository)
 
+    gtfs_repository = GtfsRepository(settings.database_url, settings.debug)
+    await gtfs_repository.initialize()
+    set_gtfs_repository(gtfs_repository)
+
     set_security_service(SecurityService(repository))
 
-    datasource_scheduler_service = DatasourceSchedulerService(repository)
+    datasource_scheduler_service = DatasourceSchedulerService(repository, gtfs_repository)
     set_datasource_scheduler_service(datasource_scheduler_service)
     
     # Bootstrap first superuser when the database is empty
@@ -56,7 +65,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 
     # Schedule GTFS import cron on startup
-    await GtfsImportService(repository).schedule_import_from_cron()
+    await GtfsImportService(repository, gtfs_repository).schedule_import_from_cron()
     
     # Schedule all data source alert imports on startup
     await datasource_scheduler_service.schedule_all_data_sources()
@@ -67,6 +76,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
 
     # Close database repository on shutdown
+    await gtfs_repository.close()
     await repository.close()
 
 

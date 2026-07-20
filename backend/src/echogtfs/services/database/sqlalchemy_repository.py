@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any
 import uuid
 
-from sqlalchemy import case, delete, func, insert, select, text, update
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy import case, delete, func, select, update
 from sqlalchemy.orm import selectinload
 
 from echogtfs.services.database.intf_repository import RepositoryInterface
@@ -17,41 +14,17 @@ from echogtfs.services.database.models import (
     DataSourceEnrichment,
     DataSourceLog,
     DataSourceMapping,
-    GtfsAgency,
-    GtfsRoute,
-    GtfsStop,
     ServiceAlert,
     ServiceAlertActivePeriod,
     ServiceAlertInformedEntity,
     ServiceAlertTranslation,
     User,
 )
+from echogtfs.services.database.base import RepositoryBase
 
 
-class SqlAlchemyRepository(RepositoryInterface):
+class SqlAlchemyRepository(RepositoryBase, RepositoryInterface):
     """SQLAlchemy-based repository for database access."""
-
-    def __init__(self, database_url: str, debug: bool = False):
-        self._engine: AsyncEngine = create_async_engine(database_url, echo=debug)
-        self._session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
-            self._engine,
-            expire_on_commit=False,
-        )
-
-    async def initialize(self) -> None:
-        """Validate database connectivity during application startup."""
-        async with self.get_session() as db:
-            await db.execute(text("SELECT 1"))
-
-    async def close(self) -> None:
-        """Dispose repository-owned engine resources."""
-        await self._engine.dispose()
-
-    @asynccontextmanager
-    async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
-        """Yield a managed session using repository-owned session factory."""
-        async with self._session_factory() as db:
-            yield db
 
     async def get_app_setting(self, key: str) -> str | None:
         """Return one app setting value by key, or None if key is missing."""
@@ -636,76 +609,6 @@ class SqlAlchemyRepository(RepositoryInterface):
 
             return int(result.rowcount or 0)
 
-    async def list_gtfs_entity_ids(self) -> dict[str, set[str]]:
-        """Return GTFS IDs for agency, route, and stop as sets."""
-        async with self.get_session() as db:
-            agencies_result = await db.execute(select(GtfsAgency.gtfs_id))
-            routes_result = await db.execute(select(GtfsRoute.gtfs_id))
-            stops_result = await db.execute(select(GtfsStop.gtfs_id))
-
-            return {
-                "agency": {row[0] for row in agencies_result.fetchall()},
-                "route": {row[0] for row in routes_result.fetchall()},
-                "stop": {row[0] for row in stops_result.fetchall()},
-            }
-        
-    async def list_gtfs_agencies(self) -> list[GtfsAgency]:
-        """Return all GTFS agencies ordered by name."""
-        stmt = select(GtfsAgency).order_by(GtfsAgency.name)
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
-
-    async def list_gtfs_stops(self, *, query: str, limit: int) -> list[GtfsStop]:
-        """Return GTFS stops filtered by query and limited by max rows."""
-        stmt = select(GtfsStop).order_by(GtfsStop.name)
-        if query:
-            stmt = stmt.where(
-                GtfsStop.gtfs_id.ilike(f"%{query}%") | GtfsStop.name.ilike(f"%{query}%")
-            )
-        stmt = stmt.limit(limit)
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
-
-    async def list_gtfs_routes(self, *, query: str, limit: int) -> list[GtfsRoute]:
-        """Return GTFS routes filtered by query and limited by max rows."""
-        stmt = select(GtfsRoute).order_by(GtfsRoute.short_name, GtfsRoute.long_name)
-        if query:
-            stmt = stmt.where(
-                GtfsRoute.gtfs_id.ilike(f"%{query}%")
-                | GtfsRoute.short_name.ilike(f"%{query}%")
-                | GtfsRoute.long_name.ilike(f"%{query}%")
-            )
-        stmt = stmt.limit(limit)
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
-
-    async def replace_gtfs_static_data(
-        self,
-        *,
-        agencies: list[dict[str, str]],
-        stops: list[dict[str, str]],
-        routes: list[dict[str, str]],
-    ) -> None:
-        """Atomically replace all imported GTFS static entities."""
-        async with self.get_session() as db:
-            await db.execute(delete(GtfsAgency))
-            await db.execute(delete(GtfsStop))
-            await db.execute(delete(GtfsRoute))
-
-            if agencies:
-                await db.execute(insert(GtfsAgency), agencies)
-            if stops:
-                await db.execute(insert(GtfsStop), stops)
-            if routes:
-                await db.execute(insert(GtfsRoute), routes)
-
-            await db.commit()
-        
     async def get_realtime_service_alerts(self) -> list[ServiceAlert]:
         """Return active realtime alerts with relationships needed for GTFS-RT export."""
         stmt = (
