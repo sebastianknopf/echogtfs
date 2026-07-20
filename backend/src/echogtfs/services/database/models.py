@@ -2,7 +2,7 @@
 from typing import ClassVar
 import uuid
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, Uuid, func
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, Uuid, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from echogtfs.enum.gtfsrt import AlertCause, AlertEffect, AlertSeverityLevel, PeriodType
@@ -261,6 +261,16 @@ class GtfsStop(Base):
     gtfs_id: Mapped[str] = mapped_column(String(128), unique=True)
     name:    Mapped[str] = mapped_column(String(255))
 
+    start_trips: Mapped[list["GtfsTrip"]] = relationship(
+        back_populates="start_stop",
+        foreign_keys="GtfsTrip.start_stop_id",
+    )
+    end_trips: Mapped[list["GtfsTrip"]] = relationship(
+        back_populates="end_stop",
+        foreign_keys="GtfsTrip.end_stop_id",
+    )
+    stop_times: Mapped[list["GtfsStopTime"]] = relationship(back_populates="stop")
+
 
 class GtfsRoute(Base):
     """Imported GTFS routes (routes.txt)."""
@@ -270,6 +280,61 @@ class GtfsRoute(Base):
     gtfs_id:    Mapped[str] = mapped_column(String(128), unique=True)
     short_name: Mapped[str] = mapped_column(String(128))
     long_name:  Mapped[str] = mapped_column(String(255))
+
+    trips: Mapped[list["GtfsTrip"]] = relationship(back_populates="route")
+
+
+class GtfsTrip(Base):
+    """Imported GTFS trips (trips.txt)."""
+    __tablename__ = "gtfs_trips"
+
+    gtfs_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    route_id: Mapped[str] = mapped_column(Text, ForeignKey("gtfs_routes.gtfs_id"))
+    direction_id: Mapped[int] = mapped_column(Integer)
+    start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    start_stop_id: Mapped[str] = mapped_column(Text, ForeignKey("gtfs_stops.gtfs_id"))
+    end_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    end_stop_id: Mapped[str] = mapped_column(Text, ForeignKey("gtfs_stops.gtfs_id"))
+
+    route: Mapped["GtfsRoute"] = relationship(back_populates="trips")
+    start_stop: Mapped["GtfsStop"] = relationship(
+        back_populates="start_trips",
+        foreign_keys=[start_stop_id],
+    )
+    end_stop: Mapped["GtfsStop"] = relationship(
+        back_populates="end_trips",
+        foreign_keys=[end_stop_id],
+    )
+    stop_times: Mapped[list["GtfsStopTime"]] = relationship(
+        back_populates="trip",
+        cascade="all, delete-orphan",
+        order_by="GtfsStopTime.stop_sequence",
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_gtfs_trips_route_start_end_lookup",
+            "route_id",
+            "start_stop_id",
+            "start_time",
+            "end_stop_id",
+            "end_time",
+        ),
+    )
+
+
+class GtfsStopTime(Base):
+    """Imported GTFS stop times (stop_times.txt)."""
+    __tablename__ = "gtfs_stop_times"
+
+    trip_id: Mapped[str] = mapped_column(Text, ForeignKey("gtfs_trips.gtfs_id"), primary_key=True)
+    stop_id: Mapped[str] = mapped_column(Text, ForeignKey("gtfs_stops.gtfs_id"), primary_key=True)
+    stop_sequence: Mapped[int] = mapped_column(Integer, primary_key=True)
+    arrival_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    departure_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    trip: Mapped["GtfsTrip"] = relationship(back_populates="stop_times")
+    stop: Mapped["GtfsStop"] = relationship(back_populates="stop_times")
 
 # ---------------------------------------------------------------------------
 # GTFS-RT models
