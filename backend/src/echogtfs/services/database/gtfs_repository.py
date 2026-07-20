@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import delete, insert, select
 
 from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
-from echogtfs.services.database.models import GtfsAgency, GtfsRoute, GtfsStop
+from echogtfs.services.database.models import GtfsAgency, GtfsRoute, GtfsStop, GtfsStopTime, GtfsTrip
 from echogtfs.services.database.base import RepositoryBase
 
 
@@ -80,16 +82,63 @@ class GtfsRepository(RepositoryBase, GtfsRepositoryInterface):
         routes: list[dict[str, str]],
     ) -> None:
         """Atomically replace all imported GTFS static entities."""
+        await self.clear_gtfs_static_data()
+        await self.insert_gtfs_agencies(agencies)
+        await self.insert_gtfs_stops(stops)
+        await self.insert_gtfs_routes(routes)
+
+    async def clear_gtfs_static_data(self) -> None:
+        """Delete all imported GTFS static data in FK-safe order."""
         async with self.get_session() as db:
+            await db.execute(delete(GtfsStopTime))
+            await db.execute(delete(GtfsTrip))
             await db.execute(delete(GtfsAgency))
             await db.execute(delete(GtfsStop))
             await db.execute(delete(GtfsRoute))
 
-            if agencies:
-                await db.execute(insert(GtfsAgency), agencies)
-            if stops:
-                await db.execute(insert(GtfsStop), stops)
-            if routes:
-                await db.execute(insert(GtfsRoute), routes)
+            await db.commit()
 
+    async def insert_gtfs_agencies(self, agencies: list[dict[str, str]]) -> None:
+        """Insert GTFS agencies rows."""
+        if not agencies:
+            return
+
+        async with self.get_session() as db:
+            await db.execute(insert(GtfsAgency), agencies)
+            await db.commit()
+
+    async def insert_gtfs_stops(self, stops: list[dict[str, str]]) -> None:
+        """Insert GTFS stop rows."""
+        if not stops:
+            return
+
+        async with self.get_session() as db:
+            await db.execute(insert(GtfsStop), stops)
+            await db.commit()
+
+    async def insert_gtfs_routes(self, routes: list[dict[str, str]]) -> None:
+        """Insert GTFS route rows."""
+        if not routes:
+            return
+
+        async with self.get_session() as db:
+            await db.execute(insert(GtfsRoute), routes)
+            await db.commit()
+
+    async def insert_gtfs_trips(self, trips: list[dict[str, str | int | datetime]]) -> None:
+        """Insert GTFS trip rows."""
+        if not trips:
+            return
+
+        async with self.get_session() as db:
+            await db.execute(insert(GtfsTrip), trips)
+            await db.commit()
+
+    async def insert_gtfs_stop_times(self, stop_times: list[dict[str, str | int | datetime]]) -> None:
+        """Insert GTFS stop-time rows."""
+        if not stop_times:
+            return
+
+        async with self.get_session() as db:
+            await db.execute(insert(GtfsStopTime), stop_times)
             await db.commit()

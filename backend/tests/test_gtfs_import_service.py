@@ -4,13 +4,14 @@ import io
 import sys
 import unittest
 import zipfile
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from echogtfs.services.gtfs.gtfs_import_service import GtfsImportService
+from echogtfs.services.gtfs.gtfs_import_service import GtfsImportService, _TripWindow
 
 
 class TestGtfsImportService(unittest.IsolatedAsyncioTestCase):
@@ -58,3 +59,65 @@ class TestGtfsImportService(unittest.IsolatedAsyncioTestCase):
         with zipfile.ZipFile(mem) as zf:
             with self.assertRaises(KeyError):
                 GtfsImportService._find_in_zip(zf, "agency.txt")
+
+    def test_map_stop_time_row_updates_trip_window_and_uses_time_fallback(self):
+        trip_windows: dict[str, object] = {}
+        row = {
+            "trip_id": "T1",
+            "stop_id": "S1",
+            "stop_sequence": "1",
+            "arrival_time": "",
+            "departure_time": "08:01:00",
+        }
+
+        mapped = GtfsImportService._map_stop_time_row(
+            row,
+            trip_meta={"T1": ("R1", 0)},
+            stop_ids={"S1"},
+            trip_windows=trip_windows,
+        )
+
+        self.assertIsNotNone(mapped)
+        assert mapped is not None
+        self.assertEqual(mapped["trip_id"], "T1")
+        self.assertEqual(mapped["stop_id"], "S1")
+        self.assertEqual(mapped["stop_sequence"], 1)
+        self.assertEqual(mapped["arrival_time"], mapped["departure_time"])
+        self.assertEqual(len(trip_windows), 1)
+
+    def test_derive_trip_rows_uses_first_departure_and_last_arrival(self):
+        start_departure = datetime(1970, 1, 1, 8, 5, 0, tzinfo=UTC)
+        start_arrival = datetime(1970, 1, 1, 8, 4, 0, tzinfo=UTC)
+        end_arrival = datetime(1970, 1, 1, 9, 0, 0, tzinfo=UTC)
+        end_departure = datetime(1970, 1, 1, 9, 2, 0, tzinfo=UTC)
+
+        trip_windows = {
+            "T1": _TripWindow(
+                first_sequence=1,
+                first_stop_id="S1",
+                first_arrival_time=start_arrival,
+                first_departure_time=start_departure,
+                last_sequence=5,
+                last_stop_id="S5",
+                last_arrival_time=end_arrival,
+                last_departure_time=end_departure,
+            )
+        }
+
+        trips = GtfsImportService._derive_trip_rows({"T1": ("R1", 1)}, trip_windows)
+
+        self.assertEqual(len(trips), 1)
+        self.assertEqual(trips[0]["gtfs_id"], "T1")
+        self.assertEqual(trips[0]["route_id"], "R1")
+        self.assertEqual(trips[0]["direction_id"], 1)
+        self.assertEqual(trips[0]["start_stop_id"], "S1")
+        self.assertEqual(trips[0]["end_stop_id"], "S5")
+        self.assertEqual(trips[0]["start_time"], start_departure)
+        self.assertEqual(trips[0]["end_time"], end_arrival)
+
+    def test_parse_gtfs_time_supports_values_beyond_24_hours(self):
+        value = GtfsImportService._parse_gtfs_time("25:10:05")
+
+        self.assertIsNotNone(value)
+        assert value is not None
+        self.assertEqual(value, datetime(1970, 1, 2, 1, 10, 5, tzinfo=UTC))

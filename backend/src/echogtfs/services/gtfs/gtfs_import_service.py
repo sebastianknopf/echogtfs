@@ -5,8 +5,12 @@ from __future__ import annotations
 import csv
 import io
 import logging
+import tempfile
 import zipfile
-from datetime import UTC, datetime
+from collections.abc import Iterable, Iterator
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -20,6 +24,18 @@ from echogtfs.services.gtfs.intf_gtfs_import import GtfsImportInterface
 logger = logging.getLogger("uvicorn")
 
 
+@dataclass
+class _TripWindow:
+    first_sequence: int
+    first_stop_id: str
+    first_arrival_time: datetime | None
+    first_departure_time: datetime | None
+    last_sequence: int
+    last_stop_id: str
+    last_arrival_time: datetime | None
+    last_departure_time: datetime | None
+
+
 class GtfsImportService(GtfsImportInterface):
     """Service responsible for GTFS static feed import and scheduling."""
 
@@ -27,6 +43,7 @@ class GtfsImportService(GtfsImportInterface):
     STATUS_RUNNING = "running"
     STATUS_SUCCESS = "success"
     STATUS_ERROR = "error"
+    STOP_TIME_BATCH_SIZE = 10_000
 
     _scheduler: AsyncIOScheduler | None = None
 
@@ -131,7 +148,9 @@ class GtfsImportService(GtfsImportInterface):
             message = (
                 f"{result['agencies']} agencies, "
                 f"{result['stops']} stops, "
-                f"{result['routes']} routes imported"
+                f"{result['routes']} routes, "
+                f"{result['trips']} trips, "
+                f"{result['stop_times']} stop_times imported"
             )
 
             logger.info("[GTFS] Import successful: %s", message)
@@ -153,35 +172,310 @@ class GtfsImportService(GtfsImportInterface):
         if not feed_url:
             raise ValueError("No GTFS feed URL configured")
 
-        buffer = io.BytesIO()
-        async with httpx.AsyncClient(follow_redirects=True, timeout=300.0) as client:
-            async with client.stream("GET", feed_url) as response:
-                response.raise_for_status()
+        zip_path = await self._download_gtfs_zip(feed_url)
 
-                async for chunk in response.aiter_bytes(65_536):
-                    buffer.write(chunk)
+        try:
+            with zipfile.ZipFile(zip_path) as zip_file:
+                agencies = self._map_agencies(self._iter_csv_rows(zip_file, "agency.txt"))
+                stops = self._map_stops(self._iter_csv_rows(zip_file, "stops.txt"))
+                routes = self._map_routes(self._iter_csv_rows(zip_file, "routes.txt"))
 
-        buffer.seek(0)
-        with zipfile.ZipFile(buffer) as zip_file:
-            agency_rows = self._parse_csv(self._find_in_zip(zip_file, "agency.txt"))
-            stop_rows = self._parse_csv(self._find_in_zip(zip_file, "stops.txt"))
-            route_rows = self._parse_csv(self._find_in_zip(zip_file, "routes.txt"))
+                stop_ids = {row["gtfs_id"] for row in stops}
+                route_ids = {row["gtfs_id"] for row in routes}
 
-        agencies = self._map_agencies(agency_rows)
-        stops = self._map_stops(stop_rows)
-        routes = self._map_routes(route_rows)
+                trip_meta = self._map_trips(
+                    self._iter_csv_rows(zip_file, "trips.txt"),
+                    route_ids=route_ids,
+                )
 
-        await self._gtfs_repository.replace_gtfs_static_data(
-            agencies=agencies,
-            stops=stops,
-            routes=routes,
+                trip_windows: dict[str, _TripWindow] = {}
+                await self._import_stop_times(
+                    zip_file,
+                    trip_meta=trip_meta,
+                    stop_ids=stop_ids,
+                    trip_windows=trip_windows,
+                    persist=False,
+                )
+
+                trip_rows = self._derive_trip_rows(trip_meta, trip_windows)
+
+            await self._gtfs_repository.clear_gtfs_static_data()
+            await self._gtfs_repository.insert_gtfs_agencies(agencies)
+            await self._gtfs_repository.insert_gtfs_stops(stops)
+            await self._gtfs_repository.insert_gtfs_routes(routes)
+            await self._gtfs_repository.insert_gtfs_trips(trip_rows)
+
+            with zipfile.ZipFile(zip_path) as zip_file:
+                stop_time_count = await self._import_stop_times(
+                    zip_file,
+                    trip_meta=trip_meta,
+                    stop_ids=stop_ids,
+                    trip_windows={},
+                    persist=True,
+                )
+
+            return {
+                "agencies": len(agencies),
+                "stops": len(stops),
+                "routes": len(routes),
+                "trips": len(trip_rows),
+                "stop_times": stop_time_count,
+            }
+        
+        finally:
+            zip_path.unlink(missing_ok=True)
+
+    async def _download_gtfs_zip(self, feed_url: str) -> Path:
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
+            zip_path = Path(tmp.name)
+
+        try:
+            async with httpx.AsyncClient(follow_redirects=True, timeout=300.0) as client:
+                async with client.stream("GET", feed_url) as response:
+                    response.raise_for_status()
+
+                    with zip_path.open("wb") as out_stream:
+                        async for chunk in response.aiter_bytes(65_536):
+                            out_stream.write(chunk)
+        except Exception:
+            zip_path.unlink(missing_ok=True)
+            raise
+
+        return zip_path
+
+    @staticmethod
+    def _iter_csv_rows(zip_file: zipfile.ZipFile, filename: str) -> Iterator[dict[str, str]]:
+        target = filename.lower()
+
+        for member in zip_file.namelist():
+            lower_member = member.lower()
+            if lower_member == target or lower_member.endswith("/" + target):
+                with zip_file.open(member) as payload:
+                    with io.TextIOWrapper(payload, encoding="utf-8-sig", newline="") as text_payload:
+                        reader = csv.DictReader(text_payload)
+                        
+                        for row in reader:
+                            cleaned_row: dict[str, str] = {}
+                            for key, value in row.items():
+                                if key is None:
+                                    continue
+                                cleaned_row[key.strip()] = (value.strip() if value else "")
+                            
+                            yield cleaned_row
+                return
+
+        raise KeyError(f"'{filename}' not found in GTFS ZIP")
+
+    @staticmethod
+    def _map_trips(
+        rows: Iterable[dict[str, str]],
+        *,
+        route_ids: set[str],
+    ) -> dict[str, tuple[str, int]]:
+        trips: dict[str, tuple[str, int]] = {}
+
+        for row in rows:
+            trip_id = row.get("trip_id") or ""
+            route_id = row.get("route_id") or ""
+
+            if not trip_id or not route_id or route_id not in route_ids:
+                continue
+
+            direction_raw = row.get("direction_id") or "0"
+            direction_id = GtfsImportService._parse_int(direction_raw)
+            
+            if direction_id is None:
+                continue
+
+            trips[trip_id] = (route_id, direction_id)
+
+        return trips
+
+    async def _import_stop_times(
+        self,
+        zip_file: zipfile.ZipFile,
+        *,
+        trip_meta: dict[str, tuple[str, int]],
+        stop_ids: set[str],
+        trip_windows: dict[str, _TripWindow],
+        persist: bool,
+    ) -> int:
+        batch: list[dict[str, str | int | datetime]] = []
+        total = 0
+
+        for row in self._iter_csv_rows(zip_file, "stop_times.txt"):
+            stop_time_row = self._map_stop_time_row(
+                row,
+                trip_meta=trip_meta,
+                stop_ids=stop_ids,
+                trip_windows=trip_windows,
+            )
+            
+            if stop_time_row is None:
+                continue
+
+            batch.append(stop_time_row)
+            if len(batch) >= self.STOP_TIME_BATCH_SIZE:
+                
+                if persist:
+                    await self._gtfs_repository.insert_gtfs_stop_times(batch)
+                
+                total += len(batch)
+                batch = []
+
+        if batch:
+            if persist:
+                await self._gtfs_repository.insert_gtfs_stop_times(batch)
+            
+            total += len(batch)
+
+        return total
+
+    @staticmethod
+    def _map_stop_time_row(
+        row: dict[str, str],
+        *,
+        trip_meta: dict[str, tuple[str, int]],
+        stop_ids: set[str],
+        trip_windows: dict[str, _TripWindow],
+    ) -> dict[str, str | int | datetime] | None:
+        trip_id = row.get("trip_id") or ""
+        stop_id = row.get("stop_id") or ""
+
+        if not trip_id or trip_id not in trip_meta or not stop_id or stop_id not in stop_ids:
+            return None
+
+        stop_sequence = GtfsImportService._parse_int(row.get("stop_sequence") or "")
+        if stop_sequence is None:
+            return None
+
+        arrival_time_raw = row.get("arrival_time") or ""
+        departure_time_raw = row.get("departure_time") or ""
+
+        arrival_time = GtfsImportService._parse_gtfs_time(arrival_time_raw)
+        departure_time = GtfsImportService._parse_gtfs_time(departure_time_raw)
+
+        if arrival_time is None and departure_time is None:
+            return None
+
+        fallback_arrival = arrival_time or departure_time
+        fallback_departure = departure_time or arrival_time
+        if fallback_arrival is None or fallback_departure is None:
+            return None
+
+        GtfsImportService._update_trip_window(
+            trip_windows,
+            trip_id=trip_id,
+            stop_sequence=stop_sequence,
+            stop_id=stop_id,
+            arrival_time=arrival_time,
+            departure_time=departure_time,
         )
 
         return {
-            "agencies": len(agencies),
-            "stops": len(stops),
-            "routes": len(routes),
+            "trip_id": trip_id,
+            "stop_id": stop_id,
+            "stop_sequence": stop_sequence,
+            "arrival_time": fallback_arrival,
+            "departure_time": fallback_departure,
         }
+
+    @staticmethod
+    def _update_trip_window(
+        trip_windows: dict[str, _TripWindow],
+        *,
+        trip_id: str,
+        stop_sequence: int,
+        stop_id: str,
+        arrival_time: datetime | None,
+        departure_time: datetime | None,
+    ) -> None:
+        window = trip_windows.get(trip_id)
+        if window is None:
+            trip_windows[trip_id] = _TripWindow(
+                first_sequence=stop_sequence,
+                first_stop_id=stop_id,
+                first_arrival_time=arrival_time,
+                first_departure_time=departure_time,
+                last_sequence=stop_sequence,
+                last_stop_id=stop_id,
+                last_arrival_time=arrival_time,
+                last_departure_time=departure_time,
+            )
+            
+            return
+
+        if stop_sequence < window.first_sequence:
+            window.first_sequence = stop_sequence
+            window.first_stop_id = stop_id
+            window.first_arrival_time = arrival_time
+            window.first_departure_time = departure_time
+
+        if stop_sequence > window.last_sequence:
+            window.last_sequence = stop_sequence
+            window.last_stop_id = stop_id
+            window.last_arrival_time = arrival_time
+            window.last_departure_time = departure_time
+
+    @staticmethod
+    def _derive_trip_rows(
+        trip_meta: dict[str, tuple[str, int]],
+        trip_windows: dict[str, _TripWindow],
+    ) -> list[dict[str, str | int | datetime]]:
+        trips: list[dict[str, str | int | datetime]] = []
+
+        for trip_id, (route_id, direction_id) in trip_meta.items():
+            window = trip_windows.get(trip_id)
+            if window is None:
+                continue
+
+            start_time = window.first_departure_time or window.first_arrival_time
+            end_time = window.last_arrival_time or window.last_departure_time
+            if start_time is None or end_time is None:
+                continue
+
+            trips.append(
+                {
+                    "gtfs_id": trip_id,
+                    "route_id": route_id,
+                    "direction_id": direction_id,
+                    "start_time": start_time,
+                    "start_stop_id": window.first_stop_id,
+                    "end_time": end_time,
+                    "end_stop_id": window.last_stop_id,
+                }
+            )
+
+        return trips
+
+    @staticmethod
+    def _parse_int(value: str) -> int | None:
+        try:
+            return int(value)
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _parse_gtfs_time(value: str) -> datetime | None:
+        if not value:
+            return None
+
+        parts = value.split(":")
+        if len(parts) != 3:
+            return None
+
+        try:
+            hours = int(parts[0])
+            minutes = int(parts[1])
+            seconds = int(parts[2])
+        except ValueError:
+            return None
+
+        if minutes < 0 or minutes > 59 or seconds < 0 or seconds > 59 or hours < 0:
+            return None
+
+        base = datetime(1970, 1, 1, tzinfo=UTC)
+        return base + timedelta(hours=hours, minutes=minutes, seconds=seconds)
 
     @staticmethod
     def _now_iso() -> str:
@@ -209,7 +503,7 @@ class GtfsImportService(GtfsImportInterface):
         raise KeyError(f"'{filename}' not found in GTFS ZIP")
 
     @staticmethod
-    def _map_agencies(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    def _map_agencies(rows: Iterable[dict[str, str]]) -> list[dict[str, str]]:
         agencies: dict[str, dict[str, str]] = {}
         
         for row in rows:
@@ -227,7 +521,7 @@ class GtfsImportService(GtfsImportInterface):
         return list(agencies.values())
 
     @staticmethod
-    def _map_stops(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    def _map_stops(rows: Iterable[dict[str, str]]) -> list[dict[str, str]]:
         stops: dict[str, dict[str, str]] = {}
         
         for row in rows:
@@ -246,7 +540,7 @@ class GtfsImportService(GtfsImportInterface):
         return list(stops.values())
 
     @staticmethod
-    def _map_routes(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    def _map_routes(rows: Iterable[dict[str, str]]) -> list[dict[str, str]]:
         routes: dict[str, dict[str, str]] = {}
         
         for row in rows:

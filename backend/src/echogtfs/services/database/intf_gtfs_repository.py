@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
+from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,4 +56,34 @@ class GtfsRepositoryInterface(ABC):
         routes: list[dict[str, str]],
     ) -> None:
         """Atomically replace all imported GTFS agencies, stops, and routes."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def clear_gtfs_static_data(self) -> None:
+        """Delete all imported GTFS static data in FK-safe order."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def insert_gtfs_agencies(self, agencies: list[dict[str, str]]) -> None:
+        """Insert GTFS agencies rows."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def insert_gtfs_stops(self, stops: list[dict[str, str]]) -> None:
+        """Insert GTFS stop rows."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def insert_gtfs_routes(self, routes: list[dict[str, str]]) -> None:
+        """Insert GTFS route rows."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def insert_gtfs_trips(self, trips: list[dict[str, str | int | datetime]]) -> None:
+        """Insert GTFS trip rows."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def insert_gtfs_stop_times(self, stop_times: list[dict[str, str | int | datetime]]) -> None:
+        """Insert GTFS stop-time rows."""
         raise NotImplementedError
