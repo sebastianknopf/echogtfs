@@ -1,6 +1,6 @@
 """Use gtfs_id as primary key for static GTFS tables.
 
-Revision ID: 0004_gtfs_static_ids_to_gtfs_id_pk
+Revision ID: 0004_gtfs_static_pk
 Revises: 0003_gtfs_trips_stop_times
 Create Date: 2026-07-20 00:00:00.000000
 
@@ -11,7 +11,7 @@ from alembic import op
 
 
 # revision identifiers, used by Alembic.
-revision: str = "0004_gtfs_static_ids_to_gtfs_id_pk"
+revision: str = "0004_gtfs_static_pk"
 down_revision: Union[str, None] = "0003_gtfs_trips_stop_times"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
