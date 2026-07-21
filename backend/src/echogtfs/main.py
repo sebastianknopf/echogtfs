@@ -39,23 +39,25 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     migration_service: AlembicMigrationService = AlembicMigrationService()
     await migration_service.upgrade_head()
 
-    repository = SystemRepository(settings.database_url, settings.debug)
-    await repository.initialize()
-    set_system_repository(repository)
+    # intialize repositories
+    system_repository = SystemRepository(settings.database_url, settings.debug)
+    await system_repository.initialize()
+    set_system_repository(system_repository)
 
     gtfs_repository = GtfsRepository(settings.database_url, settings.debug)
     await gtfs_repository.initialize()
     set_gtfs_repository(gtfs_repository)
 
-    set_security_service(SecurityService(repository))
+    # intialize single-instance services
+    set_security_service(SecurityService(system_repository))
 
-    datasource_scheduler_service = DatasourceSchedulerService(repository, gtfs_repository)
+    datasource_scheduler_service = DatasourceSchedulerService(system_repository, gtfs_repository)
     set_datasource_scheduler_service(datasource_scheduler_service)
-    
-    # Bootstrap first superuser when the database is empty
-    users = await repository.list_users()
+
+    # bootstrap first superuser when the database is empty
+    users = await system_repository.list_users()
     if not users:
-        await repository.create_user(
+        await system_repository.create_user(
             username=settings.first_superuser,
             email=settings.first_superuser_email,
             hashed_password=get_security_service().hash_password(settings.first_superuser_password),
@@ -63,21 +65,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             is_superuser=True,
         )
 
-
-    # Schedule GTFS import cron on startup
-    await GtfsImportService(repository, gtfs_repository).schedule_import_from_cron()
+    # start schedulers for all scheduled services
+    await GtfsImportService(system_repository, gtfs_repository).schedule_from_settings()
+    await CleanupService(system_repository).schedule_from_settings()
     
-    # Schedule all data source alert imports on startup
     await datasource_scheduler_service.schedule_all_data_sources()
-    
-    # Schedule cleanup job on startup
-    await CleanupService(repository).schedule_from_settings()
     
     yield
 
-    # Close database repository on shutdown
+    # close database repositories on shutdown
     await gtfs_repository.close()
-    await repository.close()
+    await system_repository.close()
 
 
 # -- FastAPI app ---------------------------------------------------------------
