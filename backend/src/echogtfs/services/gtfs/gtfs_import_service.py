@@ -110,14 +110,14 @@ class GtfsImportService(GtfsImportInterface):
             await self._repository.set_app_setting(AppSetting.KEY_GTFS_CRON, cron)
 
         if cron is not None:
-            await self.schedule_import_from_cron()
+            await self.schedule_from_settings()
 
         return {
             "feed_url": feed_url or "",
             "cron": cron or "",
         }
 
-    async def schedule_import_from_cron(self) -> None:
+    async def schedule_from_settings(self) -> None:
         cron_expr = await self._repository.get_app_setting(AppSetting.KEY_GTFS_CRON)
         scheduler = self._get_scheduler()
 

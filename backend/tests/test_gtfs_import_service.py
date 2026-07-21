@@ -203,7 +203,7 @@ class TestGtfsImportService(unittest.IsolatedAsyncioTestCase):
             "echogtfs.services.gtfs.gtfs_import_service.CronTrigger.from_crontab",
             return_value="trigger",
         ) as from_crontab_mock:
-            await service.schedule_import_from_cron()
+            await service.schedule_from_settings()
 
         from_crontab_mock.assert_called_once()
         self.assertEqual(from_crontab_mock.call_args.kwargs["timezone"], ZoneInfo("Europe/Berlin"))
