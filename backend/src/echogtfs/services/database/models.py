@@ -37,7 +37,9 @@ class AppSetting(Base):
     KEY_APP_TITLE: ClassVar[str] = "app_title"
     KEY_APP_LANGUAGE: ClassVar[str] = "app_language"
 
-    KEY_GTFS_RT_PATH: ClassVar[str] = "gtfs_rt_path"
+    KEY_GTFS_RT_SERVICE_ALERTS_PATH: ClassVar[str] = "gtfs_rt_service_alerts_path"
+    KEY_GTFS_RT_TRIP_UPDATES_PATH: ClassVar[str] = "gtfs_rt_trip_updates_path"
+    KEY_GTFS_RT_VEHICLE_POSITIONS_PATH: ClassVar[str] = "gtfs_rt_vehicle_positions_path"
     KEY_GTFS_RT_USERNAME: ClassVar[str] = "gtfs_rt_username"
     KEY_GTFS_RT_PASSWORD: ClassVar[str] = "gtfs_rt_password"
 
@@ -56,7 +58,9 @@ class AppSetting(Base):
         KEY_COLOR_SECONDARY,
         KEY_APP_TITLE,
         KEY_APP_LANGUAGE,
-        KEY_GTFS_RT_PATH,
+        KEY_GTFS_RT_SERVICE_ALERTS_PATH,
+        KEY_GTFS_RT_TRIP_UPDATES_PATH,
+        KEY_GTFS_RT_VEHICLE_POSITIONS_PATH,
         KEY_GTFS_RT_USERNAME,
         KEY_GTFS_RT_PASSWORD,
         KEY_CLEANUP_CRON,

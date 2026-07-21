@@ -44,7 +44,9 @@ class AppSettings(BaseModel):
     app_language:    str = 'de'  # 'de' or 'en'
     
     # GTFS-RT endpoint configuration
-    gtfs_rt_path:     str = 'realtime/service-alerts.pbf'
+    gtfs_rt_service_alerts_path:   str = 'realtime/service-alerts.pbf'
+    gtfs_rt_trip_updates_path:     str = 'realtime/trip-updates.pbf'
+    gtfs_rt_vehicle_positions_path: str = 'realtime/vehicle-positions.pbf'
     gtfs_rt_username: str = ''
     gtfs_rt_password: str | None = ''
     

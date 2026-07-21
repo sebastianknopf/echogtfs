@@ -271,7 +271,9 @@ const api = (() => {
         app_title: 'echogtfs',
         color_primary: '#008c99',
         color_secondary: '#99cc04',
-        gtfs_rt_path: 'realtime/service-alerts.pbf',
+        gtfs_rt_service_alerts_path: 'realtime/service-alerts.pbf',
+        gtfs_rt_trip_updates_path: 'realtime/trip-updates.pbf',
+        gtfs_rt_vehicle_positions_path: 'realtime/vehicle-positions.pbf',
         gtfs_rt_username: '',
         gtfs_rt_password: ''
       });

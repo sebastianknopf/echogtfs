@@ -20,7 +20,9 @@ DEFAULTS = AppSettings(
     color_secondary="#99cc04",
     app_title="echogtfs",
     app_language="de",
-    gtfs_rt_path="realtime/service-alerts.pbf",
+    gtfs_rt_service_alerts_path="realtime/service-alerts.pbf",
+    gtfs_rt_trip_updates_path="realtime/trip-updates.pbf",
+    gtfs_rt_vehicle_positions_path="realtime/vehicle-positions.pbf",
     gtfs_rt_username="",
     gtfs_rt_password="",
     cleanup_cron="*/10 * * * *",
@@ -34,9 +36,24 @@ async def _load() -> AppSettings:
     rows = await repository.get_all_app_settings()
     
     # Initialize defaults in database if not present
-    if AppSetting.KEY_GTFS_RT_PATH not in rows:
-        await repository.set_app_setting(AppSetting.KEY_GTFS_RT_PATH, DEFAULTS.gtfs_rt_path)
-        rows[AppSetting.KEY_GTFS_RT_PATH] = DEFAULTS.gtfs_rt_path
+    if AppSetting.KEY_GTFS_RT_SERVICE_ALERTS_PATH not in rows:
+        await repository.set_app_setting(
+            AppSetting.KEY_GTFS_RT_SERVICE_ALERTS_PATH,
+            DEFAULTS.gtfs_rt_service_alerts_path,
+        )
+        rows[AppSetting.KEY_GTFS_RT_SERVICE_ALERTS_PATH] = DEFAULTS.gtfs_rt_service_alerts_path
+    if AppSetting.KEY_GTFS_RT_TRIP_UPDATES_PATH not in rows:
+        await repository.set_app_setting(
+            AppSetting.KEY_GTFS_RT_TRIP_UPDATES_PATH,
+            DEFAULTS.gtfs_rt_trip_updates_path,
+        )
+        rows[AppSetting.KEY_GTFS_RT_TRIP_UPDATES_PATH] = DEFAULTS.gtfs_rt_trip_updates_path
+    if AppSetting.KEY_GTFS_RT_VEHICLE_POSITIONS_PATH not in rows:
+        await repository.set_app_setting(
+            AppSetting.KEY_GTFS_RT_VEHICLE_POSITIONS_PATH,
+            DEFAULTS.gtfs_rt_vehicle_positions_path,
+        )
+        rows[AppSetting.KEY_GTFS_RT_VEHICLE_POSITIONS_PATH] = DEFAULTS.gtfs_rt_vehicle_positions_path
     if AppSetting.KEY_GTFS_RT_USERNAME not in rows:
         await repository.set_app_setting(AppSetting.KEY_GTFS_RT_USERNAME, DEFAULTS.gtfs_rt_username)
         rows[AppSetting.KEY_GTFS_RT_USERNAME] = DEFAULTS.gtfs_rt_username
@@ -58,7 +75,18 @@ async def _load() -> AppSettings:
         color_secondary  = rows.get(AppSetting.KEY_COLOR_SECONDARY, DEFAULTS.color_secondary),
         app_title        = rows.get(AppSetting.KEY_APP_TITLE, DEFAULTS.app_title),
         app_language     = rows.get(AppSetting.KEY_APP_LANGUAGE, DEFAULTS.app_language),
-        gtfs_rt_path     = rows.get(AppSetting.KEY_GTFS_RT_PATH, DEFAULTS.gtfs_rt_path),
+        gtfs_rt_service_alerts_path = rows.get(
+            AppSetting.KEY_GTFS_RT_SERVICE_ALERTS_PATH,
+            DEFAULTS.gtfs_rt_service_alerts_path,
+        ),
+        gtfs_rt_trip_updates_path = rows.get(
+            AppSetting.KEY_GTFS_RT_TRIP_UPDATES_PATH,
+            DEFAULTS.gtfs_rt_trip_updates_path,
+        ),
+        gtfs_rt_vehicle_positions_path = rows.get(
+            AppSetting.KEY_GTFS_RT_VEHICLE_POSITIONS_PATH,
+            DEFAULTS.gtfs_rt_vehicle_positions_path,
+        ),
         gtfs_rt_username = rows.get(AppSetting.KEY_GTFS_RT_USERNAME, DEFAULTS.gtfs_rt_username),
         gtfs_rt_password = rows.get(AppSetting.KEY_GTFS_RT_PASSWORD, DEFAULTS.gtfs_rt_password),
         cleanup_cron     = rows.get(AppSetting.KEY_CLEANUP_CRON, DEFAULTS.cleanup_cron),
@@ -100,7 +128,18 @@ async def update_settings(
     await repository.set_app_setting(AppSetting.KEY_COLOR_SECONDARY, payload.color_secondary)
     await repository.set_app_setting(AppSetting.KEY_APP_TITLE, payload.app_title)
     await repository.set_app_setting(AppSetting.KEY_APP_LANGUAGE, payload.app_language)
-    await repository.set_app_setting(AppSetting.KEY_GTFS_RT_PATH, payload.gtfs_rt_path)
+    await repository.set_app_setting(
+        AppSetting.KEY_GTFS_RT_SERVICE_ALERTS_PATH,
+        payload.gtfs_rt_service_alerts_path,
+    )
+    await repository.set_app_setting(
+        AppSetting.KEY_GTFS_RT_TRIP_UPDATES_PATH,
+        payload.gtfs_rt_trip_updates_path,
+    )
+    await repository.set_app_setting(
+        AppSetting.KEY_GTFS_RT_VEHICLE_POSITIONS_PATH,
+        payload.gtfs_rt_vehicle_positions_path,
+    )
     
     # Cleanup settings
     await repository.set_app_setting(AppSetting.KEY_CLEANUP_CRON, payload.cleanup_cron)

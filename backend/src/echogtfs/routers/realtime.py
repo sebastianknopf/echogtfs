@@ -7,6 +7,7 @@ if credentials are configured in settings.
 """
 
 import base64
+from collections.abc import Callable
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -14,18 +15,28 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from echogtfs.services.database import get_realtime_repository, get_system_repository
 from echogtfs.services.database.models import AppSetting
 from echogtfs.services.gtfsrt.gtfs_realtime_service_alerts_export_service import GtfsRealtimeServiceAlertsExportService
+from echogtfs.services.gtfsrt.gtfs_realtime_trip_updates_export_service import GtfsRealtimeTripUpdatesExportService
+from echogtfs.services.gtfsrt.gtfs_realtime_vehicle_positions_export_service import (
+    GtfsRealtimeVehiclePositionsExportService,
+)
+from echogtfs.services.gtfsrt.intf_gtfs_realtime_export import GtfsRealtimeExportInterface
 from echogtfs.services.security import get_security_service
 
 router = APIRouter()
 
 
-async def _get_gtfs_rt_settings() -> tuple[str, str, str]:
-    """Load GTFS-RT path and optional basic-auth credentials from repository."""
+async def _get_gtfs_rt_settings() -> tuple[dict[str, Callable[[], GtfsRealtimeExportInterface]], str, str]:
+    """Load GTFS-RT paths and optional basic-auth credentials from repository."""
     repository = get_system_repository()
     rows = await repository.get_all_app_settings()
+    realtime_repository = get_realtime_repository()
     
     return (
-        rows.get(AppSetting.KEY_GTFS_RT_PATH, "realtime/service-alerts.pbf"),
+        {
+            rows.get(AppSetting.KEY_GTFS_RT_SERVICE_ALERTS_PATH, "realtime/service-alerts.pbf"): lambda: GtfsRealtimeServiceAlertsExportService(realtime_repository),
+            rows.get(AppSetting.KEY_GTFS_RT_TRIP_UPDATES_PATH, "realtime/trip-updates.pbf"): lambda: GtfsRealtimeTripUpdatesExportService(realtime_repository),
+            rows.get(AppSetting.KEY_GTFS_RT_VEHICLE_POSITIONS_PATH, "realtime/vehicle-positions.pbf"): lambda: GtfsRealtimeVehiclePositionsExportService(realtime_repository),
+        },
         rows.get(AppSetting.KEY_GTFS_RT_USERNAME, ""),
         rows.get(AppSetting.KEY_GTFS_RT_PASSWORD, ""),
     )
@@ -83,7 +94,7 @@ async def check_gtfs_rt_auth(request: Request) -> None:
 
 
 @router.get("/{path:path}")
-async def get_service_alerts(
+async def get_realtime_feed(
     path: str,
     request: Request,
     _auth: Annotated[None, Depends(check_gtfs_rt_auth)],
@@ -91,16 +102,16 @@ async def get_service_alerts(
     debug_format: Annotated[str | None, Query(alias="debug")] = None,
 ) -> Response:
     """
-    Export GTFS-Realtime ServiceAlerts.
+    Export GTFS-Realtime feeds.
     
-    Returns active service alerts in GTFS-RT protobuf format (default)
+    Returns the configured GTFS-RT feed in protobuf format (default)
     or JSON format when ?json or ?debug parameter is present.
     
     The endpoint path is configurable via settings. Authentication is
     optional and only enforced if credentials are configured.
     
     Args:
-        path: Requested path (must match configured gtfs_rt_path)
+        path: Requested path (must match one configured GTFS-RT path)
         request: HTTP request for auth checking
         _auth: Auth dependency (automatically checks if needed)
         json_format: If present (query param ?json), return JSON instead of protobuf
@@ -110,21 +121,24 @@ async def get_service_alerts(
         Response with either application/x-protobuf or application/json content
     """
     # Load configured path from repository settings
-    configured_path_value, _, _ = await _get_gtfs_rt_settings()
+    configured_paths, _, _ = await _get_gtfs_rt_settings()
     
     # Normalize paths for comparison (remove leading/trailing slashes)
-    configured_path = configured_path_value.strip('/')
     requested_path = path.strip('/')
-    
-    # Return 404 if path doesn't match
-    if requested_path != configured_path:
+
+    export_service_factory = None
+    for configured_path, factory in configured_paths.items():
+        if requested_path == configured_path.strip('/'):
+            export_service_factory = factory
+            break
+
+    if export_service_factory is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Not found"
         )
 
-    # define export service instance
-    export_service = GtfsRealtimeServiceAlertsExportService(get_realtime_repository())
+    export_service = export_service_factory()
     
     # Return as JSON or protobuf
     # If ?json or ?debug is present (even without value), return JSON

@@ -116,9 +116,19 @@ const settings = (() => {
       secondaryHex.value = secondaryColor;
     }
     
-    const rtPath = ui.el('settings-gtfs-rt-path');
-    if (rtPath) {
-      rtPath.value = settings.gtfs_rt_path || '';
+    const serviceAlertsPath = ui.el('settings-gtfs-rt-service-alerts-path');
+    if (serviceAlertsPath) {
+      serviceAlertsPath.value = settings.gtfs_rt_service_alerts_path || '';
+    }
+
+    const tripUpdatesPath = ui.el('settings-gtfs-rt-trip-updates-path');
+    if (tripUpdatesPath) {
+      tripUpdatesPath.value = settings.gtfs_rt_trip_updates_path || '';
+    }
+
+    const vehiclePositionsPath = ui.el('settings-gtfs-rt-vehicle-positions-path');
+    if (vehiclePositionsPath) {
+      vehiclePositionsPath.value = settings.gtfs_rt_vehicle_positions_path || '';
     }
     
     const rtUsername = ui.el('settings-gtfs-rt-username');
@@ -212,7 +222,9 @@ const settings = (() => {
         app_language: ui.el('settings-app-language')?.value || 'de',
         color_primary: ui.el('settings-color-primary')?.value || '#008c99',
         color_secondary: ui.el('settings-color-secondary')?.value || '#99cc04',
-        gtfs_rt_path: ui.el('settings-gtfs-rt-path')?.value || '',
+        gtfs_rt_service_alerts_path: ui.el('settings-gtfs-rt-service-alerts-path')?.value || '',
+        gtfs_rt_trip_updates_path: ui.el('settings-gtfs-rt-trip-updates-path')?.value || '',
+        gtfs_rt_vehicle_positions_path: ui.el('settings-gtfs-rt-vehicle-positions-path')?.value || '',
         gtfs_rt_username: ui.el('settings-gtfs-rt-username')?.value || '',
         gtfs_rt_password: ui.el('settings-gtfs-rt-password')?.value || '',
         cleanup_cron: ui.el('settings-cleanup-cron')?.value || '*/10 * * * *',
@@ -263,7 +275,9 @@ const settings = (() => {
         app_language: 'de',
         color_primary: '#008c99',
         color_secondary: '#99cc04',
-        gtfs_rt_path: 'realtime/service-alerts.pbf',
+        gtfs_rt_service_alerts_path: 'realtime/service-alerts.pbf',
+        gtfs_rt_trip_updates_path: 'realtime/trip-updates.pbf',
+        gtfs_rt_vehicle_positions_path: 'realtime/vehicle-positions.pbf',
         gtfs_rt_username: '',
         gtfs_rt_password: '',
         cleanup_cron: '*/10 * * * *',
