@@ -2,10 +2,19 @@
 from typing import ClassVar
 import uuid
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, Uuid, func
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, Uuid, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-from echogtfs.enum.gtfsrt import AlertCause, AlertEffect, AlertSeverityLevel, PeriodType
+from echogtfs.enum.gtfsrt import (
+    AlertCause,
+    AlertEffect,
+    AlertSeverityLevel,
+    AssignmentType,
+    CongestionLevel,
+    PeriodType,
+    VehicleStopStatus,
+    WheelchairAccessible,
+)
 from echogtfs.enum.system import EnrichmentType, ExpiredAlertPolicy, InvalidReferencePolicy, SourceField
 
 
@@ -130,6 +139,12 @@ class DataSource(Base):
         order_by="DataSourceEnrichment.sort_order"
     )
     alerts: Mapped[list["ServiceAlert"]] = relationship(
+        back_populates="data_source", cascade="all, delete-orphan"
+    )
+    trips: Mapped[list["Trip"]] = relationship(
+        back_populates="data_source", cascade="all, delete-orphan"
+    )
+    vehicles: Mapped[list["Vehicle"]] = relationship(
         back_populates="data_source", cascade="all, delete-orphan"
     )
     logs: Mapped[list["DataSourceLog"]] = relationship(
@@ -492,3 +507,109 @@ class ServiceAlertInformedEntity(Base):
     
     # Relationship
     alert: Mapped["ServiceAlert"] = relationship(back_populates="informed_entities")
+
+
+class Trip(Base):
+    """GTFS-RT trip entity for stop events and vehicle positions."""
+
+    __tablename__ = "realtime_trips"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    data_source_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("sys_data_sources.id", ondelete="CASCADE"), index=True, nullable=True
+    )
+    source: Mapped[str] = mapped_column(Text, default="echogtfs")
+    trip_id: Mapped[str] = mapped_column(Text, unique=True)
+    start_time: Mapped[str] = mapped_column(Text)
+    start_date: Mapped[str] = mapped_column(Text)
+    route_id: Mapped[str] = mapped_column(Text)
+    schedule_relationship: Mapped[str] = mapped_column(Text, default="SCHEDULED")
+    assignment_type: Mapped[AssignmentType] = mapped_column(String(64))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    data_source: Mapped["DataSource | None"] = relationship(back_populates="trips")
+    stop_events: Mapped[list["StopEvent"]] = relationship(
+        back_populates="trip", cascade="all, delete-orphan"
+    )
+    vehicle: Mapped["Vehicle | None"] = relationship(
+        back_populates="trip", cascade="all, delete-orphan", uselist=False
+    )
+
+    @property
+    def data_source_name(self) -> str | None:
+        """Return the name of the data source if this is an external realtime trip."""
+        return self.data_source.name if self.data_source else None
+
+
+class StopEvent(Base):
+    """GTFS-RT stop event tied to a realtime trip."""
+
+    __tablename__ = "realtime_stop_events"
+
+    trip_id: Mapped[str] = mapped_column(
+        Text,
+        ForeignKey("realtime_trips.trip_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    stop_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    stop_sequence: Mapped[str] = mapped_column(Text, primary_key=True)
+    arrival_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    departure_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    schedule_relationship: Mapped[str] = mapped_column(Text, default="SCHEDULE")
+
+    trip: Mapped["Trip"] = relationship(back_populates="stop_events")
+
+
+class Vehicle(Base):
+    """GTFS-RT vehicle position tied 1:1 to a realtime trip."""
+
+    __tablename__ = "realtime_vehicle_positions"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    data_source_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("sys_data_sources.id", ondelete="CASCADE"), nullable=True
+    )
+    source: Mapped[str] = mapped_column(Text, default="echogtfs")
+    trip_id: Mapped[str] = mapped_column(
+        Text,
+        ForeignKey("realtime_trips.trip_id", ondelete="CASCADE"),
+        unique=True,
+    )
+    vehicle_id: Mapped[str] = mapped_column(Text)
+    vehicle_label: Mapped[str | None] = mapped_column(Text, nullable=True)
+    vehicle_license_plate: Mapped[str | None] = mapped_column(Text, nullable=True)
+    vehicle_wheelchair_accessible: Mapped[WheelchairAccessible] = mapped_column(
+        String(64), default=WheelchairAccessible.NO_VALUE
+    )
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    latitude: Mapped[float] = mapped_column(Float)
+    longitude: Mapped[float] = mapped_column(Float)
+    current_stop_sequence: Mapped[int] = mapped_column(Integer)
+    current_status: Mapped[VehicleStopStatus] = mapped_column(
+        String(64), default=VehicleStopStatus.IN_TRANSIT_TO
+    )
+    assignment_type: Mapped[AssignmentType] = mapped_column(String(64))
+    congestion_level: Mapped[CongestionLevel] = mapped_column(
+        String(64), default=CongestionLevel.UNKNOWN_CONGESTION_LEVEL
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    data_source: Mapped["DataSource | None"] = relationship(back_populates="vehicles")
+    trip: Mapped["Trip"] = relationship(back_populates="vehicle")
+
+    @property
+    def data_source_name(self) -> str | None:
+        """Return the name of the data source if this is an external vehicle position."""
+        return self.data_source.name if self.data_source else None
