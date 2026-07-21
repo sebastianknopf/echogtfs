@@ -10,7 +10,12 @@ from typing import Annotated, List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
 from fastapi.responses import StreamingResponse, FileResponse
 
-from echogtfs.services.database import SystemRepositoryInterface, get_system_repository
+from echogtfs.services.database import (
+    RealtimeRepositoryInterface,
+    SystemRepositoryInterface,
+    get_realtime_repository,
+    get_system_repository,
+)
 from echogtfs.services.database.models import DataSource
 from echogtfs.services.scheduler import get_datasource_scheduler_service
 from echogtfs.validation.schemas import DataSourceCreate, DataSourceRead, DataSourceUpdate, DataSourceLogRead
@@ -23,6 +28,7 @@ router = APIRouter()
 logger = logging.getLogger("uvicorn")
 
 _Repo = Annotated[SystemRepositoryInterface, Depends(get_system_repository)]
+_RealtimeRepo = Annotated[RealtimeRepositoryInterface, Depends(get_realtime_repository)]
 
 
 async def _enrich_source_with_error_flag(source: DataSource, repository: SystemRepositoryInterface) -> DataSourceRead:
@@ -340,6 +346,7 @@ async def toggle_source_active(
     source_id: int,
     _: CurrentPoweruser,
     repository: _Repo,
+    realtime_repository: _RealtimeRepo,
 ) -> DataSourceRead:
     """
     Toggle the is_active flag of a data source (requires poweruser/admin).
@@ -363,7 +370,7 @@ async def toggle_source_active(
     
     # If deactivating, delete all alerts from this source
     if old_status and not source.is_active:
-        deleted_count = await repository.delete_alerts_for_data_source(source_id)
+        deleted_count = await realtime_repository.delete_alerts_for_data_source(source_id)
 
         logger.info(
             f"Deactivated data source {source_id} '{source.name}': "
@@ -435,6 +442,7 @@ async def update_source(
     source_data: DataSourceUpdate,
     _: CurrentPoweruser,
     repository: _Repo,
+    realtime_repository: _RealtimeRepo,
 ):
     """
     Update a data source and optionally replace its mappings and enrichments.
@@ -450,7 +458,7 @@ async def update_source(
         # Check if new name conflicts with another source
         if await repository.data_source_name_exists(source_data.name, exclude_id=source_id):
             raise HTTPException(status_code=400, detail="Data source with this name already exists")
-        await repository.update_service_alert_source_name(old_name, source_data.name)
+        await realtime_repository.update_service_alert_source_name(old_name, source_data.name)
     
     # Handle is_active changes
     if source_data.is_active is not None:
@@ -458,7 +466,7 @@ async def update_source(
 
         # If deactivating, delete all alerts from this source
         if old_status and not source_data.is_active:
-            deleted_count = await repository.delete_alerts_for_data_source(source_id)
+            deleted_count = await realtime_repository.delete_alerts_for_data_source(source_id)
 
             logger.info(
                 f"Deactivated data source {source_id} '{source.name}': "

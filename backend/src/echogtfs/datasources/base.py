@@ -9,6 +9,7 @@ from echogtfs.datasources.intf_datasource import DatasourceInterface
 from echogtfs.services.database import get_system_repository
 from echogtfs.services.datalog import DatalogService
 from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
+from echogtfs.services.database.intf_realtime_repository import RealtimeRepositoryInterface
 from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
 from echogtfs.services.enrichment.entity_enrichtment_service import EntityEnrichmentService
 from echogtfs.services.enrichment.intf_entity_enrichment import EntityEnrichmentInterface
@@ -395,6 +396,7 @@ class DatasourceBase(DatasourceInterface):
     async def sync_records(
         self, 
         repository: SystemRepositoryInterface,
+        realtime_repository: RealtimeRepositoryInterface,
         gtfs_repository: GtfsRepositoryInterface,
         source_id: int, 
         source_name: str
@@ -433,6 +435,7 @@ class DatasourceBase(DatasourceInterface):
         if record_type == "service_alerts":
             return await self._sync_service_alert_records(
                 repository=repository,
+                realtime_repository=realtime_repository,
                 gtfs_repository=gtfs_repository,
                 source_id=source_id,
                 source_name=source_name,
@@ -446,6 +449,7 @@ class DatasourceBase(DatasourceInterface):
     async def _sync_service_alert_records(
         self,
         repository: SystemRepositoryInterface,
+        realtime_repository: RealtimeRepositoryInterface,
         gtfs_repository: GtfsRepositoryInterface,
         source_id: int,
         source_name: str,
@@ -500,7 +504,7 @@ class DatasourceBase(DatasourceInterface):
         # Get existing alerts from this data source
         existing_alerts = {
             alert.id: alert
-            for alert in await repository.list_service_alerts_for_data_source(source_id)
+            for alert in await realtime_repository.list_service_alerts_for_data_source(source_id)
         }
         existing_alert_ids = set(existing_alerts.keys())
         
@@ -509,7 +513,7 @@ class DatasourceBase(DatasourceInterface):
         if incoming_alert_ids:
             alerts_by_id = {
                 alert.id: alert
-                for alert in await repository.list_service_alerts_by_ids(list(incoming_alert_ids))
+                for alert in await realtime_repository.list_service_alerts_by_ids(list(incoming_alert_ids))
             }
             
             # Merge into existing_alerts - alerts with matching IDs should be updated
@@ -538,7 +542,7 @@ class DatasourceBase(DatasourceInterface):
         
         # Delete alerts that are no longer in the feed
         if alerts_to_delete:
-            await repository.delete_service_alerts_for_data_source_by_ids(
+            await realtime_repository.delete_service_alerts_for_data_source_by_ids(
                 source_id,
                 list(alerts_to_delete),
             )
@@ -700,7 +704,7 @@ class DatasourceBase(DatasourceInterface):
             if alert_id in alerts_to_update:
                 logger.debug(f"[{self.get_adapter_type()}] Updating alert {alert_id}")
                 stats_updated += 1
-                await repository.upsert_service_alert_from_sync(
+                await realtime_repository.upsert_service_alert_from_sync(
                     alert_id=alert_id,
                     source_id=source_id,
                     source_name=source_name,
@@ -723,7 +727,7 @@ class DatasourceBase(DatasourceInterface):
                 
                 stats_created += 1
 
-                await repository.upsert_service_alert_from_sync(
+                await realtime_repository.upsert_service_alert_from_sync(
                     alert_id=alert_id,
                     source_id=source_id,
                     source_name=source_name,
@@ -743,7 +747,7 @@ class DatasourceBase(DatasourceInterface):
                 f"due to invalid reference policy"
             )
 
-            await repository.delete_service_alerts_by_ids(list(policy_based_deletes))
+            await realtime_repository.delete_service_alerts_by_ids(list(policy_based_deletes))
 
             # Add to total delete count
             stats_deleted += len(policy_based_deletes)

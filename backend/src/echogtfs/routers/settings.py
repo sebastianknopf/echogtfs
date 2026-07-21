@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from echogtfs.enum.system import ExpiredAlertPolicy
-from echogtfs.services.database import get_system_repository
+from echogtfs.services.database import get_realtime_repository, get_system_repository
 from echogtfs.services.database.models import AppSetting
 from echogtfs.services.security import get_security_service
 from echogtfs.validation.schemas import AppSettings, PublicAppSettings
@@ -134,7 +134,7 @@ async def update_settings(
         # else: None means keep existing password
     
     # Re-schedule cleanup job with new settings
-    await CleanupService(repository).schedule_from_settings()
+    await CleanupService(repository, get_realtime_repository()).schedule_from_settings()
     
     # Return current settings (reload to get actual stored password status)
     return await _load()

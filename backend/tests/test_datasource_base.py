@@ -20,11 +20,18 @@ class _TestDatasource(DatasourceBase):
         return self.config.get("_payload", [])
 
 
-class _RepositoryStub:
+class _SystemRepositoryStub:
     def __init__(self):
         self.get_data_source_invalid_reference_policy = AsyncMock(
             return_value=InvalidReferencePolicy.DISCARD_INVALID
         )
+        self.list_gtfs_entity_ids = AsyncMock(
+            return_value={"agency": {"a1"}, "route": {"r1"}, "stop": {"s1"}}
+        )
+
+
+class _RealtimeRepositoryStub:
+    def __init__(self):
         self.list_gtfs_entity_ids = AsyncMock(
             return_value={"agency": {"a1"}, "route": {"r1"}, "stop": {"s1"}}
         )
@@ -105,7 +112,8 @@ class TestDatasourceBaseHelpers(unittest.TestCase):
 
 class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
     async def test_sync_service_alert_records_applies_policy_and_upserts(self):
-        repository = _RepositoryStub()
+        repository = _SystemRepositoryStub()
+        realtime_repository = _RealtimeRepositoryStub()
         gtfs_repository = _GtfsRepositoryStub()
         datasource = _TestDatasource({})
         datasource._identifier_mapping_service = SimpleNamespace(
@@ -134,6 +142,7 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
 
         result = await datasource._sync_service_alert_records(
             repository=repository,
+            realtime_repository=realtime_repository,
             gtfs_repository=gtfs_repository,
             source_id=2,
             source_name="Demo",
@@ -141,8 +150,8 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(result, {"added": 1, "updated": 0, "deleted": 0})
-        repository.upsert_service_alert_from_sync.assert_awaited_once()
-        kwargs = repository.upsert_service_alert_from_sync.await_args.kwargs
+        realtime_repository.upsert_service_alert_from_sync.assert_awaited_once()
+        kwargs = realtime_repository.upsert_service_alert_from_sync.await_args.kwargs
         self.assertEqual(kwargs["alert_id"], "alert-1")
         self.assertFalse(kwargs["is_active_on_create"])
         self.assertEqual(kwargs["informed_entities"], [])

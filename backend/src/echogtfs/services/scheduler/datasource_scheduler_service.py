@@ -14,6 +14,7 @@ from echogtfs.services.scheduler.intf_datasource_scheduler import DatasourceSche
 
 if TYPE_CHECKING:
     from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
+    from echogtfs.services.database.intf_realtime_repository import RealtimeRepositoryInterface
     from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
 
 logger = logging.getLogger("uvicorn")
@@ -28,6 +29,7 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
     def __new__(
         cls,
         repository: SystemRepositoryInterface,
+        realtime_repository: RealtimeRepositoryInterface,
         gtfs_repository: GtfsRepositoryInterface,
     ) -> DatasourceSchedulerService:
         if cls._instance is None:
@@ -38,9 +40,11 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
     def __init__(
         self,
         repository: SystemRepositoryInterface,
+        realtime_repository: RealtimeRepositoryInterface,
         gtfs_repository: GtfsRepositoryInterface,
     ):
         self._repository = repository
+        self._realtime_repository = realtime_repository
         self._gtfs_repository = gtfs_repository
         self._scheduler_timezone = self._resolve_scheduler_timezone()
 
@@ -154,6 +158,7 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
 
             stats = await datasource.sync_records(
                 self._repository,
+                self._realtime_repository,
                 self._gtfs_repository,
                 source.id,
                 source.name,
