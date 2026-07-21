@@ -13,6 +13,8 @@ from echogtfs.services.database.models import (
     ServiceAlertActivePeriod,
     ServiceAlertInformedEntity,
     ServiceAlertTranslation,
+    Trip,
+    Vehicle,
 )
 
 
@@ -448,3 +450,35 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
 
             await db.commit()
             return action
+
+    async def get_realtime_trips(self) -> list[Trip]:
+        """Return active realtime trips with relationships needed for GTFS-RT export."""
+        stmt = (
+            select(Trip)
+            .where(Trip.is_active == True)
+            .options(
+                selectinload(Trip.data_source),
+                selectinload(Trip.stop_events),
+                selectinload(Trip.vehicle),
+            )
+            .order_by(Trip.created_at, Trip.trip_id)
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
+    async def get_realtime_vehicles(self) -> list[Vehicle]:
+        """Return active realtime vehicle positions with trip relations loaded."""
+        stmt = (
+            select(Vehicle)
+            .where(Vehicle.is_active == True)
+            .options(
+                selectinload(Vehicle.trip),
+            )
+            .order_by(Vehicle.created_at, Vehicle.trip_id)
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())

@@ -7,7 +7,7 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from echogtfs.services.database.models import ServiceAlert
+from echogtfs.services.database.models import ServiceAlert, Trip, Vehicle
 
 
 class RealtimeRepositoryInterface(ABC):
@@ -153,4 +153,14 @@ class RealtimeRepositoryInterface(ABC):
         informed_entities: list[dict[str, Any]],
     ) -> str:
         """Create or update one synchronized alert and replace child records."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_realtime_trips(self) -> list[Trip]:
+        """Return active realtime trips with stop events and vehicle relations loaded."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_realtime_vehicles(self) -> list[Vehicle]:
+        """Return active realtime vehicle positions with trip relations loaded."""
         raise NotImplementedError
