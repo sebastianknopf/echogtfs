@@ -84,7 +84,6 @@ The single instance services are initialized in the `main.py` module during the 
 Other services initialized in `main.py` are:
 
 - `AlembicMigrationService` (responsible for running the Alembic migrations)
-- `SqlAlchemyRepository` (responsible for database access (not really a service, but also located in the services package))
 - `GtfsImportService` (responsible for loading and updating the GTFS static nominal data)
 - `CleanupService` (responsible for cleanup of **internal** deprecated GTFS-RT entities and datasource logs)
 
@@ -99,6 +98,15 @@ Tables are split into `sys_` tables which are internal application tables, `gtfs
 ### Database Migrations
 
 Migrations are generated for running with Alembic. All pending migrations are applied during application startup.
+
+### Repositories
+
+There're several repositories for structured database access. The repositories are grouped into domain specific repositories. The repositories are initialized in the `main.py` module during application lifecycle startup. Current repositories are:
+
+- `SystemRepository`: responsible for general database access especially for `sys_` tables
+- `GtfsRepository`: reponsible for GTFS nominal data access of `gtfs_` tables
+
+Each repository has an interface defined for testing purposes.
 
 ## External Data Sources
 
