@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import time
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from google.protobuf.json_format import MessageToDict
 
@@ -17,6 +19,7 @@ class GtfsRealtimeVehiclePositionsExportService(GtfsRealtimeExportInterface):
 
     def __init__(self, repository: RealtimeRepositoryInterface):
         self._repository = repository
+        self._target_timezone = self._resolve_timezone(self._configured_timezone_name())
 
     async def export_protobuf(self) -> bytes:
         """Export active Vehicle positions as GTFS-RT protobuf payload."""
@@ -102,6 +105,70 @@ class GtfsRealtimeVehiclePositionsExportService(GtfsRealtimeExportInterface):
             return None
 
     @staticmethod
+    def _configured_timezone_name() -> str:
+        try:
+            from echogtfs.common.config import settings
+
+            timezone_name = getattr(settings, "timezone", "UTC")
+        except Exception:  # noqa: BLE001
+            timezone_name = "UTC"
+
+        if not isinstance(timezone_name, str) or not timezone_name.strip():
+            return "UTC"
+
+        return timezone_name
+
+    @staticmethod
+    def _resolve_timezone(timezone_name: object) -> ZoneInfo:
+        if not isinstance(timezone_name, str) or not timezone_name.strip():
+            return ZoneInfo("UTC")
+
+        try:
+            return ZoneInfo(timezone_name)
+        except ZoneInfoNotFoundError:
+            return ZoneInfo("UTC")
+
+    def _localize_start_time(self, start_date: str, start_time: str) -> str:
+        if not start_date or not start_time:
+            return start_time
+
+        date_part = start_date.strip()
+        time_part = start_time.strip()
+
+        try:
+            service_date = datetime.strptime(date_part, "%Y%m%d").date()
+        except ValueError:
+            return start_time
+
+        parts = time_part.split(":")
+        if len(parts) != 3:
+            return start_time
+
+        try:
+            hours = int(parts[0])
+            minutes = int(parts[1])
+            seconds = int(parts[2])
+        except ValueError:
+            return start_time
+
+        if hours < 0 or minutes < 0 or minutes > 59 or seconds < 0 or seconds > 59:
+            return start_time
+
+        source_base = datetime(service_date.year, service_date.month, service_date.day, tzinfo=ZoneInfo("UTC"))
+        source_timestamp = source_base + timedelta(hours=hours, minutes=minutes, seconds=seconds)
+        local_timestamp = source_timestamp.astimezone(self._target_timezone)
+        service_midnight_local = datetime(service_date.year, service_date.month, service_date.day, tzinfo=self._target_timezone)
+        total_seconds = int((local_timestamp - service_midnight_local).total_seconds())
+
+        if total_seconds < 0:
+            return start_time
+
+        total_hours, remainder = divmod(total_seconds, 3600)
+        total_minutes, total_seconds = divmod(remainder, 60)
+
+        return f"{total_hours:02d}:{total_minutes:02d}:{total_seconds:02d}"
+
+    @staticmethod
     def _vehicle_id_value(vehicle_model: Vehicle) -> str:
         return vehicle_model.vehicle_id or str(vehicle_model.id)
 
@@ -125,7 +192,7 @@ class GtfsRealtimeVehiclePositionsExportService(GtfsRealtimeExportInterface):
             trip = vehicle_model.trip
             trip_descriptor.trip_id = trip.trip_id
             trip_descriptor.route_id = trip.route_id
-            trip_descriptor.start_time = trip.start_time
+            trip_descriptor.start_time = self._localize_start_time(trip.start_date, trip.start_time)
             trip_descriptor.start_date = trip.start_date
 
             trip_schedule_relationship = self._trip_schedule_relationship_to_enum(trip.schedule_relationship)

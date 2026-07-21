@@ -29,7 +29,12 @@ class TestGtfsRealtimeVehiclePositionsExportService(unittest.IsolatedAsyncioTest
     async def test_export_json_contains_vehicle_position_payload(self):
         vehicle = self._make_vehicle()
         repo = SimpleNamespace(get_realtime_vehicles=AsyncMock(return_value=[vehicle]))
-        service = GtfsRealtimeVehiclePositionsExportService(repo)
+        with patch.object(
+            GtfsRealtimeVehiclePositionsExportService,
+            "_configured_timezone_name",
+            return_value="UTC",
+        ):
+            service = GtfsRealtimeVehiclePositionsExportService(repo)
 
         with patch("echogtfs.services.gtfsrt.gtfs_realtime_vehicle_positions_export_service.time.time", return_value=1700000000):
             payload = await service.export_json()
@@ -46,7 +51,12 @@ class TestGtfsRealtimeVehiclePositionsExportService(unittest.IsolatedAsyncioTest
         self.assertEqual(entity["vehicle"]["congestion_level"], "CONGESTION")
 
     def test_build_feed_message_maps_position_and_trip_descriptor(self):
-        service = GtfsRealtimeVehiclePositionsExportService(SimpleNamespace())
+        with patch.object(
+            GtfsRealtimeVehiclePositionsExportService,
+            "_configured_timezone_name",
+            return_value="UTC",
+        ):
+            service = GtfsRealtimeVehiclePositionsExportService(SimpleNamespace())
         vehicle = self._make_vehicle()
 
         with patch("echogtfs.services.gtfsrt.gtfs_realtime_vehicle_positions_export_service.time.time", return_value=1700000000):
@@ -66,7 +76,12 @@ class TestGtfsRealtimeVehiclePositionsExportService(unittest.IsolatedAsyncioTest
             vehicle_wheelchair_accessible="INVALID",
             schedule_relationship="INVALID",
         )
-        service = GtfsRealtimeVehiclePositionsExportService(SimpleNamespace())
+        with patch.object(
+            GtfsRealtimeVehiclePositionsExportService,
+            "_configured_timezone_name",
+            return_value="UTC",
+        ):
+            service = GtfsRealtimeVehiclePositionsExportService(SimpleNamespace())
 
         with patch("echogtfs.services.gtfsrt.gtfs_realtime_vehicle_positions_export_service.time.time", return_value=1700000000):
             feed = service._build_feed_message([vehicle])
@@ -84,6 +99,48 @@ class TestGtfsRealtimeVehiclePositionsExportService(unittest.IsolatedAsyncioTest
             "vehicle-row-id",
         )
 
+    def test_build_feed_message_converts_start_time_to_configured_timezone(self):
+        vehicle = self._make_vehicle(start_time="08:00:00")
+        with patch.object(
+            GtfsRealtimeVehiclePositionsExportService,
+            "_configured_timezone_name",
+            return_value="Europe/Berlin",
+        ):
+            service = GtfsRealtimeVehiclePositionsExportService(SimpleNamespace())
+
+        with patch("echogtfs.services.gtfsrt.gtfs_realtime_vehicle_positions_export_service.time.time", return_value=1700000000):
+            feed = service._build_feed_message([vehicle])
+
+        self.assertEqual(feed.entity[0].vehicle.trip.start_time, "10:00:00")
+
+    def test_build_feed_message_formats_next_day_departure_above_23_hours(self):
+        vehicle = self._make_vehicle(start_time="23:30:00")
+        with patch.object(
+            GtfsRealtimeVehiclePositionsExportService,
+            "_configured_timezone_name",
+            return_value="Europe/Berlin",
+        ):
+            service = GtfsRealtimeVehiclePositionsExportService(SimpleNamespace())
+
+        with patch("echogtfs.services.gtfsrt.gtfs_realtime_vehicle_positions_export_service.time.time", return_value=1700000000):
+            feed = service._build_feed_message([vehicle])
+
+        self.assertEqual(feed.entity[0].vehicle.trip.start_time, "25:30:00")
+
+    def test_localize_start_time_falls_back_to_original_for_invalid_timezone(self):
+        vehicle = self._make_vehicle(start_time="08:00:00")
+        with patch.object(
+            GtfsRealtimeVehiclePositionsExportService,
+            "_configured_timezone_name",
+            return_value="Invalid/Timezone",
+        ):
+            service = GtfsRealtimeVehiclePositionsExportService(SimpleNamespace())
+
+        self.assertEqual(
+            service._localize_start_time(vehicle.trip.start_date, vehicle.trip.start_time),
+            "08:00:00",
+        )
+
     @staticmethod
     def _make_vehicle(
         *,
@@ -92,11 +149,12 @@ class TestGtfsRealtimeVehiclePositionsExportService(unittest.IsolatedAsyncioTest
         vehicle_wheelchair_accessible: str = "WHEELCHAIR_ACCESSIBLE",
         schedule_relationship: str = "SCHEDULED",
         vehicle_id: str = "BUS-1",
+        start_time: str = "08:00:00",
     ) -> SimpleNamespace:
         trip = SimpleNamespace(
             trip_id="TRIP-1",
             route_id="ROUTE-1",
-            start_time="08:00:00",
+            start_time=start_time,
             start_date="20260721",
             schedule_relationship=schedule_relationship,
         )
