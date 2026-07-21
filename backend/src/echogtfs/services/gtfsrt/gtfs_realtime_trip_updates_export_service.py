@@ -74,9 +74,6 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
             return None
 
         text = value.value if hasattr(value, "value") else str(value)
-        if text == "SCHEDULE":
-            text = "SCHEDULED"
-
         try:
             return gtfs_realtime_pb2.TripDescriptor.ScheduleRelationship.Value(text)
         except ValueError:
@@ -88,9 +85,6 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
             return None
 
         text = value.value if hasattr(value, "value") else str(value)
-        if text == "SCHEDULE":
-            text = "SCHEDULED"
-
         try:
             return gtfs_realtime_pb2.TripUpdate.StopTimeUpdate.ScheduleRelationship.Value(text)
         except ValueError:

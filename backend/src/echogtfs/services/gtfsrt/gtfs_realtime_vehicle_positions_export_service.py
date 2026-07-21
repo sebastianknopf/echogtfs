@@ -6,7 +6,7 @@ import time
 from google.protobuf.json_format import MessageToDict
 
 from echogtfs import gtfs_realtime_pb2
-from echogtfs.enum.gtfsrt import CongestionLevel, VehicleStopStatus, WheelchairAccessible
+from echogtfs.enum.gtfsrt import WheelchairAccessible
 from echogtfs.services.database.intf_realtime_repository import RealtimeRepositoryInterface
 from echogtfs.services.database.models import Vehicle
 from echogtfs.services.gtfsrt.intf_gtfs_realtime_export import GtfsRealtimeExportInterface
@@ -96,9 +96,6 @@ class GtfsRealtimeVehiclePositionsExportService(GtfsRealtimeExportInterface):
             return None
 
         text = value.value if hasattr(value, "value") else str(value)
-        if text == "SCHEDULE":
-            text = "SCHEDULED"
-
         try:
             return gtfs_realtime_pb2.TripDescriptor.ScheduleRelationship.Value(text)
         except ValueError:

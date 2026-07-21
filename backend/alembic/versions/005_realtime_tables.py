@@ -84,7 +84,7 @@ def upgrade() -> None:
         sa.Column("stop_sequence", sa.Text(), nullable=False),
         sa.Column("arrival_time", sa.DateTime(timezone=True), nullable=False),
         sa.Column("departure_time", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("schedule_relationship", sa.Text(), server_default=sa.text("'SCHEDULE'"), nullable=False),
+        sa.Column("schedule_relationship", sa.Text(), server_default=sa.text("'SCHEDULED'"), nullable=False),
         sa.ForeignKeyConstraint(["trip_id"], ["realtime_trips.trip_id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("trip_id", "stop_id", "stop_sequence"),
     )
