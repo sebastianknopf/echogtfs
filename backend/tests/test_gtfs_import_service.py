@@ -160,19 +160,19 @@ class TestGtfsImportService(unittest.IsolatedAsyncioTestCase):
         mem.seek(0)
 
         with zipfile.ZipFile(mem) as zf:
-            total = await service._import_stop_times(
+            batches = await service._map_stop_times(
                 zf,
                 trip_meta={"T1": ("R1", 0)},
                 stop_ids={"S1"},
                 trip_windows={},
-                persist=True,
                 service_date=date(2026, 7, 20),
                 feed_timezone=ZoneInfo("UTC"),
             )
 
+        total = sum(len(batch) for batch in batches)
         self.assertEqual(total, 1)
-        gtfs_repo.insert_gtfs_stop_times.assert_awaited_once()
-        inserted_batch = gtfs_repo.insert_gtfs_stop_times.await_args.args[0]
+        gtfs_repo.insert_gtfs_stop_times.assert_not_awaited()
+        inserted_batch = batches[0]
         inserted = inserted_batch[0]
         self.assertEqual(inserted["arrival_time"], datetime(2026, 7, 20, 10, 0, 0, tzinfo=ZoneInfo("Europe/Berlin")))
         self.assertEqual(inserted["departure_time"], datetime(2026, 7, 20, 10, 5, 0, tzinfo=ZoneInfo("Europe/Berlin")))

@@ -104,5 +104,5 @@ class TestGtfsRepository(unittest.IsolatedAsyncioTestCase):
                 ]
             )
 
-        self.assertGreaterEqual(fake_session.execute.await_count, 9)
+        self.assertGreaterEqual(fake_session.execute.await_count, 6)
         self.assertGreaterEqual(fake_session.commit.await_count, 6)

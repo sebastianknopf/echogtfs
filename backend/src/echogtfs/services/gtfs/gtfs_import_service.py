@@ -45,7 +45,7 @@ class GtfsImportService(GtfsImportInterface):
     STATUS_RUNNING = "running"
     STATUS_SUCCESS = "success"
     STATUS_ERROR = "error"
-    STOP_TIME_BATCH_SIZE = 10_000
+    STOP_TIME_BATCH_SIZE = 100_000
 
     _scheduler: AsyncIOScheduler | None = None
 
@@ -152,6 +152,7 @@ class GtfsImportService(GtfsImportInterface):
 
         try:
             result = await self._import_feed()
+            
             agencies_count = int(result.get("agencies", 0))
             stops_count = int(result.get("stops", 0))
             routes_count = int(result.get("routes", 0))
@@ -190,9 +191,10 @@ class GtfsImportService(GtfsImportInterface):
         try:
             with zipfile.ZipFile(zip_path) as zip_file:
                 agency_rows = list(self._iter_csv_rows(zip_file, "agency.txt"))
-                agencies = self._map_agencies(agency_rows)
                 feed_timezone = self._extract_feed_timezone(agency_rows)
                 service_date = datetime.now(feed_timezone).date()
+                
+                agencies = self._map_agencies(agency_rows)
                 stops = self._map_stops(self._iter_csv_rows(zip_file, "stops.txt"))
                 routes = self._map_routes(self._iter_csv_rows(zip_file, "routes.txt"))
 
@@ -205,12 +207,11 @@ class GtfsImportService(GtfsImportInterface):
                 )
 
                 trip_windows: dict[str, _TripWindow] = {}
-                await self._import_stop_times(
+                stop_time_batches = await self._map_stop_times(
                     zip_file,
                     trip_meta=trip_meta,
                     stop_ids=stop_ids,
                     trip_windows=trip_windows,
-                    persist=False,
                     service_date=service_date,
                     feed_timezone=feed_timezone,
                 )
@@ -219,27 +220,21 @@ class GtfsImportService(GtfsImportInterface):
 
             await self._gtfs_repository.clear_gtfs_static_data()
             await self._gtfs_repository.insert_gtfs_agencies(agencies)
-            await self._gtfs_repository.insert_gtfs_stops(stops)
             await self._gtfs_repository.insert_gtfs_routes(routes)
+            await self._gtfs_repository.insert_gtfs_stops(stops)
             await self._gtfs_repository.insert_gtfs_trips(trip_rows)
 
-            with zipfile.ZipFile(zip_path) as zip_file:
-                stop_time_count = await self._import_stop_times(
-                    zip_file,
-                    trip_meta=trip_meta,
-                    stop_ids=stop_ids,
-                    trip_windows={},
-                    persist=True,
-                    service_date=service_date,
-                    feed_timezone=feed_timezone,
-                )
+            for batch in stop_time_batches:
+                await self._gtfs_repository.insert_gtfs_stop_times(batch)
+
+            stop_times_count = sum(len(batch) for batch in stop_time_batches)
 
             return {
                 "agencies": len(agencies),
                 "stops": len(stops),
                 "routes": len(routes),
                 "trips": len(trip_rows),
-                "stop_times": stop_time_count,
+                "stop_times": stop_times_count,
             }
         
         finally:
@@ -311,19 +306,18 @@ class GtfsImportService(GtfsImportInterface):
 
         return trips
 
-    async def _import_stop_times(
+    async def _map_stop_times(
         self,
         zip_file: zipfile.ZipFile,
         *,
         trip_meta: dict[str, tuple[str, int]],
         stop_ids: set[str],
         trip_windows: dict[str, _TripWindow],
-        persist: bool,
         service_date: date,
         feed_timezone: ZoneInfo,
-    ) -> int:
+    ) -> list[list[dict[str, str | int | datetime]]]:
+        batches: list[list[dict[str, str | int | datetime]]] = []
         batch: list[dict[str, str | int | datetime]] = []
-        total = 0
 
         for row in self._iter_csv_rows(zip_file, "stop_times.txt"):
             stop_time_row = self._map_stop_time_row(
@@ -341,20 +335,13 @@ class GtfsImportService(GtfsImportInterface):
 
             batch.append(stop_time_row)
             if len(batch) >= self.STOP_TIME_BATCH_SIZE:
-                
-                if persist:
-                    await self._gtfs_repository.insert_gtfs_stop_times(batch)
-                
-                total += len(batch)
+                batches.append(batch)
                 batch = []
 
         if batch:
-            if persist:
-                await self._gtfs_repository.insert_gtfs_stop_times(batch)
-            
-            total += len(batch)
+            batches.append(batch)
 
-        return total
+        return batches
 
     @staticmethod
     def _map_stop_time_row(
@@ -386,6 +373,7 @@ class GtfsImportService(GtfsImportInterface):
             feed_timezone=feed_timezone,
             target_timezone=target_timezone,
         )
+        
         departure_time = GtfsImportService._parse_gtfs_time(
             departure_time_raw,
             service_date=service_date,

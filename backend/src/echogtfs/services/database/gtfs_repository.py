@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import delete, insert, select
+from sqlalchemy import delete, insert, select, text
 
 from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
 from echogtfs.services.database.models import GtfsAgency, GtfsRoute, GtfsStop, GtfsStopTime, GtfsTrip
@@ -17,6 +17,7 @@ class GtfsRepository(RepositoryBase, GtfsRepositoryInterface):
     def __new__(cls, database_url: str, debug: bool = False) -> GtfsRepository:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
+        
         return cls._instance
 
     def __init__(self, database_url: str, debug: bool = False):
@@ -88,15 +89,25 @@ class GtfsRepository(RepositoryBase, GtfsRepositoryInterface):
         await self.insert_gtfs_routes(routes)
 
     async def clear_gtfs_static_data(self) -> None:
-        """Delete all imported GTFS static data in FK-safe order."""
+        """Delete all imported GTFS static data in FK-safe order. Use TRUNCATE to force deletion."""
         async with self.get_session() as db:
-            await db.execute(delete(GtfsStopTime))
-            await db.execute(delete(GtfsTrip))
-            await db.execute(delete(GtfsAgency))
-            await db.execute(delete(GtfsStop))
-            await db.execute(delete(GtfsRoute))
+            tables = [
+                GtfsStopTime.__table__.fullname,
+                GtfsTrip.__table__.fullname,
+                GtfsAgency.__table__.fullname,
+                GtfsStop.__table__.fullname,
+                GtfsRoute.__table__.fullname,
+            ]
 
-            await db.commit()
+            sql = f"""
+                TRUNCATE TABLE
+                    {", ".join(tables)}
+                RESTART IDENTITY CASCADE
+            """
+
+            async with self.get_session() as db:
+                await db.execute(text(sql))
+                await db.commit()
 
     async def insert_gtfs_agencies(self, agencies: list[dict[str, str]]) -> None:
         """Insert GTFS agencies rows."""
