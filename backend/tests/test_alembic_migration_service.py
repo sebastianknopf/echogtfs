@@ -10,7 +10,12 @@ from unittest.mock import AsyncMock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 fake_config = types.ModuleType("echogtfs.common.config")
-fake_config.settings = SimpleNamespace(database_url="sqlite+aiosqlite://")
+fake_config.settings = SimpleNamespace(
+    database_url="sqlite+aiosqlite://",
+    secret_key="test-secret-key-that-is-at-least-32-bytes-long",
+    algorithm="HS256",
+    access_token_expire_minutes=30,
+)
 fake_config.Settings = object
 sys.modules.setdefault("echogtfs.common.config", fake_config)
 
