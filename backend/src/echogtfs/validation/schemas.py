@@ -357,6 +357,94 @@ class ServiceAlertListResponse(BaseModel):
     items: list[ServiceAlertRead]
 
 
+class StopEventRead(BaseModel):
+    """Read model for realtime stop events."""
+    trip_id: str
+    stop_id: str
+    stop_sequence: str
+    arrival_time: datetime
+    departure_time: datetime
+    schedule_relationship: str
+
+    model_config = {"from_attributes": True}
+
+
+class TripRead(BaseModel):
+    """Read model for realtime trips."""
+    id: UUID
+    data_source_id: int | None
+    source: str
+    trip_id: str
+    start_time: str
+    start_date: str
+    route_id: str
+    schedule_relationship: str
+    assignment_type: str
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    stop_events: list[StopEventRead]
+    data_source_name: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class TripListResponse(BaseModel):
+    """Paginated response for realtime trips list."""
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+    items: list[TripRead]
+
+
+class VehicleTripSummaryRead(BaseModel):
+    """Minimal trip summary embedded in vehicle responses."""
+    trip_id: str
+    route_id: str
+    start_time: str
+    start_date: str
+    schedule_relationship: str
+    is_active: bool
+
+    model_config = {"from_attributes": True}
+
+
+class VehicleRead(BaseModel):
+    """Read model for realtime vehicle positions."""
+    id: UUID
+    data_source_id: int | None
+    source: str
+    trip_id: str
+    vehicle_id: str
+    vehicle_label: str | None
+    vehicle_license_plate: str | None
+    vehicle_wheelchair_accessible: str
+    timestamp: datetime
+    latitude: float
+    longitude: float
+    current_stop_sequence: int
+    current_status: str
+    assignment_type: str
+    congestion_level: str
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    data_source_name: str | None = None
+    trip: VehicleTripSummaryRead | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class VehicleListResponse(BaseModel):
+    """Paginated response for realtime vehicles list."""
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+    items: list[VehicleRead]
+
+
 class ServiceAlertTranslationCreate(BaseModel):
     """Translation data for creating/updating alerts."""
     language: str

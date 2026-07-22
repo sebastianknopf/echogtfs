@@ -161,6 +161,41 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def list_trips_paginated(
+        self,
+        *,
+        page: int,
+        limit: int,
+        sort: str,
+        search: str,
+        is_active: bool | None,
+    ) -> tuple[list[Trip], int]:
+        """Return paginated realtime trips with total count and required relationships loaded."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def toggle_trip_active(self, trip_uuid: uuid.UUID) -> Trip | None:
+        """Toggle the is_active flag for one realtime trip and return updated model."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def get_realtime_vehicles(self) -> list[Vehicle]:
         """Return active realtime vehicle positions with trip relations loaded."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_vehicles_paginated(
+        self,
+        *,
+        page: int,
+        limit: int,
+        search: str,
+        is_active: bool | None,
+    ) -> tuple[list[Vehicle], int]:
+        """Return paginated realtime vehicles with total count and required relationships loaded."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def toggle_vehicle_active(self, vehicle_uuid: uuid.UUID) -> Vehicle | None:
+        """Toggle the is_active flag for one realtime vehicle and return updated model."""
         raise NotImplementedError

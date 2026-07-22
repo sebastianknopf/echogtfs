@@ -468,6 +468,90 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
             result = await db.execute(stmt)
             return list(result.scalars().all())
 
+    async def list_trips_paginated(
+        self,
+        *,
+        page: int,
+        limit: int,
+        sort: str,
+        search: str,
+        is_active: bool | None,
+    ) -> tuple[list[Trip], int]:
+        """Return paginated realtime trips with required relationships loaded."""
+        page = max(1, page)
+        limit = max(1, min(100, limit))
+        offset = (page - 1) * limit
+        normalized_sort = sort.lower() if sort in ["asc", "desc"] else "asc"
+
+        where_conditions = []
+        trimmed_search = search.strip()
+        if trimmed_search:
+            search_pattern = f"%{trimmed_search}%"
+            where_conditions.append(
+                (
+                    Trip.trip_id.ilike(search_pattern)
+                    | Trip.route_id.ilike(search_pattern)
+                    | Trip.start_date.ilike(search_pattern)
+                    | Trip.start_time.ilike(search_pattern)
+                )
+            )
+
+        if is_active is not None:
+            where_conditions.append(Trip.is_active == is_active)
+
+        count_stmt = select(func.count(Trip.id))
+        if where_conditions:
+            count_stmt = count_stmt.where(*where_conditions)
+
+        sort_date = Trip.start_date.desc() if normalized_sort == "desc" else Trip.start_date.asc()
+        sort_time = Trip.start_time.desc() if normalized_sort == "desc" else Trip.start_time.asc()
+
+        stmt = select(Trip)
+        if where_conditions:
+            stmt = stmt.where(*where_conditions)
+
+        stmt = stmt.options(
+            selectinload(Trip.data_source),
+            selectinload(Trip.stop_events),
+            selectinload(Trip.vehicle),
+        ).order_by(
+            sort_date,
+            sort_time,
+            Trip.trip_id.asc(),
+        ).offset(offset).limit(limit)
+
+        async with self.get_session() as db:
+            count_result = await db.execute(count_stmt)
+            total = int(count_result.scalar_one())
+
+            result = await db.execute(stmt)
+            items = list(result.scalars().all())
+            return items, total
+
+    async def toggle_trip_active(self, trip_uuid: uuid.UUID) -> Trip | None:
+        """Toggle the is_active flag for one realtime trip and return updated model."""
+        stmt = (
+            select(Trip)
+            .where(Trip.id == trip_uuid)
+            .options(
+                selectinload(Trip.data_source),
+                selectinload(Trip.stop_events),
+                selectinload(Trip.vehicle),
+            )
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            trip = result.scalar_one_or_none()
+            if trip is None:
+                return None
+
+            trip.is_active = not trip.is_active
+            await db.commit()
+
+            refreshed = await db.execute(stmt)
+            return refreshed.scalar_one_or_none()
+
     async def get_realtime_vehicles(self) -> list[Vehicle]:
         """Return active realtime vehicle positions with trip relations loaded."""
         stmt = (
@@ -482,3 +566,79 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
         async with self.get_session() as db:
             result = await db.execute(stmt)
             return list(result.scalars().all())
+
+    async def list_vehicles_paginated(
+        self,
+        *,
+        page: int,
+        limit: int,
+        search: str,
+        is_active: bool | None,
+    ) -> tuple[list[Vehicle], int]:
+        """Return paginated realtime vehicles with required relationships loaded."""
+        page = max(1, page)
+        limit = max(1, min(1000, limit))
+        offset = (page - 1) * limit
+
+        where_conditions = []
+        trimmed_search = search.strip()
+        if trimmed_search:
+            search_pattern = f"%{trimmed_search}%"
+            where_conditions.append(
+                (
+                    Vehicle.vehicle_id.ilike(search_pattern)
+                    | Vehicle.trip_id.ilike(search_pattern)
+                    | Vehicle.vehicle_label.ilike(search_pattern)
+                    | Vehicle.vehicle_license_plate.ilike(search_pattern)
+                )
+            )
+
+        if is_active is not None:
+            where_conditions.append(Vehicle.is_active == is_active)
+
+        count_stmt = select(func.count(Vehicle.id))
+        if where_conditions:
+            count_stmt = count_stmt.where(*where_conditions)
+
+        stmt = select(Vehicle)
+        if where_conditions:
+            stmt = stmt.where(*where_conditions)
+
+        stmt = stmt.options(
+            selectinload(Vehicle.data_source),
+            selectinload(Vehicle.trip),
+        ).order_by(
+            Vehicle.timestamp.desc(),
+            Vehicle.vehicle_id.asc(),
+        ).offset(offset).limit(limit)
+
+        async with self.get_session() as db:
+            count_result = await db.execute(count_stmt)
+            total = int(count_result.scalar_one())
+
+            result = await db.execute(stmt)
+            items = list(result.scalars().all())
+            return items, total
+
+    async def toggle_vehicle_active(self, vehicle_uuid: uuid.UUID) -> Vehicle | None:
+        """Toggle the is_active flag for one realtime vehicle and return updated model."""
+        stmt = (
+            select(Vehicle)
+            .where(Vehicle.id == vehicle_uuid)
+            .options(
+                selectinload(Vehicle.data_source),
+                selectinload(Vehicle.trip),
+            )
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            vehicle = result.scalar_one_or_none()
+            if vehicle is None:
+                return None
+
+            vehicle.is_active = not vehicle.is_active
+            await db.commit()
+
+            refreshed = await db.execute(stmt)
+            return refreshed.scalar_one_or_none()

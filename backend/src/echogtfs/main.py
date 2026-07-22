@@ -25,6 +25,8 @@ from echogtfs.routers.alerts import router as alerts_router
 from echogtfs.routers.auth import router as auth_router
 from echogtfs.routers.gtfs import router as gtfs_router
 from echogtfs.routers.realtime import router as realtime_router
+from echogtfs.routers.trips import router as trips_router
+from echogtfs.routers.vehicles import router as vehicles_router
 from echogtfs.services.gtfs import GtfsImportService
 from echogtfs.services.cleanup import CleanupService
 from echogtfs.routers.settings import router as settings_router
@@ -132,6 +134,8 @@ app.include_router(settings_router, prefix="/api/settings", tags=["settings"])
 app.include_router(gtfs_router,     prefix="/api/gtfs",     tags=["gtfs"])
 app.include_router(sources_router,  prefix="/api/sources",  tags=["sources"])
 app.include_router(alerts_router,   prefix="/api/alerts",   tags=["alerts"])
+app.include_router(trips_router,    prefix="/api/trips",    tags=["trips"])
+app.include_router(vehicles_router, prefix="/api/vehicles", tags=["vehicles"])
 app.include_router(realtime_router, prefix="/api",          tags=["realtime"])
 
 
