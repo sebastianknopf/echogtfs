@@ -94,6 +94,8 @@ const trips = (() => {
 
     const startDate = _parseServiceDateTime(item.start_date, item.start_time);
     const endDate = lastStopEvent?.arrival_time ? new Date(lastStopEvent.arrival_time) : startDate;
+    const hasInvalidStopEvent = stopEvents.some((stopEvent) => stopEvent?.is_valid === false);
+    const isValid = Boolean(item.is_valid) && !hasInvalidStopEvent;
 
     return {
       id: item.id,
@@ -108,6 +110,7 @@ const trips = (() => {
       sourceName: item.data_source_name || item.source || window.i18n('alerts.badge.external'),
       isInternal: !item.data_source_id,
       isActive: Boolean(item.is_active),
+      isValid,
       isMatched: stopEvents.length > 0,
       scheduleRelationship: item.schedule_relationship || 'SCHEDULED',
     };
@@ -391,7 +394,7 @@ const trips = (() => {
         </div>
 
         <div class="alert-list-item__actions">
-          ${!trip.isMatched ? `<span class="resolution-warning" title="${window.i18n('trips.resolution.warning')}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg></span>` : ''}
+          ${!trip.isValid ? `<span class="resolution-warning" title="${window.i18n('trips.resolution.warning')}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg></span>` : ''}
           <button class="icon-btn" data-action="view" data-id="${trip.id}" title="${window.i18n('common.view')}" data-ripple>
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
           </button>

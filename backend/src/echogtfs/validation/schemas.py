@@ -361,10 +361,12 @@ class StopEventRead(BaseModel):
     """Read model for realtime stop events."""
     trip_id: str
     stop_id: str
+    stop_name: str | None = None
     stop_sequence: str
     arrival_time: datetime
     departure_time: datetime
     schedule_relationship: str
+    is_valid: bool
 
     model_config = {"from_attributes": True}
 
@@ -378,11 +380,13 @@ class TripRead(BaseModel):
     start_time: str
     start_date: str
     route_id: str
+    route_name: str | None = None
     schedule_relationship: str
     assignment_type: str
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    is_valid: bool
     stop_events: list[StopEventRead]
     data_source_name: str | None = None
 
@@ -406,6 +410,7 @@ class VehicleTripSummaryRead(BaseModel):
     start_date: str
     schedule_relationship: str
     is_active: bool
+    is_valid: bool
 
     model_config = {"from_attributes": True}
 
@@ -430,6 +435,7 @@ class VehicleRead(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    is_valid: bool
     data_source_name: str | None = None
     trip: VehicleTripSummaryRead | None = None
 

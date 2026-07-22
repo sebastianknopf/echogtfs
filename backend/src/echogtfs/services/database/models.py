@@ -536,6 +536,7 @@ class Trip(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+    is_valid: Mapped[bool] = mapped_column(Boolean, default=True)
 
     data_source: Mapped["DataSource | None"] = relationship(back_populates="trips")
     stop_events: Mapped[list["StopEvent"]] = relationship(
@@ -566,6 +567,7 @@ class StopEvent(Base):
     arrival_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     departure_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     schedule_relationship: Mapped[str] = mapped_column(Text, default="SCHEDULED")
+    is_valid: Mapped[bool] = mapped_column(Boolean, default=True)
 
     trip: Mapped["Trip"] = relationship(back_populates="stop_events")
 
@@ -609,6 +611,7 @@ class Vehicle(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+    is_valid: Mapped[bool] = mapped_column(Boolean, default=True)
 
     data_source: Mapped["DataSource | None"] = relationship(back_populates="vehicles")
     trip: Mapped["Trip"] = relationship(back_populates="vehicle")
