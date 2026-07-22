@@ -83,6 +83,18 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
             return None
 
     @staticmethod
+    def _trip_schedule_relationship_text(value: object | None) -> str | None:
+        if value is None:
+            return None
+
+        text = value.value if hasattr(value, "value") else str(value)
+        normalized = text.strip().upper()
+        if not normalized:
+            return None
+
+        return normalized
+
+    @staticmethod
     def _stop_time_schedule_relationship_to_enum(value: object | None) -> int | None:
         if value is None:
             return None
@@ -166,7 +178,9 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
         feed.header.timestamp = int(time.time())
 
         for trip_model in trips:
-            if not trip_model.stop_events:
+            has_stop_events = bool(trip_model.stop_events)
+            trip_schedule_relationship_text = self._trip_schedule_relationship_text(trip_model.schedule_relationship)
+            if not has_stop_events and trip_schedule_relationship_text not in {"DELETED", "CANCELED"}:
                 continue
 
             entity = feed.entity.add()

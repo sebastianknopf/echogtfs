@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from echogtfs.services.gtfsrt.gtfs_realtime_trip_updates_export_service import (
     GtfsRealtimeTripUpdatesExportService,
 )
+from echogtfs import gtfs_realtime_pb2
 
 
 class TestGtfsRealtimeTripUpdatesExportService(unittest.IsolatedAsyncioTestCase):
@@ -65,6 +66,39 @@ class TestGtfsRealtimeTripUpdatesExportService(unittest.IsolatedAsyncioTestCase)
             feed = service._build_feed_message([trip_without_events])
 
         self.assertEqual(len(feed.entity), 0)
+
+    def test_build_feed_message_exports_deleted_and_canceled_trips_without_stop_events(self):
+        with patch.object(
+            GtfsRealtimeTripUpdatesExportService,
+            "_configured_timezone_name",
+            return_value="UTC",
+        ):
+            service = GtfsRealtimeTripUpdatesExportService(SimpleNamespace())
+
+        scheduled_trip_without_events = self._make_trip(stop_events=[], schedule_relationship="SCHEDULED")
+        canceled_trip_without_events = self._make_trip(stop_events=[], schedule_relationship="CANCELED")
+        deleted_trip_without_events = self._make_trip(stop_events=[], schedule_relationship="DELETED")
+
+        with patch("echogtfs.services.gtfsrt.gtfs_realtime_trip_updates_export_service.time.time", return_value=1700000000):
+            feed = service._build_feed_message(
+                [
+                    scheduled_trip_without_events,
+                    canceled_trip_without_events,
+                    deleted_trip_without_events,
+                ]
+            )
+
+        self.assertEqual(len(feed.entity), 2)
+        self.assertEqual(
+            feed.entity[0].trip_update.trip.schedule_relationship,
+            gtfs_realtime_pb2.TripDescriptor.ScheduleRelationship.CANCELED,
+        )
+        self.assertEqual(
+            feed.entity[1].trip_update.trip.schedule_relationship,
+            gtfs_realtime_pb2.TripDescriptor.ScheduleRelationship.DELETED,
+        )
+        self.assertEqual(len(feed.entity[0].trip_update.stop_time_update), 0)
+        self.assertEqual(len(feed.entity[1].trip_update.stop_time_update), 0)
 
     def test_build_feed_message_ignores_invalid_optional_values(self):
         invalid_vehicle = SimpleNamespace(
