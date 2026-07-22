@@ -49,9 +49,9 @@ echogtfs/
 3. `AlembicMigrationService` applies all pending numbered SQL migrations.
 4. If the `sys_users` table is empty, a first superuser is created from `FIRST_SUPERUSER*` environment variables.
 5. Scheduled jobs are configured:
-   - `schedule_import_from_cron`: Reads the `gtfs_cron` key from the `app_settings` table and registers a GTFS Static feed import job.
-   - `schedule_all_data_sources`: Queries all active `DataSource` rows whose `cron` column is set and registers one polling job per data source. Cron expressions are stored per data source in the `data_sources` table, not in `app_settings`.
-   - `schedule_cleanup_from_settings`: Reads cleanup configuration from `app_settings` and registers the alert expiry cleanup job.
+   - `GtfsImportService.schedule_from_settings`: Reads the `gtfs_cron` key from the `app_settings` table and registers a GTFS Static feed import job.
+   - `DatasourceSchedulerService.schedule_all_data_sources`: Queries all active `DataSource` rows whose `cron` column is set and registers one polling job per data source. Cron expressions are stored per data source in the `data_sources` table, not in `app_settings`.
+   - `CleanupService.schedule_from_settings`: Reads cleanup configuration from `app_settings` and registers the alert expiry cleanup job.
 6. FastAPI app starts accepting requests.
 
 ## API Routers
@@ -105,6 +105,7 @@ There're several repositories for structured database access. The repositories a
 
 - `SystemRepository`: responsible for general database access especially for `sys_` tables
 - `GtfsRepository`: reponsible for GTFS nominal data access of `gtfs_` tables
+- `RealtimeRepository`: responsible for GTFS-RT data access of `realtime_` tables
 
 Each repository has an interface defined for testing purposes.
 
@@ -118,7 +119,7 @@ For reading and parsing the external data, the transformers are implemented in `
 
 ## GTFS-Realtime Feed
 
-The `/api/realtime/feed` endpoint is the public output endpoint. It serializes realtime data to GTFS-RT compliant protobuf stream. The endpoint also supports a `?format=json` query parameter for JSON output. 
+The GTFS-RT endpoint is the public output endpoint. It serializes realtime data to GTFS-RT compliant protobuf stream. The endpoint also supports a `?format=json` query parameter for JSON output. 
 
 Optional Basic Auth can be enabled for the realtime endpoint by storing `gtfs_rt_username` and `gtfs_rt_password` in `app_settings`.
 
