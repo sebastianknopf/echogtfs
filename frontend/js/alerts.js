@@ -3,6 +3,7 @@
 ========================================================================== */
 
 const alerts = (() => {
+  const POLL_INTERVAL_MS = 60_000;
   let _alerts = [];
   let _sources = [];
   let _filterText = '';
@@ -11,12 +12,27 @@ const alerts = (() => {
   let _totalPages = 1;
   let _total = 0;
   let _filterTimeout = null; // For debouncing filter input
+  let _pollTimer = null;
   let _filters = {
     active: true,
     inactive: true,
     internal: true,
     external: true
   };
+
+  function _isPanelActive() {
+    const panel = document.querySelector('.panel[data-panel="alerts"]');
+    return Boolean(panel?.classList.contains('is-active'));
+  }
+
+  function _startPolling() {
+    if (_pollTimer) return;
+    _pollTimer = window.setInterval(() => {
+      if (_isPanelActive()) {
+        _loadAlerts();
+      }
+    }, POLL_INTERVAL_MS);
+  }
 
   // Helper to check if user has poweruser or admin rights
   function _isPoweruser() {
@@ -774,6 +790,8 @@ const alerts = (() => {
     window.addEventListener('popstate', () => {
       _loadAlerts();
     });
+
+    _startPolling();
   }
 
   async function load() {

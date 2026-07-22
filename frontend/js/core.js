@@ -194,6 +194,46 @@ const api = (() => {
       return request(`/alerts/${id}/toggle-active`, { method: 'POST' });
     },
 
+    // Trips
+    getTrips(page = 1, limit = 20, sort = 'asc', search = '', filters = {}) {
+      const params = new URLSearchParams({ page, limit, sort });
+      if (search) {
+        params.set('search', search);
+      }
+      if (filters.active !== undefined && filters.inactive !== undefined) {
+        if (filters.active && !filters.inactive) {
+          params.set('is_active', 'true');
+        } else if (!filters.active && filters.inactive) {
+          params.set('is_active', 'false');
+        }
+      }
+      return request(`/trips/?${params}`);
+    },
+
+    toggleTripActive(id) {
+      return request(`/trips/${id}/toggle-active`, { method: 'POST' });
+    },
+
+    // Vehicles
+    getVehicles(page = 1, limit = 200, search = '', filters = {}) {
+      const params = new URLSearchParams({ page, limit });
+      if (search) {
+        params.set('search', search);
+      }
+      if (filters.active !== undefined && filters.inactive !== undefined) {
+        if (filters.active && !filters.inactive) {
+          params.set('is_active', 'true');
+        } else if (!filters.active && filters.inactive) {
+          params.set('is_active', 'false');
+        }
+      }
+      return request(`/vehicles/?${params}`);
+    },
+
+    toggleVehicleActive(id) {
+      return request(`/vehicles/${id}/toggle-active`, { method: 'POST' });
+    },
+
     // Data sources
     getSources() {
       return request('/sources/');
