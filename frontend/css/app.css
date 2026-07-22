@@ -851,6 +851,7 @@ body {
 }
 
 .vehicles-map {
+  position: relative;
   flex: 1;
   width: 100%;
   height: 100%;
@@ -858,6 +859,134 @@ body {
   border-radius: var(--md-shape-s);
   overflow: hidden;
   border: 1px solid var(--md-outline-variant);
+}
+
+.vehicle-map-marker {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  cursor: pointer;
+}
+
+.vehicle-map-marker__dot {
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+  color: #4a4a4a;
+}
+
+.vehicle-map-marker--inactive .vehicle-map-marker__dot {
+  background: #f2f2f2;
+  color: #6f6f6f;
+}
+
+.vehicle-map-marker__dot svg {
+  width: 28px;
+  height: 28px;
+  display: block;
+}
+
+.vehicle-map-marker__warning {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  color: #b3261e;
+}
+
+.vehicle-map-marker__warning svg {
+  width: 12px;
+  height: 12px;
+  display: block;
+}
+
+.vehicle-map-sheet {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  width: 400px;
+  max-width: calc(100% - 24px);
+  background: var(--md-surface);
+  border-radius: var(--md-shape-m);
+  box-shadow: var(--md-elev-3);
+  border: 1px solid var(--md-outline-variant);
+  padding: 12px 14px;
+  z-index: 20;
+}
+
+.vehicle-map-sheet__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.vehicle-map-sheet__title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--md-on-surface);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vehicle-map-sheet__close {
+  width: 32px;
+  height: 32px;
+  color: var(--md-on-surface-medium);
+}
+
+.vehicle-map-sheet__meta {
+  margin-top: 6px;
+  color: var(--md-on-surface-medium);
+  font-size: 0.85rem;
+}
+
+.vehicle-map-sheet__details {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vehicle-map-sheet__detail-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--md-on-surface-medium);
+  font-size: 0.875rem;
+}
+
+.vehicle-map-sheet__detail-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--md-on-surface-medium);
+  flex: 0 0 16px;
+}
+
+.vehicle-map-sheet__actions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.vehicle-map-sheet__actions .icon-btn {
+  width: 36px;
+  height: 36px;
 }
 
 /* -- Filter Popout ------------------------------------------------------- */

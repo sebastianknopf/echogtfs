@@ -118,6 +118,15 @@ window.translations = {
     'vehicles.map.aria': 'Karte mit Fahrzeugpositionen',
     'vehicles.filter.status.active': 'aktive Fahrzeuge',
     'vehicles.filter.status.inactive': 'inaktive Fahrzeuge',
+    'vehicles.sheet.line': 'Linie: {value}',
+    'vehicles.sheet.updated': 'Aktualisiert: {value}',
+    'vehicles.time.second_ago': 'vor {count} Sekunde',
+    'vehicles.time.seconds_ago': 'vor {count} Sekunden',
+    'vehicles.time.minute_ago': 'vor {count} Minute',
+    'vehicles.time.minutes_ago': 'vor {count} Minuten',
+    'vehicles.wheelchair.accessible': 'Barrierefrei',
+    'vehicles.wheelchair.inaccessible': 'Nicht barrierefrei',
+    'vehicles.wheelchair.unknown': 'Keine Information zur Barrierefreiheit',
     
     // === ALERTS MODAL (Create/Edit) ===
     'alert.modal.create': 'Neue Meldung erstellen',
@@ -649,6 +658,15 @@ window.translations = {
     'vehicles.map.aria': 'Map with vehicle positions',
     'vehicles.filter.status.active': 'active vehicles',
     'vehicles.filter.status.inactive': 'inactive vehicles',
+    'vehicles.sheet.line': 'Line: {value}',
+    'vehicles.sheet.updated': 'Updated: {value}',
+    'vehicles.time.second_ago': '{count} second ago',
+    'vehicles.time.seconds_ago': '{count} seconds ago',
+    'vehicles.time.minute_ago': '{count} minute ago',
+    'vehicles.time.minutes_ago': '{count} minutes ago',
+    'vehicles.wheelchair.accessible': 'Wheelchair accessible',
+    'vehicles.wheelchair.inaccessible': 'Not wheelchair accessible',
+    'vehicles.wheelchair.unknown': 'No wheelchair accessibility information',
     
     // === ALERTS MODAL (Create/Edit) ===
     'alert.modal.create': 'Create New Alert',

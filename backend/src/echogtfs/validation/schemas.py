@@ -406,6 +406,7 @@ class VehicleTripSummaryRead(BaseModel):
     """Minimal trip summary embedded in vehicle responses."""
     trip_id: str
     route_id: str
+    route_name: str | None = None
     start_time: str
     start_date: str
     schedule_relationship: str
