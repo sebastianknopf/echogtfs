@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>echogtfs</title>
   <link rel="stylesheet" href="css/app.css" />
+  <link rel="stylesheet" href="css/maplibre-gl.css" />
 </head>
 <body>
 
@@ -174,6 +175,18 @@
             </span>
             <span class="nav-item__label" data-i18n="nav.alerts">Meldungen</span>
           </button>
+          <button class="nav-item" data-panel="trips" data-ripple>
+            <span class="nav-item__icon">
+              <svg viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="M760-360v-80H200v80h560Zm0-160v-80H200v80h560Zm0-160v-80H200v80h560ZM200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm560-80v-80H200v80h560Z"/></svg>
+            </span>
+            <span class="nav-item__label" data-i18n="nav.trips">Fahrten</span>
+          </button>
+          <button class="nav-item" data-panel="vehicles" data-ripple>
+            <span class="nav-item__icon">
+              <svg viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="M240-120q-17 0-28.5-11.5T200-160v-82q-18-20-29-44.5T160-340v-380q0-83 77-121.5T480-880q172 0 246 37t74 123v380q0 29-11 53.5T760-242v82q0 17-11.5 28.5T720-120h-40q-17 0-28.5-11.5T640-160v-40H320v40q0 17-11.5 28.5T280-120h-40Zm242-640h224-448 224Zm158 280H240h480-80Zm-400-80h480v-120H240v120Zm142.5 222.5Q400-355 400-380t-17.5-42.5Q365-440 340-440t-42.5 17.5Q280-405 280-380t17.5 42.5Q315-320 340-320t42.5-17.5Zm280 0Q680-355 680-380t-17.5-42.5Q645-440 620-440t-42.5 17.5Q560-405 560-380t17.5 42.5Q595-320 620-320t42.5-17.5ZM258-760h448q-15-17-64.5-28.5T482-800q-107 0-156.5 12.5T258-760Zm62 480h320q33 0 56.5-23.5T720-360v-120H240v120q0 33 23.5 56.5T320-280Z"/></svg>
+            </span>
+            <span class="nav-item__label" data-i18n="nav.vehicles">Fahrzeuge</span>
+          </button>
           <button class="nav-item" data-panel="sources" data-poweruser-only data-ripple>
             <span class="nav-item__icon">
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3C7.58 3 4 4.79 4 7s3.58 4 8 4 8-1.79 8-4-3.58-4-8-4zM4 9v3c0 2.21 3.58 4 8 4s8-1.79 8-4V9c0 2.21-3.58 4-8 4S4 11.21 4 9zm0 5v3c0 2.21 3.58 4 8 4s8-1.79 8-4v-3c0 2.21-3.58 4-8 4s-8-1.79-8-4z"/></svg>
@@ -260,6 +273,98 @@
             </div>
             <div class="md-card__content" id="alerts-content">
               <div class="panel__loading" data-i18n="alerts.loading">Wird geladen ...</div>
+            </div>
+          </section>
+        </div>
+
+        <!-- Panel: Trips -->
+        <div class="panel" data-panel="trips">
+          <section class="md-card" aria-label="Fahrten">
+            <div class="md-card__header user-list-header">
+              <h2 class="md-card__title" data-i18n="trips.title">Fahrten</h2>
+              <div class="md-field md-field--inline">
+                <input
+                  class="md-field__input"
+                  type="text"
+                  id="trip-filter"
+                  data-i18n-placeholder="alerts.quickfilter.placeholder"
+                  placeholder="Suchbegriff eingeben..."
+                />
+                <label class="md-field__label" for="trip-filter" data-i18n="alerts.quickfilter">Schnellfilter</label>
+              </div>
+              <div class="panel-filter-actions">
+                <button id="sort-trips-btn" class="md-btn md-btn--text" data-ripple data-i18n-title="trips.sort.title" title="Sortierung ändern">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M12 5.83L15.17 9l1.41-1.41L12 3 7.41 7.59 8.83 9 12 5.83zm0 12.34L8.83 15l-1.41 1.41L12 21l4.59-4.59L15.17 15 12 18.17z"/>
+                  </svg>
+                  <span id="sort-trips-label" data-i18n="trips.sort.asc">nach Start aufsteigend</span>
+                </button>
+                <div class="filter-dropdown-container">
+                  <button id="filter-trips-btn" class="md-btn md-btn--text" data-ripple data-i18n-title="alerts.filter" data-i18n-aria-label="alerts.filter" title="Filter">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/>
+                    </svg>
+                    <span data-i18n="alerts.filter">Filter</span>
+                  </button>
+                  <div id="filter-trips-popout" class="filter-popout" hidden>
+                    <div class="filter-popout__section">
+                      <div class="filter-popout__label" data-i18n="alerts.filter.status">Status</div>
+                      <label class="filter-checkbox">
+                        <input type="checkbox" id="filter-trips-active" checked>
+                        <span data-i18n="trips.filter.status.active">aktive Fahrten</span>
+                      </label>
+                      <label class="filter-checkbox">
+                        <input type="checkbox" id="filter-trips-inactive" checked>
+                        <span data-i18n="trips.filter.status.inactive">inaktive Fahrten</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="md-card__content" id="trips-content"></div>
+          </section>
+        </div>
+
+        <!-- Panel: Vehicles -->
+        <div class="panel" data-panel="vehicles">
+          <section class="md-card vehicles-card" aria-label="Fahrzeuge">
+            <div class="md-card__header user-list-header">
+              <h2 class="md-card__title" data-i18n="vehicles.title">Fahrzeuge</h2>
+              <div class="md-field md-field--inline">
+                <input
+                  class="md-field__input"
+                  type="text"
+                  id="vehicle-filter"
+                  data-i18n-placeholder="alerts.quickfilter.placeholder"
+                  placeholder="Suchbegriff eingeben..."
+                />
+                <label class="md-field__label" for="vehicle-filter" data-i18n="alerts.quickfilter">Schnellfilter</label>
+              </div>
+              <div class="filter-dropdown-container panel-filter-actions">
+                <button id="filter-vehicles-btn" class="md-btn md-btn--text" data-ripple data-i18n-title="alerts.filter" data-i18n-aria-label="alerts.filter" title="Filter">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/>
+                  </svg>
+                  <span data-i18n="alerts.filter">Filter</span>
+                </button>
+                <div id="filter-vehicles-popout" class="filter-popout" hidden>
+                  <div class="filter-popout__section">
+                    <div class="filter-popout__label" data-i18n="alerts.filter.status">Status</div>
+                    <label class="filter-checkbox">
+                      <input type="checkbox" id="filter-vehicles-active" checked>
+                      <span data-i18n="vehicles.filter.status.active">aktive Fahrzeuge</span>
+                    </label>
+                    <label class="filter-checkbox">
+                      <input type="checkbox" id="filter-vehicles-inactive" checked>
+                      <span data-i18n="vehicles.filter.status.inactive">inaktive Fahrzeuge</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="md-card__content" id="vehicles-content">
+              <div id="vehicles-map" class="vehicles-map" data-i18n-aria-label="vehicles.map.aria" aria-label="Karte mit Fahrzeugpositionen"></div>
             </div>
           </section>
         </div>
@@ -890,6 +995,9 @@
   <script src="js/accounts.js"></script>
   <script src="js/sources.js"></script>
   <script src="js/alerts.js"></script>
+  <script src="js/trips.js"></script>
+  <script src="js/maplibre-gl.js"></script>
+  <script src="js/vehicles.js"></script>
   <script src="js/settings.js"></script>
   <script src="js/main.js"></script>
 </body>

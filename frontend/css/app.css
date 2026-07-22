@@ -829,10 +829,48 @@ body {
   padding: 24px 0;
 }
 
+/* -- Vehicles map panel ----------------------------------------------------- */
+.panel[data-panel="vehicles"] {
+  height: 100%;
+  min-height: 0;
+}
+
+.panel[data-panel="vehicles"] .vehicles-card {
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel[data-panel="vehicles"] #vehicles-content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  padding: 16px 24px 24px;
+}
+
+.vehicles-map {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border-radius: var(--md-shape-s);
+  overflow: hidden;
+  border: 1px solid var(--md-outline-variant);
+}
+
 /* -- Filter Popout ------------------------------------------------------- */
 .filter-dropdown-container {
   position: relative;
   display: inline-block;
+}
+
+.panel-filter-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .filter-popout {
@@ -1439,6 +1477,15 @@ body {
   flex: 1;
 }
 
+.alert-list-item__title--canceled {
+  text-decoration: line-through;
+  color: var(--md-error);
+}
+
+.alert-list-item__title--deleted {
+  text-decoration: line-through;
+}
+
 .alert-list-item__badges {
   display: flex;
   gap: 8px;
@@ -1778,6 +1825,9 @@ body {
   .nav-item { justify-content: center; padding: 0; height: 44px; border-radius: var(--md-shape-m); }
   .nav-item__label { display: none; }
   .panel { padding: 12px; }
+  .panel[data-panel="vehicles"] #vehicles-content {
+    padding: 12px;
+  }
   .user-card { grid-template-columns: auto 1fr; grid-template-rows: auto auto; }
   .user-card > .md-btn--outlined { grid-column: 1 / -1; }
   .user-table th:nth-child(2), .user-table td:nth-child(2) { display: none; }

@@ -11,6 +11,15 @@ window.appState = {
 const app = (() => {
   let _currentUser = null;
 
+  function _resetPageInURL() {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('page')) return;
+
+    params.delete('page');
+    const newURL = params.toString() ? `?${params}` : window.location.pathname;
+    window.history.pushState({}, '', newURL);
+  }
+
   // Authentication
   async function handleLogin(e) {
     e.preventDefault();
@@ -53,6 +62,13 @@ const app = (() => {
 
     e.preventDefault();
     const panel = navItem.dataset.panel;
+
+    const activeItem = document.querySelector('.nav-item.is-active[data-panel]');
+    const currentPanel = activeItem?.dataset.panel;
+    if (currentPanel && currentPanel !== panel) {
+      _resetPageInURL();
+    }
+
     ui.setPanel(panel);
 
     // Load panel data
@@ -70,6 +86,16 @@ const app = (() => {
       case 'alerts':
         if (typeof alerts !== 'undefined') {
           alerts.load();
+        }
+        break;
+      case 'trips':
+        if (typeof trips !== 'undefined') {
+          trips.load();
+        }
+        break;
+      case 'vehicles':
+        if (typeof vehicles !== 'undefined') {
+          vehicles.load();
         }
         break;
       case 'settings':
@@ -151,6 +177,8 @@ const app = (() => {
       if (typeof accounts !== 'undefined') accounts.init();
       if (typeof sources !== 'undefined') await sources.init(); // sources.init is async
       if (typeof alerts !== 'undefined') alerts.init();
+      if (typeof trips !== 'undefined') trips.init();
+      if (typeof vehicles !== 'undefined') vehicles.init();
       if (typeof settings !== 'undefined') settings.init();
 
       // Load default panel

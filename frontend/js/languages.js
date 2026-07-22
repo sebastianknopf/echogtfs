@@ -41,6 +41,8 @@ window.translations = {
     // === NAVIGATION ===
     'nav.main': 'Hauptnavigation',
     'nav.alerts': 'Meldungen',
+    'nav.trips': 'Fahrten',
+    'nav.vehicles': 'Fahrzeuge',
     'nav.sources': 'Datenquellen',
     'nav.accounts': 'Accounts',
     'nav.settings': 'Einstellungen',
@@ -90,6 +92,31 @@ window.translations = {
     'alerts.title.unnamed': 'Unbenannte Meldung',
     'alerts.resolution.warning': 'Einige Bezüge konnten nicht aufgelöst werden',
     'alerts.pagination.info': 'Seite {current} von {total} ({count} Meldungen)',
+
+    // === TRIPS PANEL ===
+    'trips.title': 'Fahrten',
+    'trips.field.line': 'Linie',
+    'trips.field.gtfs_id': 'GTFS-ID',
+    'trips.field.start': 'Start',
+    'trips.field.end': 'Ende',
+    'trips.sort.title': 'Sortierung ändern',
+    'trips.sort.asc': 'nach Start aufsteigend',
+    'trips.sort.desc': 'nach Start absteigend',
+    'trips.filter.status.active': 'aktive Fahrten',
+    'trips.filter.status.inactive': 'inaktive Fahrten',
+    'trips.empty': 'Keine Fahrten verfügbar.',
+    'trips.empty.filter': 'Keine Fahrten entsprechen dem Filter.',
+    'trips.pagination.info': 'Seite {current} von {total} ({count} Fahrten)',
+    'trips.resolution.warning': 'Fahrt konnte keiner Soll-Fahrt zugeordnet werden',
+    'trips.mock.view': 'Details für Linie {line} sind in dieser Vorschau noch nicht verfügbar.',
+    'trips.status.activated': 'Fahrt auf Linie {line} wurde aktiviert.',
+    'trips.status.deactivated': 'Fahrt auf Linie {line} wurde deaktiviert.',
+
+    // === VEHICLES PANEL ===
+    'vehicles.title': 'Fahrzeuge',
+    'vehicles.map.aria': 'Karte mit Fahrzeugpositionen',
+    'vehicles.filter.status.active': 'aktive Fahrzeuge',
+    'vehicles.filter.status.inactive': 'inaktive Fahrzeuge',
     
     // === ALERTS MODAL (Create/Edit) ===
     'alert.modal.create': 'Neue Meldung erstellen',
@@ -544,6 +571,8 @@ window.translations = {
     // === NAVIGATION ===
     'nav.main': 'Main navigation',
     'nav.alerts': 'Alerts',
+    'nav.trips': 'Trips',
+    'nav.vehicles': 'Vehicles',
     'nav.sources': 'Data Sources',
     'nav.accounts': 'Accounts',
     'nav.settings': 'Settings',
@@ -593,6 +622,31 @@ window.translations = {
     'alerts.title.unnamed': 'Unnamed Alert',
     'alerts.resolution.warning': 'Some references could not be resolved',
     'alerts.pagination.info': 'Page {current} of {total} ({count} alerts)',
+
+    // === TRIPS PANEL ===
+    'trips.title': 'Trips',
+    'trips.field.line': 'Line',
+    'trips.field.gtfs_id': 'GTFS ID',
+    'trips.field.start': 'Start',
+    'trips.field.end': 'End',
+    'trips.sort.title': 'Change sort order',
+    'trips.sort.asc': 'sort by start ascending',
+    'trips.sort.desc': 'sort by start descending',
+    'trips.filter.status.active': 'active trips',
+    'trips.filter.status.inactive': 'inactive trips',
+    'trips.empty': 'No trips available.',
+    'trips.empty.filter': 'No trips match the filter.',
+    'trips.pagination.info': 'Page {current} of {total} ({count} trips)',
+    'trips.resolution.warning': 'Trip could not be matched to a nominal trip',
+    'trips.mock.view': 'Details for line {line} are not available in this preview yet.',
+    'trips.status.activated': 'Trip on line {line} has been activated.',
+    'trips.status.deactivated': 'Trip on line {line} has been deactivated.',
+
+    // === VEHICLES PANEL ===
+    'vehicles.title': 'Vehicles',
+    'vehicles.map.aria': 'Map with vehicle positions',
+    'vehicles.filter.status.active': 'active vehicles',
+    'vehicles.filter.status.inactive': 'inactive vehicles',
     
     // === ALERTS MODAL (Create/Edit) ===
     'alert.modal.create': 'Create New Alert',
