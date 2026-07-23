@@ -13,6 +13,7 @@ from echogtfs.services.database.models import (
     ServiceAlertActivePeriod,
     ServiceAlertInformedEntity,
     ServiceAlertTranslation,
+    StopEvent,
     Trip,
     Vehicle,
 )
@@ -527,6 +528,24 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
             result = await db.execute(stmt)
             items = list(result.scalars().all())
             return items, total
+
+    async def list_trip_ids_with_invalid_stop_events(self, trip_ids: list[str]) -> set[str]:
+        """Return trip_ids where at least one realtime stop event is marked invalid."""
+        if not trip_ids:
+            return set()
+
+        stmt = (
+            select(StopEvent.trip_id)
+            .where(
+                StopEvent.trip_id.in_(trip_ids),
+                StopEvent.is_valid == False,
+            )
+            .distinct()
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return {row[0] for row in result.all()}
 
     async def toggle_trip_active(self, trip_uuid: uuid.UUID) -> Trip | None:
         """Toggle the is_active flag for one realtime trip and return updated model."""

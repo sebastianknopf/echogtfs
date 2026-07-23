@@ -174,6 +174,11 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def list_trip_ids_with_invalid_stop_events(self, trip_ids: list[str]) -> set[str]:
+        """Return trip ids where at least one stop event has is_valid=False."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def toggle_trip_active(self, trip_uuid: uuid.UUID) -> Trip | None:
         """Toggle the is_active flag for one realtime trip and return updated model."""
         raise NotImplementedError
@@ -193,7 +198,7 @@ class RealtimeRepositoryInterface(ABC):
         is_active: bool | None,
     ) -> tuple[list[Vehicle], int]:
         """Return paginated realtime vehicles with total count and required relationships loaded."""
-        raise NotImplementedError
+        raise NotImplementedError    
 
     @abstractmethod
     async def toggle_vehicle_active(self, vehicle_uuid: uuid.UUID) -> Vehicle | None:

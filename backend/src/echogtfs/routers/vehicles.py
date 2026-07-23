@@ -58,6 +58,28 @@ def _enrich_vehicles_with_route_names(vehicles: list[dict], route_names: dict[st
             trip["route_name"] = route_names.get(route_id, route_id)
 
 
+def _apply_effective_vehicle_validity(
+    vehicles: list[dict],
+    trip_ids_with_invalid_stop_events: set[str],
+) -> None:
+    """Set effective trip and vehicle validity including stop-event cascade."""
+    for vehicle in vehicles:
+        trip = vehicle.get("trip")
+        if not trip:
+            continue
+
+        trip_id = trip.get("trip_id")
+        has_invalid_stop_event = bool(trip_id and trip_id in trip_ids_with_invalid_stop_events)
+        trip_is_valid = trip.get("is_valid") is not False
+
+        if has_invalid_stop_event:
+            trip_is_valid = False
+            trip["is_valid"] = False
+
+        if not trip_is_valid:
+            vehicle["is_valid"] = False
+
+
 @router.get("/", response_model=VehicleListResponse)
 async def list_vehicles(
     _: CurrentUser,
@@ -92,6 +114,15 @@ async def list_vehicles(
     response_dict = response.model_dump()
     _enrich_vehicles_with_route_names(response_dict["items"], route_names)
 
+    trip_ids = [
+        item["trip"]["trip_id"]
+        for item in response_dict["items"]
+        if item.get("trip") and item["trip"].get("trip_id")
+    ]
+    
+    trip_ids_with_invalid_stop_events = await repository.list_trip_ids_with_invalid_stop_events(trip_ids)
+    _apply_effective_vehicle_validity(response_dict["items"], trip_ids_with_invalid_stop_events)
+
     return response_dict
 
 
@@ -116,5 +147,9 @@ async def toggle_vehicle_active(
 
     route_names = await _load_gtfs_route_names(gtfs_repository)
     _enrich_vehicles_with_route_names([vehicle_dict], route_names)
+
+    trip_ids = [vehicle_dict["trip"]["trip_id"]] if vehicle_dict.get("trip") and vehicle_dict["trip"].get("trip_id") else []
+    trip_ids_with_invalid_stop_events = await repository.list_trip_ids_with_invalid_stop_events(trip_ids)
+    _apply_effective_vehicle_validity([vehicle_dict], trip_ids_with_invalid_stop_events)
 
     return vehicle_dict
