@@ -477,7 +477,7 @@
 
                 <p class="settings-section-label" data-i18n="settings.section.cleanup">Datenbereinigung</p>
 
-                <div class="md-field__helper" style="margin-top: 0; margin-bottom: 16px;" data-i18n="settings.cleanup_info">Die Datenbereinigung gilt nur für interne Meldungen. Externe Meldungen werden immer ausgehend von ihrer Datenquelle synchronisiert.</div>
+                <div class="md-field__helper" style="margin-top: 0; margin-bottom: 16px;" data-i18n="settings.cleanup_info">Die Datenbereinigung gilt nur für interne Objekte und Logs von Datenquellen. Objekte von externen Datenquellen werden immer ausgehend von ihrer Datenquelle synchronisiert.</div>
 
                 <div class="md-field">
                   <input type="text" id="settings-cleanup-cron" class="md-field__input" placeholder="*/10 * * * *" maxlength="64" />
@@ -490,7 +490,7 @@
                     <option value="deactivate" selected data-i18n="settings.cleanup_policy.deactivate">Deaktivieren</option>
                     <option value="delete" data-i18n="settings.cleanup_policy.delete">Löschen</option>
                   </select>
-                  <label class="md-field__label" for="settings-cleanup-policy" data-i18n="settings.cleanup_policy">Verfahrensweise bei abgelaufenen Meldungen</label>
+                  <label class="md-field__label" for="settings-cleanup-policy" data-i18n="settings.cleanup_policy">Verfahrensweise bei abgelaufenen Objekten</label>
                 </div>
 
                 <div class="md-field">
@@ -669,13 +669,13 @@
           <div class="md-field">
             <select class="md-field__input" id="source-invalid-reference-policy" name="invalid_reference_policy" placeholder=" ">
               <option value="not_specified" data-i18n="source.invalid_reference_policy.not_specified">keine Angabe</option>
-              <option value="discard_alert" data-i18n="source.invalid_reference_policy.discard_alert">gesamte Meldung verwerfen</option>
+              <option value="discard_entire_object" data-i18n="source.invalid_reference_policy.discard_entire_object">gesamtes Objekt verwerfen</option>
               <option value="discard_invalid" data-i18n="source.invalid_reference_policy.discard_invalid">ungültige Bezüge verwerfen</option>
               <option value="discard_invalid_elements" data-i18n="source.invalid_reference_policy.discard_invalid_elements">ungültige Bezugselemente verwerfen</option>
-              <option value="keep_alert" data-i18n="source.invalid_reference_policy.keep_alert">gesamte Meldung deaktivieren</option>
+              <option value="keep_object_disabled" data-i18n="source.invalid_reference_policy.keep_object_disabled">gesamtes Objekt deaktivieren</option>
             </select>
             <label class="md-field__label" for="source-invalid-reference-policy" data-i18n="source.invalid_reference_policy">Verfahrensweise bei ungültigen Bezügen</label>
-            <div class="md-field__helper" data-i18n="source.invalid_reference_policy.helper">Definiert, wie mit Meldungen umgegangen wird, die auf nicht-existierende GTFS-Objekte verweisen.</div>
+            <div class="md-field__helper" data-i18n="source.invalid_reference_policy.helper">Definiert, wie mit Objekten umgegangen wird, die auf nicht-existierende GTFS-Objekte verweisen.</div>
           </div>
           
           <div class="modal__switches">

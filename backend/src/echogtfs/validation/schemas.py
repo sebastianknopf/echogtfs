@@ -7,7 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, EmailStr, field_validator, model_validator
 
 from echogtfs.enum.gtfsrt import AlertCause, AlertEffect, AlertSeverityLevel, PeriodType
-from echogtfs.enum.system import EnrichmentType, ExpiredAlertPolicy, InvalidReferencePolicy, SourceField
+from echogtfs.enum.system import EnrichmentType, ExpiredRealtimeObjectPolicy, InvalidReferencePolicy, SourceField
 
 _HEX_COLOR = re.compile(r'^#[0-9a-fA-F]{6}$')
 
@@ -52,7 +52,7 @@ class AppSettings(BaseModel):
     
     # Data cleanup configuration
     cleanup_cron:             str = '*/10 * * * *'  # Every 10 minutes
-    cleanup_expired_policy:   ExpiredAlertPolicy = ExpiredAlertPolicy.DEACTIVATE
+    cleanup_expired_policy:   ExpiredRealtimeObjectPolicy = ExpiredRealtimeObjectPolicy.DEACTIVATE
     cleanup_delete_after_days: int = -1  # -1 = never, >= 0 = days after expiration
 
     @field_validator('color_primary', 'color_secondary')

@@ -968,13 +968,7 @@ body {
 }
 
 .vehicle-map-sheet__toggle {
-  width: 32px;
-  height: 32px;
-  color: var(--md-on-surface-medium);
-}
-
-.vehicle-map-sheet__toggle.is-active {
-  color: #2e7d32;
+  flex-shrink: 0;
 }
 
 .vehicle-map-sheet__meta {

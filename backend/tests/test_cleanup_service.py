@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from echogtfs.enum.system import ExpiredAlertPolicy
+from echogtfs.enum.system import ExpiredRealtimeObjectPolicy
 from echogtfs.services.cleanup.cleanup_service import CleanupService
 
 
@@ -24,7 +24,7 @@ class TestCleanupService(unittest.IsolatedAsyncioTestCase):
         )
         service = CleanupService(system_repo, realtime_repo)
 
-        count = await service._handle_expired_alerts(ExpiredAlertPolicy.DEACTIVATE)
+        count = await service._handle_expired_alerts(ExpiredRealtimeObjectPolicy.DEACTIVATE)
 
         self.assertEqual(count, 2)
         realtime_repo.deactivate_service_alerts.assert_awaited_once_with(["a", "b"])

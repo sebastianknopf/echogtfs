@@ -617,7 +617,7 @@ class DatasourceBase(DatasourceInterface):
             entities_to_create = validated_entities
             
             if has_invalid_entity:
-                if policy == InvalidReferencePolicy.DISCARD_ALERT:
+                if policy == InvalidReferencePolicy.DISCARD_ENTIRE_OBJECT:
                     # Discard entire alert if any reference is invalid
                     logger.debug(
                         f"[{self.get_adapter_type()}] Discarding alert {alert_id} "
@@ -665,7 +665,7 @@ class DatasourceBase(DatasourceInterface):
                             f"entities with no valid references from alert {alert_id} (policy: {policy.value})"
                         )
                 
-                elif policy == InvalidReferencePolicy.KEEP_ALERT:
+                elif policy == InvalidReferencePolicy.KEEP_OBJECT_DISABLED:
                     # Keep all entities but deactivate the alert
                     should_deactivate_alert = True
                     logger.debug(

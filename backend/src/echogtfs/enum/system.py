@@ -2,11 +2,11 @@ from enum import Enum
 
 
 class InvalidReferencePolicy(str, Enum):
-    """Policy for handling alerts with invalid entity references."""
+    """Policy for handling objects with invalid entity references."""
 
-    DISCARD_ALERT = "discard_alert"  # Discard entire alert if any reference is invalid
-    KEEP_ALERT = "keep_alert"  # Keep entire alert even if references are invalid
-    DISCARD_INVALID = "discard_invalid"  # Discard only invalid references, keep alert
+    DISCARD_ENTIRE_OBJECT = "discard_entire_object"  # Discard entire object if any reference is invalid
+    KEEP_OBJECT_DISABLED = "keep_object_disabled"  # Keep entire object but deactivate it when references are invalid
+    DISCARD_INVALID = "discard_invalid"  # Discard only invalid references, keep object
     DISCARD_INVALID_ELEMENTS = "discard_invalid_elements"  # Discard invalid fields within references
     NOT_SPECIFIED = "not_specified"  # No specific policy defined
 
@@ -27,7 +27,7 @@ class SourceField(str, Enum):
     HEADER_DESCRIPTION = "header_description"  # Match in either header or description
 
 
-class ExpiredAlertPolicy(str, Enum):
+class ExpiredRealtimeObjectPolicy(str, Enum):
     """Policy for handling expired alerts during cleanup."""
 
     DEACTIVATE = "deactivate"  # Set is_active=False for expired alerts

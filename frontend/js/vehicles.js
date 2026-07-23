@@ -129,7 +129,7 @@ const vehicles = (() => {
       <div class="vehicle-map-sheet__header">
         <h3 class="vehicle-map-sheet__title" id="vehicle-map-sheet-title"></h3>
         <div class="vehicle-map-sheet__header-actions">
-          <button type="button" class="md-icon-btn vehicle-map-sheet__toggle" id="vehicle-map-sheet-toggle" title="${window.i18n('common.deactivate')}" aria-label="${window.i18n('common.deactivate')}">
+          <button type="button" class="icon-btn vehicle-map-sheet__toggle" id="vehicle-map-sheet-toggle" title="${window.i18n('common.deactivate')}" aria-label="${window.i18n('common.deactivate')}" data-ripple>
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${POWER_ICON_PATH}"/></svg>
           </button>
           <button type="button" class="md-icon-btn vehicle-map-sheet__close" id="vehicle-map-sheet-close" title="${window.i18n('common.close')}" aria-label="${window.i18n('common.close')}">
@@ -223,7 +223,8 @@ const vehicles = (() => {
 
     if (toggleBtn) {
       const isActive = Boolean(selectedVehicle.is_active);
-      toggleBtn.classList.toggle('is-active', isActive);
+      toggleBtn.classList.toggle('icon-btn--success', isActive);
+      toggleBtn.classList.toggle('icon-btn--warning', !isActive);
       const title = isActive ? window.i18n('common.deactivate') : window.i18n('common.activate');
       toggleBtn.title = title;
       toggleBtn.setAttribute('aria-label', title);

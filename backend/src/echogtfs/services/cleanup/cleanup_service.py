@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from echogtfs.enum.system import ExpiredAlertPolicy
+from echogtfs.enum.system import ExpiredRealtimeObjectPolicy
 from echogtfs.services.datalog import DatalogService
 from echogtfs.services.database import RealtimeRepositoryInterface
 from echogtfs.services.database import SystemRepositoryInterface
@@ -85,7 +85,7 @@ class CleanupService:
 
         try:
             policy_str = await self._repository.get_app_setting(AppSetting.KEY_CLEANUP_EXPIRED_POLICY) or "deactivate"
-            policy = ExpiredAlertPolicy(policy_str)
+            policy = ExpiredRealtimeObjectPolicy(policy_str)
 
             delete_days_value = await self._repository.get_app_setting(AppSetting.KEY_CLEANUP_DELETE_AFTER_DAYS)
             delete_after_days = int(delete_days_value) if delete_days_value is not None else -1
@@ -111,11 +111,11 @@ class CleanupService:
         except Exception as exc:  # noqa: BLE001
             logger.error("[Cleanup] Error during cleanup task: %s", exc, exc_info=True)
 
-    async def _handle_expired_alerts(self, policy: ExpiredAlertPolicy) -> int:
+    async def _handle_expired_alerts(self, policy: ExpiredRealtimeObjectPolicy) -> int:
         current_timestamp = int(datetime.now(UTC).timestamp())
         alert_ids = await self._realtime_repository.list_expired_internal_alert_ids(
             current_timestamp,
-            only_active=policy == ExpiredAlertPolicy.DEACTIVATE,
+            only_active=policy == ExpiredRealtimeObjectPolicy.DEACTIVATE,
         )
 
         if not alert_ids:
@@ -123,10 +123,10 @@ class CleanupService:
             return 0
 
         count = len(alert_ids)
-        if policy == ExpiredAlertPolicy.DEACTIVATE:
+        if policy == ExpiredRealtimeObjectPolicy.DEACTIVATE:
             await self._realtime_repository.deactivate_service_alerts(alert_ids)
             logger.info("[Cleanup] Deactivated %s expired internal alerts", count)
-        elif policy == ExpiredAlertPolicy.DELETE:
+        elif policy == ExpiredRealtimeObjectPolicy.DELETE:
             await self._realtime_repository.delete_service_alerts_by_ids(alert_ids)
             logger.info("[Cleanup] Deleted %s expired internal alerts", count)
 

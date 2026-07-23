@@ -15,7 +15,7 @@ from echogtfs.enum.gtfsrt import (
     VehicleStopStatus,
     WheelchairAccessible,
 )
-from echogtfs.enum.system import EnrichmentType, ExpiredAlertPolicy, InvalidReferencePolicy, SourceField
+from echogtfs.enum.system import EnrichmentType, ExpiredRealtimeObjectPolicy, InvalidReferencePolicy, SourceField
 
 
 # ---------------------------------------------------------------------------

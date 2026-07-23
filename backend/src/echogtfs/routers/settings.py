@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from echogtfs.enum.system import ExpiredAlertPolicy
+from echogtfs.enum.system import ExpiredRealtimeObjectPolicy
 from echogtfs.services.database import get_realtime_repository, get_system_repository
 from echogtfs.services.database.models import AppSetting
 from echogtfs.services.security import get_security_service
@@ -26,7 +26,7 @@ DEFAULTS = AppSettings(
     gtfs_rt_username="",
     gtfs_rt_password="",
     cleanup_cron="*/10 * * * *",
-    cleanup_expired_policy=ExpiredAlertPolicy.DEACTIVATE,
+    cleanup_expired_policy=ExpiredRealtimeObjectPolicy.DEACTIVATE,
     cleanup_delete_after_days=-1,
 )
 
@@ -90,7 +90,7 @@ async def _load() -> AppSettings:
         gtfs_rt_username = rows.get(AppSetting.KEY_GTFS_RT_USERNAME, DEFAULTS.gtfs_rt_username),
         gtfs_rt_password = rows.get(AppSetting.KEY_GTFS_RT_PASSWORD, DEFAULTS.gtfs_rt_password),
         cleanup_cron     = rows.get(AppSetting.KEY_CLEANUP_CRON, DEFAULTS.cleanup_cron),
-        cleanup_expired_policy = ExpiredAlertPolicy(
+        cleanup_expired_policy = ExpiredRealtimeObjectPolicy(
             rows.get(AppSetting.KEY_CLEANUP_EXPIRED_POLICY, DEFAULTS.cleanup_expired_policy.value)
         ),
         cleanup_delete_after_days = int(
