@@ -77,6 +77,29 @@ const vehicles = (() => {
     return vehicle?.trip?.route_name || vehicle?.trip?.route_id || '-';
   }
 
+  function _getTripDisplayId(vehicle) {
+    return vehicle?.trip?.trip_id || vehicle?.trip_id || '-';
+  }
+
+  function _getLineTripDisplay(vehicle) {
+    return `${_getRouteDisplayName(vehicle)} / ${_getTripDisplayId(vehicle)}`;
+  }
+
+  function _getVehicleIdentityDisplay(vehicle) {
+    const label = vehicle?.vehicle_label == null ? '' : String(vehicle.vehicle_label).trim();
+    if (label) {
+      return label;
+    }
+
+    const licensePlate = vehicle?.vehicle_license_plate == null ? '' : String(vehicle.vehicle_license_plate).trim();
+    if (licensePlate) {
+      return licensePlate;
+    }
+
+    const vehicleId = vehicle?.vehicle_id == null ? '' : String(vehicle.vehicle_id).trim();
+    return vehicleId || '-';
+  }
+
   function _getWheelchairStatusText(vehicle) {
     const rawValue = vehicle?.wheelchair_accessible ?? vehicle?.vehicle_wheelchair_accessible;
     const value = String(rawValue ?? '').trim().toUpperCase();
@@ -105,9 +128,14 @@ const vehicles = (() => {
     sheet.innerHTML = `
       <div class="vehicle-map-sheet__header">
         <h3 class="vehicle-map-sheet__title" id="vehicle-map-sheet-title"></h3>
-        <button type="button" class="md-icon-btn vehicle-map-sheet__close" id="vehicle-map-sheet-close" title="${window.i18n('common.close')}" aria-label="${window.i18n('common.close')}">
-          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-        </button>
+        <div class="vehicle-map-sheet__header-actions">
+          <button type="button" class="md-icon-btn vehicle-map-sheet__toggle" id="vehicle-map-sheet-toggle" title="${window.i18n('common.deactivate')}" aria-label="${window.i18n('common.deactivate')}">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${POWER_ICON_PATH}"/></svg>
+          </button>
+          <button type="button" class="md-icon-btn vehicle-map-sheet__close" id="vehicle-map-sheet-close" title="${window.i18n('common.close')}" aria-label="${window.i18n('common.close')}">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+          </button>
+        </div>
       </div>
       <div class="vehicle-map-sheet__details">
         <div class="vehicle-map-sheet__detail-row">
@@ -116,17 +144,12 @@ const vehicles = (() => {
         </div>
         <div class="vehicle-map-sheet__detail-row">
           <svg class="vehicle-map-sheet__detail-icon" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="${VEHICLE_ICON_PATH}"/></svg>
-          <span id="vehicle-map-sheet-line"></span>
+          <span id="vehicle-map-sheet-vehicle"></span>
         </div>
         <div class="vehicle-map-sheet__detail-row">
           <svg class="vehicle-map-sheet__detail-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${WHEELCHAIR_ICON_PATH}"/></svg>
           <span id="vehicle-map-sheet-wheelchair"></span>
         </div>
-      </div>
-      <div class="vehicle-map-sheet__actions">
-        <button type="button" class="icon-btn" id="vehicle-map-sheet-toggle" title="${window.i18n('common.deactivate')}" aria-label="${window.i18n('common.deactivate')}">
-          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${POWER_ICON_PATH}"/></svg>
-        </button>
       </div>
     `;
 
@@ -173,18 +196,18 @@ const vehicles = (() => {
     }
 
     const titleEl = sheet.querySelector('#vehicle-map-sheet-title');
-    const lineEl = sheet.querySelector('#vehicle-map-sheet-line');
+    const vehicleEl = sheet.querySelector('#vehicle-map-sheet-vehicle');
     const updatedEl = sheet.querySelector('#vehicle-map-sheet-updated');
     const wheelchairEl = sheet.querySelector('#vehicle-map-sheet-wheelchair');
     const toggleBtn = sheet.querySelector('#vehicle-map-sheet-toggle');
 
     if (titleEl) {
-      titleEl.textContent = _getVehicleDisplayTitle(selectedVehicle);
+      titleEl.textContent = _getLineTripDisplay(selectedVehicle);
     }
 
-    if (lineEl) {
-      lineEl.textContent = window.i18n('vehicles.sheet.line', {
-        value: _getRouteDisplayName(selectedVehicle),
+    if (vehicleEl) {
+      vehicleEl.textContent = window.i18n('vehicles.sheet.vehicle', {
+        value: _getVehicleIdentityDisplay(selectedVehicle),
       });
     }
 
@@ -200,8 +223,7 @@ const vehicles = (() => {
 
     if (toggleBtn) {
       const isActive = Boolean(selectedVehicle.is_active);
-      toggleBtn.classList.toggle('icon-btn--success', isActive);
-      toggleBtn.classList.toggle('icon-btn--warning', !isActive);
+      toggleBtn.classList.toggle('is-active', isActive);
       const title = isActive ? window.i18n('common.deactivate') : window.i18n('common.activate');
       toggleBtn.title = title;
       toggleBtn.setAttribute('aria-label', title);

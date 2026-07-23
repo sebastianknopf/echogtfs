@@ -7,6 +7,7 @@ const trips = (() => {
   const SORT_STORAGE_KEY = 'echogtfs_trips_sort';
   const FILTERS_STORAGE_KEY = 'echogtfs_trips_filters';
   const POLL_INTERVAL_MS = 30_000;
+  const WARNING_ICON_PATH = 'M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z';
 
   let _eventsBound = false;
   let _pollTimer = null;
@@ -78,6 +79,60 @@ const trips = (() => {
     });
   }
 
+  function _formatLocalTime(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '-';
+
+    const currentLang = typeof window.i18n?.getCurrentLanguage === 'function'
+      ? window.i18n.getCurrentLanguage()
+      : 'de';
+    const locale = currentLang === 'de' ? 'de-DE' : 'en-GB';
+
+    return date.toLocaleTimeString(locale, {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
+  function _getScheduleRelationshipText(value) {
+    const normalized = String(value || '').trim().toUpperCase();
+    const keyByRelationship = {
+      SCHEDULED: 'trips.schedule.scheduled',
+      ADDED: 'trips.schedule.added',
+      UNSCHEDULED: 'trips.schedule.unscheduled',
+      CANCELED: 'trips.schedule.canceled',
+      DELETED: 'trips.schedule.deleted',
+      DUPLICATED: 'trips.schedule.duplicated',
+      REPLACEMENT: 'trips.schedule.replacement',
+      SKIPPED: 'trips.schedule.skipped',
+      NO_DATA: 'trips.schedule.no_data',
+    };
+
+    const key = keyByRelationship[normalized];
+    return key ? window.i18n(key) : (normalized || '-');
+  }
+
+  function _getTripStatusClass(value) {
+    const normalized = String(value || '').trim().toUpperCase();
+    if (normalized === 'CANCELED' || normalized === 'DELETED') {
+      return 'status-text--negative';
+    }
+    if (normalized === 'ADDED' || normalized === 'UNSCHEDULED' || normalized === 'DUPLICATED' || normalized === 'REPLACEMENT') {
+      return 'status-text--positive';
+    }
+    return '';
+  }
+
+  function _getStopEventStatusClass(value) {
+    const normalized = String(value || '').trim().toUpperCase();
+    if (normalized === 'SKIPPED') {
+      return 'status-text--negative';
+    }
+    if (normalized === 'ADDED') {
+      return 'status-text--positive';
+    }
+    return '';
+  }
+
   function _normalizeTrip(item) {
     const stopEvents = Array.isArray(item.stop_events) ? [...item.stop_events] : [];
     stopEvents.sort((a, b) => {
@@ -97,15 +152,29 @@ const trips = (() => {
     const hasInvalidStopEvent = stopEvents.some((stopEvent) => stopEvent?.is_valid === false);
     const isValid = Boolean(item.is_valid) && !hasInvalidStopEvent;
 
+    const normalizedStopEvents = stopEvents.map((stopEvent) => {
+      const arrivalDate = stopEvent?.arrival_time ? new Date(stopEvent.arrival_time) : null;
+      const departureDate = stopEvent?.departure_time ? new Date(stopEvent.departure_time) : null;
+
+      return {
+        stopDisplayName: stopEvent?.stop_name || stopEvent?.stop_id || '-',
+        arrivalTimeLabel: _formatLocalTime(arrivalDate),
+        departureTimeLabel: _formatLocalTime(departureDate),
+        statusCode: String(stopEvent?.schedule_relationship || ''),
+        statusLabel: _getScheduleRelationshipText(stopEvent?.schedule_relationship),
+        isValid: stopEvent?.is_valid !== false,
+      };
+    });
+
     return {
       id: item.id,
-      line: item.route_id || '-',
+      line: item.route_name || item.route_id || '-',
       tripId: item.trip_id || '-',
       startDate,
       endDate,
-      startStopName: firstStopEvent?.stop_id || '-',
+      startStopName: firstStopEvent?.stop_name || firstStopEvent?.stop_id || '-',
       startStopId: firstStopEvent?.stop_id || '-',
-      endStopName: lastStopEvent?.stop_id || '-',
+      endStopName: lastStopEvent?.stop_name || lastStopEvent?.stop_id || '-',
       endStopId: lastStopEvent?.stop_id || '-',
       sourceName: item.data_source_name || item.source || window.i18n('alerts.badge.external'),
       isInternal: !item.data_source_id,
@@ -113,7 +182,91 @@ const trips = (() => {
       isValid,
       isMatched: stopEvents.length > 0,
       scheduleRelationship: item.schedule_relationship || 'SCHEDULED',
+      scheduleRelationshipLabel: _getScheduleRelationshipText(item.schedule_relationship || 'SCHEDULED'),
+      scheduleRelationshipClass: _getTripStatusClass(item.schedule_relationship || 'SCHEDULED'),
+      stopEvents: normalizedStopEvents,
     };
+  }
+
+  function _renderTripDetailsModal(trip) {
+    const titleElement = document.getElementById('view-trip-title');
+    const contentElement = document.getElementById('view-trip-content');
+    const modalElement = document.getElementById('view-trip-modal');
+    if (!titleElement || !contentElement || !modalElement) return;
+
+    const headerWarning = trip.isValid
+      ? ''
+      : ` <span class="view-item__warning" title="${ui.esc(window.i18n('trips.resolution.warning'))}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${WARNING_ICON_PATH}"/></svg></span>`;
+    const modalTitle = window.i18n('trips.modal.view');
+    const lineLabel = window.i18n('trips.field.line');
+    titleElement.innerHTML = `${ui.esc(modalTitle)}: ${ui.esc(lineLabel)} ${ui.esc(trip.line)} / ${ui.esc(trip.tripId)}${headerWarning}`;
+
+    const startTimeLabel = _formatLocalTime(trip.startDate);
+    const endTimeLabel = _formatLocalTime(trip.endDate);
+
+    const stopEventsHtml = trip.stopEvents.length
+      ? trip.stopEvents.map((stopEvent) => {
+        const warning = stopEvent.isValid
+          ? ''
+          : `<span class="view-item__warning" title="${ui.esc(window.i18n('trips.resolution.warning'))}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${WARNING_ICON_PATH}"/></svg></span>`;
+
+        return `
+          <div class="view-item view-item--entity">
+            <div class="view-item__content">
+              <strong>${ui.esc(stopEvent.stopDisplayName)}</strong><br>
+              ${ui.esc(window.i18n('trips.view.arrival'))}: ${ui.esc(stopEvent.arrivalTimeLabel)} •
+              ${ui.esc(window.i18n('trips.view.departure'))}: ${ui.esc(stopEvent.departureTimeLabel)} •
+              ${ui.esc(window.i18n('trips.view.status'))}: <span class="${_getStopEventStatusClass(stopEvent.statusCode)}">${ui.esc(stopEvent.statusLabel)}</span>
+            </div>
+            ${warning}
+          </div>
+        `;
+      }).join('')
+      : `<div class="view-item view-item--entity"><div class="view-item__content"><em>${ui.esc(window.i18n('trips.view.empty_stop_events'))}</em></div></div>`;
+
+    contentElement.innerHTML = `
+      <div class="view-section">
+        <h3 class="view-section__title">${ui.esc(window.i18n('trips.view.section.trip'))}</h3>
+        <div class="view-item">
+          <div class="view-item__label">${ui.esc(window.i18n('trips.view.trip_id'))}</div>
+          <div class="view-item__content">${ui.esc(trip.tripId)}</div>
+        </div>
+        <div class="view-item">
+          <div class="view-item__label">${ui.esc(window.i18n('trips.view.route'))}</div>
+          <div class="view-item__content">${ui.esc(trip.line)}</div>
+        </div>
+        <div class="view-item">
+          <div class="view-item__label">${ui.esc(window.i18n('trips.field.start'))}</div>
+          <div class="view-item__content">${ui.esc(startTimeLabel)} - ${ui.esc(trip.startStopName)}</div>
+        </div>
+        <div class="view-item">
+          <div class="view-item__label">${ui.esc(window.i18n('trips.field.end'))}</div>
+          <div class="view-item__content">${ui.esc(endTimeLabel)} - ${ui.esc(trip.endStopName)}</div>
+        </div>
+        <div class="view-item">
+          <div class="view-item__label">${ui.esc(window.i18n('trips.view.status'))}</div>
+          <div class="view-item__content"><span class="${trip.scheduleRelationshipClass}">${ui.esc(trip.scheduleRelationshipLabel)}</span></div>
+        </div>
+      </div>
+
+      <div class="view-section">
+        <h3 class="view-section__title">${ui.esc(window.i18n('trips.view.section.stop_events'))}</h3>
+        ${stopEventsHtml}
+      </div>
+    `;
+
+    modalElement.hidden = false;
+  }
+
+  function _openTripDetails(trip) {
+    _renderTripDetailsModal(trip);
+  }
+
+  function _closeTripDetailsModal() {
+    const modalElement = document.getElementById('view-trip-modal');
+    if (modalElement) {
+      modalElement.hidden = true;
+    }
   }
 
   async function _loadTrips() {
@@ -347,6 +500,69 @@ const trips = (() => {
     _loadTrips();
   }
 
+  function _createTripListItem(trip) {
+    const item = document.createElement('li');
+    item.className = 'alert-list-item' + (trip.isActive ? '' : ' alert-list-item--inactive');
+
+    const sourceBadge = `<span class="badge badge--system">${ui.esc(_getSourceBadgeLabel(trip))}</span>`;
+    const gtfsTripId = trip.tripId;
+    const startDateLabel = _formatLocalTime(trip.startDate);
+    const endDateLabel = _formatLocalTime(trip.endDate);
+    const scheduleRelationship = trip.scheduleRelationship || 'SCHEDULED';
+    const titleClassSuffix = scheduleRelationship === 'CANCELED'
+      ? ' alert-list-item__title--canceled'
+      : (scheduleRelationship === 'DELETED' ? ' alert-list-item__title--deleted' : '');
+
+    item.innerHTML = `
+      <div class="alert-list-item__content">
+        <div class="alert-list-item__header">
+          <h3 class="alert-list-item__title${titleClassSuffix}">${window.i18n('trips.field.line')} ${ui.esc(trip.line)} <span class="alert-list-item__subtitle">(${ui.esc(gtfsTripId)})</span></h3>
+          <div class="alert-list-item__badges">
+            ${sourceBadge}
+            ${!trip.isActive ? `<span class="badge badge--system badge--inactive">${window.i18n('alerts.badge.inactive')}</span>` : ''}
+          </div>
+        </div>
+
+        <div class="alert-list-item__time">
+          <svg class="alert-list-item__icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.2 3.2.8-1.3-4.5-2.7V7z"/>
+          </svg>
+          <span>${window.i18n('trips.field.start')} ${ui.esc(startDateLabel)} - ${ui.esc(trip.startStopName)} • ${window.i18n('trips.field.end')} ${ui.esc(endDateLabel)} - ${ui.esc(trip.endStopName)} • ${window.i18n('trips.view.status')} <span class="${trip.scheduleRelationshipClass}">${ui.esc(trip.scheduleRelationshipLabel)}</span></span>
+        </div>
+      </div>
+
+      <div class="alert-list-item__actions">
+        ${!trip.isValid ? `<span class="resolution-warning" title="${window.i18n('trips.resolution.warning')}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg></span>` : ''}
+        <button class="icon-btn" data-action="view" data-id="${trip.id}" title="${window.i18n('common.view')}" data-ripple>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+        </button>
+        <button class="icon-btn ${trip.isActive ? 'icon-btn--success' : 'icon-btn--warning'}" data-action="toggle" data-id="${trip.id}" title="${trip.isActive ? window.i18n('common.deactivate') : window.i18n('common.activate')}" data-ripple>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42C17.99 7.86 19 9.81 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.59-5.41L6.17 5.17C4.23 6.82 3 9.26 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z"/></svg>
+        </button>
+      </div>
+    `;
+
+    return item;
+  }
+
+  function _replaceTripListItem(trip) {
+    const container = document.getElementById('trips-content');
+    if (!container) return;
+
+    const toggleBtn = container.querySelector(`[data-action="toggle"][data-id="${trip.id}"]`);
+    const oldItem = toggleBtn?.closest('.alert-list-item');
+    if (!oldItem || !oldItem.parentNode) {
+      _renderTripsList();
+      return;
+    }
+
+    const newItem = _createTripListItem(trip);
+    oldItem.parentNode.replaceChild(newItem, oldItem);
+    if (window.initRipples) {
+      initRipples(newItem);
+    }
+  }
+
   function _renderTripsList() {
     const container = document.getElementById('trips-content');
     if (!container) return;
@@ -363,47 +579,7 @@ const trips = (() => {
     const list = container.querySelector('.alert-list');
 
     _items.forEach(trip => {
-      const item = document.createElement('li');
-      item.className = 'alert-list-item' + (trip.isActive ? '' : ' alert-list-item--inactive');
-
-      const sourceBadge = `<span class="badge badge--system">${ui.esc(_getSourceBadgeLabel(trip))}</span>`;
-      const gtfsTripId = trip.tripId;
-      const startDateLabel = _formatLocalDateTime(trip.startDate);
-      const endDateLabel = _formatLocalDateTime(trip.endDate);
-      const scheduleRelationship = trip.scheduleRelationship || 'SCHEDULED';
-      const titleClassSuffix = scheduleRelationship === 'CANCELED'
-        ? ' alert-list-item__title--canceled'
-        : (scheduleRelationship === 'DELETED' ? ' alert-list-item__title--deleted' : '');
-
-      item.innerHTML = `
-        <div class="alert-list-item__content">
-          <div class="alert-list-item__header">
-            <h3 class="alert-list-item__title${titleClassSuffix}">${window.i18n('trips.field.line')} ${ui.esc(trip.line)} <span class="alert-list-item__subtitle">(${ui.esc(gtfsTripId)})</span></h3>
-            <div class="alert-list-item__badges">
-              ${sourceBadge}
-              ${!trip.isActive ? `<span class="badge badge--system badge--inactive">${window.i18n('alerts.badge.inactive')}</span>` : ''}
-            </div>
-          </div>
-
-          <div class="alert-list-item__time">
-            <svg class="alert-list-item__icon" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.2 3.2.8-1.3-4.5-2.7V7z"/>
-            </svg>
-            <span>${window.i18n('trips.field.start')} ${ui.esc(startDateLabel)} - ${ui.esc(trip.startStopName)} (${ui.esc(trip.startStopId)}) • ${window.i18n('trips.field.end')} ${ui.esc(endDateLabel)} - ${ui.esc(trip.endStopName)} (${ui.esc(trip.endStopId)})</span>
-          </div>
-        </div>
-
-        <div class="alert-list-item__actions">
-          ${!trip.isValid ? `<span class="resolution-warning" title="${window.i18n('trips.resolution.warning')}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg></span>` : ''}
-          <button class="icon-btn" data-action="view" data-id="${trip.id}" title="${window.i18n('common.view')}" data-ripple>
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
-          </button>
-          <button class="icon-btn ${trip.isActive ? 'icon-btn--success' : 'icon-btn--warning'}" data-action="toggle" data-id="${trip.id}" title="${trip.isActive ? window.i18n('common.deactivate') : window.i18n('common.activate')}" data-ripple>
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42C17.99 7.86 19 9.81 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.59-5.41L6.17 5.17C4.23 6.82 3 9.26 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z"/></svg>
-          </button>
-        </div>
-      `;
-
+      const item = _createTripListItem(trip);
       list.appendChild(item);
     });
 
@@ -423,16 +599,26 @@ const trips = (() => {
     if (!trip) return;
 
     if (btn.dataset.action === 'view') {
-      ui.toast(window.i18n('trips.mock.view', { line: trip.line }), 'success');
+      _openTripDetails(trip);
       return;
     }
 
     if (btn.dataset.action === 'toggle') {
+      const previousIsActive = trip.isActive;
       api.toggleTripActive(trip.id)
-        .then(() => _loadTrips())
-        .then(() => {
+        .then((result) => {
+          const updatedTrip = result ? _normalizeTrip(result) : {
+            ...trip,
+            isActive: !trip.isActive,
+          };
+          const itemIndex = _items.findIndex((item) => item.id === trip.id);
+          if (itemIndex !== -1) {
+            _items[itemIndex] = updatedTrip;
+          }
+          _replaceTripListItem(updatedTrip);
+
           ui.toast(
-            trip.isActive
+            previousIsActive
               ? window.i18n('trips.status.deactivated', { line: trip.line })
               : window.i18n('trips.status.activated', { line: trip.line }),
             'success'
@@ -474,6 +660,16 @@ const trips = (() => {
     const content = document.getElementById('trips-content');
     if (content) {
       content.addEventListener('click', _handleContentClick);
+    }
+
+    const viewModalCloseBtn = document.getElementById('view-trip-close-btn');
+    if (viewModalCloseBtn) {
+      viewModalCloseBtn.addEventListener('click', _closeTripDetailsModal);
+    }
+
+    const viewModalBackdrop = document.querySelector('#view-trip-modal .modal__backdrop');
+    if (viewModalBackdrop) {
+      viewModalBackdrop.addEventListener('click', _closeTripDetailsModal);
     }
 
     window.addEventListener('popstate', () => {

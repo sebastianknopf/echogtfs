@@ -940,6 +940,22 @@
     </div>
   </div>
 
+  <!-- Modal: View trip (read-only) -->
+  <div id="view-trip-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="view-trip-title" hidden>
+    <div class="modal__backdrop"></div>
+    <div class="modal__panel modal__panel--lg">
+      <div class="modal__header">
+        <h2 class="modal__title" id="view-trip-title" data-i18n="trips.modal.view">Fahrt anzeigen</h2>
+      </div>
+      <div class="modal__body" style="max-height: calc(100vh - 200px);">
+        <div id="view-trip-content" class="view-alert-content"></div>
+      </div>
+      <div class="modal__actions">
+        <button type="button" id="view-trip-close-btn" class="md-btn md-btn--text" data-ripple data-i18n="common.close">Schließen</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: Confirm delete -->
   <div id="confirm-modal" class="modal" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" hidden>
     <div class="modal__backdrop"></div>
