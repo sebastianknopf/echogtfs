@@ -571,6 +571,16 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
             refreshed = await db.execute(stmt)
             return refreshed.scalar_one_or_none()
 
+    async def delete_trips_for_data_source(self, source_id: int) -> int:
+        """Delete all realtime trips for one data source and return deleted row count."""
+        stmt = delete(Trip).where(Trip.data_source_id == source_id)
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            await db.commit()
+
+            return int(result.rowcount or 0)
+
     async def get_realtime_vehicles(self) -> list[Vehicle]:
         """Return active realtime vehicle positions with trip relations loaded."""
         stmt = (
@@ -661,3 +671,13 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
 
             refreshed = await db.execute(stmt)
             return refreshed.scalar_one_or_none()
+
+    async def delete_vehicles_for_data_source(self, source_id: int) -> int:
+        """Delete all realtime vehicles for one data source and return deleted row count."""
+        stmt = delete(Vehicle).where(Vehicle.data_source_id == source_id)
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            await db.commit()
+
+            return int(result.rowcount or 0)

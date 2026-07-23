@@ -350,7 +350,7 @@ async def toggle_source_active(
 ) -> DataSourceRead:
     """
     Toggle the is_active flag of a data source (requires poweruser/admin).
-    When deactivating, all alerts from this source will be deleted.
+    When deactivating, all alerts, trips, and vehicles from this source will be deleted.
     
     Returns:
         Updated data source
@@ -370,11 +370,14 @@ async def toggle_source_active(
     
     # If deactivating, delete all alerts from this source
     if old_status and not source.is_active:
-        deleted_count = await realtime_repository.delete_alerts_for_data_source(source_id)
+        deleted_alerts = await realtime_repository.delete_alerts_for_data_source(source_id)
+        deleted_trips = await realtime_repository.delete_trips_for_data_source(source_id)
+        deleted_vehicles = await realtime_repository.delete_vehicles_for_data_source(source_id)
 
         logger.info(
             f"Deactivated data source {source_id} '{source.name}': "
-            f"Deleted {deleted_count} associated alerts"
+            f"Deleted {deleted_alerts} alerts, {deleted_trips} trips, "
+            f"and {deleted_vehicles} vehicles"
         )
     
     # Update cron job: remove if deactivated, add if activated
@@ -464,13 +467,16 @@ async def update_source(
     if source_data.is_active is not None:
         old_status = source.is_active
 
-        # If deactivating, delete all alerts from this source
+        # If deactivating, delete all realtime data from this source
         if old_status and not source_data.is_active:
-            deleted_count = await realtime_repository.delete_alerts_for_data_source(source_id)
+            deleted_alerts = await realtime_repository.delete_alerts_for_data_source(source_id)
+            deleted_trips = await realtime_repository.delete_trips_for_data_source(source_id)
+            deleted_vehicles = await realtime_repository.delete_vehicles_for_data_source(source_id)
 
             logger.info(
                 f"Deactivated data source {source_id} '{source.name}': "
-                f"Deleted {deleted_count} associated alerts"
+                f"Deleted {deleted_alerts} alerts, {deleted_trips} trips, "
+                f"and {deleted_vehicles} vehicles"
             )
 
     source = await repository.update_data_source(

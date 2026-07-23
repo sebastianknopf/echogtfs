@@ -184,6 +184,11 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def delete_trips_for_data_source(self, source_id: int) -> int:
+        """Delete all realtime trips for one data source and return deleted row count."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def get_realtime_vehicles(self) -> list[Vehicle]:
         """Return active realtime vehicle positions with trip relations loaded."""
         raise NotImplementedError
@@ -203,4 +208,9 @@ class RealtimeRepositoryInterface(ABC):
     @abstractmethod
     async def toggle_vehicle_active(self, vehicle_uuid: uuid.UUID) -> Vehicle | None:
         """Toggle the is_active flag for one realtime vehicle and return updated model."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def delete_vehicles_for_data_source(self, source_id: int) -> int:
+        """Delete all realtime vehicles for one data source and return deleted row count."""
         raise NotImplementedError
