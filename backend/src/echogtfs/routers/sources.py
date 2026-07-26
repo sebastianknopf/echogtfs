@@ -2,12 +2,13 @@
 Data sources router
 """
 import asyncio
+import json
 import logging
 import os
 import tempfile
 from typing import Annotated, List
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, status
 from fastapi.responses import StreamingResponse, FileResponse
 
 from echogtfs.services.database import (
@@ -20,6 +21,7 @@ from echogtfs.services.database.models import DataSource
 from echogtfs.services.scheduler import get_datasource_scheduler_service
 from echogtfs.validation.schemas import DataSourceCreate, DataSourceRead, DataSourceUpdate, DataSourceLogRead
 from echogtfs.common.security import CurrentPoweruser
+from echogtfs.common.report_progress_queue import ReportProgressQueue
 from echogtfs.datasources import DATASOURCE_REGISTRY
 from echogtfs.services.datalog import DatalogService
 from echogtfs.services.mapping import MappingExportService, MappingImportService, MappingServiceError
@@ -317,12 +319,12 @@ async def create_source(
     return await _enrich_source_with_error_flag(source, repository)
 
 
-@router.post("/{source_id}/run", status_code=202)
+@router.post("/{source_id}/run")
 async def run_source_import(
     source_id: int,
     _: CurrentPoweruser,
     repository: _Repo,
-):
+) -> StreamingResponse:
     """
     Manually trigger an import for a specific data source.
     Requires poweruser or admin role.
@@ -331,14 +333,44 @@ async def run_source_import(
         Accepted response - import runs in background
     """
     # Check if source exists
-    source = await repository.get_data_source_by_id(source_id)
-    if not source:
+    if await repository.get_data_source_by_id(source_id) is None:
         raise HTTPException(status_code=404, detail="Data source not found")
 
     # Trigger import task asynchronously
-    asyncio.create_task(get_datasource_scheduler_service().run_import_task(source_id))
+    queue: ReportProgressQueue = ReportProgressQueue()
+
+    async def run_import_with_boundaries() -> None:
+        await queue.report_progress(progress=0.0, message="intf.sources.running")
+
+        try:
+            await get_datasource_scheduler_service().run_import_task(source_id, queue)
+        finally:
+            await queue.report_progress(progress=100.0, message="intf.sources.completed")
+
+    asyncio.create_task(run_import_with_boundaries())
     
-    return {"message": f"Import for data source '{source.name}' has been triggered"}
+    async def stream():
+        async for event in queue:
+            event_name = event.get("event", "progress")
+            event_data = json.dumps(
+                {
+                    "progress": event.get("progress", 0.0),
+                    "message": event.get("message", ""),
+                }
+            )
+
+            yield f"event: {event_name}\ndata: {event_data}\n\n".encode("utf-8")
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        status_code=status.HTTP_200_OK,
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.post("/{source_id}/toggle-active", response_model=DataSourceRead)
