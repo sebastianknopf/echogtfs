@@ -9,14 +9,20 @@ class ReportProgressQueue(ReportProgressInterface):
         self._queue = asyncio.Queue()
 
     async def report_progress(self, *, progress: float, message: str) -> None:
-
-        event = {"event": "progress", "progress": progress, "message": message}
+        event = {
+            "event": "progress",
+            "progress": progress,
+            "message": message,
+            "done": progress >= 100.0,
+        }
+        
         await self._queue.put(event)
+        await asyncio.sleep(0)
 
     async def __aiter__(self):
         while True:
             event = await self._queue.get()
             yield event
 
-            if event["progress"] >= 100.0:
+            if event.get("done") or event.get("progress", 0.0) >= 100.0:
                 break

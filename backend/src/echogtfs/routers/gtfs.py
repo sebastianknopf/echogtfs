@@ -10,10 +10,11 @@ Endpoints:
 """
 
 import asyncio
+import json
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.sse import EventSourceResponse
+from fastapi.responses import StreamingResponse
 
 from echogtfs.services.database import get_gtfs_repository, get_system_repository
 from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
@@ -74,14 +75,14 @@ async def list_routes(
     return await repository.list_gtfs_routes(query=q, limit=limit)
 
 
-@router.post("/import", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/import")
 async def trigger_import(
     _: CurrentPoweruser,
     service: _GtfsImport,
-) -> EventSourceResponse:
+) -> StreamingResponse:
     """
-    Enqueue a background import.  Returns 202 immediately; poll /status for
-    progress.  Returns 409 if an import is already running.
+    Enqueue a background import and stream progress via SSE.
+    Returns 409 if an import is already running.
     """
     # Check whether an import is already in progress
     if await service.is_import_running():
@@ -96,9 +97,27 @@ async def trigger_import(
 
     async def stream():
         async for event in queue:
-            yield event
+            payload = {
+                "progress": event.get("progress", 0.0),
+                "message": event.get("message", ""),
+            }
+            
+            event_name = event.get("event", "progress")
+            event_data = json.dumps(payload)
 
-    return EventSourceResponse(stream())
+            yield f"event: {event_name}\n".encode("utf-8")
+            yield f"data: {event_data}\n\n".encode("utf-8")
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        status_code=status.HTTP_200_OK,
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.put("/feed-url", status_code=200)

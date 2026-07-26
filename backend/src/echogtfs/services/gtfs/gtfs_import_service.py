@@ -39,6 +39,11 @@ class _TripWindow:
     last_departure_time: datetime | None
 
 
+class _NullProgressReporter(ReportProgressInterface):
+    async def report_progress(self, *, progress: float, message: str) -> None:
+        return
+
+
 class GtfsImportService(GtfsImportInterface):
     """Service responsible for GTFS static feed import and scheduling."""
 
@@ -132,7 +137,7 @@ class GtfsImportService(GtfsImportInterface):
                 logger.info("[GTFS] Scheduler: setting new cron job: %s", cron_expr)
 
                 scheduler.add_job(
-                    self.run_import_task,
+                    self._run_scheduled_import,
                     CronTrigger.from_crontab(cron_expr, timezone=self._server_timezone),
                     id=job_id,
                     replace_existing=True,
@@ -144,6 +149,9 @@ class GtfsImportService(GtfsImportInterface):
 
         else:
             logger.info("[GTFS] Scheduler: no cron expression set, no job scheduled")
+
+    async def _run_scheduled_import(self) -> None:
+        await self.run_import_task(_NullProgressReporter())
 
     async def run_import_task(self, progress_report_interface: ReportProgressInterface) -> None:
         logger.info("[GTFS] Import task started")
@@ -173,12 +181,16 @@ class GtfsImportService(GtfsImportInterface):
             await self._repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_STATUS, self.STATUS_SUCCESS)
             await self._repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_MESSAGE, message)
             await self._repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_TIME, self._now_iso())
+
+            await progress_report_interface.report_progress(progress=100.0, message="intf.gtfsimport.done")
         except Exception as exc:  # noqa: BLE001
             logger.error("[GTFS] Import error: %s", exc)
 
             await self._repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_STATUS, self.STATUS_ERROR)
             await self._repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_MESSAGE, str(exc))
             await self._repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_TIME, self._now_iso())
+
+            await progress_report_interface.report_progress(progress=100.0, message="intf.gtfsimport.error")
 
     async def _import_feed(self, progress_report_interface: ReportProgressInterface) -> dict[str, int]:
         settings = await self._get_filtered_settings([AppSetting.KEY_GTFS_FEED_URL])
