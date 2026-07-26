@@ -91,22 +91,21 @@ async def trigger_import(
             detail="An import is already running.",
         )
 
-    queue: ReportProgressQueue = ReportProgressQueue()
+    queue = ReportProgressQueue()
 
     asyncio.create_task(service.run_import_task(queue))
 
     async def stream():
         async for event in queue:
-            payload = {
-                "progress": event.get("progress", 0.0),
-                "message": event.get("message", ""),
-            }
-            
             event_name = event.get("event", "progress")
-            event_data = json.dumps(payload)
+            event_data = json.dumps(
+                {
+                    "progress": event.get("progress", 0.0),
+                    "message": event.get("message", ""),
+                }
+            )
 
-            yield f"event: {event_name}\n".encode("utf-8")
-            yield f"data: {event_data}\n\n".encode("utf-8")
+            yield f"event: {event_name}\ndata: {event_data}\n\n".encode("utf-8")
 
     return StreamingResponse(
         stream(),
