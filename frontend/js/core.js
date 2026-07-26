@@ -396,6 +396,10 @@ const api = (() => {
       return request(`/sources/${id}/run`, { method: 'POST' });
     },
 
+    streamSourceImport(id, onEvent) {
+      return streamRequest(`/sources/${id}/run`, { method: 'POST' }, onEvent);
+    },
+
     toggleSourceActive(id) {
       return request(`/sources/${id}/toggle-active`, { method: 'POST' });
     },

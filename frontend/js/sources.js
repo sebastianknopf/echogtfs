@@ -6,6 +6,7 @@ const sources = (() => {
   let _sources = [];
   let _adapterTypes = [];
   let _editingSourceId = null;
+  const _runningSourceIds = new Set();
 
   // Source mapping management
   let _allMappings = [];
@@ -654,6 +655,13 @@ const sources = (() => {
       
       // Error badge if the last run had an error (4xx/5xx status code)
       const errorBadge = source.has_error ? `<span class="badge badge--error" title="${window.i18n('sources.badge.error')}">${window.i18n('sources.badge.error')}</span>` : '';
+      const isRunning = _runningSourceIds.has(source.id);
+      const runTitle = !source.is_active
+        ? window.i18n('sources.run.disabled')
+        : (isRunning ? window.i18n('sources.run.running') : window.i18n('sources.run.title'));
+      const runIcon = isRunning
+        ? '<span class="btn-spinner source-run-spinner" aria-hidden="true"></span>'
+        : '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
       
       tr.innerHTML = `
         <td>${ui.esc(source.name)}</td>
@@ -664,10 +672,10 @@ const sources = (() => {
           ${inactiveBadge}
           ${errorBadge}
           <button class="icon-btn" data-action="run" data-id="${source.id}"
-            title="${source.is_active ? window.i18n('sources.run.title') : window.i18n('sources.run.disabled')}" 
+            title="${runTitle}" 
             aria-label="${window.i18n('sources.run.title')} ${ui.esc(source.name)}" 
-            data-ripple ${!source.is_active ? 'disabled' : ''}>
-            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+            data-ripple ${(!source.is_active || isRunning) ? 'disabled' : ''}>
+            ${runIcon}
           </button>
           <button class="icon-btn" data-action="view-logs" data-id="${source.id}"
             title="${window.i18n('sources.logs.title')}" aria-label="${window.i18n('sources.logs.title')} ${ui.esc(source.name)}" data-ripple>
@@ -1009,13 +1017,25 @@ const sources = (() => {
       return;
     }
 
+    if (_runningSourceIds.has(sourceId)) {
+      return;
+    }
+
     try {
-      await api.runSourceImport(sourceId);
+      _runningSourceIds.add(sourceId);
+      _renderSourcesList();
       ui.toast(window.i18n('sources.run.started', { name: source.name }));
-      // Reload to show updated last_run_at
-      setTimeout(() => _loadSources(), 2000);
+
+      await api.streamSourceImport(sourceId, () => {
+        // Keep stream open while running; spinner state is enough for list UX.
+      });
+
+      ui.toast(window.i18n('intf.sources.completed'), 'success');
     } catch (err) {
       ui.toast(err.message, 'error');
+    } finally {
+      _runningSourceIds.delete(sourceId);
+      await _loadSources();
     }
   }
 
