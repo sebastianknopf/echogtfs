@@ -86,6 +86,131 @@ const api = (() => {
     }
   }
 
+  async function streamRequest(path, options = {}, onEvent) {
+    const url = path.startsWith('http') ? path : `${BASE_URL}${path}`;
+    const token = localStorage.getItem('auth-token');
+
+    const config = {
+      ...options,
+      headers: {
+        Accept: 'text/event-stream',
+        ...options.headers,
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+      },
+    };
+
+    let response;
+    try {
+      response = await fetch(url, config);
+    } catch (error) {
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error(window.i18n('error.network'));
+      }
+      throw error;
+    }
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('auth-token');
+        localStorage.removeItem('current-user');
+        window.location.reload();
+        return;
+      }
+
+      const errorText = await response.text();
+      throw new Error(translateError(errorText, response.status));
+    }
+
+    if (!response.body) {
+      return;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    function processEventBlock(rawBlock) {
+      if (!rawBlock.trim()) {
+        return;
+      }
+
+      const lines = rawBlock.split('\n');
+      let eventName = 'message';
+      const dataLines = [];
+
+      for (const line of lines) {
+        if (line.startsWith('event:')) {
+          eventName = line.slice(6).trimStart() || 'message';
+        }
+
+        if (line.startsWith('data:')) {
+          dataLines.push(line.slice(5).trimStart());
+        }
+      }
+
+      if (!dataLines.length) {
+        return;
+      }
+
+      const payloadText = dataLines.join('\n').trim();
+      if (!payloadText) {
+        return;
+      }
+
+      let payload;
+      try {
+        payload = JSON.parse(payloadText);
+      } catch {
+        payload = { message: payloadText };
+      }
+
+      if (payload && typeof payload === 'object' && payload.data !== undefined) {
+        const nested = payload.data;
+
+        if (typeof nested === 'string') {
+          try {
+            payload = JSON.parse(nested);
+          } catch {
+            payload = { message: nested };
+          }
+        } else if (nested && typeof nested === 'object') {
+          payload = nested;
+        }
+      }
+
+      if (payload && typeof payload === 'object') {
+        payload.event = payload.event || eventName;
+      } else {
+        payload = { event: eventName, message: String(payload ?? '') };
+      }
+
+      if (typeof onEvent === 'function') {
+        onEvent(payload);
+      }
+    }
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+
+      let sepIndex = buffer.indexOf('\n\n');
+      while (sepIndex !== -1) {
+        const eventBlock = buffer.slice(0, sepIndex);
+        processEventBlock(eventBlock);
+        buffer = buffer.slice(sepIndex + 2);
+        sepIndex = buffer.indexOf('\n\n');
+      }
+    }
+
+    if (buffer.trim()) {
+      processEventBlock(buffer);
+    }
+  }
+
   return {
     // Auth
     login(credentials) {
@@ -336,6 +461,12 @@ const api = (() => {
       return request('/gtfs/import', {
         method: 'POST',
       });
+    },
+
+    streamGtfsImport(onEvent) {
+      return streamRequest('/gtfs/import', {
+        method: 'POST',
+      }, onEvent);
     },
   };
 })();

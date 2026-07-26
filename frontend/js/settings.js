@@ -2,8 +2,6 @@
    SETTINGS MODULE
 ========================================================================== */
 const settings = (() => {
-  let _pollInterval = null;
-
   function init() {
     // Sync color pickers with hex inputs
     _syncColorInputs('primary');
@@ -197,11 +195,16 @@ const settings = (() => {
     } else {
       _showStatus(time ? window.i18n('settings.gtfs_import_last_short', { time }) : window.i18n('settings.gtfs_import_none'));
     }
-    
-    // Continue polling during import
-    if (status.status === 'running') {
-      _startPolling();
-    }
+  }
+
+  function _renderGtfsProgress(progressEvent) {
+    const progressValue = Number(progressEvent?.progress);
+    const progress = Number.isFinite(progressValue) ? progressValue : 0;
+    const percent = Math.max(0, Math.min(100, progress));
+    const messageCode = typeof progressEvent?.message === 'string' ? progressEvent.message : '';
+    const message = messageCode ? window.i18n(messageCode) : window.i18n('settings.gtfs_import_running');
+
+    _showStatus(`${percent.toFixed(1)}% - ${message}`, 'running');
   }
 
   async function _saveSettings() {
@@ -360,67 +363,38 @@ const settings = (() => {
       _showStatus(window.i18n('settings.gtfs_import_running'), 'running');
       
       await api.updateGtfsFeedUrl({ feed_url: url, cron });
-      await api.triggerGtfsImport();
-      
-      // Start polling for status updates
-      _startPolling();
+      let reachedCompletion = false;
+      await api.streamGtfsImport((event) => {
+        _renderGtfsProgress(event);
+
+        const progressValue = Number(event?.progress);
+        if (Number.isFinite(progressValue) && progressValue >= 100.0) {
+          reachedCompletion = true;
+        }
+      });
+
+      if (reachedCompletion) {
+        const finalStatus = await api.getGtfsStatus();
+        _renderGtfsStatus(finalStatus);
+
+        if (finalStatus?.status === 'success') {
+          ui.toast(window.i18n('settings.gtfs_import_success'));
+        } else if (finalStatus?.status === 'error') {
+          ui.toast(window.i18n('settings.gtfs_import_error'), 'error');
+        }
+      }
       
     } catch (err) {
-      importBtn.disabled = false;
-      spinner.hidden = true;
-      label.textContent = window.i18n('common.import');
-      _showStatus('');
       if (errorEl) {
         errorEl.textContent = err.message;
         errorEl.style.display = 'block';
       }
+      _showStatus('');
+    } finally {
+      importBtn.disabled = false;
+      spinner.hidden = true;
+      label.textContent = window.i18n('common.import');
     }
-  }
-
-  function _startPolling() {
-    // Clear existing timer
-    if (_pollInterval) {
-      clearInterval(_pollInterval);
-    }
-    
-    let pollCount = 0;
-    const maxPolls = 100; // 5 minutes at 3s interval
-    
-    _pollInterval = setInterval(async () => {
-      try {
-        pollCount++;
-        
-        const status = await api.getGtfsStatus();
-        
-        // Render status update
-        _renderGtfsStatus(status);
-        
-        // Stop polling when complete or error
-        if (status.status === 'success' || status.status === 'error' || pollCount >= maxPolls) {
-          clearInterval(_pollInterval);
-          _pollInterval = null;
-          
-          // Re-enable import button
-          const importBtn = ui.el('settings-gtfs-import-btn');
-          const spinner = ui.el('settings-gtfs-import-spinner');
-          const label = ui.el('settings-gtfs-import-label');
-          
-          if (importBtn) importBtn.disabled = false;
-          if (spinner) spinner.hidden = true;
-          if (label) label.textContent = window.i18n('common.import');
-          
-          if (status.status === 'success') {
-            ui.toast(window.i18n('settings.gtfs_import_success'));
-          } else if (status.status === 'error') {
-            ui.toast(window.i18n('settings.gtfs_import_error'), 'error');
-          }
-        }
-        
-      } catch (err) {
-        clearInterval(_pollInterval);
-        _pollInterval = null;
-      }
-    }, 3000);
   }
 
   return { init, load };
