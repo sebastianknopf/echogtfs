@@ -18,6 +18,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from echogtfs.common.config import settings
+from echogtfs.common.intf_progress_report import ReportProgressInterface
 from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
 from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
 from echogtfs.services.database.models import AppSetting
@@ -144,14 +145,14 @@ class GtfsImportService(GtfsImportInterface):
         else:
             logger.info("[GTFS] Scheduler: no cron expression set, no job scheduled")
 
-    async def run_import_task(self) -> None:
+    async def run_import_task(self, progress_report_interface: ReportProgressInterface) -> None:
         logger.info("[GTFS] Import task started")
 
         await self._repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_STATUS, self.STATUS_RUNNING)
         await self._repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_TIME, self._now_iso())
 
         try:
-            result = await self._import_feed()
+            result = await self._import_feed(progress_report_interface)
             
             agencies_count = int(result.get("agencies", 0))
             stops_count = int(result.get("stops", 0))
@@ -164,7 +165,7 @@ class GtfsImportService(GtfsImportInterface):
                 f"{stops_count} stops, "
                 f"{routes_count} routes, "
                 f"{trips_count} trips, "
-                f"{stop_times_count} stop_times imported"
+                f"{stop_times_count} stop_times"
             )
 
             logger.info("[GTFS] Import successful: %s", message)
@@ -179,33 +180,42 @@ class GtfsImportService(GtfsImportInterface):
             await self._repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_MESSAGE, str(exc))
             await self._repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_TIME, self._now_iso())
 
-    async def _import_feed(self) -> dict[str, int]:
+    async def _import_feed(self, progress_report_interface: ReportProgressInterface) -> dict[str, int]:
         settings = await self._get_filtered_settings([AppSetting.KEY_GTFS_FEED_URL])
         feed_url = (settings.get(AppSetting.KEY_GTFS_FEED_URL) or "").strip()
 
         if not feed_url:
             raise ValueError("No GTFS feed URL configured")
 
+        await progress_report_interface.report_progress(progress=0.0, message="intf.gtfsimport.downloading")
         zip_path = await self._download_gtfs_zip(feed_url)
 
         try:
             with zipfile.ZipFile(zip_path) as zip_file:
+                await progress_report_interface.report_progress(progress=10, message="intf.gtfsimport.parsing")
                 agency_rows = list(self._iter_csv_rows(zip_file, "agency.txt"))
                 feed_timezone = self._extract_feed_timezone(agency_rows)
                 service_date = datetime.now(feed_timezone).date()
-                
+
+                await progress_report_interface.report_progress(progress=20, message="intf.gtfsimport.mapping.agencies")
                 agencies = self._map_agencies(agency_rows)
+
+                await progress_report_interface.report_progress(progress=30, message="intf.gtfsimport.mapping.stops")
                 stops = self._map_stops(self._iter_csv_rows(zip_file, "stops.txt"))
+
+                await progress_report_interface.report_progress(progress=40, message="intf.gtfsimport.mapping.routes")
                 routes = self._map_routes(self._iter_csv_rows(zip_file, "routes.txt"))
 
                 stop_ids = {row["gtfs_id"] for row in stops}
                 route_ids = {row["gtfs_id"] for row in routes}
 
+                await progress_report_interface.report_progress(progress=50, message="intf.gtfsimport.mapping.trips")
                 trip_meta = self._map_trips(
                     self._iter_csv_rows(zip_file, "trips.txt"),
                     route_ids=route_ids,
                 )
 
+                await progress_report_interface.report_progress(progress=60, message="intf.gtfsimport.mapping.stop_times")
                 trip_windows: dict[str, _TripWindow] = {}
                 stop_time_batches = await self._map_stop_times(
                     zip_file,
@@ -216,9 +226,13 @@ class GtfsImportService(GtfsImportInterface):
                     feed_timezone=feed_timezone,
                 )
 
+                await progress_report_interface.report_progress(progress=70, message="intf.gtfsimport.completing")
                 trip_rows = self._derive_trip_rows(trip_meta, trip_windows)
 
+            await progress_report_interface.report_progress(progress=80, message="intf.gtfsimport.clearing")
             await self._gtfs_repository.clear_gtfs_static_data()
+
+            await progress_report_interface.report_progress(progress=90, message="intf.gtfsimport.inserting")
             await self._gtfs_repository.insert_gtfs_agencies(agencies)
             await self._gtfs_repository.insert_gtfs_routes(routes)
             await self._gtfs_repository.insert_gtfs_stops(stops)

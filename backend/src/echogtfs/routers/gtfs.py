@@ -9,15 +9,18 @@ Endpoints:
     PUT  /api/gtfs/feed-url    – persist feed URL (admin)
 """
 
+import asyncio
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.sse import EventSourceResponse
 
 from echogtfs.services.database import get_gtfs_repository, get_system_repository
 from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
 from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
 from echogtfs.services.database.models import GtfsAgency, GtfsRoute, GtfsStop
 from echogtfs.common.security import CurrentUser, CurrentPoweruser
+from echogtfs.common.report_progress_queue import ReportProgressQueue
 from echogtfs.services.gtfs import (
     GtfsImportInterface,
     GtfsImportService,
@@ -74,9 +77,8 @@ async def list_routes(
 @router.post("/import", status_code=status.HTTP_202_ACCEPTED)
 async def trigger_import(
     _: CurrentPoweruser,
-    background_tasks: BackgroundTasks,
     service: _GtfsImport,
-) -> dict[str, str]:
+) -> EventSourceResponse:
     """
     Enqueue a background import.  Returns 202 immediately; poll /status for
     progress.  Returns 409 if an import is already running.
@@ -88,8 +90,15 @@ async def trigger_import(
             detail="An import is already running.",
         )
 
-    background_tasks.add_task(service.run_import_task)
-    return {"status": GtfsImportService.STATUS_RUNNING}
+    queue: ReportProgressQueue = ReportProgressQueue()
+
+    asyncio.create_task(service.run_import_task(queue))
+
+    async def stream():
+        async for event in queue:
+            yield event
+
+    return EventSourceResponse(stream())
 
 
 @router.put("/feed-url", status_code=200)
