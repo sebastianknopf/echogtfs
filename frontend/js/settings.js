@@ -6,14 +6,16 @@ const settings = (() => {
     if (typeof message !== 'string') return false;
 
     const normalized = message.trim().toLowerCase();
+    const keyMinuteOnly = 'error.cron_minute_only';
+    const keyInvalid = 'error.invalid_cron';
     const localizedMinuteOnly = window.i18n('error.cron_minute_only').trim().toLowerCase();
     const localizedInvalid = window.i18n('error.invalid_cron').trim().toLowerCase();
 
     return (
-      normalized === localizedMinuteOnly
+      normalized === keyMinuteOnly
+      || normalized === keyInvalid
+      || normalized === localizedMinuteOnly
       || normalized === localizedInvalid
-      || normalized === 'cron expression must be minute-based (5 fields)'
-      || normalized === 'invalid cron expression'
     );
   }
 

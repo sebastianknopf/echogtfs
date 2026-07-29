@@ -16,6 +16,9 @@ except ImportError:
 
 router = APIRouter()
 
+_ERR_CRON_MINUTE_ONLY = "error.cron_minute_only"
+_ERR_INVALID_CRON = "error.invalid_cron"
+
 
 def _validate_minute_cron_expression(cron_expr: str) -> str:
     normalized = cron_expr.strip()
@@ -24,16 +27,16 @@ def _validate_minute_cron_expression(cron_expr: str) -> str:
 
     if len(normalized.split()) != 5:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cron expression must be minute-based (5 fields)",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_ERR_CRON_MINUTE_ONLY,
         )
 
     try:
         CronTrigger.from_crontab(normalized)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid cron expression",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_ERR_INVALID_CRON,
         ) from exc
 
     return normalized

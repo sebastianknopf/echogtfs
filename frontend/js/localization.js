@@ -63,6 +63,21 @@ const i18n = (() => {
     return text;
   }
 
+  function hasTranslation(key) {
+    if (!key || typeof key !== 'string') {
+      return false;
+    }
+
+    const translations = window.translations || {};
+    const languageStrings = translations[_currentLanguage];
+    if (!languageStrings) {
+      return false;
+    }
+
+    return Object.prototype.hasOwnProperty.call(languageStrings, key)
+      || Object.prototype.hasOwnProperty.call(RUNTIME_FALLBACKS[_currentLanguage] || {}, key);
+  }
+
   /**
    * Set the current language.
    * 
@@ -232,6 +247,7 @@ const i18n = (() => {
   return {
     // Main translation function (also exposed as global function below)
     t: translate,
+    hasTranslation,
     
     // Language management
     setLanguage,
