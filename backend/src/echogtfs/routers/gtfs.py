@@ -13,6 +13,7 @@ import asyncio
 import json
 from typing import Annotated
 
+from apscheduler.triggers.cron import CronTrigger
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
@@ -41,6 +42,28 @@ def create_gtfs_import_service(repository: _Repo, gtfs_repository: _GtfsRepo) ->
 
 
 _GtfsImport = Annotated[GtfsImportInterface, Depends(create_gtfs_import_service)]
+
+
+def _validate_minute_cron_expression(cron_expr: str) -> str:
+    normalized = cron_expr.strip()
+    if not normalized:
+        return normalized
+
+    if len(normalized.split()) != 5:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cron expression must be minute-based (5 fields)",
+        )
+
+    try:
+        CronTrigger.from_crontab(normalized)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid cron expression",
+        ) from exc
+
+    return normalized
 
 
 @router.get("/status", response_model=GtfsStatusRead)
@@ -126,4 +149,8 @@ async def update_feed_url(
     service: _GtfsImport,
 ) -> dict[str, str]:
     """Update GTFS feed URL and/or cron expression."""
-    return await service.update_configuration(feed_url=data.feed_url, cron=data.cron)
+    cron = data.cron
+    if cron is not None:
+        cron = _validate_minute_cron_expression(cron)
+
+    return await service.update_configuration(feed_url=data.feed_url, cron=cron)

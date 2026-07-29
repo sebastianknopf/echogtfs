@@ -69,6 +69,25 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
 
         return cls._scheduler
 
+    def _build_cron_trigger(self, cron_expr: str) -> CronTrigger:
+        fields = cron_expr.split()
+        if len(fields) == 5:
+            return CronTrigger.from_crontab(cron_expr, timezone=self._scheduler_timezone)
+
+        if len(fields) == 6:
+            second, minute, hour, day, month, day_of_week = fields
+            return CronTrigger(
+                second=second,
+                minute=minute,
+                hour=hour,
+                day=day,
+                month=month,
+                day_of_week=day_of_week,
+                timezone=self._scheduler_timezone,
+            )
+
+        raise ValueError("Cron expression must have 5 fields (minute-level) or 6 fields (second-level)")
+
     @staticmethod
     def _get_datasource(source_type: str, config: dict[str, object]):
         from echogtfs.datasources import get_datasource
@@ -116,7 +135,7 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
             try:
                 scheduler.add_job(
                     self.run_import_task,
-                    CronTrigger.from_crontab(cron_expr, timezone=self._scheduler_timezone),
+                    self._build_cron_trigger(cron_expr),
                     args=[source_id],
                     id=job_id,
                     replace_existing=True,

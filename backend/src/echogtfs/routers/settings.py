@@ -1,4 +1,5 @@
-from fastapi import APIRouter
+from apscheduler.triggers.cron import CronTrigger
+from fastapi import APIRouter, HTTPException, status
 
 from echogtfs.enum.system import ExpiredRealtimeObjectPolicy
 from echogtfs.services.database import get_realtime_repository, get_system_repository
@@ -14,6 +15,28 @@ except ImportError:
     __version__ = "0.0.0+unknown"
 
 router = APIRouter()
+
+
+def _validate_minute_cron_expression(cron_expr: str) -> str:
+    normalized = cron_expr.strip()
+    if not normalized:
+        return normalized
+
+    if len(normalized.split()) != 5:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cron expression must be minute-based (5 fields)",
+        )
+
+    try:
+        CronTrigger.from_crontab(normalized)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid cron expression",
+        ) from exc
+
+    return normalized
 
 DEFAULTS = AppSettings(
     color_primary="#008c99",
@@ -123,6 +146,7 @@ async def update_settings(
 ) -> AppSettings:
     """Admin only: persists app settings."""
     repository = get_system_repository()
+    cleanup_cron = _validate_minute_cron_expression(payload.cleanup_cron)
 
     await repository.set_app_setting(AppSetting.KEY_COLOR_PRIMARY, payload.color_primary)
     await repository.set_app_setting(AppSetting.KEY_COLOR_SECONDARY, payload.color_secondary)
@@ -142,7 +166,7 @@ async def update_settings(
     )
     
     # Cleanup settings
-    await repository.set_app_setting(AppSetting.KEY_CLEANUP_CRON, payload.cleanup_cron)
+    await repository.set_app_setting(AppSetting.KEY_CLEANUP_CRON, cleanup_cron)
     await repository.set_app_setting(AppSetting.KEY_CLEANUP_EXPIRED_POLICY, payload.cleanup_expired_policy.value)
     await repository.set_app_setting(AppSetting.KEY_CLEANUP_DELETE_AFTER_DAYS, str(payload.cleanup_delete_after_days))
     
