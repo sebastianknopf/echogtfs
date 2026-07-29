@@ -21,6 +21,7 @@ const api = (() => {
       'Access denied': window.i18n('error.access_denied'),
       'Data source not found': window.i18n('error.source_not_found'),
       'Invalid cron expression': window.i18n('error.invalid_cron'),
+      'Cron expression must be minute-based (5 fields)': window.i18n('error.cron_minute_only'),
       'Alert not found': window.i18n('error.alert_not_found'),
       'Cannot delete external alert': window.i18n('error.cannot_delete_external'),
       'Invalid active period': window.i18n('error.invalid_period'),

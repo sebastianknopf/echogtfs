@@ -644,10 +644,17 @@ const sources = (() => {
       
       const cronText = source.cron || '—';
       const lastRunText = source.last_run_at 
-        ? new Date(source.last_run_at).toLocaleString('de-DE', { 
-            dateStyle: 'short', 
-            timeStyle: 'short' 
-          })
+        ? (() => {
+            const lastRunDate = new Date(source.last_run_at);
+            const datePart = lastRunDate.toLocaleDateString('de-DE', { dateStyle: 'short' });
+            const timePart = lastRunDate.toLocaleTimeString('de-DE', {
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+              hour12: false
+            });
+            return `${datePart}, ${timePart}`;
+          })()
         : '—';
       
       // Inaktiv badge (like alerts) - will be shown in actions cell

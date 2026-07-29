@@ -2,6 +2,21 @@
    SETTINGS MODULE
 ========================================================================== */
 const settings = (() => {
+  function _isCronValidationError(message) {
+    if (typeof message !== 'string') return false;
+
+    const normalized = message.trim().toLowerCase();
+    const localizedMinuteOnly = window.i18n('error.cron_minute_only').trim().toLowerCase();
+    const localizedInvalid = window.i18n('error.invalid_cron').trim().toLowerCase();
+
+    return (
+      normalized === localizedMinuteOnly
+      || normalized === localizedInvalid
+      || normalized === 'cron expression must be minute-based (5 fields)'
+      || normalized === 'invalid cron expression'
+    );
+  }
+
   function init() {
     // Sync color pickers with hex inputs
     _syncColorInputs('primary');
@@ -256,7 +271,9 @@ const settings = (() => {
         errorEl.textContent = err.message;
         errorEl.style.display = 'block';
       }
-      ui.toast(err.message, 'error');
+      if (!_isCronValidationError(err.message)) {
+        ui.toast(err.message, 'error');
+      }
     } finally {
       saveBtn.disabled = false;
       spinner.hidden = true;
@@ -328,7 +345,9 @@ const settings = (() => {
         errorEl.textContent = err.message;
         errorEl.style.display = 'block';
       }
-      ui.toast(err.message, 'error');
+      if (!_isCronValidationError(err.message)) {
+        ui.toast(err.message, 'error');
+      }
     } finally {
       saveBtn.disabled = false;
     }
