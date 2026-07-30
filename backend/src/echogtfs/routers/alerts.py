@@ -25,6 +25,9 @@ from echogtfs.common.security import CurrentUser
 router = APIRouter()
 logger = logging.getLogger("uvicorn")
 
+_ERR_ALERT_NOT_FOUND = "error.alert_not_found"
+_ERR_CANNOT_DELETE_EXTERNAL = "error.cannot_delete_external"
+
 _Repo = Annotated[RealtimeRepositoryInterface, Depends(get_realtime_repository)]
 _GtfsRepo = Annotated[GtfsRepositoryInterface, Depends(get_gtfs_repository)]
 
@@ -223,8 +226,8 @@ async def get_alert(alert_id: UUID, repository: _Repo, gtfs_repository: _GtfsRep
     
     if not alert:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Alert not found"
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_ERR_ALERT_NOT_FOUND,
         )
     
     # Convert to Pydantic and then enrich with entity names
@@ -312,8 +315,8 @@ async def toggle_alert_active(
     
     if not alert:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Alert not found"
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_ERR_ALERT_NOT_FOUND,
         )
     
     return alert
@@ -336,8 +339,8 @@ async def update_alert(
     
     if not alert:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Alert not found"
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_ERR_ALERT_NOT_FOUND,
         )
     
     # Check if alert is external (imported from data source)
@@ -399,8 +402,8 @@ async def update_alert(
 
     if alert is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Alert not found"
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_ERR_ALERT_NOT_FOUND,
         )
     
     # Convert to Pydantic and then enrich with entity names
@@ -427,15 +430,15 @@ async def delete_alert(
     
     if not alert:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Alert not found"
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_ERR_ALERT_NOT_FOUND,
         )
     
     # Check if alert is external (imported from data source)
     if alert.data_source_id is not None:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot delete external alerts from data sources"
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_ERR_CANNOT_DELETE_EXTERNAL,
         )
     
     await repository.delete_service_alerts_by_ids([alert_id])

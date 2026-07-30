@@ -24,6 +24,8 @@ from echogtfs.services.security import get_security_service
 
 router = APIRouter()
 
+_ERR_INVALID_CREDENTIALS = "error.invalid_credentials"
+
 
 async def _get_gtfs_rt_settings() -> tuple[dict[str, Callable[[], GtfsRealtimeExportInterface]], str, str]:
     """Load GTFS-RT paths and optional basic-auth credentials from repository."""
@@ -72,23 +74,23 @@ async def check_gtfs_rt_auth(request: Request) -> None:
         
         if provided_username != configured_username:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid credentials",
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=_ERR_INVALID_CREDENTIALS,
                 headers={"WWW-Authenticate": "Basic"},
             )
         
         if not get_security_service().verify_password(password, hashed_password):
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid credentials",
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=_ERR_INVALID_CREDENTIALS,
                 headers={"WWW-Authenticate": "Basic"},
             )
     except Exception as e:
         if isinstance(e, HTTPException):
             raise
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_ERR_INVALID_CREDENTIALS,
             headers={"WWW-Authenticate": "Basic"},
         )
 

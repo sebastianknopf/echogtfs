@@ -10,6 +10,10 @@ from echogtfs.common.security import CurrentSuperuser, CurrentUser
 
 router = APIRouter()
 
+_ERR_USER_NOT_FOUND = "error.user_not_found"
+_ERR_CURRENT_PASSWORD_INCORRECT = "error.current_password_incorrect"
+_ERR_USER_EXISTS = "error.user_exists"
+
 _Repo = Annotated[SystemRepositoryInterface, Depends(get_system_repository)]
 
 
@@ -28,7 +32,7 @@ async def get_user(user_id: int, _: CurrentSuperuser, repository: _Repo) -> User
     user = await repository.get_user_by_id(user_id)
 
     if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_USER_NOT_FOUND)
     
     return user
 
@@ -43,8 +47,8 @@ async def change_own_password(
         current_user.hashed_password,
     ):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Current password is incorrect",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_ERR_CURRENT_PASSWORD_INCORRECT,
         )
     
     await repository.update_user(
@@ -60,8 +64,8 @@ async def register(
     """Admin-only registration endpoint for creating regular (non-superuser) accounts."""
     if await repository.user_exists_by_username_or_email(payload.username, payload.email):
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Username or email already taken",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_ERR_USER_EXISTS,
         )
     
     return await repository.create_user(
@@ -86,7 +90,7 @@ async def update_me(
     )
 
     if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_USER_NOT_FOUND)
     
     return user
 
@@ -101,7 +105,7 @@ async def update_user(
     existing_user = await repository.get_user_by_id(user_id)
 
     if existing_user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_USER_NOT_FOUND)
 
     if payload.is_active is not None:
         if user_id == current_superuser.id and not payload.is_active:
@@ -138,7 +142,7 @@ async def update_user(
     )
 
     if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_USER_NOT_FOUND)
     
     return user
 
@@ -155,4 +159,4 @@ async def delete_user(
     deleted = await repository.delete_user(user_id)
 
     if not deleted:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_USER_NOT_FOUND)

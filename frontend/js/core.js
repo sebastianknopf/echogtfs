@@ -10,24 +10,6 @@ const api = (() => {
   const BASE_URL = '/api';
   
   function translateError(msg, status) {
-    const translations = {
-      'Invalid credentials': window.i18n('error.invalid_credentials'),
-      'User not found': window.i18n('error.user_not_found'),
-      'User already exists': window.i18n('error.user_exists'),
-      'Missing required fields': window.i18n('error.required_fields'),
-      'Invalid email format': window.i18n('error.invalid_email'),
-      'Password too short': window.i18n('error.password_short'),
-      'Current password is incorrect': window.i18n('error.current_password_incorrect'),
-      'Access denied': window.i18n('error.access_denied'),
-      'Data source not found': window.i18n('error.source_not_found'),
-      'Invalid cron expression': window.i18n('error.invalid_cron'),
-      'Alert not found': window.i18n('error.alert_not_found'),
-      'Cannot delete external alert': window.i18n('error.cannot_delete_external'),
-      'Invalid active period': window.i18n('error.invalid_period'),
-      'Missing translation': window.i18n('error.missing_translation'),
-      'Invalid informed entity': window.i18n('error.invalid_entity'),
-    };
-
     if (typeof msg === 'string' && window.i18n.hasTranslation(msg)) {
       return window.i18n(msg);
     }
@@ -36,9 +18,9 @@ const api = (() => {
     if (status === 409) return window.i18n('error.conflict');
     if (status === 500) return window.i18n('error.server_500');
     if (status === 503) return window.i18n('error.server_503');
-    if (status >= 400 && status < 500) return translations[msg] || window.i18n('error.request_failed');
+    if (status >= 400 && status < 500) return (typeof msg === 'string' && msg) || window.i18n('error.request_failed');
     if (status >= 500) return window.i18n('error.server_error');
-    return translations[msg] || msg || window.i18n('error.unknown');
+    return (typeof msg === 'string' && msg) || window.i18n('error.unknown');
   }
 
   async function request(path, options = {}, skipAuthRedirect = false) {
@@ -121,8 +103,11 @@ const api = (() => {
         return;
       }
 
-      const errorText = await response.text();
-      throw new Error(translateError(errorText, response.status));
+      const contentType = response.headers.get('content-type');
+      const isJson = contentType?.includes('application/json');
+      const errorData = isJson ? await response.json() : await response.text();
+      const detail = isJson && errorData && typeof errorData === 'object' ? errorData.detail : errorData;
+      throw new Error(translateError(detail, response.status));
     }
 
     if (!response.body) {

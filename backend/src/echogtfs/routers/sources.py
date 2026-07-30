@@ -29,6 +29,8 @@ from echogtfs.services.mapping import MappingExportService, MappingImportService
 router = APIRouter()
 logger = logging.getLogger("uvicorn")
 
+_ERR_SOURCE_NOT_FOUND = "error.source_not_found"
+
 _Repo = Annotated[SystemRepositoryInterface, Depends(get_system_repository)]
 _RealtimeRepo = Annotated[RealtimeRepositoryInterface, Depends(get_realtime_repository)]
 
@@ -127,7 +129,7 @@ async def get_source(
     """
     source = await repository.get_data_source_by_id(source_id)
     if not source:
-        raise HTTPException(status_code=404, detail="Data source not found")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
 
     return await _enrich_source_with_error_flag(source, repository)
 
@@ -189,7 +191,7 @@ async def list_source_logs(
     
     # Check if source exists
     if await repository.get_data_source_by_id(source_id) is None:
-        raise HTTPException(status_code=404, detail="Data source not found")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
 
     logs = await repository.list_data_source_logs(source_id, limit=limit)
     
@@ -334,7 +336,7 @@ async def run_source_import(
     """
     # Check if source exists
     if await repository.get_data_source_by_id(source_id) is None:
-        raise HTTPException(status_code=404, detail="Data source not found")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
 
     # Trigger import task asynchronously
     queue: ReportProgressQueue = ReportProgressQueue()
@@ -391,14 +393,14 @@ async def toggle_source_active(
     
     if not source:
         raise HTTPException(
-            status_code=404,
-            detail="Data source not found"
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_ERR_SOURCE_NOT_FOUND,
         )
     
     old_status = source.is_active
     source = await repository.toggle_data_source_active(source_id)
     if source is None:
-        raise HTTPException(status_code=404, detail="Data source not found")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
     
     # If deactivating, delete all alerts from this source
     if old_status and not source.is_active:
@@ -422,7 +424,7 @@ async def toggle_source_active(
     
     source = await repository.get_data_source_by_id(source.id)
     if source is None:
-        raise HTTPException(status_code=404, detail="Data source not found")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
 
     return await _enrich_source_with_error_flag(source, repository)
 
@@ -485,7 +487,7 @@ async def update_source(
     """
     source = await repository.get_data_source_by_id(source_id)
     if not source:
-        raise HTTPException(status_code=404, detail="Data source not found")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
     
     # Update basic fields
     old_name = source.name
@@ -548,7 +550,7 @@ async def update_source(
     )
 
     if source is None:
-        raise HTTPException(status_code=404, detail="Data source not found")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
     
     # Update cron job: only schedule if active, otherwise remove
     if source.is_active and source.cron:
@@ -572,7 +574,7 @@ async def delete_source(
     """
     source = await repository.get_data_source_by_id(source_id)
     if not source:
-        raise HTTPException(status_code=404, detail="Data source not found")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
     
     # Delete log files before deleting the data source
     # (DB entries will be cascade-deleted automatically)

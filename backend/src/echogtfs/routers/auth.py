@@ -11,6 +11,8 @@ from echogtfs.validation.schemas import Token
 
 router = APIRouter()
 
+_ERR_INVALID_CREDENTIALS = "error.invalid_credentials"
+
 _Repo = Annotated[SystemRepositoryInterface, Depends(get_system_repository)]
 
 
@@ -29,8 +31,8 @@ async def login(
         user.hashed_password,
     ):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_ERR_INVALID_CREDENTIALS,
             headers={"WWW-Authenticate": "Bearer"},
         )
     
