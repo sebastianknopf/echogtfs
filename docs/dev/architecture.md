@@ -117,6 +117,12 @@ The specific datasource implementation encapsulates source related specifics lik
 
 For reading and parsing the external data, the transformers are implemented in `backend/src/echogtfs/datasources/transformers`. There's one transformer interface for each GTFS-RT entity and several specific transformer implementations. The transformers are kept as generic as possible, however, proprietary transformers may be required to include arbitrary data.
 
+Compared to other cron-based tasks (e.g. GTFS import, cleanup), the datasources **can be defined with a second based cron expression with 6 places** like this:
+
+`*/30 * * * * *`
+
+This cron expression would run the datasource every 30 seconds (on ':00 and on ':30).
+
 ## GTFS-Realtime Feed
 
 The GTFS-RT endpoint is the public output endpoint. It serializes realtime data to GTFS-RT compliant protobuf stream. The endpoint also supports a `?format=json` query parameter for JSON output. 
