@@ -11,6 +11,7 @@ The application is composed of three Docker containers defined in `docker-compos
 - `backend`: Python/FastAPI HTTP service, port 8000 (internal only).
 - `frontend`: NGINX web server that serves the static single-page application and reverse-proxies `/api` requests to the backend. Exposed on the host at the port defined by `FRONTEND_PORT` (default 80).
 - `database`: PostgreSQL 16. Accessible only to the backend container.
+- `redis`: Redis service used for caching and event streaming inside the application.
 
 All runtime configuration is injected via environment variables. The canonical source of variable names is `.env.example`.
 
@@ -77,6 +78,7 @@ Services are meant to encapsulate all the logic which is not a) direct database 
 Most services are instantiated when they're used in the code. Some special services are meant to be single-instance services used globally around the whole python process. These services are currently:
 
 - `SecurityService` (related for security related issues)
+- `CachingService` (abstraction layer for redis access)
 - `DatasourceSchedulerService` (responsible for scheduling datasources by their cron job)
 
 The single instance services are initialized in the `main.py` module during the startup sequence of the application and also used across other modules and services.
