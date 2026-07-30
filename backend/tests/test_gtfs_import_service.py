@@ -20,9 +20,10 @@ class TestGtfsImportService(unittest.IsolatedAsyncioTestCase):
         repo = SimpleNamespace(set_app_setting=AsyncMock())
         gtfs_repo = SimpleNamespace(replace_gtfs_static_data=AsyncMock())
         service = GtfsImportService(repo, gtfs_repo)
+        progress_reporter = SimpleNamespace(report_progress=AsyncMock())
 
         with patch.object(service, "_import_feed", AsyncMock(return_value={"agencies": 1, "stops": 2, "routes": 3})):
-            await service.run_import_task()
+            await service.run_import_task(progress_reporter)
 
         self.assertTrue(repo.set_app_setting.await_count >= 5)
 
@@ -47,9 +48,10 @@ class TestGtfsImportService(unittest.IsolatedAsyncioTestCase):
         repo = SimpleNamespace(get_all_app_settings=AsyncMock(return_value={}))
         gtfs_repo = SimpleNamespace(replace_gtfs_static_data=AsyncMock())
         service = GtfsImportService(repo, gtfs_repo)
+        progress_reporter = SimpleNamespace(report_progress=AsyncMock())
 
         with self.assertRaises(ValueError):
-            await service._import_feed()
+            await service._import_feed(progress_reporter)
 
     def test_find_in_zip_raises_when_missing_file(self):
         mem = io.BytesIO()
