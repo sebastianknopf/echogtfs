@@ -21,6 +21,7 @@ from echogtfs.services.database import (
 )
 from echogtfs.services.scheduler import DatasourceSchedulerService, set_datasource_scheduler_service
 from echogtfs.services.security import SecurityService, get_security_service, set_security_service
+from echogtfs.services.caching import CachingService, set_caching_service
 from echogtfs.routers.alerts import router as alerts_router
 from echogtfs.routers.auth import router as auth_router
 from echogtfs.routers.gtfs import router as gtfs_router
@@ -58,6 +59,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # intialize single-instance services
     set_security_service(SecurityService(system_repository))
+    caching_service = CachingService(settings.redis_url)
+
+    await caching_service.initialize()
+    set_caching_service(caching_service)
 
     datasource_scheduler_service = DatasourceSchedulerService(
         system_repository,
@@ -86,6 +91,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
 
     # close database repositories on shutdown
+    await caching_service.close()
     await gtfs_repository.close()
     await realtime_repository.close()
     await system_repository.close()

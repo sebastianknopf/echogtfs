@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "postgresql+asyncpg://echogtfs:echogtfs@db:5432/echogtfs"
 
+    # Caching (Redis)
+    redis_url: str = "redis://redis:6379/0"
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000
