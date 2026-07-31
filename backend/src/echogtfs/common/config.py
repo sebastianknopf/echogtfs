@@ -1,4 +1,7 @@
-﻿from pydantic_settings import BaseSettings, SettingsConfigDict
+﻿import re
+
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -38,6 +41,23 @@ class Settings(BaseSettings):
     first_superuser: str = "admin"
     first_superuser_email: str = "admin@localhost"
     first_superuser_password: str = "admin"
+
+    # Optional regex pattern used to validate global IDs.
+    global_id_pattern: str | None = None
+
+    @field_validator("global_id_pattern")
+    @classmethod
+    def validate_global_id_pattern(cls, value: str | None) -> str | None:
+        """Validate GLOBAL_ID_PATTERN when provided."""
+        if value in (None, ""):
+            return None
+
+        try:
+            re.compile(value)
+        except re.error as exc:
+            raise ValueError("GLOBAL_ID_PATTERN must be a valid regular expression") from exc
+
+        return value
 
     @property
     def cors_origins_list(self) -> list[str]:

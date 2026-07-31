@@ -48,6 +48,7 @@ services:
       FIRST_SUPERUSER: ${FIRST_SUPERUSER}
       FIRST_SUPERUSER_EMAIL: ${FIRST_SUPERUSER_EMAIL}
       FIRST_SUPERUSER_PASSWORD: ${FIRST_SUPERUSER_PASSWORD}
+      GLOBAL_ID_PATTERN: ${GLOBAL_ID_PATTERN}
     command: "echogtfs"
     volumes:
       - datasource_logs:/var/log/echogtfs/datasources
