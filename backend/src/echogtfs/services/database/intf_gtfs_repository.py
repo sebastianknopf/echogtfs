@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -86,4 +86,18 @@ class GtfsRepositoryInterface(ABC):
     @abstractmethod
     async def insert_gtfs_stop_times(self, stop_times: list[dict[str, str | int | datetime]]) -> None:
         """Insert GTFS stop-time rows."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def find_trip_ids_by_match_properties(
+        self,
+        *,
+        route_id: str | None = None,
+        operation_day_date: date | None = None,
+        scheduled_start_time: datetime | None = None,
+        scheduled_end_time: datetime | None = None,
+        scheduled_start_stop_id: str | None = None,
+        scheduled_end_stop_id: str | None = None,
+    ) -> list[str] | None:
+        """Return GTFS trip IDs matching the provided trip properties."""
         raise NotImplementedError

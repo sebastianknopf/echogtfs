@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date, timedelta
 from datetime import datetime
 
 from sqlalchemy import delete, insert, select, text
@@ -153,3 +154,45 @@ class GtfsRepository(RepositoryBase, GtfsRepositoryInterface):
         async with self.get_session() as db:
             await db.execute(insert(GtfsStopTime), stop_times)
             await db.commit()
+
+    async def find_trip_ids_by_match_properties(
+        self,
+        *,
+        route_id: str | None = None,
+        operation_day_date: date | None = None,
+        scheduled_start_time: datetime | None = None,
+        scheduled_end_time: datetime | None = None,
+        scheduled_start_stop_id: str | None = None,
+        scheduled_end_stop_id: str | None = None,
+    ) -> list[str] | None:
+        """Return GTFS trip IDs using tolerant time and prefix stop matching rules."""
+        stmt = select(GtfsTrip.gtfs_id)
+
+        if route_id is not None:
+            stmt = stmt.where(GtfsTrip.route_id == route_id)
+
+        if operation_day_date is not None:
+            stmt = stmt.where(text("DATE(gtfs_trips.start_time) = :operation_day_date")).params(
+                operation_day_date=operation_day_date
+            )
+
+        if scheduled_start_time is not None:
+            stmt = stmt.where(GtfsTrip.start_time >= (scheduled_start_time - timedelta(seconds=60)))
+            stmt = stmt.where(GtfsTrip.start_time <= (scheduled_start_time + timedelta(seconds=60)))
+
+        if scheduled_end_time is not None:
+            stmt = stmt.where(GtfsTrip.end_time >= (scheduled_end_time - timedelta(seconds=60)))
+            stmt = stmt.where(GtfsTrip.end_time <= (scheduled_end_time + timedelta(seconds=60)))
+
+        if scheduled_start_stop_id is not None:
+            stmt = stmt.where(GtfsTrip.start_stop_id.like(f"{scheduled_start_stop_id}%"))
+
+        if scheduled_end_stop_id is not None:
+            stmt = stmt.where(GtfsTrip.end_stop_id.like(f"{scheduled_end_stop_id}%"))
+
+        stmt = stmt.order_by(GtfsTrip.gtfs_id)
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            matches = list(result.scalars().all())
+            return matches if matches else None
