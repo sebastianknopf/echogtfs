@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 fake_config = types.ModuleType("echogtfs.common.config")
-fake_config.settings = SimpleNamespace(secret_key="test-secret")
+fake_config.settings = SimpleNamespace(secret_key="test-secret", global_id_pattern=None)
 fake_config.Settings = object
 sys.modules.setdefault("echogtfs.common.config", fake_config)
 
