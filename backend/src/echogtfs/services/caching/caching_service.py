@@ -38,17 +38,29 @@ class CachingService(CachingServiceInterface):
             await self._client.aclose()
             self._client = None
 
-    async def put_trip_id(self, external_trip_id: str, internal_trip_id: int) -> None:
+    async def put_trip_id(self, external_trip_id: str, internal_trip_id: str) -> None:
         client = self._get_client()
 
         key = self._build_trip_key(external_trip_id)
-        await client.set(key, str(internal_trip_id), ex=self._TRIP_CACHE_TTL_SECONDS)
+        await client.set(key, internal_trip_id, ex=self._TRIP_CACHE_TTL_SECONDS)
+
+    async def get_trip_id(self, external_trip_id: str) -> str | None:
+        client = self._get_client()
+
+        key = self._build_trip_key(external_trip_id)
+        value = await client.get(key)
+
+        if value is None:
+            return None
+
+        return str(value)
 
     async def pop_trip_id(self, external_trip_id: str) -> bool:
         client = self._get_client()
 
         key = self._build_trip_key(external_trip_id)
         deleted_count = await client.delete(key)
+        
         return deleted_count > 0
 
     def _get_client(self) -> Redis:

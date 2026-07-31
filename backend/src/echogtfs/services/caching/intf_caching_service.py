@@ -17,8 +17,13 @@ class CachingServiceInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def put_trip_id(self, external_trip_id: str, internal_trip_id: int) -> None:
+    async def put_trip_id(self, external_trip_id: str, internal_trip_id: str) -> None:
         """Store one external->internal trip ID match with TTL."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_trip_id(self, external_trip_id: str) -> str | None:
+        """Return one cached internal trip ID by external trip ID, or None when missing."""
         raise NotImplementedError
 
     @abstractmethod
