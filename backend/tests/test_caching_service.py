@@ -60,13 +60,33 @@ class TestCachingService(unittest.IsolatedAsyncioTestCase):
         client = SimpleNamespace(set=AsyncMock())
         service._client = client
 
-        await service.put_trip_id("external-trip-1", 42)
+        await service.put_trip_id("external-trip-1", "T42")
 
         client.set.assert_awaited_once_with(
             "echogtfs:data:trips:external-trip-1",
-            "42",
+            "T42",
             ex=24 * 60 * 60,
         )
+
+    async def test_get_trip_id_returns_cached_value(self):
+        service = CachingService("redis://redis:6379/0")
+        client = SimpleNamespace(get=AsyncMock(return_value="T42"))
+        service._client = client
+
+        result = await service.get_trip_id("external-trip-1")
+
+        self.assertEqual(result, "T42")
+        client.get.assert_awaited_once_with("echogtfs:data:trips:external-trip-1")
+
+    async def test_get_trip_id_returns_none_when_missing(self):
+        service = CachingService("redis://redis:6379/0")
+        client = SimpleNamespace(get=AsyncMock(return_value=None))
+        service._client = client
+
+        result = await service.get_trip_id("missing")
+
+        self.assertIsNone(result)
+        client.get.assert_awaited_once_with("echogtfs:data:trips:missing")
 
     async def test_pop_trip_id_returns_true_when_key_deleted(self):
         service = CachingService("redis://redis:6379/0")
@@ -92,7 +112,13 @@ class TestCachingService(unittest.IsolatedAsyncioTestCase):
         service = CachingService("redis://redis:6379/0")
 
         with self.assertRaises(RuntimeError):
-            await service.put_trip_id("external-trip-1", 1)
+            await service.put_trip_id("external-trip-1", "T1")
+
+    async def test_get_trip_id_raises_when_service_not_initialized(self):
+        service = CachingService("redis://redis:6379/0")
+
+        with self.assertRaises(RuntimeError):
+            await service.get_trip_id("external-trip-1")
 
     async def test_pop_trip_id_raises_when_service_not_initialized(self):
         service = CachingService("redis://redis:6379/0")
