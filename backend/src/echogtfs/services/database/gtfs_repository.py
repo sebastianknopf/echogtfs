@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from datetime import datetime
 
 from sqlalchemy import delete, insert, select, text
+from sqlalchemy.orm import selectinload
 
 from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
 from echogtfs.services.database.models import GtfsAgency, GtfsRoute, GtfsStop, GtfsStopTime, GtfsTrip
@@ -198,3 +199,18 @@ class GtfsRepository(RepositoryBase, GtfsRepositoryInterface):
             result = await db.execute(stmt)
             matches = list(result.scalars().all())
             return matches if matches else None
+
+    async def get_gtfs_trip_with_stop_times(
+        self,
+        trip_id: str,
+    ) -> GtfsTrip | None:
+        """Return one GTFS trip with ordered stop_times relationship loaded."""
+        stmt = (
+            select(GtfsTrip)
+            .where(GtfsTrip.gtfs_id == trip_id)
+            .options(selectinload(GtfsTrip.stop_times))
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return result.scalar_one_or_none()

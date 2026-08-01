@@ -60,6 +60,7 @@ class _GtfsRepositoryStub:
         self.list_gtfs_entity_ids = AsyncMock(
             return_value={"agency": {"a1"}, "route": {"r1"}, "stop": {"s1"}, "trip": {"trip-1"}}
         )
+        self.get_gtfs_trip_with_stop_times = AsyncMock(return_value=None)
 
 
 class TestDatasourceBaseHelpers(unittest.TestCase):
@@ -742,3 +743,188 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result, {"added": 1, "updated": 0, "deleted": 0})
         realtime_repository.update_vehicle_position_from_sync.assert_awaited_once()
+
+    async def test_sync_trip_update_records_marks_unexpected_as_added_when_enabled(self):
+        repository = _SystemRepositoryStub()
+        realtime_repository = _RealtimeRepositoryStub()
+        gtfs_repository = _GtfsRepositoryStub()
+        gtfs_repository.list_gtfs_entity_ids = AsyncMock(
+            return_value={
+                "agency": {"a1"},
+                "route": {"r1"},
+                "stop": {"s1", "s-extra"},
+                "trip": {"trip-1"},
+            }
+        )
+        datasource = _TestDatasource({"treat_unexpected_stop_as_added_stop": True})
+        datasource._matching_service = SimpleNamespace(match=AsyncMock(return_value=None))
+        datasource._identifier_mapping_service = SimpleNamespace(
+            initialize=AsyncMock(),
+            get_loaded_mapping_count=lambda: 0,
+            apply_mapping=lambda entity: entity,
+        )
+
+        gtfs_repository.get_gtfs_trip_with_stop_times = AsyncMock(
+            return_value=SimpleNamespace(
+                gtfs_id="trip-1",
+                stop_times=[SimpleNamespace(stop_id="s1", stop_sequence=1, arrival_time=None, departure_time=None)],
+            )
+        )
+
+        records = [
+            {
+                "id": "trip-upd-1",
+                "trip_id": "trip-1",
+                "start_time": "08:00:00",
+                "start_date": "20260801",
+                "route_id": "r1",
+                "stop_events": [
+                    {
+                        "stop_id": "s-extra",
+                        "stop_sequence": "1",
+                        "arrival_time": "2026-08-01T08:00:00Z",
+                        "departure_time": "2026-08-01T08:01:00Z",
+                        "is_valid": True,
+                    }
+                ],
+            }
+        ]
+
+        await datasource._sync_trip_update_records(
+            repository=repository,
+            realtime_repository=realtime_repository,
+            gtfs_repository=gtfs_repository,
+            source_id=2,
+            source_name="Demo",
+            records=records,
+        )
+
+        kwargs = realtime_repository.update_trip_update_from_sync.await_args.kwargs
+        added_events = [
+            event for event in kwargs["stop_events"]
+            if event.get("schedule_relationship") == "ADDED"
+        ]
+        self.assertEqual(len(added_events), 1)
+        self.assertEqual(added_events[0]["stop_id"], "s-extra")
+
+    async def test_sync_trip_update_records_adds_missing_as_canceled_when_enabled(self):
+        repository = _SystemRepositoryStub()
+        realtime_repository = _RealtimeRepositoryStub()
+        gtfs_repository = _GtfsRepositoryStub()
+        datasource = _TestDatasource({"treat_missing_stop_as_canceled_stop": True})
+        datasource._matching_service = SimpleNamespace(match=AsyncMock(return_value=None))
+        datasource._identifier_mapping_service = SimpleNamespace(
+            initialize=AsyncMock(),
+            get_loaded_mapping_count=lambda: 0,
+            apply_mapping=lambda entity: entity,
+        )
+
+        nominal_stop_1 = SimpleNamespace(
+            stop_id="s1",
+            stop_sequence=1,
+            arrival_time=datetime(2026, 8, 1, 8, 0, tzinfo=timezone.utc),
+            departure_time=datetime(2026, 8, 1, 8, 1, tzinfo=timezone.utc),
+        )
+        nominal_stop_2 = SimpleNamespace(
+            stop_id="s2",
+            stop_sequence=2,
+            arrival_time=datetime(2026, 8, 1, 8, 10, tzinfo=timezone.utc),
+            departure_time=datetime(2026, 8, 1, 8, 11, tzinfo=timezone.utc),
+        )
+        gtfs_repository.get_gtfs_trip_with_stop_times = AsyncMock(
+            return_value=SimpleNamespace(gtfs_id="trip-1", stop_times=[nominal_stop_1, nominal_stop_2])
+        )
+
+        records = [
+            {
+                "id": "trip-upd-1",
+                "trip_id": "trip-1",
+                "start_time": "08:00:00",
+                "start_date": "20260801",
+                "route_id": "r1",
+                "stop_events": [
+                    {
+                        "stop_id": "s1",
+                        "stop_sequence": "1",
+                        "arrival_time": "2026-08-01T08:00:00Z",
+                        "departure_time": "2026-08-01T08:01:00Z",
+                        "is_valid": True,
+                    }
+                ],
+            }
+        ]
+
+        await datasource._sync_trip_update_records(
+            repository=repository,
+            realtime_repository=realtime_repository,
+            gtfs_repository=gtfs_repository,
+            source_id=2,
+            source_name="Demo",
+            records=records,
+        )
+
+        kwargs = realtime_repository.update_trip_update_from_sync.await_args.kwargs
+        canceled_events = [e for e in kwargs["stop_events"] if e.get("schedule_relationship") == "CANCELED"]
+        self.assertEqual(len(canceled_events), 1)
+        self.assertEqual(canceled_events[0]["stop_id"], "s2")
+
+    async def test_sync_trip_update_records_merges_complete_sequence_order(self):
+        repository = _SystemRepositoryStub()
+        realtime_repository = _RealtimeRepositoryStub()
+        gtfs_repository = _GtfsRepositoryStub()
+        datasource = _TestDatasource({"treat_missing_stop_as_canceled_stop": True})
+        datasource._matching_service = SimpleNamespace(match=AsyncMock(return_value=None))
+        datasource._identifier_mapping_service = SimpleNamespace(
+            initialize=AsyncMock(),
+            get_loaded_mapping_count=lambda: 0,
+            apply_mapping=lambda entity: entity,
+        )
+
+        nominal_stop_1 = SimpleNamespace(
+            stop_id="s1",
+            stop_sequence=1,
+            arrival_time=datetime(2026, 8, 1, 8, 0, tzinfo=timezone.utc),
+            departure_time=datetime(2026, 8, 1, 8, 1, tzinfo=timezone.utc),
+        )
+        nominal_stop_2 = SimpleNamespace(
+            stop_id="s2",
+            stop_sequence=2,
+            arrival_time=datetime(2026, 8, 1, 8, 10, tzinfo=timezone.utc),
+            departure_time=datetime(2026, 8, 1, 8, 11, tzinfo=timezone.utc),
+        )
+        gtfs_repository.get_gtfs_trip_with_stop_times = AsyncMock(
+            return_value=SimpleNamespace(gtfs_id="trip-1", stop_times=[nominal_stop_1, nominal_stop_2])
+        )
+
+        records = [
+            {
+                "id": "trip-upd-1",
+                "trip_id": "trip-1",
+                "start_time": "08:00:00",
+                "start_date": "20260801",
+                "route_id": "r1",
+                "is_complete_stop_sequence": True,
+                "stop_events": [
+                    {
+                        "stop_id": "s1",
+                        "stop_sequence": "8",
+                        "arrival_time": "2026-08-01T08:00:00Z",
+                        "departure_time": "2026-08-01T08:01:00Z",
+                        "is_valid": True,
+                    }
+                ],
+            }
+        ]
+
+        await datasource._sync_trip_update_records(
+            repository=repository,
+            realtime_repository=realtime_repository,
+            gtfs_repository=gtfs_repository,
+            source_id=2,
+            source_name="Demo",
+            records=records,
+        )
+
+        kwargs = realtime_repository.update_trip_update_from_sync.await_args.kwargs
+        self.assertEqual([e["stop_id"] for e in kwargs["stop_events"]], ["s1", "s2"])
+        self.assertEqual([e["stop_sequence"] for e in kwargs["stop_events"]], ["1", "2"])

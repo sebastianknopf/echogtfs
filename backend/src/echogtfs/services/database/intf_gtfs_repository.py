@@ -6,7 +6,7 @@ from datetime import date, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from echogtfs.services.database.models import GtfsAgency, GtfsRoute, GtfsStop
+from echogtfs.services.database.models import GtfsAgency, GtfsRoute, GtfsStop, GtfsTrip
 
 
 class GtfsRepositoryInterface(ABC):
@@ -100,4 +100,12 @@ class GtfsRepositoryInterface(ABC):
         scheduled_end_stop_id: str | None = None,
     ) -> list[str] | None:
         """Return GTFS trip IDs matching the provided trip properties."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_gtfs_trip_with_stop_times(
+        self,
+        trip_id: str,
+    ) -> GtfsTrip | None:
+        """Return one GTFS trip with ordered stop_times relationship loaded."""
         raise NotImplementedError
