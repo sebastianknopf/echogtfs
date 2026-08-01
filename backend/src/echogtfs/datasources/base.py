@@ -1116,7 +1116,14 @@ class DatasourceBase(DatasourceInterface):
 
         for record in records:
             vehicle_uuid = self._record_uuid(record, source_name, fallback_key="vehicle_id", kind="Vehicle-position")
-            trip_payload = self._extract_vehicle_trip_payload(record)
+            try:
+                trip_payload = self._extract_vehicle_trip_payload(record)
+            except ValueError as exc:
+                logger.debug(
+                    f"[{self.get_adapter_type()}] Discarding vehicle-position record due to invalid trip payload: {exc}"
+                )
+                
+                continue
 
             mapped_trip = self._identifier_mapping_service.apply_mapping(
                 {
