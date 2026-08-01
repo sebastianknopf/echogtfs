@@ -602,3 +602,213 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result, 8)
         session.execute.assert_awaited_once()
         session.commit.assert_awaited_once()
+
+    async def test_update_trip_update_from_sync_returns_created_for_new_trip(self):
+        added_objects = []
+        session = SimpleNamespace(
+            get=AsyncMock(return_value=None),
+            add=lambda obj: added_objects.append(obj),
+            flush=AsyncMock(),
+            execute=AsyncMock(),
+            commit=AsyncMock(),
+        )
+        repository = self._make_repository(session)
+
+        result = await repository.update_trip_update_from_sync(
+            trip_uuid=uuid.uuid4(),
+            source_id=11,
+            source_name="source-a",
+            trip_id="trip-1",
+            start_time="08:00:00",
+            start_date="20260801",
+            route_id="route-1",
+            schedule_relationship="SCHEDULED",
+            assignment_type="ASSIGNED",
+            is_active_on_create=False,
+            is_valid=True,
+            stop_events=[
+                {
+                    "stop_id": "stop-1",
+                    "stop_sequence": "1",
+                    "arrival_time": "2026-08-01T08:00:00Z",
+                    "departure_time": "2026-08-01T08:01:00Z",
+                    "schedule_relationship": "SCHEDULED",
+                    "is_valid": True,
+                }
+            ],
+        )
+
+        self.assertEqual(result, "created")
+        session.get.assert_awaited_once()
+        session.flush.assert_awaited_once()
+        self.assertEqual(session.execute.await_count, 1)
+        session.commit.assert_awaited_once()
+        self.assertEqual(len(added_objects), 2)
+
+    async def test_update_trip_update_from_sync_preserves_is_active_on_existing_trip(self):
+        existing = SimpleNamespace(
+            trip_id="old-trip",
+            is_active=True,
+            data_source_id=1,
+            source="old",
+            start_time="07:00:00",
+            start_date="20260801",
+            route_id="old-route",
+            schedule_relationship="SCHEDULED",
+            assignment_type="ASSIGNED",
+            is_valid=False,
+        )
+        session = SimpleNamespace(
+            get=AsyncMock(return_value=existing),
+            add=lambda _: None,
+            flush=AsyncMock(),
+            execute=AsyncMock(),
+            commit=AsyncMock(),
+        )
+        repository = self._make_repository(session)
+
+        result = await repository.update_trip_update_from_sync(
+            trip_uuid=uuid.uuid4(),
+            source_id=22,
+            source_name="source-b",
+            trip_id="trip-2",
+            start_time="09:00:00",
+            start_date="20260802",
+            route_id="route-2",
+            schedule_relationship="ADDED",
+            assignment_type="DUPLICATED",
+            is_active_on_create=False,
+            is_valid=True,
+            stop_events=[],
+        )
+
+        self.assertEqual(result, "updated")
+        self.assertTrue(existing.is_active)
+        self.assertEqual(existing.trip_id, "trip-2")
+        self.assertEqual(existing.data_source_id, 22)
+        self.assertEqual(existing.source, "source-b")
+        self.assertEqual(existing.is_valid, True)
+        session.flush.assert_not_awaited()
+        session.commit.assert_awaited_once()
+
+    async def test_update_vehicle_position_from_sync_returns_created_for_new_vehicle(self):
+        added_objects = []
+        session = SimpleNamespace(
+            get=AsyncMock(side_effect=[None, None]),
+            add=lambda obj: added_objects.append(obj),
+            flush=AsyncMock(),
+            execute=AsyncMock(),
+            commit=AsyncMock(),
+        )
+        repository = self._make_repository(session)
+
+        result = await repository.update_vehicle_position_from_sync(
+            vehicle_uuid=uuid.uuid4(),
+            source_id=33,
+            source_name="source-c",
+            trip_uuid=uuid.uuid4(),
+            trip_id="trip-3",
+            trip_start_time="10:00:00",
+            trip_start_date="20260803",
+            trip_route_id="route-3",
+            trip_schedule_relationship="SCHEDULED",
+            trip_assignment_type="ASSIGNED",
+            trip_is_active_on_create=True,
+            trip_is_valid=True,
+            vehicle_id="veh-1",
+            vehicle_label="Label 1",
+            vehicle_license_plate="ABC123",
+            vehicle_wheelchair_accessible="NO_VALUE",
+            timestamp="2026-08-01T10:00:00Z",
+            latitude=47.0,
+            longitude=8.0,
+            current_stop_sequence=3,
+            current_status="IN_TRANSIT_TO",
+            assignment_type="ASSIGNED",
+            congestion_level="UNKNOWN_CONGESTION_LEVEL",
+            is_active_on_create=False,
+            is_valid=True,
+        )
+
+        self.assertEqual(result, "created")
+        self.assertEqual(session.get.await_count, 2)
+        self.assertEqual(session.flush.await_count, 2)
+        self.assertEqual(len(added_objects), 2)
+        session.commit.assert_awaited_once()
+
+    async def test_update_vehicle_position_from_sync_preserves_is_active_on_existing_records(self):
+        existing_trip = SimpleNamespace(
+            is_active=True,
+            data_source_id=1,
+            source="old",
+            trip_id="old-trip",
+            start_time="07:00:00",
+            start_date="20260801",
+            route_id="old-route",
+            schedule_relationship="SCHEDULED",
+            assignment_type="ASSIGNED",
+            is_valid=False,
+        )
+        existing_vehicle = SimpleNamespace(
+            is_active=True,
+            data_source_id=1,
+            source="old",
+            trip_id="old-trip",
+            vehicle_id="old-veh",
+            vehicle_label=None,
+            vehicle_license_plate=None,
+            vehicle_wheelchair_accessible="NO_VALUE",
+            timestamp="2026-08-01T07:00:00Z",
+            latitude=0.0,
+            longitude=0.0,
+            current_stop_sequence=0,
+            current_status="IN_TRANSIT_TO",
+            assignment_type="ASSIGNED",
+            congestion_level="UNKNOWN_CONGESTION_LEVEL",
+            is_valid=False,
+        )
+        session = SimpleNamespace(
+            get=AsyncMock(side_effect=[existing_trip, existing_vehicle]),
+            add=lambda _: None,
+            flush=AsyncMock(),
+            execute=AsyncMock(),
+            commit=AsyncMock(),
+        )
+        repository = self._make_repository(session)
+
+        result = await repository.update_vehicle_position_from_sync(
+            vehicle_uuid=uuid.uuid4(),
+            source_id=44,
+            source_name="source-d",
+            trip_uuid=uuid.uuid4(),
+            trip_id="trip-4",
+            trip_start_time="11:00:00",
+            trip_start_date="20260804",
+            trip_route_id="route-4",
+            trip_schedule_relationship="ADDED",
+            trip_assignment_type="DUPLICATED",
+            trip_is_active_on_create=False,
+            trip_is_valid=True,
+            vehicle_id="veh-2",
+            vehicle_label="Label 2",
+            vehicle_license_plate="XYZ987",
+            vehicle_wheelchair_accessible="POSSIBLE",
+            timestamp="2026-08-01T11:00:00Z",
+            latitude=48.0,
+            longitude=9.0,
+            current_stop_sequence=5,
+            current_status="STOPPED_AT",
+            assignment_type="DUPLICATED",
+            congestion_level="RUNNING_SMOOTHLY",
+            is_active_on_create=False,
+            is_valid=True,
+        )
+
+        self.assertEqual(result, "updated")
+        self.assertTrue(existing_trip.is_active)
+        self.assertTrue(existing_vehicle.is_active)
+        self.assertEqual(existing_trip.trip_id, "trip-4")
+        self.assertEqual(existing_vehicle.vehicle_id, "veh-2")
+        self.assertEqual(existing_vehicle.trip_id, "trip-4")
+        session.flush.assert_not_awaited()
+        session.commit.assert_awaited_once()

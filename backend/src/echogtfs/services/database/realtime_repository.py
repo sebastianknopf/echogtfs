@@ -581,6 +581,110 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
 
             return int(result.rowcount or 0)
 
+    async def list_trips_for_data_source(self, source_id: int) -> list[Trip]:
+        """Return realtime trips linked to one data source."""
+        stmt = select(Trip).where(Trip.data_source_id == source_id)
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
+    async def list_trips_by_ids(self, trip_ids: list[uuid.UUID]) -> list[Trip]:
+        """Return realtime trips by IDs."""
+        if not trip_ids:
+            return []
+
+        stmt = select(Trip).where(Trip.id.in_(trip_ids))
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
+    async def delete_trips_for_data_source_by_ids(
+        self,
+        source_id: int,
+        trip_ids: list[uuid.UUID],
+    ) -> int:
+        """Delete trips by IDs only for the given data source."""
+        if not trip_ids:
+            return 0
+
+        stmt = delete(Trip).where(
+            Trip.data_source_id == source_id,
+            Trip.id.in_(trip_ids),
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            await db.commit()
+            return int(result.rowcount or 0)
+
+    async def update_trip_update_from_sync(
+        self,
+        *,
+        trip_uuid: uuid.UUID,
+        source_id: int,
+        source_name: str,
+        trip_id: str,
+        start_time: str,
+        start_date: str,
+        route_id: str,
+        schedule_relationship: str,
+        assignment_type: str,
+        is_active_on_create: bool,
+        is_valid: bool,
+        stop_events: list[dict[str, Any]],
+    ) -> str:
+        """Create or update a synchronized trip update and replace stop events."""
+        async with self.get_session() as db:
+            existing = await db.get(Trip, trip_uuid)
+
+            action = "updated"
+            previous_trip_id = trip_id
+            if existing is None:
+                action = "created"
+                existing = Trip(
+                    id=trip_uuid,
+                    data_source_id=source_id,
+                    source=source_name,
+                    trip_id=trip_id,
+                    start_time=start_time,
+                    start_date=start_date,
+                    route_id=route_id,
+                    schedule_relationship=schedule_relationship,
+                    assignment_type=assignment_type,
+                    is_active=is_active_on_create,
+                    is_valid=is_valid,
+                )
+                
+                db.add(existing)
+                await db.flush()
+            else:
+                previous_trip_id = existing.trip_id
+                existing.data_source_id = source_id
+                existing.source = source_name
+                existing.trip_id = trip_id
+                existing.start_time = start_time
+                existing.start_date = start_date
+                existing.route_id = route_id
+                existing.schedule_relationship = schedule_relationship
+                existing.assignment_type = assignment_type
+                existing.is_valid = is_valid
+
+            trip_ids_to_clear = [trip_id]
+            if previous_trip_id != trip_id:
+                trip_ids_to_clear.append(previous_trip_id)
+
+            await db.execute(delete(StopEvent).where(StopEvent.trip_id.in_(trip_ids_to_clear)))
+
+            for event_data in stop_events:
+                payload = dict(event_data)
+                payload.pop("trip_id", None)
+                db.add(StopEvent(trip_id=trip_id, **payload))
+
+            await db.commit()
+            return action
+
     async def get_realtime_vehicles(self) -> list[Vehicle]:
         """Return active realtime vehicle positions with trip relations loaded."""
         stmt = (
@@ -681,3 +785,146 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
             await db.commit()
 
             return int(result.rowcount or 0)
+
+    async def list_vehicles_for_data_source(self, source_id: int) -> list[Vehicle]:
+        """Return realtime vehicles linked to one data source."""
+        stmt = select(Vehicle).where(Vehicle.data_source_id == source_id)
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
+    async def list_vehicles_by_ids(self, vehicle_ids: list[uuid.UUID]) -> list[Vehicle]:
+        """Return realtime vehicles by IDs."""
+        if not vehicle_ids:
+            return []
+
+        stmt = select(Vehicle).where(Vehicle.id.in_(vehicle_ids))
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
+    async def delete_vehicles_for_data_source_by_ids(
+        self,
+        source_id: int,
+        vehicle_ids: list[uuid.UUID],
+    ) -> int:
+        """Delete vehicles by IDs only for the given data source."""
+        if not vehicle_ids:
+            return 0
+
+        stmt = delete(Vehicle).where(
+            Vehicle.data_source_id == source_id,
+            Vehicle.id.in_(vehicle_ids),
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            await db.commit()
+            return int(result.rowcount or 0)
+
+    async def update_vehicle_position_from_sync(
+        self,
+        *,
+        vehicle_uuid: uuid.UUID,
+        source_id: int,
+        source_name: str,
+        trip_uuid: uuid.UUID,
+        trip_id: str,
+        trip_start_time: str,
+        trip_start_date: str,
+        trip_route_id: str,
+        trip_schedule_relationship: str,
+        trip_assignment_type: str,
+        trip_is_active_on_create: bool,
+        trip_is_valid: bool,
+        vehicle_id: str,
+        vehicle_label: str | None,
+        vehicle_license_plate: str | None,
+        vehicle_wheelchair_accessible: str,
+        timestamp: Any,
+        latitude: float,
+        longitude: float,
+        current_stop_sequence: int,
+        current_status: str,
+        assignment_type: str,
+        congestion_level: str,
+        is_active_on_create: bool,
+        is_valid: bool,
+    ) -> str:
+        """Create or update a synchronized vehicle position and ensure linked trip exists."""
+        async with self.get_session() as db:
+            existing_trip = await db.get(Trip, trip_uuid)
+            if existing_trip is None:
+                existing_trip = Trip(
+                    id=trip_uuid,
+                    data_source_id=source_id,
+                    source=source_name,
+                    trip_id=trip_id,
+                    start_time=trip_start_time,
+                    start_date=trip_start_date,
+                    route_id=trip_route_id,
+                    schedule_relationship=trip_schedule_relationship,
+                    assignment_type=trip_assignment_type,
+                    is_active=trip_is_active_on_create,
+                    is_valid=trip_is_valid,
+                )
+                db.add(existing_trip)
+                await db.flush()
+            else:
+                existing_trip.data_source_id = source_id
+                existing_trip.source = source_name
+                existing_trip.trip_id = trip_id
+                existing_trip.start_time = trip_start_time
+                existing_trip.start_date = trip_start_date
+                existing_trip.route_id = trip_route_id
+                existing_trip.schedule_relationship = trip_schedule_relationship
+                existing_trip.assignment_type = trip_assignment_type
+                existing_trip.is_valid = trip_is_valid
+
+            existing_vehicle = await db.get(Vehicle, vehicle_uuid)
+
+            action = "updated"
+            if existing_vehicle is None:
+                action = "created"
+                existing_vehicle = Vehicle(
+                    id=vehicle_uuid,
+                    data_source_id=source_id,
+                    source=source_name,
+                    trip_id=trip_id,
+                    vehicle_id=vehicle_id,
+                    vehicle_label=vehicle_label,
+                    vehicle_license_plate=vehicle_license_plate,
+                    vehicle_wheelchair_accessible=vehicle_wheelchair_accessible,
+                    timestamp=timestamp,
+                    latitude=latitude,
+                    longitude=longitude,
+                    current_stop_sequence=current_stop_sequence,
+                    current_status=current_status,
+                    assignment_type=assignment_type,
+                    congestion_level=congestion_level,
+                    is_active=is_active_on_create,
+                    is_valid=is_valid,
+                )
+                db.add(existing_vehicle)
+                await db.flush()
+            else:
+                existing_vehicle.data_source_id = source_id
+                existing_vehicle.source = source_name
+                existing_vehicle.trip_id = trip_id
+                existing_vehicle.vehicle_id = vehicle_id
+                existing_vehicle.vehicle_label = vehicle_label
+                existing_vehicle.vehicle_license_plate = vehicle_license_plate
+                existing_vehicle.vehicle_wheelchair_accessible = vehicle_wheelchair_accessible
+                existing_vehicle.timestamp = timestamp
+                existing_vehicle.latitude = latitude
+                existing_vehicle.longitude = longitude
+                existing_vehicle.current_stop_sequence = current_stop_sequence
+                existing_vehicle.current_status = current_status
+                existing_vehicle.assignment_type = assignment_type
+                existing_vehicle.congestion_level = congestion_level
+                existing_vehicle.is_valid = is_valid
+
+            await db.commit()
+            return action

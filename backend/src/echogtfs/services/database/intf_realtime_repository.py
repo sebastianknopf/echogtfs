@@ -189,6 +189,45 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def list_trips_for_data_source(self, source_id: int) -> list[Trip]:
+        """Return all realtime trips currently linked to one data source."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_trips_by_ids(self, trip_ids: list[uuid.UUID]) -> list[Trip]:
+        """Return realtime trips by ids."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def delete_trips_for_data_source_by_ids(
+        self,
+        source_id: int,
+        trip_ids: list[uuid.UUID],
+    ) -> int:
+        """Delete realtime trips by ids only when they belong to a specific data source."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def update_trip_update_from_sync(
+        self,
+        *,
+        trip_uuid: uuid.UUID,
+        source_id: int,
+        source_name: str,
+        trip_id: str,
+        start_time: str,
+        start_date: str,
+        route_id: str,
+        schedule_relationship: str,
+        assignment_type: str,
+        is_active_on_create: bool,
+        is_valid: bool,
+        stop_events: list[dict[str, Any]],
+    ) -> str:
+        """Create or update one synchronized trip update and replace stop event records."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def get_realtime_vehicles(self) -> list[Vehicle]:
         """Return active realtime vehicle positions with trip relations loaded."""
         raise NotImplementedError
@@ -213,4 +252,56 @@ class RealtimeRepositoryInterface(ABC):
     @abstractmethod
     async def delete_vehicles_for_data_source(self, source_id: int) -> int:
         """Delete all realtime vehicles for one data source and return deleted row count."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_vehicles_for_data_source(self, source_id: int) -> list[Vehicle]:
+        """Return all realtime vehicles currently linked to one data source."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_vehicles_by_ids(self, vehicle_ids: list[uuid.UUID]) -> list[Vehicle]:
+        """Return realtime vehicles by ids."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def delete_vehicles_for_data_source_by_ids(
+        self,
+        source_id: int,
+        vehicle_ids: list[uuid.UUID],
+    ) -> int:
+        """Delete realtime vehicles by ids only when they belong to a specific data source."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def update_vehicle_position_from_sync(
+        self,
+        *,
+        vehicle_uuid: uuid.UUID,
+        source_id: int,
+        source_name: str,
+        trip_uuid: uuid.UUID,
+        trip_id: str,
+        trip_start_time: str,
+        trip_start_date: str,
+        trip_route_id: str,
+        trip_schedule_relationship: str,
+        trip_assignment_type: str,
+        trip_is_active_on_create: bool,
+        trip_is_valid: bool,
+        vehicle_id: str,
+        vehicle_label: str | None,
+        vehicle_license_plate: str | None,
+        vehicle_wheelchair_accessible: str,
+        timestamp: Any,
+        latitude: float,
+        longitude: float,
+        current_stop_sequence: int,
+        current_status: str,
+        assignment_type: str,
+        congestion_level: str,
+        is_active_on_create: bool,
+        is_valid: bool,
+    ) -> str:
+        """Create or update one synchronized vehicle position and ensure linked trip exists."""
         raise NotImplementedError

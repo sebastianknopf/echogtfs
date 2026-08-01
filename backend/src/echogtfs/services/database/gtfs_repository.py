@@ -29,16 +29,18 @@ class GtfsRepository(RepositoryBase, GtfsRepositoryInterface):
         self._initialized = True
 
     async def list_gtfs_entity_ids(self) -> dict[str, set[str]]:
-        """Return GTFS IDs for agency, route, and stop as sets."""
+        """Return GTFS IDs for agency, route, stop, and trip as sets."""
         async with self.get_session() as db:
             agencies_result = await db.execute(select(GtfsAgency.gtfs_id))
             routes_result = await db.execute(select(GtfsRoute.gtfs_id))
             stops_result = await db.execute(select(GtfsStop.gtfs_id))
+            trips_result = await db.execute(select(GtfsTrip.gtfs_id))
 
             return {
                 "agency": {row[0] for row in agencies_result.fetchall()},
                 "route": {row[0] for row in routes_result.fetchall()},
                 "stop": {row[0] for row in stops_result.fetchall()},
+                "trip": {row[0] for row in trips_result.fetchall()},
             }
 
     async def list_gtfs_agencies(self) -> list[GtfsAgency]:

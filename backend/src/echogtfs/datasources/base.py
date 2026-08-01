@@ -1,11 +1,17 @@
 """Base datasource implementation for external data feeds."""
 
 from abc import ABC, abstractmethod
+from datetime import datetime
 import logging
 import uuid
 from typing import Any
 
 from echogtfs.datasources.intf_datasource import DatasourceInterface
+from echogtfs.enum.gtfsrt import AssignmentType
+from echogtfs.enum.system import InvalidReferencePolicy
+from echogtfs.matching.intf_matching_service import MatchingServiceInterface
+from echogtfs.matching.matching_service import MatchingService
+from echogtfs.services.caching import get_caching_service
 from echogtfs.services.database import get_system_repository
 from echogtfs.services.datalog import DatalogService
 from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
@@ -43,6 +49,7 @@ class DatasourceBase(DatasourceInterface):
         self.config = config
         self._entity_enrichment_service: EntityEnrichmentInterface = EntityEnrichmentService()
         self._identifier_mapping_service: IdentifierMappingInterface = IdentifierMappingService()
+        self._matching_service: MatchingServiceInterface | None = None
         self._validate_config()
     
     @abstractmethod
@@ -61,45 +68,9 @@ class DatasourceBase(DatasourceInterface):
         Fetch realtime records from the external data source.
         
         Returns:
-            Dialect-defined record payload ready for synchronization.
-            Recommended envelope structure:
-            {
-                "record_type": "service_alerts",
-                "records": [ ... ]
-            }
-
-            For backward compatibility, returning only a list of records is also supported
-            and treated as "service_alerts".
-
-            For ServiceAlerts, each dictionary should have the structure:
-            {
-                "cause": "MAINTENANCE",
-                "effect": "DETOUR",
-                "severity_level": "WARNING",
-                "source": "datasource_name",
-                "is_active": True,
-                "translations": [
-                    {
-                        "language": "de-DE",
-                        "header_text": "...",
-                        "description_text": "...",
-                        "url": "..."
-                    }
-                ],
-                "active_periods": [
-                    {
-                        "start_time": 1234567890,
-                        "end_time": 1234567999
-                    }
-                ],
-                "informed_entities": [
-                    {
-                        "route_id": "123",
-                        "stop_id": "456",
-                        ...
-                    }
-                ]
-            }
+            Dialect-defined payload ready for sync_records().
+            Supported return shapes and per-record model contracts are documented in
+            docs/dev/transformation.md.
         """
         pass
     
@@ -392,6 +363,71 @@ class DatasourceBase(DatasourceInterface):
         raise ValueError(
             "Fetched payload must be either a list[dict] or a dict with 'record_type' and 'records'"
         )
+
+    @staticmethod
+    def _parse_service_datetime(start_date: str | None, time_value: str | None) -> datetime | None:
+        """Parse GTFS service date/time pair to datetime, or None if incomplete/invalid."""
+        if not start_date or not time_value:
+            return None
+
+        try:
+            return datetime.strptime(f"{start_date} {time_value}", "%Y%m%d %H:%M:%S")
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _coerce_datetime(value: Any) -> datetime | None:
+        """Convert datetime-like input to datetime where possible."""
+        if isinstance(value, datetime):
+            return value
+
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError:
+                return None
+
+        return None
+
+    def _record_uuid(self, record: dict[str, Any], source_name: str, *, fallback_key: str, kind: str) -> uuid.UUID:
+        """Build deterministic UUID for one record using id or fallback key."""
+        record_key = str(record.get("id") or record.get(fallback_key) or "")
+        if not record_key:
+            raise ValueError(f"{kind} record is missing 'id' or '{fallback_key}'")
+
+        return self._make_unique_id(record_key, source_name)
+
+    @staticmethod
+    def _extract_vehicle_trip_payload(record: dict[str, Any]) -> dict[str, Any]:
+        """Normalize vehicle trip payload from flat or nested dialect shapes."""
+        payload = record.get("trip", {})
+        if not isinstance(payload, dict):
+            payload = {}
+
+        trip_id_value = record.get("trip_id") or payload.get("trip_id")
+        if not trip_id_value:
+            raise ValueError("Vehicle-position record is missing trip reference ('trip_id' or 'trip.trip_id')")
+
+        return {
+            "trip_id": str(trip_id_value),
+            "start_time": str(record.get("trip_start_time") or payload.get("start_time") or ""),
+            "start_date": str(record.get("trip_start_date") or payload.get("start_date") or ""),
+            "route_id": str(record.get("trip_route_id") or payload.get("route_id") or ""),
+            "schedule_relationship": str(
+                record.get("trip_schedule_relationship")
+                or payload.get("schedule_relationship")
+                or "SCHEDULED"
+            ),
+            "assignment_type": str(
+                record.get("trip_assignment_type")
+                or payload.get("assignment_type")
+                or "ASSIGNED"
+            ),
+            "is_active_on_create": bool(
+                record.get("trip_is_active_on_create", payload.get("is_active", True))
+            ),
+            "is_valid": bool(record.get("trip_is_valid", payload.get("is_valid", True))),
+        }
     
     async def sync_records(
         self, 
@@ -442,6 +478,26 @@ class DatasourceBase(DatasourceInterface):
                 records=records,
             )
 
+        if record_type == "trip_updates":
+            return await self._sync_trip_update_records(
+                repository=repository,
+                realtime_repository=realtime_repository,
+                gtfs_repository=gtfs_repository,
+                source_id=source_id,
+                source_name=source_name,
+                records=records,
+            )
+
+        if record_type == "vehicle_positions":
+            return await self._sync_vehicle_position_records(
+                repository=repository,
+                realtime_repository=realtime_repository,
+                gtfs_repository=gtfs_repository,
+                source_id=source_id,
+                source_name=source_name,
+                records=records,
+            )
+
         raise NotImplementedError(
             f"Record type '{record_type}' is not supported by sync_records yet"
         )
@@ -456,8 +512,6 @@ class DatasourceBase(DatasourceInterface):
         records: list[dict[str, Any]],
     ) -> dict[str, int]:
         """Synchronize service-alert records into the database."""
-        from echogtfs.enum.system import InvalidReferencePolicy
-
         policy = await repository.get_data_source_invalid_reference_policy(source_id)
 
         # Convert string to enum if needed (database stores as string)
@@ -760,6 +814,441 @@ class DatasourceBase(DatasourceInterface):
             f"deleted={stats_deleted}, policy_discarded={stats_policy_discarded}"
         )
         
+        return {
+            "added": stats_created,
+            "updated": stats_updated,
+            "deleted": stats_deleted,
+        }
+
+    async def _sync_trip_update_records(
+        self,
+        repository: SystemRepositoryInterface,
+        realtime_repository: RealtimeRepositoryInterface,
+        gtfs_repository: GtfsRepositoryInterface,
+        source_id: int,
+        source_name: str,
+        records: list[dict[str, Any]],
+    ) -> dict[str, int]:
+        """Synchronize trip-update records into the database."""
+        policy = await repository.get_data_source_invalid_reference_policy(source_id)
+        if isinstance(policy, str):
+            policy = InvalidReferencePolicy(policy)
+
+        logger.info(
+            f"[{self.get_adapter_type()}] Synchronizing trip-update records from '{source_name}' "
+            f"(policy: {policy.value})"
+        )
+
+        await self._identifier_mapping_service.initialize(repository, source_id)
+
+        mapping_count = self._identifier_mapping_service.get_loaded_mapping_count()
+        if mapping_count > 0:
+            logger.info(
+                f"[{self.get_adapter_type()}] Loaded {mapping_count} mapping entries"
+            )
+
+        gtfs_entities = await self._load_gtfs_entities(gtfs_repository)
+        nominal_trip_ids = gtfs_entities.get("trip", set())
+        if self._matching_service is None:
+            self._matching_service = MatchingService(gtfs_repository, get_caching_service())
+
+        incoming_trip_ids = {
+            self._record_uuid(record, source_name, fallback_key="trip_id", kind="Trip-update")
+            for record in records
+        }
+
+        existing_trips = {
+            trip.id: trip
+            for trip in await realtime_repository.list_trips_for_data_source(source_id)
+        }
+
+        existing_trip_ids = set(existing_trips.keys())
+
+        if incoming_trip_ids:
+            trips_by_id = {
+                trip.id: trip
+                for trip in await realtime_repository.list_trips_by_ids(list(incoming_trip_ids))
+            }
+
+            for trip_id, trip in trips_by_id.items():
+                if trip_id not in existing_trips:
+                    existing_trips[trip_id] = trip
+                    existing_trip_ids.add(trip_id)
+
+        trips_to_update = incoming_trip_ids & existing_trip_ids
+        trips_to_delete = {
+            trip_id for trip_id, trip in existing_trips.items()
+            if trip.data_source_id == source_id and trip_id not in incoming_trip_ids
+        }
+
+        stats_created = 0
+        stats_updated = 0
+        stats_deleted = len(trips_to_delete)
+        policy_based_deletes: set[uuid.UUID] = set()
+
+        if trips_to_delete:
+            await realtime_repository.delete_trips_for_data_source_by_ids(
+                source_id,
+                list(trips_to_delete),
+            )
+
+        for record in records:
+            trip_uuid = self._record_uuid(record, source_name, fallback_key="trip_id", kind="Trip-update")
+
+            mapped_trip = self._identifier_mapping_service.apply_mapping(
+                {
+                    "route_id": record.get("route_id"),
+                }
+            )
+            mapped_route_id = str(mapped_trip.get("route_id") or "")
+            route_is_valid = bool(mapped_route_id) and mapped_route_id in gtfs_entities.get("route", set())
+
+            stop_events = []
+            has_invalid_stop_reference = False
+            for event in record.get("stop_events", []):
+                mapped_event = dict(event)
+                mapped_stop = self._identifier_mapping_service.apply_mapping(
+                    {
+                        "stop_id": mapped_event.get("stop_id"),
+                    }
+                )
+                mapped_event["stop_id"] = mapped_stop.get("stop_id")
+
+                mapped_stop_id = str(mapped_event.get("stop_id") or "")
+                stop_is_valid = bool(mapped_stop_id) and mapped_stop_id in gtfs_entities.get("stop", set())
+                if not stop_is_valid:
+                    has_invalid_stop_reference = True
+
+                mapped_event["is_valid"] = bool(mapped_event.get("is_valid", True)) and stop_is_valid
+                stop_events.append(mapped_event)
+
+            derived_trip_id = str(record["trip_id"])
+            resolved_trip_id = derived_trip_id
+            assignment_type = AssignmentType.DIRECT_BY_ID.value
+            trip_reference_is_valid = derived_trip_id in nominal_trip_ids
+
+            if not trip_reference_is_valid:
+                scheduled_start_time = self._parse_service_datetime(
+                    str(record.get("start_date") or ""),
+                    str(record.get("start_time") or ""),
+                )
+
+                scheduled_end_time = None
+                if stop_events:
+                    scheduled_end_time = self._coerce_datetime(
+                        stop_events[-1].get("departure_time")
+                        or stop_events[-1].get("arrival_time")
+                    )
+
+                matched_trip_id = await self._matching_service.match(
+                    trip_id=derived_trip_id,
+                    route_id=str(mapped_trip.get("route_id") or "") or None,
+                    scheduled_start_time=scheduled_start_time,
+                    scheduled_end_time=scheduled_end_time,
+                    scheduled_start_stop_id=(stop_events[0].get("stop_id") if stop_events else None),
+                    scheduled_end_stop_id=(stop_events[-1].get("stop_id") if stop_events else None),
+                )
+
+                if matched_trip_id is not None:
+                    resolved_trip_id = matched_trip_id
+                    assignment_type = AssignmentType.MATCHED_BY_START_STOP.value
+                    trip_reference_is_valid = True
+                else:
+                    assignment_type = AssignmentType.NO_MATCH_GENERAL.value
+
+            has_invalid_reference = (not route_is_valid) or has_invalid_stop_reference or (not trip_reference_is_valid)
+
+            should_skip_trip = False
+            should_deactivate_trip = False
+            stop_events_to_persist = stop_events
+            route_id_to_persist = mapped_route_id
+
+            if has_invalid_reference:
+                if policy == InvalidReferencePolicy.DISCARD_ENTIRE_OBJECT:
+                    should_skip_trip = True
+                    if trip_uuid in existing_trip_ids:
+                        policy_based_deletes.add(trip_uuid)
+
+                elif policy in (
+                    InvalidReferencePolicy.DISCARD_INVALID,
+                    InvalidReferencePolicy.DISCARD_INVALID_ELEMENTS,
+                ):
+                    stop_events_to_persist = [event for event in stop_events if bool(event.get("is_valid"))]
+                    if not route_is_valid:
+                        route_id_to_persist = ""
+
+                    has_any_valid_reference = (
+                        trip_reference_is_valid
+                        or bool(route_id_to_persist)
+                        or bool(stop_events_to_persist)
+                    )
+                    if (not trip_reference_is_valid) or (not has_any_valid_reference):
+                        should_deactivate_trip = True
+
+                elif policy == InvalidReferencePolicy.KEEP_OBJECT_DISABLED:
+                    should_deactivate_trip = True
+
+            if should_skip_trip:
+                continue
+
+            is_active_on_create = bool(record.get("is_active", True))
+            if should_deactivate_trip:
+                is_active_on_create = False
+
+            trip_is_valid = (
+                bool(record.get("is_valid", True))
+                and route_is_valid
+                and trip_reference_is_valid
+                and not has_invalid_stop_reference
+            )
+
+            if trip_uuid in trips_to_update:
+                stats_updated += 1
+            else:
+                stats_created += 1
+
+            await realtime_repository.update_trip_update_from_sync(
+                trip_uuid=trip_uuid,
+                source_id=source_id,
+                source_name=source_name,
+                trip_id=resolved_trip_id,
+                start_time=str(record["start_time"]),
+                start_date=str(record["start_date"]),
+                route_id=route_id_to_persist,
+                schedule_relationship=str(record.get("schedule_relationship", "SCHEDULED")),
+                assignment_type=assignment_type,
+                is_active_on_create=is_active_on_create,
+                is_valid=trip_is_valid,
+                stop_events=stop_events_to_persist,
+            )
+
+        if policy_based_deletes:
+            await realtime_repository.delete_trips_for_data_source_by_ids(
+                source_id,
+                list(policy_based_deletes),
+            )
+            stats_deleted += len(policy_based_deletes)
+
+        logger.info(
+            f"[{self.get_adapter_type()}] Trip-update import completed for '{source_name}': "
+            f"fetched={len(records)}, created={stats_created}, updated={stats_updated}, deleted={stats_deleted}"
+        )
+
+        return {
+            "added": stats_created,
+            "updated": stats_updated,
+            "deleted": stats_deleted,
+        }
+
+    async def _sync_vehicle_position_records(
+        self,
+        repository: SystemRepositoryInterface,
+        realtime_repository: RealtimeRepositoryInterface,
+        gtfs_repository: GtfsRepositoryInterface,
+        source_id: int,
+        source_name: str,
+        records: list[dict[str, Any]],
+    ) -> dict[str, int]:
+        """Synchronize vehicle-position records into the database."""
+        policy = await repository.get_data_source_invalid_reference_policy(source_id)
+        if isinstance(policy, str):
+            policy = InvalidReferencePolicy(policy)
+
+        logger.info(
+            f"[{self.get_adapter_type()}] Synchronizing vehicle-position records from '{source_name}' "
+            f"(policy: {policy.value})"
+        )
+
+        await self._identifier_mapping_service.initialize(repository, source_id)
+
+        mapping_count = self._identifier_mapping_service.get_loaded_mapping_count()
+        if mapping_count > 0:
+            logger.info(
+                f"[{self.get_adapter_type()}] Loaded {mapping_count} mapping entries"
+            )
+
+        gtfs_entities = await self._load_gtfs_entities(gtfs_repository)
+        nominal_trip_ids = gtfs_entities.get("trip", set())
+        if self._matching_service is None:
+            self._matching_service = MatchingService(gtfs_repository, get_caching_service())
+
+        incoming_vehicle_ids = {
+            self._record_uuid(record, source_name, fallback_key="vehicle_id", kind="Vehicle-position")
+            for record in records
+        }
+
+        existing_vehicles = {
+            vehicle.id: vehicle
+            for vehicle in await realtime_repository.list_vehicles_for_data_source(source_id)
+        }
+        existing_vehicle_ids = set(existing_vehicles.keys())
+
+        if incoming_vehicle_ids:
+            vehicles_by_id = {
+                vehicle.id: vehicle
+                for vehicle in await realtime_repository.list_vehicles_by_ids(list(incoming_vehicle_ids))
+            }
+            
+            for vehicle_id, vehicle in vehicles_by_id.items():
+                if vehicle_id not in existing_vehicles:
+                    existing_vehicles[vehicle_id] = vehicle
+                    existing_vehicle_ids.add(vehicle_id)
+
+        vehicles_to_update = incoming_vehicle_ids & existing_vehicle_ids
+        vehicles_to_delete = {
+            vehicle_id for vehicle_id, vehicle in existing_vehicles.items()
+            if vehicle.data_source_id == source_id and vehicle_id not in incoming_vehicle_ids
+        }
+
+        stats_created = 0
+        stats_updated = 0
+        stats_deleted = len(vehicles_to_delete)
+        policy_based_deletes: set[uuid.UUID] = set()
+
+        if vehicles_to_delete:
+            await realtime_repository.delete_vehicles_for_data_source_by_ids(
+                source_id,
+                list(vehicles_to_delete),
+            )
+
+        for record in records:
+            vehicle_uuid = self._record_uuid(record, source_name, fallback_key="vehicle_id", kind="Vehicle-position")
+            trip_payload = self._extract_vehicle_trip_payload(record)
+
+            mapped_trip = self._identifier_mapping_service.apply_mapping(
+                {
+                    "route_id": trip_payload.get("route_id"),
+                }
+            )
+            trip_payload["route_id"] = str(mapped_trip.get("route_id") or "")
+            route_is_valid = bool(trip_payload["route_id"]) and trip_payload["route_id"] in gtfs_entities.get("route", set())
+
+            stop_reference_value = record.get("stop_id")
+            stop_reference_is_valid = True
+            if stop_reference_value:
+                stop_reference_is_valid = str(stop_reference_value) in gtfs_entities.get("stop", set())
+
+            derived_trip_id = trip_payload["trip_id"]
+            resolved_trip_id = derived_trip_id
+            trip_assignment_type = AssignmentType.DIRECT_BY_ID.value
+            vehicle_assignment_type = AssignmentType.DIRECT_BY_ID.value
+            trip_reference_is_valid = derived_trip_id in nominal_trip_ids
+
+            if not trip_reference_is_valid:
+                matched_trip_id = await self._matching_service.match(
+                    trip_id=derived_trip_id,
+                    route_id=trip_payload["route_id"] or None,
+                    scheduled_start_time=self._parse_service_datetime(
+                        trip_payload["start_date"],
+                        trip_payload["start_time"],
+                    ),
+                    scheduled_end_time=None,
+                    scheduled_start_stop_id=record.get("stop_id"),
+                    scheduled_end_stop_id=record.get("stop_id"),
+                )
+
+                if matched_trip_id is not None:
+                    resolved_trip_id = matched_trip_id
+                    trip_assignment_type = AssignmentType.MATCHED_BY_CURRENT_STOP.value
+                    vehicle_assignment_type = AssignmentType.MATCHED_BY_CURRENT_STOP.value
+                    trip_reference_is_valid = True
+                else:
+                    trip_assignment_type = AssignmentType.NO_MATCH_GENERAL.value
+                    vehicle_assignment_type = AssignmentType.NO_MATCH_GENERAL.value
+
+            has_invalid_reference = (not route_is_valid) or (not stop_reference_is_valid) or (not trip_reference_is_valid)
+
+            should_skip_vehicle = False
+            should_deactivate_vehicle = False
+
+            if has_invalid_reference:
+                if policy == InvalidReferencePolicy.DISCARD_ENTIRE_OBJECT:
+                    should_skip_vehicle = True
+                    if vehicle_uuid in existing_vehicle_ids:
+                        policy_based_deletes.add(vehicle_uuid)
+
+                elif policy in (
+                    InvalidReferencePolicy.DISCARD_INVALID,
+                    InvalidReferencePolicy.DISCARD_INVALID_ELEMENTS,
+                ):
+                    if not route_is_valid:
+                        trip_payload["route_id"] = ""
+
+                    has_any_valid_reference = (
+                        trip_reference_is_valid
+                        or bool(trip_payload["route_id"])
+                        or stop_reference_is_valid
+                    )
+                    if (not trip_reference_is_valid) or (not has_any_valid_reference):
+                        should_deactivate_vehicle = True
+
+                elif policy == InvalidReferencePolicy.KEEP_OBJECT_DISABLED:
+                    should_deactivate_vehicle = True
+
+            if should_skip_vehicle:
+                continue
+
+            vehicle_is_active_on_create = bool(record.get("is_active", True))
+            if should_deactivate_vehicle:
+                vehicle_is_active_on_create = False
+
+            trip_is_valid = bool(trip_payload.get("is_valid", True)) and route_is_valid and trip_reference_is_valid
+            vehicle_is_valid = (
+                bool(record.get("is_valid", True))
+                and route_is_valid
+                and stop_reference_is_valid
+                and trip_reference_is_valid
+            )
+
+            trip_payload["trip_id"] = resolved_trip_id
+
+            trip_uuid = self._make_unique_id(trip_payload["trip_id"], source_name)
+
+            if vehicle_uuid in vehicles_to_update:
+                stats_updated += 1
+            else:
+                stats_created += 1
+
+            await realtime_repository.update_vehicle_position_from_sync(
+                vehicle_uuid=vehicle_uuid,
+                source_id=source_id,
+                source_name=source_name,
+                trip_uuid=trip_uuid,
+                trip_id=trip_payload["trip_id"],
+                trip_start_time=trip_payload["start_time"],
+                trip_start_date=trip_payload["start_date"],
+                trip_route_id=trip_payload["route_id"],
+                trip_schedule_relationship=trip_payload["schedule_relationship"],
+                trip_assignment_type=trip_assignment_type,
+                trip_is_active_on_create=trip_payload["is_active_on_create"],
+                trip_is_valid=trip_is_valid,
+                vehicle_id=str(record["vehicle_id"]),
+                vehicle_label=record.get("vehicle_label"),
+                vehicle_license_plate=record.get("vehicle_license_plate"),
+                vehicle_wheelchair_accessible=str(record.get("vehicle_wheelchair_accessible", "NO_VALUE")),
+                timestamp=record["timestamp"],
+                latitude=float(record["latitude"]),
+                longitude=float(record["longitude"]),
+                current_stop_sequence=int(record.get("current_stop_sequence", 0)),
+                current_status=str(record.get("current_status", "IN_TRANSIT_TO")),
+                assignment_type=vehicle_assignment_type,
+                congestion_level=str(record.get("congestion_level", "UNKNOWN_CONGESTION_LEVEL")),
+                is_active_on_create=vehicle_is_active_on_create,
+                is_valid=vehicle_is_valid,
+            )
+
+        if policy_based_deletes:
+            await realtime_repository.delete_vehicles_for_data_source_by_ids(
+                source_id,
+                list(policy_based_deletes),
+            )
+            stats_deleted += len(policy_based_deletes)
+
+        logger.info(
+            f"[{self.get_adapter_type()}] Vehicle-position import completed for '{source_name}': "
+            f"fetched={len(records)}, created={stats_created}, updated={stats_updated}, deleted={stats_deleted}"
+        )
+
         return {
             "added": stats_created,
             "updated": stats_updated,

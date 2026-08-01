@@ -29,7 +29,7 @@ class GtfsRepositoryInterface(ABC):
 
     @abstractmethod
     async def list_gtfs_entity_ids(self) -> dict[str, set[str]]:
-        """Return GTFS entity IDs as sets for agency, route, and stop."""
+        """Return GTFS entity IDs as sets for agency, route, stop, and trip."""
         raise NotImplementedError
 
     @abstractmethod
