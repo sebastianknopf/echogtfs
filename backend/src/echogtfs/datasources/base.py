@@ -374,15 +374,9 @@ class DatasourceBase(DatasourceInterface):
 
     @staticmethod
     def _coerce_datetime(value: Any) -> datetime | None:
-        """Convert datetime-like input to datetime where possible."""
+        """Accept datetime input and return None for unsupported types."""
         if isinstance(value, datetime):
             return value
-
-        if isinstance(value, str):
-            try:
-                return datetime.fromisoformat(value.replace("Z", "+00:00"))
-            except ValueError:
-                return None
 
         return None
 
@@ -924,26 +918,38 @@ class DatasourceBase(DatasourceInterface):
             assignment_type = AssignmentType.DIRECT_BY_ID.value
             trip_reference_is_valid = derived_trip_id in nominal_trip_ids
 
+            mapped_match_start_stop = self._identifier_mapping_service.apply_mapping(
+                {
+                    "stop_id": record.get("scheduled_start_stop_id"),
+                }
+            )
+            mapped_match_end_stop = self._identifier_mapping_service.apply_mapping(
+                {
+                    "stop_id": record.get("scheduled_end_stop_id"),
+                }
+            )
+
+            scheduled_start_time = self._coerce_datetime(record.get("scheduled_start_time"))
+            scheduled_end_time = self._coerce_datetime(record.get("scheduled_end_time"))
+            scheduled_start_stop_id = mapped_match_start_stop.get("stop_id")
+            scheduled_end_stop_id = mapped_match_end_stop.get("stop_id")
+
             if not trip_reference_is_valid:
-                scheduled_start_time = self._parse_service_datetime(
-                    str(record.get("start_date") or ""),
-                    str(record.get("start_time") or ""),
-                )
-
-                scheduled_end_time = None
-                if stop_events:
-                    scheduled_end_time = self._coerce_datetime(
-                        stop_events[-1].get("departure_time")
-                        or stop_events[-1].get("arrival_time")
-                    )
-
                 matched_trip_id = await self._matching_service.match(
                     trip_id=derived_trip_id,
                     route_id=str(mapped_trip.get("route_id") or "") or None,
                     scheduled_start_time=scheduled_start_time,
                     scheduled_end_time=scheduled_end_time,
-                    scheduled_start_stop_id=(stop_events[0].get("stop_id") if stop_events else None),
-                    scheduled_end_stop_id=(stop_events[-1].get("stop_id") if stop_events else None),
+                    scheduled_start_stop_id=(
+                        str(scheduled_start_stop_id)
+                        if scheduled_start_stop_id is not None
+                        else None
+                    ),
+                    scheduled_end_stop_id=(
+                        str(scheduled_end_stop_id)
+                        if scheduled_end_stop_id is not None
+                        else None
+                    ),
                 )
 
                 if matched_trip_id is not None:
@@ -1131,17 +1137,38 @@ class DatasourceBase(DatasourceInterface):
             vehicle_assignment_type = AssignmentType.DIRECT_BY_ID.value
             trip_reference_is_valid = derived_trip_id in nominal_trip_ids
 
+            mapped_match_start_stop = self._identifier_mapping_service.apply_mapping(
+                {
+                    "stop_id": record.get("scheduled_start_stop_id"),
+                }
+            )
+            mapped_match_end_stop = self._identifier_mapping_service.apply_mapping(
+                {
+                    "stop_id": record.get("scheduled_end_stop_id"),
+                }
+            )
+
+            scheduled_start_time = self._coerce_datetime(record.get("scheduled_start_time"))
+            scheduled_end_time = self._coerce_datetime(record.get("scheduled_end_time"))
+            scheduled_start_stop_id = mapped_match_start_stop.get("stop_id")
+            scheduled_end_stop_id = mapped_match_end_stop.get("stop_id")
+
             if not trip_reference_is_valid:
                 matched_trip_id = await self._matching_service.match(
                     trip_id=derived_trip_id,
                     route_id=trip_payload["route_id"] or None,
-                    scheduled_start_time=self._parse_service_datetime(
-                        trip_payload["start_date"],
-                        trip_payload["start_time"],
+                    scheduled_start_time=scheduled_start_time,
+                    scheduled_end_time=scheduled_end_time,
+                    scheduled_start_stop_id=(
+                        str(scheduled_start_stop_id)
+                        if scheduled_start_stop_id is not None
+                        else None
                     ),
-                    scheduled_end_time=None,
-                    scheduled_start_stop_id=record.get("stop_id"),
-                    scheduled_end_stop_id=record.get("stop_id"),
+                    scheduled_end_stop_id=(
+                        str(scheduled_end_stop_id)
+                        if scheduled_end_stop_id is not None
+                        else None
+                    ),
                 )
 
                 if matched_trip_id is not None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import os
 import sys
 import unittest
@@ -392,6 +393,91 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
         kwargs = realtime_repository.update_vehicle_position_from_sync.await_args.kwargs
         self.assertEqual(kwargs["trip_assignment_type"], "NO_MATCH_GENERAL")
         self.assertEqual(kwargs["assignment_type"], "NO_MATCH_GENERAL")
+
+    async def test_sync_vehicle_position_records_discards_record_without_trip_object(self):
+        repository = _SystemRepositoryStub()
+        realtime_repository = _RealtimeRepositoryStub()
+        gtfs_repository = _GtfsRepositoryStub()
+        datasource = _TestDatasource({})
+        datasource._matching_service = SimpleNamespace(match=AsyncMock(return_value=None))
+        datasource._identifier_mapping_service = SimpleNamespace(
+            initialize=AsyncMock(),
+            get_loaded_mapping_count=lambda: 0,
+            apply_mapping=lambda entity: entity,
+        )
+
+        records = [
+            {
+                "id": "veh-upd-1",
+                "vehicle_id": "vehicle-1",
+                "timestamp": "2026-08-01T08:05:00Z",
+                "latitude": 47.1,
+                "longitude": 8.5,
+            }
+        ]
+
+        result = await datasource._sync_vehicle_position_records(
+            repository=repository,
+            realtime_repository=realtime_repository,
+            gtfs_repository=gtfs_repository,
+            source_id=2,
+            source_name="Demo",
+            records=records,
+        )
+
+        self.assertEqual(result, {"added": 0, "updated": 0, "deleted": 0})
+        realtime_repository.update_vehicle_position_from_sync.assert_not_awaited()
+
+    async def test_sync_vehicle_position_records_uses_trip_scheduled_fields_for_matching(self):
+        repository = _SystemRepositoryStub()
+        realtime_repository = _RealtimeRepositoryStub()
+        gtfs_repository = _GtfsRepositoryStub()
+        gtfs_repository.list_gtfs_entity_ids = AsyncMock(
+            return_value={"agency": {"a1"}, "route": {"r1"}, "stop": {"s1"}, "trip": {"nominal-trip"}}
+        )
+        datasource = _TestDatasource({})
+        datasource._matching_service = SimpleNamespace(match=AsyncMock(return_value="matched-trip-1"))
+        datasource._identifier_mapping_service = SimpleNamespace(
+            initialize=AsyncMock(),
+            get_loaded_mapping_count=lambda: 0,
+            apply_mapping=lambda entity: {**entity, "stop_id": "s1" if entity.get("stop_id") else entity.get("stop_id")},
+        )
+
+        records = [
+            {
+                "id": "veh-upd-1",
+                "scheduled_start_time": datetime(2026, 8, 1, 8, 0, tzinfo=timezone.utc),
+                "scheduled_end_time": datetime(2026, 8, 1, 8, 5, tzinfo=timezone.utc),
+                "scheduled_start_stop_id": "s1",
+                "scheduled_end_stop_id": "s1",
+                "trip": {
+                    "trip_id": "external-trip-1",
+                    "start_time": "08:00:00",
+                    "start_date": "20260801",
+                    "route_id": "r1",
+                },
+                "vehicle_id": "vehicle-1",
+                "timestamp": "2026-08-01T08:05:00Z",
+                "latitude": 47.1,
+                "longitude": 8.5,
+            }
+        ]
+
+        await datasource._sync_vehicle_position_records(
+            repository=repository,
+            realtime_repository=realtime_repository,
+            gtfs_repository=gtfs_repository,
+            source_id=2,
+            source_name="Demo",
+            records=records,
+        )
+
+        datasource._matching_service.match.assert_awaited_once()
+        match_kwargs = datasource._matching_service.match.await_args.kwargs
+        self.assertIsNotNone(match_kwargs["scheduled_start_time"])
+        self.assertIsNotNone(match_kwargs["scheduled_end_time"])
+        self.assertEqual(match_kwargs["scheduled_start_stop_id"], "s1")
+        self.assertEqual(match_kwargs["scheduled_end_stop_id"], "s1")
 
     async def test_sync_trip_update_records_sets_invalid_and_deactivates_when_trip_unmatched(self):
         repository = _SystemRepositoryStub()
