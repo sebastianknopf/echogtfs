@@ -10,9 +10,7 @@
 
 Transformer output is consumed by DatasourceBase._fetch_records and normalized by DatasourceBase._normalize_fetched_payload.
 
-A transformer can return one of the following shapes:
-
-1. Envelope format:
+A transformer must return this envelope shape:
 
 ```python
 {
@@ -22,16 +20,6 @@ A transformer can return one of the following shapes:
     ],
 }
 ```
-
-2. Legacy format:
-
-```python
-[
-    # list[dict[str, Any]]
-]
-```
-
-The legacy format is treated as record_type="service_alerts".
 
 ## Sync Pipeline
 
@@ -47,6 +35,49 @@ DatasourceBase expects dictionary records per record_type. These dictionaries ar
 Only fields listed below are consumed by DatasourceBase and/or RealtimeRepository for each record type.
 
 ## record_type service_alerts
+
+Allowed data model:
+
+```python
+{
+    "id": str,
+    "cause": str,
+    "effect": str,
+    "severity_level": str,
+    "is_active": bool,
+    "translations": [
+        {
+            "language": str,
+            "header_text": str | None,
+            "description_text": str | None,
+            "url": str | None,
+        }
+    ],
+    "active_periods": [
+        {
+            "period_type": str,
+            "start_time": int | None,
+            "end_time": int | None,
+        }
+    ],
+    "informed_entities": [
+        {
+            "agency_id": str | None,
+            "route_id": str | None,
+            "route_type": int | None,
+            "stop_id": str | None,
+            "trip_id": str | None,
+            "direction_id": int | None,
+            "is_valid": bool,
+        }
+    ],
+}
+```
+
+DatasourceBase also writes these internal fields before persistence:
+
+- source: overwritten with the current data source name.
+- data_source_id: overwritten with the current data source id.
 
 Processed top-level fields:
 
@@ -82,6 +113,14 @@ Processed informed_entities[*] fields:
 - direction_id: optional.
 - is_valid: optional input; may be set or overridden by invalid-reference policy flow.
 
+Invalid-reference policy effects for service_alerts:
+
+- `discard_entire_object`: skip the full alert and delete an existing synced alert with the same ID.
+- `discard_invalid`: keep only informed entities where `is_valid` is true.
+- `discard_invalid_elements`: clear invalid `agency_id`, `route_id`, and `stop_id` fields inside an entity, then keep only entities that still have at least one valid reference.
+- `keep_object_disabled`: keep the alert but force `is_active` to false for new alerts.
+- Any alert with no remaining informed entities is deactivated.
+
 Mapped fields in service_alerts:
 
 - informed_entities[*].agency_id
@@ -93,6 +132,62 @@ Not mapped in service_alerts:
 - informed_entities[*].trip_id
 
 ## record_type trip_updates
+
+Allowed data model:
+
+```python
+{
+    "id": str,
+    "trip_id": str,
+    "start_time": str,
+    "start_date": str,
+    "route_id": str,
+    "schedule_relationship": str,
+    "assignment_type": str,
+    "is_active": bool,
+    "is_valid": bool,
+    "stop_events": [
+        {
+            "trip_id": str,
+            "stop_id": str,
+            "stop_sequence": str,
+            "arrival_time": str | datetime,
+            "departure_time": str | datetime,
+            "schedule_relationship": str,
+            "is_valid": bool,
+        }
+    ],
+}
+```
+
+DatasourceBase derives this internal processing state for each trip update:
+
+```python
+{
+    "trip_uuid": uuid.UUID,
+    "resolved_trip_id": str,
+    "mapped_route_id": str,
+    "route_is_valid": bool,
+    "trip_reference_is_valid": bool,
+    "has_invalid_stop_reference": bool,
+    "scheduled_start_time": datetime | None,
+    "scheduled_end_time": datetime | None,
+    "scheduled_start_stop_id": str | None,
+    "scheduled_end_stop_id": str | None,
+    "assignment_type": str,
+    "stop_events_to_persist": [
+        {
+            "trip_id": str,
+            "stop_id": str,
+            "stop_sequence": str,
+            "arrival_time": str | datetime,
+            "departure_time": str | datetime,
+            "schedule_relationship": str,
+            "is_valid": bool,
+        }
+    ],
+}
+```
 
 Processed top-level fields:
 
@@ -116,6 +211,11 @@ Processed stop_events[*] fields:
 - is_valid: optional, default True in persistence layer.
 - trip_id: optional input but explicitly removed and replaced with resolved trip_id before persistence.
 
+DatasourceBase mutates each stop event during processing:
+
+- `stop_id` is replaced with the mapped stop ID.
+- `is_valid` is forced to `input_is_valid and stop_id_in_nominal_gtfs`.
+
 Derived matching inputs for trip_updates:
 
 - scheduled_start_time: derived from start_date + start_time via %Y%m%d %H:%M:%S parser.
@@ -129,11 +229,94 @@ Assignment behavior for trip_updates:
 - If trip_id is not nominal and match succeeds: assignment_type becomes MATCHED_BY_START_STOP and trip_id is replaced by matched ID.
 - If trip_id is not nominal and match fails: assignment_type becomes NO_MATCH_GENERAL.
 
+Invalid-reference policy effects for trip_updates:
+
+- An invalid reference means at least one of these is true:
+    - `route_id` is not contained in nominal GTFS route IDs after mapping.
+    - any `stop_events[*].stop_id` is not contained in nominal GTFS stop IDs after mapping.
+    - `trip_id` is neither a nominal GTFS trip ID nor successfully matched.
+- `trip.is_valid` persisted via `update_trip_update_from_sync(..., is_valid=...)` becomes false when any invalid reference exists.
+- `discard_entire_object`: skip the full trip update and delete an existing synced trip with the same ID.
+- `discard_invalid` and `discard_invalid_elements`:
+    - remove invalid stop events from `stop_events`.
+    - clear `route_id` to an empty string when the mapped route is invalid.
+    - deactivate the trip when `trip_id` is still unresolved or when no valid references remain.
+- `keep_object_disabled`: keep the trip update but force `is_active` to false on create.
+
 Fields not consumed from trip_updates:
 
 - top-level assignment_type input is ignored and overwritten by derived assignment_type.
 
 ## record_type vehicle_positions
+
+Allowed data model:
+
+```python
+{
+    "id": str,
+    "trip": {
+        "trip_id": str,
+        "start_time": str,
+        "start_date": str,
+        "route_id": str,
+        "schedule_relationship": str,
+        "assignment_type": str,
+        "is_active": bool,
+        "is_valid": bool,
+    },
+    "trip_id": str,
+    "trip_start_time": str,
+    "trip_start_date": str,
+    "trip_route_id": str,
+    "trip_schedule_relationship": str,
+    "trip_assignment_type": str,
+    "trip_is_active_on_create": bool,
+    "trip_is_valid": bool,
+    "vehicle_id": str,
+    "vehicle_label": str | None,
+    "vehicle_license_plate": str | None,
+    "vehicle_wheelchair_accessible": str,
+    "timestamp": str | datetime,
+    "latitude": float | int,
+    "longitude": float | int,
+    "current_stop_sequence": int,
+    "current_status": str,
+    "assignment_type": str,
+    "congestion_level": str,
+    "is_active": bool,
+    "is_valid": bool,
+    "stop_id": str,
+}
+```
+
+DatasourceBase derives this internal processing state for each vehicle position:
+
+```python
+{
+    "vehicle_uuid": uuid.UUID,
+    "trip_uuid": uuid.UUID,
+    "resolved_trip_id": str,
+    "trip_payload": {
+        "trip_id": str,
+        "start_time": str,
+        "start_date": str,
+        "route_id": str,
+        "schedule_relationship": str,
+        "assignment_type": str,
+        "is_active_on_create": bool,
+        "is_valid": bool,
+    },
+    "route_is_valid": bool,
+    "stop_reference_is_valid": bool,
+    "trip_reference_is_valid": bool,
+    "scheduled_start_time": datetime | None,
+    "scheduled_end_time": None,
+    "scheduled_start_stop_id": str | None,
+    "scheduled_end_stop_id": str | None,
+    "trip_assignment_type": str,
+    "vehicle_assignment_type": str,
+}
+```
 
 Processed top-level fields:
 
@@ -164,8 +347,10 @@ Trip payload processing rules:
 - start_date defaults to empty string when missing.
 - route_id defaults to empty string when missing, then mapped.
 - schedule_relationship defaults to SCHEDULED when missing.
+- nested `trip.assignment_type` or flat `trip_assignment_type` is read into the normalized trip payload but not persisted unchanged.
 - trip is_active_on_create defaults to True.
 - trip is_valid defaults to True.
+- mapped `route_id` replaces the original route ID in the normalized trip payload.
 
 Derived matching inputs for vehicle_positions:
 
@@ -180,256 +365,21 @@ Assignment behavior for vehicle_positions:
 - If trip_id is not nominal and match succeeds: both assignment fields become MATCHED_BY_CURRENT_STOP and trip_id is replaced by matched ID.
 - If trip_id is not nominal and match fails: both assignment fields become NO_MATCH_GENERAL.
 
+Invalid-reference policy effects for vehicle_positions:
+
+- An invalid reference means at least one of these is true:
+    - `trip.route_id` or flat route source is not contained in nominal GTFS route IDs after mapping.
+    - optional `stop_id` is present but not contained in nominal GTFS stop IDs.
+    - `trip_id` is neither a nominal GTFS trip ID nor successfully matched.
+- Persisted `trip_is_valid` becomes false when the route or trip reference is invalid.
+- Persisted vehicle `is_valid` becomes false when the route, stop, or trip reference is invalid.
+- `discard_entire_object`: skip the full vehicle position and delete an existing synced vehicle with the same ID.
+- `discard_invalid` and `discard_invalid_elements`:
+    - clear trip `route_id` to an empty string when the mapped route is invalid.
+    - deactivate the vehicle when `trip_id` is still unresolved or when no valid references remain.
+- `keep_object_disabled`: keep the vehicle position but force vehicle `is_active` to false on create.
+
 Fields not consumed from vehicle_positions:
 
 - top-level assignment_type input is ignored.
 - trip.assignment_type and flat trip_assignment_type inputs are ignored.
-
-Pipeline order used by DatasourceBase:
-
-1. Load records from transformer.
-2. Normalize payload shape into (record_type, records).
-3. Initialize mapping/enrichment/matching dependencies for the current source.
-4. Apply identifier mapping to route_id and stop_id fields where relevant.
-5. For trip-related records, conditionally run matching when trip_id is not in nominal GTFS trip IDs.
-6. Upsert records into realtime tables.
-
-## record_type service_alerts
-
-Each record must provide the fields required by _sync_service_alert_records and RealtimeRepository.upsert_service_alert_from_sync.
-
-Full allowed model:
-
-```python
-{
-    "id": str,  # required
-    "cause": str,  # required
-    "effect": str,  # required
-    "severity_level": str,  # required
-    "is_active": bool,  # optional, default True
-    "translations": [  # optional, default []
-        {
-            "language": str,  # required
-            "header_text": str | None,  # optional
-            "description_text": str | None,  # optional
-            "url": str | None,  # optional
-        }
-    ],
-    "active_periods": [  # optional, default []
-        {
-            "period_type": str,  # optional, defaults in persistence layer
-            "start_time": int | None,  # optional
-            "end_time": int | None,  # optional
-        }
-    ],
-    "informed_entities": [  # optional, default []
-        {
-            "agency_id": str | None,
-            "route_id": str | None,
-            "route_type": int | None,
-            "stop_id": str | None,
-            "trip_id": str | None,
-            "direction_id": int | None,
-            "is_valid": bool,  # optional; may be assigned by validation flow
-        }
-    ],
-}
-```
-
-```python
-{
-    "id": "external-alert-id-or-uuid",
-    "cause": "UNKNOWN_CAUSE",
-    "effect": "UNKNOWN_EFFECT",
-    "severity_level": "UNKNOWN_SEVERITY",
-    "is_active": True,
-    "translations": [
-        {
-            "language": "en",
-            "header_text": "Line disruption",
-            "description_text": "Replacement buses between A and B",
-            "url": "https://example.invalid/notice",
-        }
-    ],
-    "active_periods": [
-        {
-            "period_type": "impact_period",
-            "start_time": 1754044800,
-            "end_time": 1754052000,
-        }
-    ],
-    "informed_entities": [
-        {
-            "agency_id": None,
-            "route_id": "R10",
-            "route_type": None,
-            "stop_id": "8503000",
-            "trip_id": None,
-            "direction_id": None,
-        }
-    ],
-}
-```
-
-Notes:
-
-- agency_id, stop_id and route_id are subject to identifier mapping.
-
-**Important Note:** Trip based informed entities are currently not supported and are ignored!
-
-## record_type trip_updates
-
-Each record must provide the fields required by _sync_trip_update_records and RealtimeRepository.update_trip_update_from_sync.
-
-Full allowed model:
-
-```python
-{
-    "id": str,  # optional; if missing, trip_id is used for deterministic UUID
-    "trip_id": str,  # required
-    "start_time": str,  # required, HH:MM:SS
-    "start_date": str,  # required, YYYYMMDD
-    "route_id": str,  # required
-    "schedule_relationship": str,  # optional, default "SCHEDULED"
-    "assignment_type": str,  # optional input; overwritten by DatasourceBase
-    "is_active": bool,  # optional, default True
-    "is_valid": bool,  # optional, default True
-    "stop_events": [  # optional, default []
-        {
-            "trip_id": str,  # optional input; ignored and replaced by persisted trip_id
-            "stop_id": str,  # required for persistence
-            "stop_sequence": str,  # required for persistence
-            "arrival_time": str | datetime,  # required for persistence
-            "departure_time": str | datetime,  # required for persistence
-            "schedule_relationship": str,  # optional, default "SCHEDULED"
-            "is_valid": bool,  # optional, default True
-        }
-    ],
-}
-```
-
-```python
-{
-    "id": "external-trip-update-id",
-    "trip_id": "trip-20260801-001",
-    "start_time": "08:05:00",
-    "start_date": "20260801",
-    "route_id": "R10",
-    "schedule_relationship": "SCHEDULED",
-    "is_active": True,
-    "is_valid": True,
-    "stop_events": [
-        {
-            "stop_id": "8503000",
-            "stop_sequence": "1",
-            "arrival_time": "2026-08-01T08:05:00Z",
-            "departure_time": "2026-08-01T08:06:00Z",
-            "schedule_relationship": "SCHEDULED",
-            "is_valid": True,
-        },
-        {
-            "stop_id": "8503010",
-            "stop_sequence": "2",
-            "arrival_time": "2026-08-01T08:12:00Z",
-            "departure_time": "2026-08-01T08:13:00Z",
-            "schedule_relationship": "SCHEDULED",
-            "is_valid": True,
-        },
-    ],
-}
-```
-
-Notes:
-
-- route_id and stop_events[*].stop_id are subject to identifier mapping.
-- assignment_type is derived inside DatasourceBase from direct ID match or matching-service result.
-
-## record_type vehicle_positions
-
-Each record must provide the fields required by _sync_vehicle_position_records and RealtimeRepository.update_vehicle_position_from_sync.
-
-Full allowed model:
-
-```python
-{
-    "id": str,  # optional; if missing, vehicle_id is used for deterministic UUID
-
-    # Trip descriptor can be provided nested or as flat fields.
-    "trip": {
-        "trip_id": str,  # required if root trip_id not set
-        "start_time": str,  # optional fallback to ""
-        "start_date": str,  # optional fallback to ""
-        "route_id": str,  # optional fallback to ""
-        "schedule_relationship": str,  # optional, default "SCHEDULED"
-        "assignment_type": str,  # optional input; overwritten by DatasourceBase
-        "is_active": bool,  # optional fallback for trip_is_active_on_create
-        "is_valid": bool,  # optional fallback for trip_is_valid
-    },
-
-    # Flat trip alternatives
-    "trip_id": str,
-    "trip_start_time": str,
-    "trip_start_date": str,
-    "trip_route_id": str,
-    "trip_schedule_relationship": str,
-    "trip_assignment_type": str,  # optional input; overwritten by DatasourceBase
-    "trip_is_active_on_create": bool,
-    "trip_is_valid": bool,
-
-    # Vehicle fields
-    "vehicle_id": str,  # required
-    "vehicle_label": str | None,  # optional
-    "vehicle_license_plate": str | None,  # optional
-    "vehicle_wheelchair_accessible": str,  # optional, default "NO_VALUE"
-    "timestamp": str | datetime,  # required
-    "latitude": float | int,  # required
-    "longitude": float | int,  # required
-    "current_stop_sequence": int,  # optional, default 0
-    "current_status": str,  # optional, default "IN_TRANSIT_TO"
-    "assignment_type": str,  # optional input; overwritten by DatasourceBase
-    "congestion_level": str,  # optional, default "UNKNOWN_CONGESTION_LEVEL"
-    "is_active": bool,  # optional, default True
-    "is_valid": bool,  # optional, default True
-
-    # Optional stop hint used only by matching flow
-    "stop_id": str,
-}
-```
-
-```python
-{
-    "id": "external-vehicle-position-id",
-    "trip": {
-        "trip_id": "trip-20260801-001",
-        "start_time": "08:05:00",
-        "start_date": "20260801",
-        "route_id": "R10",
-        "schedule_relationship": "SCHEDULED",
-    },
-    "vehicle_id": "vehicle-4711",
-    "vehicle_label": "Bus 4711",
-    "vehicle_license_plate": "ZH123456",
-    "vehicle_wheelchair_accessible": "NO_VALUE",
-    "timestamp": "2026-08-01T08:07:30Z",
-    "latitude": 47.3763,
-    "longitude": 8.5476,
-    "current_stop_sequence": 1,
-    "current_status": "IN_TRANSIT_TO",
-    "congestion_level": "UNKNOWN_CONGESTION_LEVEL",
-    "is_active": True,
-    "is_valid": True,
-}
-```
-
-Alternative flat trip fields are also accepted by DatasourceBase:
-
-- trip_id
-- trip_start_time
-- trip_start_date
-- trip_route_id
-- trip_schedule_relationship
-
-Notes:
-
-- route_id is subject to identifier mapping.
-- assignment_type and trip_assignment_type are derived inside DatasourceBase from direct ID match or matching-service result.
