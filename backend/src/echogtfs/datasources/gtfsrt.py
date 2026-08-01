@@ -78,7 +78,7 @@ class GtfsRealtimeDatasource(DatasourceBase):
             if not isinstance(self.config["token"], str):
                 raise ValueError("'token' must be a string")
 
-    async def _fetch_records(self) -> dict[str, Any] | list[dict[str, Any]]:
+    async def _fetch_records(self) -> dict[str, Any]:
         """Fetch GTFS-RT feed and transform entities into internal alert dicts."""
 
         source_name = self.config.get("_source_name", "gtfsrt")

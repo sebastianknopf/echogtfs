@@ -20,7 +20,7 @@ class _TestDatasource(DatasourceBase):
         return None
 
     async def _fetch_records(self):
-        return self.config.get("_payload", [])
+        return self.config.get("_payload", {"record_type": "service_alerts", "records": []})
 
 
 class _SystemRepositoryStub:
@@ -74,8 +74,10 @@ class TestDatasourceBaseHelpers(unittest.TestCase):
         original = "f5d3f5ec-f6ca-4d16-9330-f6691a53b4c8"
         self.assertEqual(str(self.datasource._make_unique_id(original, "src")), original)
 
-    def test_normalize_payload_accepts_list(self):
-        record_type, records = self.datasource._normalize_fetched_payload([{"id": 1}])
+    def test_normalize_payload_accepts_envelope(self):
+        record_type, records = self.datasource._normalize_fetched_payload(
+            {"record_type": "service_alerts", "records": [{"id": 1}]}
+        )
         self.assertEqual(record_type, "service_alerts")
         self.assertEqual(records, [{"id": 1}])
 

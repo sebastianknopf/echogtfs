@@ -85,7 +85,7 @@ class SiriLiteDatasource(DatasourceBase):
             if not isinstance(self.config["filter"], str):
                 raise ValueError("'filter' must be a string")
 
-    async def _fetch_records(self) -> dict[str, Any] | list[dict[str, Any]]:
+    async def _fetch_records(self) -> dict[str, Any]:
         root = await self._fetch_and_parse_xml()
         source_name = self.config.get("_source_name", "sirilite")
         filter_value = self.config.get("filter", "")

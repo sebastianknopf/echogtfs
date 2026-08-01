@@ -63,7 +63,7 @@ class DatasourceBase(DatasourceInterface):
         pass
     
     @abstractmethod
-    async def _fetch_records(self) -> dict[str, Any] | list[dict[str, Any]]:
+    async def _fetch_records(self) -> dict[str, Any]:
         """
         Fetch realtime records from the external data source.
         
@@ -342,12 +342,9 @@ class DatasourceBase(DatasourceInterface):
 
     def _normalize_fetched_payload(
         self,
-        fetched_payload: dict[str, Any] | list[dict[str, Any]],
+        fetched_payload: dict[str, Any],
     ) -> tuple[str, list[dict[str, Any]]]:
         """Normalize fetched datasource payload into (record_type, records)."""
-        if isinstance(fetched_payload, list):
-            return "service_alerts", fetched_payload
-
         if isinstance(fetched_payload, dict):
             record_type = fetched_payload.get("record_type")
             records = fetched_payload.get("records")
@@ -361,7 +358,7 @@ class DatasourceBase(DatasourceInterface):
             return record_type, records
 
         raise ValueError(
-            "Fetched payload must be either a list[dict] or a dict with 'record_type' and 'records'"
+            "Fetched payload must be a dict with 'record_type' and 'records'"
         )
 
     @staticmethod

@@ -139,7 +139,7 @@ class SiriSxDatasource(DatasourceBase):
         xml_string = ET.tostring(siri, encoding="unicode", method="xml")
         return f'<?xml version="1.0" encoding="UTF-8"?>{xml_string}'
 
-    async def _fetch_records(self) -> dict[str, Any] | list[dict[str, Any]]:
+    async def _fetch_records(self) -> dict[str, Any]:
         root = await self._fetch_and_parse_xml()
         source_name = self.config.get("_source_name", "sirisx")
         

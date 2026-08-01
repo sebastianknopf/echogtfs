@@ -20,7 +20,7 @@ class DatasourceInterface(ABC):
         """Validate datasource-specific configuration values."""
 
     @abstractmethod
-    async def _fetch_records(self) -> dict[str, Any] | list[dict[str, Any]]:
+    async def _fetch_records(self) -> dict[str, Any]:
         """Fetch and transform external realtime payloads into dialect-defined records."""
 
     @abstractmethod
