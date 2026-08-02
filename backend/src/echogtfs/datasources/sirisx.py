@@ -153,7 +153,10 @@ class SiriSxDatasource(DatasourceBase):
             raise ValueError(f"Unknown SIRI-SX dialect: {dialect}")
         
         try:
-            records = transformer.transform({"root": root, "source_name": source_name})
+            records = await self._run_cpu_bound(
+                transformer.transform,
+                {"root": root, "source_name": source_name},
+            )
         except Exception as exc:
             logger.error(f"[SiriSxDatasource] Failed to transform payload: {exc}", exc_info=True)
             
@@ -223,7 +226,7 @@ class SiriSxDatasource(DatasourceBase):
         )
 
         try:
-            return ET.fromstring(xml_content)
+            return await self._run_cpu_bound(ET.fromstring, xml_content)
         except ET.ParseError as exc:
             logger.error(f"[SiriSxDatasource] Failed to parse XML: {exc}")
             

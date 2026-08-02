@@ -1,5 +1,6 @@
 """Base datasource implementation for external data feeds."""
 
+import asyncio
 from abc import ABC, abstractmethod
 from datetime import datetime
 import logging
@@ -401,6 +402,10 @@ class DatasourceBase(DatasourceInterface):
                 return datetime.max
 
         return datetime.max
+
+    async def _run_cpu_bound(self, func: Any, *args: Any, **kwargs: Any) -> Any:
+        """Run CPU-bound synchronous work in a worker thread."""
+        return await asyncio.to_thread(func, *args, **kwargs)
 
     def _propagate_trip_update_stop_events(
         self,
@@ -1054,7 +1059,8 @@ class DatasourceBase(DatasourceInterface):
 
             nominal_trip = await gtfs_repository.get_gtfs_trip_with_stop_times(resolved_trip_id)
             nominal_stop_times = list(nominal_trip.stop_times) if nominal_trip is not None else []
-            stop_events = self._propagate_trip_update_stop_events(
+            stop_events = await self._run_cpu_bound(
+                self._propagate_trip_update_stop_events,
                 stop_events,
                 nominal_stop_times,
                 treat_unexpected_stop_as_added_stop=treat_unexpected_stop_as_added_stop,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -43,10 +44,28 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
         realtime_repository: RealtimeRepositoryInterface,
         gtfs_repository: GtfsRepositoryInterface,
     ):
+        if getattr(self, "_initialized", False):
+            return
+
         self._repository = repository
         self._realtime_repository = realtime_repository
         self._gtfs_repository = gtfs_repository
         self._scheduler_timezone = self._resolve_scheduler_timezone()
+        self._run_state_lock = asyncio.Lock()
+        self._running_source_ids: set[int] = set()
+        self._initialized = True
+
+    async def _try_mark_source_running(self, source_id: int) -> bool:
+        async with self._run_state_lock:
+            if source_id in self._running_source_ids:
+                return False
+
+            self._running_source_ids.add(source_id)
+            return True
+
+    async def _mark_source_finished(self, source_id: int) -> None:
+        async with self._run_state_lock:
+            self._running_source_ids.discard(source_id)
 
     @staticmethod
     def _resolve_scheduler_timezone() -> ZoneInfo:
@@ -157,53 +176,67 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
 
     async def run_import_task(self, source_id: int) -> None:
         """Execute one datasource import run if the source exists and is active."""
+        is_marked = await self._try_mark_source_running(source_id)
+        if not is_marked:
+            logger.info(
+                "[DatasourceScheduler] Skipping import for data source ID %s: source is already running",
+                source_id,
+            )
+
+            return
+
         logger.info("[DatasourceScheduler] Starting import for data source ID %s", source_id)
 
-        source = await self._repository.get_data_source_by_id(source_id)
-        if source is None:
-            logger.error("[DatasourceScheduler] Data source %s not found", source_id)
-            return
-
-        if not source.is_active:
-            logger.info(
-                "[DatasourceScheduler] Data source '%s' is inactive, skipping import",
-                source.name,
-            )
-            return
-
         try:
-            config = json.loads(source.config)
-            datasource = self._get_datasource(source.type, config)
+            source = await self._repository.get_data_source_by_id(source_id)
+            if source is None:
+                logger.error("[DatasourceScheduler] Data source %s not found", source_id)
 
-            stats = await datasource.sync_records(
-                self._repository,
-                self._realtime_repository,
-                self._gtfs_repository,
-                source.id,
-                source.name,
-            )
+                return
 
-            logger.info(
-                "[DatasourceScheduler] Import task completed for '%s': created=%s, updated=%s, deleted=%s",
-                source.name,
-                stats["added"],
-                stats["updated"],
-                stats["deleted"],
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.error(
-                "[DatasourceScheduler] Import task failed for '%s': %s",
-                source.name,
-                exc,
-                exc_info=True,
-            )
-
-        finally:
-            timestamp = datetime.now(UTC)
-
-            updated = await self._repository.update_data_source_last_run_at(source_id, timestamp)
-            if not updated:
-                logger.error(
-                    "[DatasourceScheduler] Failed to update last_run_at for data source %s",
-                    source_id,
+            if not source.is_active:
+                logger.info(
+                    "[DatasourceScheduler] Data source '%s' is inactive, skipping import",
+                    source.name,
                 )
+                
+                return
+
+            try:
+                config = json.loads(source.config)
+                datasource = self._get_datasource(source.type, config)
+
+                stats = await datasource.sync_records(
+                    self._repository,
+                    self._realtime_repository,
+                    self._gtfs_repository,
+                    source.id,
+                    source.name,
+                )
+
+                logger.info(
+                    "[DatasourceScheduler] Import task completed for '%s': created=%s, updated=%s, deleted=%s",
+                    source.name,
+                    stats["added"],
+                    stats["updated"],
+                    stats["deleted"],
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.error(
+                    "[DatasourceScheduler] Import task failed for '%s': %s",
+                    source.name,
+                    exc,
+                    exc_info=True,
+                )
+
+            finally:
+                timestamp = datetime.now(UTC)
+
+                updated = await self._repository.update_data_source_last_run_at(source_id, timestamp)
+                if not updated:
+                    logger.error(
+                        "[DatasourceScheduler] Failed to update last_run_at for data source %s",
+                        source_id,
+                    )
+        finally:
+            await self._mark_source_finished(source_id)

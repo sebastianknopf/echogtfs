@@ -156,7 +156,10 @@ class GtfsRealtimeDatasource(DatasourceBase):
             raise ValueError(f"Unknown GTFS-RT dialect: {dialect}")
 
         try:
-            records = transformer.transform({"feed": feed, "source_name": source_name})
+            records = await self._run_cpu_bound(
+                transformer.transform,
+                {"feed": feed, "source_name": source_name},
+            )
         except Exception as exc:
             logger.error(f"[GtfsRealtimeDatasource] Failed to transform payload: {exc}", exc_info=True)
             await self._log_request(

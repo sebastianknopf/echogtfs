@@ -125,6 +125,8 @@ Compared to other cron-based tasks (e.g. GTFS import, cleanup), the datasources 
 
 This cron expression would run the datasource every 30 seconds (on ':00 and on ':30).
 
+The scheduler service ensures that each data source can **only be running once** at the same time concurrently. This means, that if a data source run takes longer than the cron expression would run the data source, the run is skipped.
+
 ## GTFS-Realtime Feed
 
 The GTFS-RT endpoint is the public output endpoint. It serializes realtime data to GTFS-RT compliant protobuf stream. The endpoint also supports a `?format=json` query parameter for JSON output. 
