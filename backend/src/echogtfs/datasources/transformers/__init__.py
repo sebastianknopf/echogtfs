@@ -12,8 +12,8 @@ from echogtfs.datasources.transformers.intf_vehicle_positions_transformer import
 from echogtfs.datasources.transformers.gtfsrt_service_alerts_transformer import (
     GtfsRtServiceAlertsTransformer,
 )
-from echogtfs.datasources.transformers.swiss_service_alerts_transformer import (
-    SwissServiceAlertsTransformer,
+from echogtfs.datasources.transformers.sirisx_swiss_service_alerts_transformer import (
+    SiriSxSwissServiceAlertsTransformer,
 )
 from echogtfs.datasources.transformers.sirisx_service_alerts_transformer import (
     SiriSxServiceAlertsTransformer,

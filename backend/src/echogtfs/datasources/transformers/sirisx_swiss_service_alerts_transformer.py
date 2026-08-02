@@ -1,4 +1,4 @@
-"""Transformer for SIRI-Lite Swiss dialect service-alert payloads."""
+"""Transformer for SIRI-SX Swiss dialect service-alert payloads."""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ from echogtfs.enum.gtfsrt import PeriodType
 logger = logging.getLogger("uvicorn")
 
 
-class SwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
-    """Transforms SIRI-Lite Swiss XML into service-alert dictionaries."""
+class SiriSxSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
+    """Transforms SIRI-SX Swiss XML into service-alert dictionaries."""
 
     def __init__(
         self,
@@ -56,12 +56,12 @@ class SwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                     alerts.append(alert)
             except Exception as exc:
                 logger.error(
-                    f"[SwissServiceAlertsTransformer] Error processing situation: {exc}",
+                    f"[SiriSxSwissServiceAlertsTransformer] Error processing situation: {exc}",
                     exc_info=True,
                 )
 
         logger.info(
-            "[SwissServiceAlertsTransformer] Processed %s alerts (filtered: %s participant, %s window)",
+            "[SiriSxSwissServiceAlertsTransformer] Processed %s alerts (filtered: %s participant, %s window)",
             len(alerts),
             filtered_by_participant,
             filtered_out_of_window,
@@ -119,7 +119,7 @@ class SwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                     
                 except (ValueError, AttributeError) as exc:
                     logger.warning(
-                        f"[SiriLiteSwissTransformer] Failed to parse PublicationWindow times: {exc}"
+                        f"[SiriSxSwissServiceAlertsTransformer] Failed to parse PublicationWindow times: {exc}"
                     )
 
         return False
@@ -127,7 +127,7 @@ class SwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
     def _parse_situation(self, situation: ET.Element, source_name: str) -> dict[str, Any] | None:
         situation_number_elem = situation.find("siri:SituationNumber", self._siri_ns)
         if situation_number_elem is None:
-            logger.warning("[SiriLiteSwissTransformer] Skipping situation without SituationNumber")
+            logger.warning("[SiriSxSwissServiceAlertsTransformer] Skipping situation without SituationNumber")
             return None
 
         situation_number = situation_number_elem.text
@@ -466,8 +466,10 @@ class SwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
 
         for vehicle_journey in vehicle_journeys:
             journey_ref = vehicle_journey.find("siri:VehicleJourneyRef", self._siri_ns)
+
             if journey_ref is None or not journey_ref.text:
                 journey_ref = vehicle_journey.find("siri:DatedVehicleJourneyRef", self._siri_ns)
+
             if journey_ref is None or not journey_ref.text:
                 continue
 
@@ -488,10 +490,12 @@ class SwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                     affected_stop_points = stop_points_container.findall(
                         "siri:AffectedStopPoint", self._siri_ns
                     )
+
                     for affected_stop_point in affected_stop_points:
                         stop_point_ref = affected_stop_point.find("siri:StopPointRef", self._siri_ns)
                         if stop_point_ref is not None and stop_point_ref.text:
                             stop_ids.append(stop_point_ref.text)
+
                         stop_place_ref = affected_stop_point.find("siri:StopPlaceRef", self._siri_ns)
                         if stop_place_ref is not None and stop_place_ref.text:
                             stop_ids.append(stop_place_ref.text)
