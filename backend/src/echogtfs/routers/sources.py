@@ -345,7 +345,7 @@ async def run_source_import(
         await queue.report_progress(progress=0.0, message="intf.sources.running")
 
         try:
-            await get_datasource_scheduler_service().run_import_task(source_id, queue)
+            await get_datasource_scheduler_service().run_import_task(source_id)
         finally:
             await queue.report_progress(progress=100.0, message="intf.sources.completed")
 
