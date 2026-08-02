@@ -16,7 +16,7 @@ class TestDatasourceRegistry(unittest.TestCase):
             "gtfsrt",
         )
         self.assertEqual(
-            get_datasource("sirilite", {"endpoint": "https://x", "dialect": "swiss"}).get_datasource_type(),
+            get_datasource("sirilite", {"endpoint": "https://x", "dialect": "sirisx-swiss"}).get_datasource_type(),
             "sirilite",
         )
         self.assertEqual(

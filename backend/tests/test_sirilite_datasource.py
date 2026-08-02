@@ -18,11 +18,11 @@ class TestSiriliteDatasource(unittest.IsolatedAsyncioTestCase):
             SiriLiteDatasource({"endpoint": "https://x", "dialect": "unknown"})
 
     async def test_fetch_records_wraps_transformer_output(self):
-        datasource = SiriLiteDatasource({"endpoint": "https://x", "dialect": "swiss"})
+        datasource = SiriLiteDatasource({"endpoint": "https://x", "dialect": "sirisx-swiss"})
         root = ET.fromstring("<root />")
 
         with patch.object(datasource, "_fetch_and_parse_xml", AsyncMock(return_value=root)), patch(
-            "echogtfs.datasources.sirilite.SwissServiceAlertsTransformer"
+            "echogtfs.datasources.sirilite.SiriSxSwissServiceAlertsTransformer"
         ) as transformer_cls:
             transformer_cls.return_value.transform.return_value = [{"id": "b"}]
             payload = await datasource._fetch_records()
@@ -31,11 +31,11 @@ class TestSiriliteDatasource(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["records"], [{"id": "b"}])
 
     async def test_fetch_records_raises_when_transform_fails(self):
-        datasource = SiriLiteDatasource({"endpoint": "https://x", "dialect": "swiss"})
+        datasource = SiriLiteDatasource({"endpoint": "https://x", "dialect": "sirisx-swiss"})
         root = ET.fromstring("<root />")
 
         with patch.object(datasource, "_fetch_and_parse_xml", AsyncMock(return_value=root)), patch(
-            "echogtfs.datasources.sirilite.SwissServiceAlertsTransformer"
+            "echogtfs.datasources.sirilite.SiriSxSwissServiceAlertsTransformer"
         ) as transformer_cls, patch.object(sirilite_module.logger, "error"):
             transformer_cls.return_value.transform.side_effect = RuntimeError("transform failed")
             with self.assertRaises(ValueError):
