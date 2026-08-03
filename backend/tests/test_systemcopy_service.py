@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import io
+import json
 import sys
 import unittest
+import zipfile
+from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -53,7 +59,41 @@ class _FakeSession:
             raise AssertionError(f"Unsupported add() type: {type(obj)}")
 
 
+class _FakeRepository:
+    def __init__(self, session):
+        self._session = session
+
+    def get_session(self):
+        session = self._session
+
+        class _Ctx:
+            async def __aenter__(self_inner):
+                return session
+
+            async def __aexit__(self_inner, exc_type, exc, tb):
+                return False
+
+        return _Ctx()
+
+
 class TestSystemCopyService(unittest.IsolatedAsyncioTestCase):
+    def test_serialize_data_sources_resets_last_run_at(self):
+        service = SystemCopyService()
+        source = DataSource(
+            id=1,
+            name="source-1",
+            type="sirilite",
+            config="{}",
+            cron="*/10 * * * *",
+            is_active=True,
+            invalid_reference_policy="not_specified",
+            last_run_at=datetime(2026, 8, 3, 10, 0, 0, tzinfo=UTC),
+        )
+
+        rows = service._serialize_data_sources([source])
+        self.assertEqual(len(rows), 1)
+        self.assertIsNone(rows[0]["last_run_at"])
+
     async def test_import_users_remaps_id_when_id_exists_but_username_differs(self):
         session = _FakeSession(
             users=[
@@ -192,3 +232,31 @@ class TestSystemCopyService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(session.mappings[0].data_source_id, 2)
         self.assertEqual(len(session.enrichments), 1)
         self.assertEqual(session.enrichments[0].data_source_id, 2)
+
+    async def test_import_zip_schedules_datasources_when_datasource_file_present(self):
+        session = _FakeSession()
+        session.commit = AsyncMock()
+        session.get = AsyncMock(return_value=None)
+        session.get_bind = lambda: SimpleNamespace(dialect=SimpleNamespace(name="sqlite"))
+        repository = _FakeRepository(session)
+
+        service = SystemCopyService(repository)
+
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr(
+                "manifest.json",
+                json.dumps({"format_version": 1, "selected_domains": {"datasources": True}}).encode("utf-8"),
+            )
+            zf.writestr("sys_data_sources.json", json.dumps([]).encode("utf-8"))
+
+        scheduler = SimpleNamespace(schedule_all_data_sources=AsyncMock())
+
+        with patch("echogtfs.services.systemcopy.systemcopy_service.get_datasource_scheduler_service", return_value=scheduler), patch.object(
+            service,
+            "_import_data_sources",
+            AsyncMock(return_value=(0, 0, 0)),
+        ):
+            await service.import_zip(archive.getvalue())
+
+        scheduler.schedule_all_data_sources.assert_awaited_once()

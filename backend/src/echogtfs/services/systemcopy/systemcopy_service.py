@@ -16,6 +16,7 @@ from echogtfs.services.database.models import (
     DataSourceMapping,
     User,
 )
+from echogtfs.services.scheduler import get_datasource_scheduler_service
 from echogtfs.services.systemcopy.intf_systemcopy import SystemCopyInterface
 
 
@@ -127,6 +128,7 @@ class SystemCopyService(SystemCopyInterface):
                 self.DOMAIN_DATASOURCES: {"created": 0, "updated": 0, "remapped": 0},
             },
         }
+        datasource_imported = False
 
         async with self._repository.get_session() as db:
             if self.FILE_SYSTEM_SETTINGS in files:
@@ -156,10 +158,14 @@ class SystemCopyService(SystemCopyInterface):
                 summary["domains"][self.DOMAIN_DATASOURCES]["created"] = created
                 summary["domains"][self.DOMAIN_DATASOURCES]["updated"] = updated
                 summary["domains"][self.DOMAIN_DATASOURCES]["remapped"] = remapped
+                datasource_imported = True
 
             await db.commit()
             await self._sync_sequence_if_postgresql(db, "sys_users")
             await self._sync_sequence_if_postgresql(db, "sys_data_sources")
+
+        if datasource_imported:
+            await get_datasource_scheduler_service().schedule_all_data_sources()
 
         return summary
 
@@ -257,7 +263,8 @@ class SystemCopyService(SystemCopyInterface):
                 "cron": source.cron,
                 "is_active": source.is_active,
                 "invalid_reference_policy": self._to_enum_value(source.invalid_reference_policy),
-                "last_run_at": self._to_iso_datetime(source.last_run_at),
+                # Last execution timestamp is intentionally reset for system copy exports.
+                "last_run_at": None,
                 "created_at": self._to_iso_datetime(source.created_at),
                 "updated_at": self._to_iso_datetime(source.updated_at),
             }
