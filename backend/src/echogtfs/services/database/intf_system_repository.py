@@ -9,7 +9,9 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from echogtfs.services.database.models import (
+    AppSetting,
     DataSource,
+    DataSourceEnrichment,
     DataSourceLog,
     DataSourceMapping,
     User,
@@ -47,6 +49,11 @@ class SystemRepositoryInterface(ABC):
     @abstractmethod
     async def get_all_app_settings(self) -> dict[str, str]:
         """Return all app settings as key-value mapping."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_app_settings(self) -> list[AppSetting]:
+        """Return all app setting rows ordered by key."""
         raise NotImplementedError
 
     @abstractmethod
@@ -186,6 +193,11 @@ class SystemRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def list_all_data_source_mappings(self) -> list[DataSourceMapping]:
+        """Return all data source mappings ordered by id."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def replace_data_source_mappings_for_entity_type(
         self,
         source_id: int,
@@ -198,6 +210,11 @@ class SystemRepositoryInterface(ABC):
     @abstractmethod
     async def list_data_source_enrichments(self, source_id: int) -> list[dict[str, Any]]:
         """Return enrichment rules for a data source ordered by priority."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_all_data_source_enrichments(self) -> list[DataSourceEnrichment]:
+        """Return all data source enrichments ordered by id."""
         raise NotImplementedError
 
     @abstractmethod

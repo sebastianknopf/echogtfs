@@ -131,6 +131,25 @@ class GtfsConfigUpdate(BaseModel):
     cron: str | None = None
 
 
+class SystemCopyExportSelection(BaseModel):
+    system_settings: bool = False
+    gtfs_settings: bool = False
+    users: bool = False
+    datasources: bool = False
+
+
+class SystemCopyDomainSummary(BaseModel):
+    created: int = 0
+    updated: int = 0
+    remapped: int = 0
+
+
+class SystemCopyImportSummary(BaseModel):
+    format_version: int
+    imported_at_utc: str
+    domains: dict[str, SystemCopyDomainSummary]
+
+
 class UserCreate(BaseModel):
     username: str
     email: EmailStr

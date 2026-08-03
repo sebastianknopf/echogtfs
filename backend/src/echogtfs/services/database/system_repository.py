@@ -49,6 +49,13 @@ class SystemRepository(RepositoryBase, SystemRepositoryInterface):
 
             return {row.key: row.value for row in result.scalars().all()}
 
+    async def list_app_settings(self) -> list[AppSetting]:
+        """Return all app setting rows ordered by key."""
+        stmt = select(AppSetting).order_by(AppSetting.key)
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
     async def get_user_by_id(self, user_id: int) -> User | None:
         """Return one user by id, or None when not found."""
         async with self.get_session() as db:
@@ -433,6 +440,13 @@ class SystemRepository(RepositoryBase, SystemRepositoryInterface):
                 grouped.setdefault(mapping.entity_type, {})[mapping.key] = mapping.value
             return grouped
 
+    async def list_all_data_source_mappings(self) -> list[DataSourceMapping]:
+        """Return all data source mappings ordered by id."""
+        stmt = select(DataSourceMapping).order_by(DataSourceMapping.id)
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
     async def replace_data_source_mappings_for_entity_type(
         self,
         source_id: int,
@@ -483,6 +497,13 @@ class SystemRepository(RepositoryBase, SystemRepositoryInterface):
                 }
                 for enrichment in enrichments
             ]
+
+    async def list_all_data_source_enrichments(self) -> list[DataSourceEnrichment]:
+        """Return all data source enrichments ordered by id."""
+        stmt = select(DataSourceEnrichment).order_by(DataSourceEnrichment.id)
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
 
     async def get_latest_data_source_log(self, source_id: int) -> DataSourceLog | None:
         """Return latest log entry for a data source."""

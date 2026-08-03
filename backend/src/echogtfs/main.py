@@ -32,6 +32,7 @@ from echogtfs.routers.vehicles import router as vehicles_router
 from echogtfs.services.gtfs import GtfsImportService
 from echogtfs.services.cleanup import CleanupService
 from echogtfs.routers.settings import router as settings_router
+from echogtfs.routers.systemcopy import router as systemcopy_router
 from echogtfs.routers.sources import router as sources_router
 from echogtfs.routers.users import router as users_router
 
@@ -138,6 +139,7 @@ app.add_middleware(
 app.include_router(auth_router,     prefix="/api/auth",     tags=["auth"])
 app.include_router(users_router,    prefix="/api/users",    tags=["users"])
 app.include_router(settings_router, prefix="/api/settings", tags=["settings"])
+app.include_router(systemcopy_router, prefix="/api/systemcopy", tags=["systemcopy"])
 app.include_router(gtfs_router,     prefix="/api/gtfs",     tags=["gtfs"])
 app.include_router(sources_router,  prefix="/api/sources",  tags=["sources"])
 app.include_router(alerts_router,   prefix="/api/alerts",   tags=["alerts"])
