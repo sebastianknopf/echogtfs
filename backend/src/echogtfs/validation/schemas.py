@@ -92,6 +92,33 @@ class PublicAppSettings(BaseModel):
         if not v:
             raise ValueError('App title cannot be empty')
         return v[:80]
+
+
+class DashboardCounter(BaseModel):
+    active: int
+    inactive: int
+
+
+class DashboardCounters(BaseModel):
+    service_alerts: DashboardCounter
+    trip_updates: DashboardCounter
+    vehicle_positions: DashboardCounter
+
+
+class DashboardEndpoint(BaseModel):
+    path: str
+    url: str
+
+
+class DashboardEndpoints(BaseModel):
+    service_alerts: DashboardEndpoint
+    trip_updates: DashboardEndpoint
+    vehicle_positions: DashboardEndpoint
+
+
+class DashboardRead(BaseModel):
+    counts: DashboardCounters
+    endpoints: DashboardEndpoints
     
     
 class GtfsFeedConfig(BaseModel):

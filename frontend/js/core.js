@@ -348,6 +348,11 @@ const api = (() => {
       return request(`/vehicles/${id}/toggle-active`, { method: 'POST' });
     },
 
+    // Dashboard
+    getDashboard() {
+      return request('/dashboard/');
+    },
+
     // Data sources
     getSources() {
       return request('/sources/');

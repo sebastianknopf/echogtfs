@@ -62,6 +62,7 @@ Each router file under `routers/` maps to a URL prefix registered in `main.py`:
 | File | Prefix | Description |
 |---|---|---|
 | `auth.py` | `/api/auth` | OAuth2 password-flow login, returns JWT |
+| `dashboard.py` | `/api/dashboard` | Dashboard data endpoint |
 | `alerts.py` | `/api/alerts` | ServiceAlert CRUD |
 | `sources.py` | `/api/sources` | External data source CRUD and manual trigger |
 | `users.py` | `/api/users` | User management (superuser only) |

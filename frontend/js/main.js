@@ -73,6 +73,11 @@ const app = (() => {
 
     // Load panel data
     switch (panel) {
+      case 'dashboard':
+        if (typeof dashboard !== 'undefined') {
+          dashboard.load();
+        }
+        break;
       case 'accounts':
         if (typeof accounts !== 'undefined') {
           accounts.load();
@@ -154,7 +159,7 @@ const app = (() => {
       // Render authenticated UI
       ui.renderUser(_currentUser);
       ui.showView('app');
-      ui.setPanel('alerts'); // Default panel
+      ui.setPanel('dashboard');
       
       // Update language selector to show active language
       if (typeof languageSelector !== 'undefined') {
@@ -174,6 +179,7 @@ const app = (() => {
       }
 
       // Initialize modules
+      if (typeof dashboard !== 'undefined') dashboard.init();
       if (typeof accounts !== 'undefined') accounts.init();
       if (typeof sources !== 'undefined') await sources.init(); // sources.init is async
       if (typeof alerts !== 'undefined') alerts.init();
@@ -182,11 +188,11 @@ const app = (() => {
       if (typeof settings !== 'undefined') settings.init();
 
       // Load default panel
-      if (typeof alerts !== 'undefined') {
-        await alerts.load();
+      if (typeof dashboard !== 'undefined') {
+        await dashboard.load();
       } else {
         // Fallback if module not available
-        ui.el('alerts-content').innerHTML = `<div class="panel__placeholder">${window.i18n('alerts.empty')}</div>`;
+        ui.el('dashboard-content').innerHTML = '';
       }
 
     } catch (err) {

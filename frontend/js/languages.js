@@ -5,6 +5,26 @@
 // Global translations object
 window.translations = {
   de: {
+    // === DASHBOARD ===
+    'nav.dashboard': 'Dashboard',
+    'dashboard.title': 'Dashboard',
+    'dashboard.section.stats': 'Echtzeitstatus',
+    'dashboard.section.endpoints': 'GTFS-RT Endpunkte',
+    'dashboard.card.alerts': 'Service Alerts',
+    'dashboard.card.trips': 'Trip Updates',
+    'dashboard.card.vehicles': 'Vehicle Positions',
+    'dashboard.metric.active': 'aktiv',
+    'dashboard.metric.inactive': '{count} inaktiv',
+    'dashboard.endpoints.service_alerts': 'Service Alerts',
+    'dashboard.endpoints.trip_updates': 'Trip Updates',
+    'dashboard.endpoints.vehicle_positions': 'Vehicle Positions',
+    'dashboard.copy.protobuf': 'Protobuf-URL kopieren',
+    'dashboard.copy.json': 'JSON-URL kopieren',
+    'dashboard.copy.protobuf.short': 'PBF',
+    'dashboard.copy.json.short': 'JSON',
+    'dashboard.copy.success': 'URL in die Zwischenablage kopiert.',
+    'dashboard.copy.error': 'URL konnte nicht kopiert werden.',
+
     // === LOGIN ===
     'login.title': 'Anmelden',
     'login.subtitle': 'Bitte melden Sie sich an',
@@ -565,6 +585,26 @@ window.translations = {
   },
   
   en: {
+    // === DASHBOARD ===
+    'nav.dashboard': 'Dashboard',
+    'dashboard.title': 'Dashboard',
+    'dashboard.section.stats': 'Realtime status',
+    'dashboard.section.endpoints': 'GTFS-RT endpoints',
+    'dashboard.card.alerts': 'Service Alerts',
+    'dashboard.card.trips': 'Trip Updates',
+    'dashboard.card.vehicles': 'Vehicle Positions',
+    'dashboard.metric.active': 'active',
+    'dashboard.metric.inactive': '{count} inactive',
+    'dashboard.endpoints.service_alerts': 'Service Alerts',
+    'dashboard.endpoints.trip_updates': 'Trip Updates',
+    'dashboard.endpoints.vehicle_positions': 'Vehicle Positions',
+    'dashboard.copy.protobuf': 'Copy Protobuf URL',
+    'dashboard.copy.json': 'Copy JSON URL',
+    'dashboard.copy.protobuf.short': 'PBF',
+    'dashboard.copy.json.short': 'JSON',
+    'dashboard.copy.success': 'URL copied to clipboard.',
+    'dashboard.copy.error': 'Could not copy URL.',
+
     // === LOGIN ===
     'login.title': 'Sign In',
     'login.subtitle': 'Please sign in',

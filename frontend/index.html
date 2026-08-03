@@ -169,6 +169,12 @@
       <!-- Sidebar navigation -->
       <nav class="sidebar" role="navigation" aria-label="Hauptnavigation">
         <div class="sidebar__main">
+          <button class="nav-item" data-panel="dashboard" data-ripple>
+            <span class="nav-item__icon">
+              <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor" aria-hidden="true"><path d="M520-600v-240h320v240H520ZM120-440v-400h320v400H120Zm400 320v-400h320v400H520Zm-400 0v-240h320v240H120Zm80-400h160v-240H200v240Zm400 320h160v-240H600v240Zm0-480h160v-80H600v80ZM200-200h160v-80H200v80Zm160-320Zm240-160Zm0 240ZM360-280Z"/></svg>
+            </span>
+            <span class="nav-item__label" data-i18n="nav.dashboard">Dashboard</span>
+          </button>
           <button class="nav-item" data-panel="alerts" data-ripple>
             <span class="nav-item__icon">
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
@@ -213,6 +219,16 @@
 
       <!-- Main content area with panels -->
       <main class="main-content" role="main">
+
+        <!-- Panel: Dashboard -->
+        <div class="panel" data-panel="dashboard">
+          <section class="md-card" data-i18n-aria-label="dashboard.title" aria-label="Dashboard">
+            <div class="md-card__header">
+              <h2 class="md-card__title" data-i18n="dashboard.title">Dashboard</h2>
+            </div>
+            <div class="md-card__content" id="dashboard-content"></div>
+          </section>
+        </div>
 
         <!-- Panel: Alerts (Meldungen) -->
         <div class="panel" data-panel="alerts">
@@ -1008,6 +1024,7 @@
   <script src="js/languages.js"></script>
   <script src="js/localization.js"></script>
   <script src="js/core.js"></script>
+  <script src="js/dashboard.js"></script>
   <script src="js/accounts.js"></script>
   <script src="js/sources.js"></script>
   <script src="js/alerts.js"></script>
