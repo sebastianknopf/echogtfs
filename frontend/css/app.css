@@ -1494,6 +1494,56 @@ body {
   flex-shrink: 0;
 }
 
+.settings-system-copy__description {
+  margin: 4px 0 14px;
+  color: var(--md-on-surface-medium);
+  font-size: .875rem;
+  line-height: 1.45;
+}
+
+.settings-system-copy__options {
+  border: 1px solid var(--md-outline-variant);
+  border-radius: var(--md-shape-s);
+  padding: 12px;
+  margin-bottom: 12px;
+  background: var(--md-surface-variant);
+}
+
+.settings-system-copy__options-label {
+  margin: 0 0 8px;
+  font-size: .75rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--md-on-surface-medium);
+}
+
+.settings-system-copy__option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 6px;
+  border-radius: var(--md-shape-xs);
+  cursor: pointer;
+  user-select: none;
+}
+
+.settings-system-copy__option:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.settings-system-copy__option input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--md-primary);
+  flex-shrink: 0;
+}
+
+.settings-system-copy__option span {
+  font-size: .9rem;
+  color: var(--md-on-surface);
+}
+
 /* -- Modal ------------------------------------------------------------------- */
 .modal {
   position: fixed;

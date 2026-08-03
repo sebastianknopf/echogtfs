@@ -200,6 +200,58 @@ const api = (() => {
     }
   }
 
+  async function downloadRequest(path, options = {}) {
+    const url = path.startsWith('http') ? path : `${BASE_URL}${path}`;
+    const token = localStorage.getItem('auth-token');
+
+    const config = {
+      ...options,
+      headers: {
+        ...options.headers,
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+      },
+    };
+
+    let response;
+    try {
+      response = await fetch(url, config);
+    } catch (error) {
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error(window.i18n('error.network'));
+      }
+      throw error;
+    }
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('auth-token');
+        localStorage.removeItem('current-user');
+        window.location.reload();
+        return null;
+      }
+
+      const contentType = response.headers.get('content-type');
+      const isJson = contentType?.includes('application/json');
+      const errorData = isJson ? await response.json() : await response.text();
+      const detail = isJson && errorData && typeof errorData === 'object' ? errorData.detail : errorData;
+      throw new Error(translateError(detail, response.status));
+    }
+
+    const newToken = response.headers.get('X-New-Token');
+    if (newToken) {
+      localStorage.setItem('auth-token', newToken);
+    }
+
+    const contentDisposition = response.headers.get('Content-Disposition') || '';
+    const filenameMatch = contentDisposition.match(/filename=([^;]+)/i);
+    const filename = filenameMatch ? filenameMatch[1].replace(/['"]/g, '') : 'system-copy.zip';
+
+    return {
+      blob: await response.blob(),
+      filename,
+    };
+  }
+
   return {
     // Auth
     login(credentials) {
@@ -465,6 +517,24 @@ const api = (() => {
       return streamRequest('/gtfs/import', {
         method: 'POST',
       }, onEvent);
+    },
+
+    // System copy
+    exportSystemCopy(selection) {
+      return downloadRequest('/systemcopy/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selection),
+      });
+    },
+
+    importSystemCopy(file) {
+      const formData = new FormData();
+      formData.append('file', file);
+      return request('/systemcopy/import', {
+        method: 'POST',
+        body: formData,
+      });
     },
   };
 })();

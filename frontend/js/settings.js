@@ -56,6 +56,20 @@ const settings = (() => {
         _triggerImport();
       });
     }
+
+    const systemCopyExportBtn = ui.el('settings-system-copy-export-btn');
+    if (systemCopyExportBtn) {
+      systemCopyExportBtn.addEventListener('click', () => {
+        _exportSystemCopy();
+      });
+    }
+
+    const systemCopyImportBtn = ui.el('settings-system-copy-import-btn');
+    if (systemCopyImportBtn) {
+      systemCopyImportBtn.addEventListener('click', () => {
+        _importSystemCopy();
+      });
+    }
   }
 
   function _syncColorInputs(type) {
@@ -180,6 +194,15 @@ const settings = (() => {
 
   function _showStatus(text, type = '') {
     const box = ui.el('settings-gtfs-status');
+    if (!box) return;
+    box.className = 'gtfs-status' + (type ? ` gtfs-status--${type}` : '');
+    box.innerHTML = type === 'running'
+      ? `<span class="gtfs-status__spinner" aria-hidden="true"></span><span>${text}</span>`
+      : text;
+  }
+
+  function _showSystemCopyStatus(text, type = '') {
+    const box = ui.el('settings-system-copy-status');
     if (!box) return;
     box.className = 'gtfs-status' + (type ? ` gtfs-status--${type}` : '');
     box.innerHTML = type === 'running'
@@ -416,6 +439,167 @@ const settings = (() => {
       spinner.hidden = true;
       label.textContent = window.i18n('common.import');
     }
+  }
+
+  function _collectSystemCopySelection() {
+    return {
+      system_settings: ui.el('settings-system-copy-system-settings')?.checked ?? false,
+      gtfs_settings: ui.el('settings-system-copy-gtfs-settings')?.checked ?? false,
+      users: ui.el('settings-system-copy-users')?.checked ?? false,
+      datasources: ui.el('settings-system-copy-datasources')?.checked ?? false,
+    };
+  }
+
+  function _setSystemCopyBusy(type, busy) {
+    const exportBtn = ui.el('settings-system-copy-export-btn');
+    const exportSpinner = ui.el('settings-system-copy-export-spinner');
+    const exportLabel = ui.el('settings-system-copy-export-label');
+    const importBtn = ui.el('settings-system-copy-import-btn');
+    const importSpinner = ui.el('settings-system-copy-import-spinner');
+    const importLabel = ui.el('settings-system-copy-import-label');
+
+    if (type === 'export') {
+      if (exportBtn) exportBtn.disabled = busy;
+      if (importBtn) importBtn.disabled = busy;
+      if (exportSpinner) exportSpinner.hidden = !busy;
+      if (exportLabel) exportLabel.textContent = busy ? window.i18n('loading.exporting') : window.i18n('settings.system_copy.export');
+    }
+
+    if (type === 'import') {
+      if (exportBtn) exportBtn.disabled = busy;
+      if (importBtn) importBtn.disabled = busy;
+      if (importSpinner) importSpinner.hidden = !busy;
+      if (importLabel) importLabel.textContent = busy ? window.i18n('loading.importing') : window.i18n('settings.system_copy.import');
+    }
+  }
+
+  function _downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename || 'system-copy.zip';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  async function _exportSystemCopy() {
+    const errorEl = ui.el('settings-system-copy-error');
+    if (errorEl) {
+      errorEl.style.display = 'none';
+      errorEl.textContent = '';
+    }
+
+    const selection = _collectSystemCopySelection();
+    if (!Object.values(selection).some(Boolean)) {
+      const message = window.i18n('settings.system_copy.selection_required');
+      if (errorEl) {
+        errorEl.textContent = message;
+        errorEl.style.display = 'block';
+      }
+      ui.toast(message, 'error');
+      return;
+    }
+
+    try {
+      _setSystemCopyBusy('export', true);
+      _showSystemCopyStatus(window.i18n('settings.system_copy.export_running'), 'running');
+
+      const result = await api.exportSystemCopy(selection);
+      if (!result) return;
+
+      _downloadBlob(result.blob, result.filename);
+      _showSystemCopyStatus(window.i18n('settings.system_copy.export_success'), 'success');
+      ui.toast(window.i18n('settings.system_copy.export_success'), 'success');
+    } catch (err) {
+      const message = err?.message || window.i18n('settings.system_copy.export_error');
+      if (errorEl) {
+        errorEl.textContent = message;
+        errorEl.style.display = 'block';
+      }
+      _showSystemCopyStatus(window.i18n('settings.system_copy.export_error'), 'error');
+      ui.toast(message, 'error');
+    } finally {
+      _setSystemCopyBusy('export', false);
+    }
+  }
+
+  function _renderSystemCopyImportSummary(summary) {
+    const domains = summary?.domains || {};
+    let created = 0;
+    let updated = 0;
+    let remapped = 0;
+
+    Object.values(domains).forEach((domain) => {
+      if (!domain || typeof domain !== 'object') return;
+      created += Number(domain.created || 0);
+      updated += Number(domain.updated || 0);
+      remapped += Number(domain.remapped || 0);
+    });
+
+    return window.i18n('settings.system_copy.import_success_summary', {
+      created,
+      updated,
+      remapped,
+    });
+  }
+
+  async function _importSystemCopy() {
+    const errorEl = ui.el('settings-system-copy-error');
+    if (errorEl) {
+      errorEl.style.display = 'none';
+      errorEl.textContent = '';
+    }
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.zip,application/zip';
+    input.style.display = 'none';
+
+    input.addEventListener('change', async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) {
+        document.body.removeChild(input);
+        return;
+      }
+
+      if (!file.name.toLowerCase().endsWith('.zip')) {
+        const message = window.i18n('settings.system_copy.import_file_invalid');
+        if (errorEl) {
+          errorEl.textContent = message;
+          errorEl.style.display = 'block';
+        }
+        ui.toast(message, 'error');
+        document.body.removeChild(input);
+        return;
+      }
+
+      try {
+        _setSystemCopyBusy('import', true);
+        _showSystemCopyStatus(window.i18n('settings.system_copy.import_running'), 'running');
+
+        const summary = await api.importSystemCopy(file);
+        const message = _renderSystemCopyImportSummary(summary);
+        _showSystemCopyStatus(message, 'success');
+        ui.toast(window.i18n('settings.system_copy.import_success'), 'success');
+      } catch (err) {
+        const message = err?.message || window.i18n('settings.system_copy.import_error');
+        if (errorEl) {
+          errorEl.textContent = message;
+          errorEl.style.display = 'block';
+        }
+        _showSystemCopyStatus(window.i18n('settings.system_copy.import_error'), 'error');
+        ui.toast(message, 'error');
+      } finally {
+        _setSystemCopyBusy('import', false);
+        document.body.removeChild(input);
+      }
+    }, { once: true });
+
+    document.body.appendChild(input);
+    input.click();
   }
 
   return { init, load };

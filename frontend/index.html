@@ -573,6 +573,54 @@
                 </div>
               </div>
 
+              <!-- System copy section -->
+              <div id="settings-system-copy-section">
+                <p class="settings-section-label" data-i18n="settings.section.system_copy">System Copy</p>
+                <p class="settings-system-copy__description" data-i18n="settings.system_copy.description">
+                  Wählen Sie die Datenbereiche für den Export und importieren Sie ein System-Copy-Archiv.
+                </p>
+
+                <div class="settings-system-copy__options" role="group" aria-labelledby="settings-system-copy-options-label">
+                  <p id="settings-system-copy-options-label" class="settings-system-copy__options-label" data-i18n="settings.system_copy.options">
+                    Zu exportierende Bereiche
+                  </p>
+
+                  <label class="settings-system-copy__option">
+                    <input type="checkbox" id="settings-system-copy-system-settings" checked />
+                    <span data-i18n="settings.system_copy.system_settings">Systemeinstellungen</span>
+                  </label>
+
+                  <label class="settings-system-copy__option">
+                    <input type="checkbox" id="settings-system-copy-gtfs-settings" checked />
+                    <span data-i18n="settings.system_copy.gtfs_settings">GTFS-Einstellungen</span>
+                  </label>
+
+                  <label class="settings-system-copy__option">
+                    <input type="checkbox" id="settings-system-copy-users" checked />
+                    <span data-i18n="settings.system_copy.users">Benutzer</span>
+                  </label>
+
+                  <label class="settings-system-copy__option">
+                    <input type="checkbox" id="settings-system-copy-datasources" checked />
+                    <span data-i18n="settings.system_copy.datasources">Datenquellen (inkl. Mapping und Anreicherung)</span>
+                  </label>
+                </div>
+
+                <div id="settings-system-copy-status" class="gtfs-status" aria-live="polite" aria-atomic="true"></div>
+                <p id="settings-system-copy-error" class="login-card__error" role="alert"></p>
+
+                <div class="settings-actions">
+                  <button type="button" id="settings-system-copy-import-btn" class="md-btn md-btn--text" data-ripple>
+                    <span id="settings-system-copy-import-spinner" class="btn-spinner" hidden aria-hidden="true"></span>
+                    <span id="settings-system-copy-import-label" data-i18n="settings.system_copy.import">Importieren</span>
+                  </button>
+                  <button type="button" id="settings-system-copy-export-btn" class="md-btn md-btn--filled" data-ripple>
+                    <span id="settings-system-copy-export-spinner" class="btn-spinner" hidden aria-hidden="true"></span>
+                    <span id="settings-system-copy-export-label" data-i18n="settings.system_copy.export">Exportieren</span>
+                  </button>
+                </div>
+              </div>
+
             </div>
           </section>
         </div>
