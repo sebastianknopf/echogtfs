@@ -25,6 +25,9 @@ class SystemCopyService(SystemCopyInterface):
 
     FORMAT_VERSION = 1
 
+    _ERR_INVALID_INPUT = "error.invalid_input"
+    _ERR_SERVER_ERROR = "error.server_error"
+
     DOMAIN_SYSTEM_SETTINGS = "system_settings"
     DOMAIN_GTFS_SETTINGS = "gtfs_settings"
     DOMAIN_USERS = "users"
@@ -68,7 +71,7 @@ class SystemCopyService(SystemCopyInterface):
         selection: dict[str, bool],
     ) -> bytes:
         if self._repository is None:
-            raise ValueError("System repository is not configured")
+            raise ValueError(self._ERR_SERVER_ERROR)
         self._validate_selection(selection)
 
         payload_files: dict[str, list[dict[str, object]]] = {}
@@ -115,7 +118,7 @@ class SystemCopyService(SystemCopyInterface):
         archive_bytes: bytes,
     ) -> dict[str, object]:
         if self._repository is None:
-            raise ValueError("System repository is not configured")
+            raise ValueError(self._ERR_SERVER_ERROR)
         manifest, files = self._read_archive(archive_bytes)
 
         summary: dict[str, object] = {
@@ -182,21 +185,21 @@ class SystemCopyService(SystemCopyInterface):
     def _validate_selection(selection: dict[str, bool]) -> None:
         normalized = SystemCopyService._normalized_selection(selection)
         if not any(normalized.values()):
-            raise ValueError("At least one export domain must be selected")
+            raise ValueError(SystemCopyService._ERR_INVALID_INPUT)
 
     def _read_archive(self, archive_bytes: bytes) -> tuple[dict[str, object], dict[str, list[dict[str, object]]]]:
         try:
             with zipfile.ZipFile(io.BytesIO(archive_bytes), mode="r") as archive:
                 names = set(archive.namelist())
                 if "manifest.json" not in names:
-                    raise ValueError("manifest.json is missing in archive")
+                    raise ValueError(SystemCopyService._ERR_INVALID_INPUT)
 
                 manifest_raw = archive.read("manifest.json")
                 manifest = json.loads(manifest_raw.decode("utf-8"))
 
                 format_version = int(manifest.get("format_version", 0))
                 if format_version != self.FORMAT_VERSION:
-                    raise ValueError("Unsupported system copy format version")
+                    raise ValueError(SystemCopyService._ERR_INVALID_INPUT)
 
                 files: dict[str, list[dict[str, object]]] = {}
 
@@ -214,7 +217,7 @@ class SystemCopyService(SystemCopyInterface):
                         continue
                     payload = json.loads(archive.read(file_name).decode("utf-8"))
                     if not isinstance(payload, list):
-                        raise ValueError(f"File '{file_name}' must contain a JSON array")
+                        raise ValueError(SystemCopyService._ERR_INVALID_INPUT)
                     files[file_name] = payload
 
                 # Datasource domain is only valid when parent table is present.
@@ -224,9 +227,9 @@ class SystemCopyService(SystemCopyInterface):
 
                 return manifest, files
         except zipfile.BadZipFile as exc:
-            raise ValueError("Invalid ZIP archive") from exc
+            raise ValueError(self._ERR_INVALID_INPUT) from exc
         except json.JSONDecodeError as exc:
-            raise ValueError("Invalid JSON data in system copy archive") from exc
+            raise ValueError(self._ERR_INVALID_INPUT) from exc
 
     def _serialize_app_settings(self, rows: list[AppSetting], *, keys: set[str]) -> list[dict[str, object]]:
         return [

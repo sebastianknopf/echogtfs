@@ -62,4 +62,4 @@ class TestSystemCopyRouter(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(ctx.exception.status_code, 422)
-        self.assertIn("Only .zip files are supported", str(ctx.exception.detail))
+        self.assertEqual(ctx.exception.detail, "error.invalid_input")

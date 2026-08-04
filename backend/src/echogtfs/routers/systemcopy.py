@@ -14,6 +14,8 @@ from echogtfs.validation.schemas import SystemCopyExportSelection, SystemCopyImp
 
 router = APIRouter()
 
+_ERR_INVALID_INPUT = "error.invalid_input"
+
 _Repo = Annotated[SystemRepositoryInterface, Depends(get_system_repository)]
 
 
@@ -59,14 +61,14 @@ async def import_system_copy(
     if not file.filename or not file.filename.lower().endswith(".zip"):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Only .zip files are supported",
+            detail=_ERR_INVALID_INPUT,
         )
 
     archive_bytes = await file.read()
     if not archive_bytes:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Uploaded archive is empty",
+            detail=_ERR_INVALID_INPUT,
         )
 
     try:
