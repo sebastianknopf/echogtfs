@@ -1,9 +1,9 @@
-name: Docs Pages
+name: Docs Release
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - "*"
   workflow_dispatch:
 
 permissions:
@@ -22,6 +22,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -39,12 +41,19 @@ jobs:
     - name: Build versioned docs site
       run: |
         set -euo pipefail
-        git fetch --force --tags
+        git fetch --force --tags origin main
 
         rm -rf _site
-        mkdir -p _site/latest
+        mkdir -p _site
 
-        sphinx-build -b html docs/manual/source _site/latest
+        MAIN_WORKTREE_DIR="$(mktemp -d)"
+        git worktree add --detach "$MAIN_WORKTREE_DIR" origin/main
+
+        if [ -f "$MAIN_WORKTREE_DIR/docs/manual/source/conf.py" ]; then
+          sphinx-build -b html "$MAIN_WORKTREE_DIR/docs/manual/source" "_site/latest"
+        fi
+
+        git worktree remove "$MAIN_WORKTREE_DIR" --force
 
         mapfile -t TAGS < <(git tag --sort=-v:refname)
         for TAG in "${TAGS[@]}"; do

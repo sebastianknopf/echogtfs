@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import re
 import subprocess
+
 from pathlib import Path
+from datetime import datetime
 
 
 project = "EchoGTFS Manual"
 author = "EchoGTFS"
-copyright = "2026, EchoGTFS"
+copyright = f"{datetime.now().year}, EchoGTFS"
 
 
 def _find_git_root(start: Path) -> Path:
@@ -87,3 +89,4 @@ gettext_compact = False
 html_theme = "furo"
 html_title = "EchoGTFS Handbuch"
 html_static_path = ["_static"]
+html_js_files = ["version-selector.js"]
