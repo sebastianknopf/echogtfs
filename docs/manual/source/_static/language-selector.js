@@ -1,4 +1,21 @@
 (function () {
+  function getMenuControlsRoot() {
+    var menuHost = document.querySelector(".sidebar-drawer .sidebar-sticky");
+    if (!menuHost) {
+      return null;
+    }
+
+    var controlsRoot = menuHost.querySelector("#docs-menu-controls");
+    if (!controlsRoot) {
+      controlsRoot = document.createElement("div");
+      controlsRoot.id = "docs-menu-controls";
+      controlsRoot.className = "docs-menu-controls";
+      menuHost.appendChild(controlsRoot);
+    }
+
+    return controlsRoot;
+  }
+
   function getVersionRoot(pathname) {
     var cleaned = pathname.replace(/\/+$/g, "").replace(/\/+/g, "/");
     var parts = cleaned.split("/").filter(Boolean);
@@ -30,6 +47,11 @@
   }
 
   function createSelector(languages, currentLanguage, routeInfo, hasLanguageSegment, contentParts) {
+    var controlsRoot = getMenuControlsRoot();
+    if (!controlsRoot) {
+      return;
+    }
+
     var container = document.createElement("div");
     container.id = "docs-language-switcher";
     container.className = "docs-language-switcher";
@@ -70,7 +92,7 @@
 
     container.appendChild(label);
     container.appendChild(select);
-    document.body.appendChild(container);
+    controlsRoot.appendChild(container);
   }
 
   function initLanguageSelector() {

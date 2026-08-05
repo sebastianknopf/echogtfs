@@ -1,4 +1,21 @@
 (function () {
+  function getMenuControlsRoot() {
+    var menuHost = document.querySelector(".sidebar-drawer .sidebar-sticky");
+    if (!menuHost) {
+      return null;
+    }
+
+    var controlsRoot = menuHost.querySelector("#docs-menu-controls");
+    if (!controlsRoot) {
+      controlsRoot = document.createElement("div");
+      controlsRoot.id = "docs-menu-controls";
+      controlsRoot.className = "docs-menu-controls";
+      menuHost.appendChild(controlsRoot);
+    }
+
+    return controlsRoot;
+  }
+
   function getVersionRoot(pathname) {
     var cleaned = pathname.replace(/\/+/g, "/").replace(/\/$/, "");
     var parts = cleaned.split("/").filter(Boolean);
@@ -21,6 +38,11 @@
   }
 
   function createSelector(versions, currentVersion, versionRoot) {
+    var controlsRoot = getMenuControlsRoot();
+    if (!controlsRoot) {
+      return;
+    }
+
     var container = document.createElement("div");
     container.id = "docs-version-switcher";
     container.className = "docs-version-switcher";
@@ -45,7 +67,15 @@
       select.appendChild(option);
     });
 
+    if (versions.length <= 1) {
+      select.disabled = true;
+    }
+
     select.addEventListener("change", function () {
+      if (versions.length <= 1) {
+        return;
+      }
+
       var selected = select.value;
       var target = (versionRoot.prefix || "") + "/" + selected + (versionRoot.suffix || "/");
       window.location.href = target.replace(/\/+/g, "/");
@@ -53,7 +83,7 @@
 
     container.appendChild(label);
     container.appendChild(select);
-    document.body.appendChild(container);
+    controlsRoot.appendChild(container);
   }
 
   function initVersionSelector() {
@@ -67,14 +97,14 @@
         }
         return response.json();
       })
+      .catch(function () {
+        return [root.version || "latest"];
+      })
       .then(function (versions) {
         if (!Array.isArray(versions) || versions.length === 0) {
           return;
         }
         createSelector(versions, root.version, root);
-      })
-      .catch(function () {
-        // Keep docs usable even when versions.json is not available.
       });
   }
 
