@@ -22,7 +22,7 @@ class GtfsImportInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def schedule_import_from_cron(self) -> None:
+    async def schedule_from_settings(self) -> None:
         """Read cron setting and (re)schedule the periodic GTFS import job."""
         raise NotImplementedError
 

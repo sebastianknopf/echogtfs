@@ -143,7 +143,7 @@ class SiriSxDatasource(DatasourceBase):
         xml_string = ET.tostring(siri, encoding="unicode", method="xml")
         return f'<?xml version="1.0" encoding="UTF-8"?>{xml_string}'
 
-    async def _fetch_records(self) -> dict[str, Any] | list[dict[str, Any]]:
+    async def _fetch_records(self) -> dict[str, Any]:
         root = await self._fetch_and_parse_xml()
         source_name = self.config.get("_source_name", "sirisx")
         
@@ -157,7 +157,10 @@ class SiriSxDatasource(DatasourceBase):
             raise ValueError(f"Unknown SIRI-SX dialect: {dialect}")
         
         try:
-            records = transformer.transform({"root": root, "source_name": source_name})
+            records = await self._run_cpu_bound(
+                transformer.transform,
+                {"root": root, "source_name": source_name},
+            )
         except Exception as exc:
             logger.error(f"[SiriSxDatasource] Failed to transform payload: {exc}", exc_info=True)
             
@@ -227,7 +230,7 @@ class SiriSxDatasource(DatasourceBase):
         )
 
         try:
-            return ET.fromstring(xml_content)
+            return await self._run_cpu_bound(ET.fromstring, xml_content)
         except ET.ParseError as exc:
             logger.error(f"[SiriSxDatasource] Failed to parse XML: {exc}")
             

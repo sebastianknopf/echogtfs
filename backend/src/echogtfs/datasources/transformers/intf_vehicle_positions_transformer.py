@@ -1,0 +1,14 @@
+"""Shared contract for raw-data to vehicle-position transformers."""
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from typing import Any
+
+
+class VehiclePositionsTransformerInterface(ABC):
+    """Transforms raw datasource payloads into vehicle-position dictionaries."""
+
+    @abstractmethod
+    def transform(self, raw_data: Any) -> list[dict[str, Any]]:
+        """Transform raw input payload into vehicle-position dictionaries."""

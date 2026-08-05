@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>echogtfs</title>
   <link rel="stylesheet" href="css/app.css" />
+  <link rel="stylesheet" href="css/maplibre-gl.css" />
 </head>
 <body>
 
@@ -168,11 +169,29 @@
       <!-- Sidebar navigation -->
       <nav class="sidebar" role="navigation" aria-label="Hauptnavigation">
         <div class="sidebar__main">
+          <button class="nav-item" data-panel="dashboard" data-ripple>
+            <span class="nav-item__icon">
+              <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor" aria-hidden="true"><path d="M520-600v-240h320v240H520ZM120-440v-400h320v400H120Zm400 320v-400h320v400H520Zm-400 0v-240h320v240H120Zm80-400h160v-240H200v240Zm400 320h160v-240H600v240Zm0-480h160v-80H600v80ZM200-200h160v-80H200v80Zm160-320Zm240-160Zm0 240ZM360-280Z"/></svg>
+            </span>
+            <span class="nav-item__label" data-i18n="nav.dashboard">Dashboard</span>
+          </button>
           <button class="nav-item" data-panel="alerts" data-ripple>
             <span class="nav-item__icon">
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4a1.5 1.5 0 0 0-3 0v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></svg>
             </span>
             <span class="nav-item__label" data-i18n="nav.alerts">Meldungen</span>
+          </button>
+          <button class="nav-item" data-panel="trips" data-ripple>
+            <span class="nav-item__icon">
+              <svg viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="M760-360v-80H200v80h560Zm0-160v-80H200v80h560Zm0-160v-80H200v80h560ZM200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm560-80v-80H200v80h560Z"/></svg>
+            </span>
+            <span class="nav-item__label" data-i18n="nav.trips">Fahrten</span>
+          </button>
+          <button class="nav-item" data-panel="vehicles" data-ripple>
+            <span class="nav-item__icon">
+              <svg viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="M240-120q-17 0-28.5-11.5T200-160v-82q-18-20-29-44.5T160-340v-380q0-83 77-121.5T480-880q172 0 246 37t74 123v380q0 29-11 53.5T760-242v82q0 17-11.5 28.5T720-120h-40q-17 0-28.5-11.5T640-160v-40H320v40q0 17-11.5 28.5T280-120h-40Zm242-640h224-448 224Zm158 280H240h480-80Zm-400-80h480v-120H240v120Zm142.5 222.5Q400-355 400-380t-17.5-42.5Q365-440 340-440t-42.5 17.5Q280-405 280-380t17.5 42.5Q315-320 340-320t42.5-17.5Zm280 0Q680-355 680-380t-17.5-42.5Q645-440 620-440t-42.5 17.5Q560-405 560-380t17.5 42.5Q595-320 620-320t42.5-17.5ZM258-760h448q-15-17-64.5-28.5T482-800q-107 0-156.5 12.5T258-760Zm62 480h320q33 0 56.5-23.5T720-360v-120H240v120q0 33 23.5 56.5T320-280Z"/></svg>
+            </span>
+            <span class="nav-item__label" data-i18n="nav.vehicles">Fahrzeuge</span>
           </button>
           <button class="nav-item" data-panel="sources" data-poweruser-only data-ripple>
             <span class="nav-item__icon">
@@ -200,6 +219,16 @@
 
       <!-- Main content area with panels -->
       <main class="main-content" role="main">
+
+        <!-- Panel: Dashboard -->
+        <div class="panel" data-panel="dashboard">
+          <section class="md-card" data-i18n-aria-label="dashboard.title" aria-label="Dashboard">
+            <div class="md-card__header">
+              <h2 class="md-card__title" data-i18n="dashboard.title">Dashboard</h2>
+            </div>
+            <div class="md-card__content" id="dashboard-content"></div>
+          </section>
+        </div>
 
         <!-- Panel: Alerts (Meldungen) -->
         <div class="panel" data-panel="alerts">
@@ -260,6 +289,98 @@
             </div>
             <div class="md-card__content" id="alerts-content">
               <div class="panel__loading" data-i18n="alerts.loading">Wird geladen ...</div>
+            </div>
+          </section>
+        </div>
+
+        <!-- Panel: Trips -->
+        <div class="panel" data-panel="trips">
+          <section class="md-card" aria-label="Fahrten">
+            <div class="md-card__header user-list-header">
+              <h2 class="md-card__title" data-i18n="trips.title">Fahrten</h2>
+              <div class="md-field md-field--inline">
+                <input
+                  class="md-field__input"
+                  type="text"
+                  id="trip-filter"
+                  data-i18n-placeholder="alerts.quickfilter.placeholder"
+                  placeholder="Suchbegriff eingeben..."
+                />
+                <label class="md-field__label" for="trip-filter" data-i18n="alerts.quickfilter">Schnellfilter</label>
+              </div>
+              <div class="panel-filter-actions">
+                <button id="sort-trips-btn" class="md-btn md-btn--text" data-ripple data-i18n-title="trips.sort.title" title="Sortierung ändern">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M12 5.83L15.17 9l1.41-1.41L12 3 7.41 7.59 8.83 9 12 5.83zm0 12.34L8.83 15l-1.41 1.41L12 21l4.59-4.59L15.17 15 12 18.17z"/>
+                  </svg>
+                  <span id="sort-trips-label" data-i18n="trips.sort.asc">nach Start aufsteigend</span>
+                </button>
+                <div class="filter-dropdown-container">
+                  <button id="filter-trips-btn" class="md-btn md-btn--text" data-ripple data-i18n-title="alerts.filter" data-i18n-aria-label="alerts.filter" title="Filter">
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/>
+                    </svg>
+                    <span data-i18n="alerts.filter">Filter</span>
+                  </button>
+                  <div id="filter-trips-popout" class="filter-popout" hidden>
+                    <div class="filter-popout__section">
+                      <div class="filter-popout__label" data-i18n="alerts.filter.status">Status</div>
+                      <label class="filter-checkbox">
+                        <input type="checkbox" id="filter-trips-active" checked>
+                        <span data-i18n="trips.filter.status.active">aktive Fahrten</span>
+                      </label>
+                      <label class="filter-checkbox">
+                        <input type="checkbox" id="filter-trips-inactive" checked>
+                        <span data-i18n="trips.filter.status.inactive">inaktive Fahrten</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="md-card__content" id="trips-content"></div>
+          </section>
+        </div>
+
+        <!-- Panel: Vehicles -->
+        <div class="panel" data-panel="vehicles">
+          <section class="md-card vehicles-card" aria-label="Fahrzeuge">
+            <div class="md-card__header user-list-header">
+              <h2 class="md-card__title" data-i18n="vehicles.title">Fahrzeuge</h2>
+              <div class="md-field md-field--inline">
+                <input
+                  class="md-field__input"
+                  type="text"
+                  id="vehicle-filter"
+                  data-i18n-placeholder="alerts.quickfilter.placeholder"
+                  placeholder="Suchbegriff eingeben..."
+                />
+                <label class="md-field__label" for="vehicle-filter" data-i18n="alerts.quickfilter">Schnellfilter</label>
+              </div>
+              <div class="filter-dropdown-container panel-filter-actions">
+                <button id="filter-vehicles-btn" class="md-btn md-btn--text" data-ripple data-i18n-title="alerts.filter" data-i18n-aria-label="alerts.filter" title="Filter">
+                  <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/>
+                  </svg>
+                  <span data-i18n="alerts.filter">Filter</span>
+                </button>
+                <div id="filter-vehicles-popout" class="filter-popout" hidden>
+                  <div class="filter-popout__section">
+                    <div class="filter-popout__label" data-i18n="alerts.filter.status">Status</div>
+                    <label class="filter-checkbox">
+                      <input type="checkbox" id="filter-vehicles-active" checked>
+                      <span data-i18n="vehicles.filter.status.active">aktive Fahrzeuge</span>
+                    </label>
+                    <label class="filter-checkbox">
+                      <input type="checkbox" id="filter-vehicles-inactive" checked>
+                      <span data-i18n="vehicles.filter.status.inactive">inaktive Fahrzeuge</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="md-card__content" id="vehicles-content">
+              <div id="vehicles-map" class="vehicles-map" data-i18n-aria-label="vehicles.map.aria" aria-label="Karte mit Fahrzeugpositionen"></div>
             </div>
           </section>
         </div>
@@ -341,9 +462,21 @@
                 <p class="settings-section-label" data-i18n="settings.section.gtfs_realtime">GTFS-Realtime</p>
 
                 <div class="md-field">
-                  <input type="text" id="settings-gtfs-rt-path" class="md-field__input" placeholder=" " maxlength="255" />
-                  <label class="md-field__label" for="settings-gtfs-rt-path" data-i18n="settings.gtfs_rt_path">GTFS-RT Endpunkt-Pfad</label>
-                  <div class="md-field__helper" data-i18n="settings.gtfs_rt_path.helper">Pfad ohne /api/ Präfix, z.B. <code>realtime/service-alerts.pbf</code></div>
+                  <input type="text" id="settings-gtfs-rt-service-alerts-path" class="md-field__input" placeholder=" " maxlength="255" />
+                  <label class="md-field__label" for="settings-gtfs-rt-service-alerts-path" data-i18n="settings.gtfs_rt_service_alerts_path">GTFS-RT ServiceAlerts Pfad</label>
+                  <div class="md-field__helper" data-i18n="settings.gtfs_rt_service_alerts_path.helper">Pfad ohne /api/ Präfix, z.B. <code>realtime/service-alerts.pbf</code></div>
+                </div>
+
+                <div class="md-field">
+                  <input type="text" id="settings-gtfs-rt-trip-updates-path" class="md-field__input" placeholder=" " maxlength="255" />
+                  <label class="md-field__label" for="settings-gtfs-rt-trip-updates-path" data-i18n="settings.gtfs_rt_trip_updates_path">GTFS-RT TripUpdates Pfad</label>
+                  <div class="md-field__helper" data-i18n="settings.gtfs_rt_trip_updates_path.helper">Pfad ohne /api/ Präfix, z.B. <code>realtime/trip-updates.pbf</code></div>
+                </div>
+
+                <div class="md-field">
+                  <input type="text" id="settings-gtfs-rt-vehicle-positions-path" class="md-field__input" placeholder=" " maxlength="255" />
+                  <label class="md-field__label" for="settings-gtfs-rt-vehicle-positions-path" data-i18n="settings.gtfs_rt_vehicle_positions_path">GTFS-RT VehiclePositions Pfad</label>
+                  <div class="md-field__helper" data-i18n="settings.gtfs_rt_vehicle_positions_path.helper">Pfad ohne /api/ Präfix, z.B. <code>realtime/vehicle-positions.pbf</code></div>
                 </div>
 
                 <div class="md-field">
@@ -360,7 +493,7 @@
 
                 <p class="settings-section-label" data-i18n="settings.section.cleanup">Datenbereinigung</p>
 
-                <div class="md-field__helper" style="margin-top: 0; margin-bottom: 16px;" data-i18n="settings.cleanup_info">Die Datenbereinigung gilt nur für interne Meldungen. Externe Meldungen werden immer ausgehend von ihrer Datenquelle synchronisiert.</div>
+                <div class="md-field__helper" style="margin-top: 0; margin-bottom: 16px;" data-i18n="settings.cleanup_info">Die Datenbereinigung gilt nur für interne Objekte und Logs von Datenquellen. Objekte von externen Datenquellen werden immer ausgehend von ihrer Datenquelle synchronisiert.</div>
 
                 <div class="md-field">
                   <input type="text" id="settings-cleanup-cron" class="md-field__input" placeholder="*/10 * * * *" maxlength="64" />
@@ -373,7 +506,7 @@
                     <option value="deactivate" selected data-i18n="settings.cleanup_policy.deactivate">Deaktivieren</option>
                     <option value="delete" data-i18n="settings.cleanup_policy.delete">Löschen</option>
                   </select>
-                  <label class="md-field__label" for="settings-cleanup-policy" data-i18n="settings.cleanup_policy">Verfahrensweise bei abgelaufenen Meldungen</label>
+                  <label class="md-field__label" for="settings-cleanup-policy" data-i18n="settings.cleanup_policy">Verfahrensweise bei abgelaufenen Objekten</label>
                 </div>
 
                 <div class="md-field">
@@ -437,6 +570,54 @@
                     <span id="settings-gtfs-import-label" data-i18n="settings.gtfs_import">Importieren</span>
                   </button>
                   <button type="button" id="settings-gtfs-save-btn" class="md-btn md-btn--filled" data-ripple data-i18n="settings.gtfs_save">Speichern</button>
+                </div>
+              </div>
+
+              <!-- System copy section -->
+              <div id="settings-system-copy-section">
+                <p class="settings-section-label" data-i18n="settings.section.system_copy">System Copy</p>
+                <p class="settings-system-copy__description" data-i18n="settings.system_copy.description">
+                  Wählen Sie die Datenbereiche für den Export und importieren Sie ein System-Copy-Archiv.
+                </p>
+
+                <div class="settings-system-copy__options" role="group" aria-labelledby="settings-system-copy-options-label">
+                  <p id="settings-system-copy-options-label" class="settings-system-copy__options-label" data-i18n="settings.system_copy.options">
+                    Zu exportierende Bereiche
+                  </p>
+
+                  <label class="settings-system-copy__option">
+                    <input type="checkbox" id="settings-system-copy-system-settings" checked />
+                    <span data-i18n="settings.system_copy.system_settings">Systemeinstellungen</span>
+                  </label>
+
+                  <label class="settings-system-copy__option">
+                    <input type="checkbox" id="settings-system-copy-gtfs-settings" checked />
+                    <span data-i18n="settings.system_copy.gtfs_settings">GTFS-Einstellungen</span>
+                  </label>
+
+                  <label class="settings-system-copy__option">
+                    <input type="checkbox" id="settings-system-copy-users" checked />
+                    <span data-i18n="settings.system_copy.users">Benutzer</span>
+                  </label>
+
+                  <label class="settings-system-copy__option">
+                    <input type="checkbox" id="settings-system-copy-datasources" checked />
+                    <span data-i18n="settings.system_copy.datasources">Datenquellen (inkl. Mapping und Anreicherung)</span>
+                  </label>
+                </div>
+
+                <div id="settings-system-copy-status" class="gtfs-status" aria-live="polite" aria-atomic="true"></div>
+                <p id="settings-system-copy-error" class="login-card__error" role="alert"></p>
+
+                <div class="settings-actions">
+                  <button type="button" id="settings-system-copy-import-btn" class="md-btn md-btn--text" data-ripple>
+                    <span id="settings-system-copy-import-spinner" class="btn-spinner" hidden aria-hidden="true"></span>
+                    <span id="settings-system-copy-import-label" data-i18n="settings.system_copy.import">Importieren</span>
+                  </button>
+                  <button type="button" id="settings-system-copy-export-btn" class="md-btn md-btn--filled" data-ripple>
+                    <span id="settings-system-copy-export-spinner" class="btn-spinner" hidden aria-hidden="true"></span>
+                    <span id="settings-system-copy-export-label" data-i18n="settings.system_copy.export">Exportieren</span>
+                  </button>
                 </div>
               </div>
 
@@ -552,13 +733,13 @@
           <div class="md-field">
             <select class="md-field__input" id="source-invalid-reference-policy" name="invalid_reference_policy" placeholder=" ">
               <option value="not_specified" data-i18n="source.invalid_reference_policy.not_specified">keine Angabe</option>
-              <option value="discard_alert" data-i18n="source.invalid_reference_policy.discard_alert">gesamte Meldung verwerfen</option>
+              <option value="discard_entire_object" data-i18n="source.invalid_reference_policy.discard_entire_object">gesamtes Objekt verwerfen</option>
               <option value="discard_invalid" data-i18n="source.invalid_reference_policy.discard_invalid">ungültige Bezüge verwerfen</option>
               <option value="discard_invalid_elements" data-i18n="source.invalid_reference_policy.discard_invalid_elements">ungültige Bezugselemente verwerfen</option>
-              <option value="keep_alert" data-i18n="source.invalid_reference_policy.keep_alert">gesamte Meldung deaktivieren</option>
+              <option value="keep_object_disabled" data-i18n="source.invalid_reference_policy.keep_object_disabled">gesamtes Objekt deaktivieren</option>
             </select>
             <label class="md-field__label" for="source-invalid-reference-policy" data-i18n="source.invalid_reference_policy">Verfahrensweise bei ungültigen Bezügen</label>
-            <div class="md-field__helper" data-i18n="source.invalid_reference_policy.helper">Definiert, wie mit Meldungen umgegangen wird, die auf nicht-existierende GTFS-Objekte verweisen.</div>
+            <div class="md-field__helper" data-i18n="source.invalid_reference_policy.helper">Definiert, wie mit Objekten umgegangen wird, die auf nicht-existierende GTFS-Objekte verweisen.</div>
           </div>
           
           <div class="modal__switches">
@@ -823,6 +1004,22 @@
     </div>
   </div>
 
+  <!-- Modal: View trip (read-only) -->
+  <div id="view-trip-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="view-trip-title" hidden>
+    <div class="modal__backdrop"></div>
+    <div class="modal__panel modal__panel--lg">
+      <div class="modal__header">
+        <h2 class="modal__title" id="view-trip-title" data-i18n="trips.modal.view">Fahrt anzeigen</h2>
+      </div>
+      <div class="modal__body" style="max-height: calc(100vh - 200px);">
+        <div id="view-trip-content" class="view-alert-content"></div>
+      </div>
+      <div class="modal__actions">
+        <button type="button" id="view-trip-close-btn" class="md-btn md-btn--text" data-ripple data-i18n="common.close">Schließen</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: Confirm delete -->
   <div id="confirm-modal" class="modal" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" hidden>
     <div class="modal__backdrop"></div>
@@ -875,9 +1072,13 @@
   <script src="js/languages.js"></script>
   <script src="js/localization.js"></script>
   <script src="js/core.js"></script>
+  <script src="js/dashboard.js"></script>
   <script src="js/accounts.js"></script>
   <script src="js/sources.js"></script>
   <script src="js/alerts.js"></script>
+  <script src="js/trips.js"></script>
+  <script src="js/maplibre-gl.js"></script>
+  <script src="js/vehicles.js"></script>
   <script src="js/settings.js"></script>
   <script src="js/main.js"></script>
 </body>

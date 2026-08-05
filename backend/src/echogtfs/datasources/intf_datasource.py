@@ -5,7 +5,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
-from echogtfs.services.database.intf_repository import RepositoryInterface
+from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
+from echogtfs.services.database.intf_realtime_repository import RealtimeRepositoryInterface
+from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
 
 
 class DatasourceInterface(ABC):
@@ -18,13 +20,15 @@ class DatasourceInterface(ABC):
         """Validate datasource-specific configuration values."""
 
     @abstractmethod
-    async def _fetch_records(self) -> dict[str, Any] | list[dict[str, Any]]:
+    async def _fetch_records(self) -> dict[str, Any]:
         """Fetch and transform external realtime payloads into dialect-defined records."""
 
     @abstractmethod
     async def sync_records(
         self,
-        repository: RepositoryInterface,
+        repository: SystemRepositoryInterface,
+        realtime_repository: RealtimeRepositoryInterface,
+        gtfs_repository: GtfsRepositoryInterface,
         source_id: int,
         source_name: str,
     ) -> dict[str, int]:

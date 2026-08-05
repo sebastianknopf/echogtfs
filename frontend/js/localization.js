@@ -10,6 +10,18 @@ const i18n = (() => {
   // LocalStorage key for user language preference
   const STORAGE_KEY = 'echogtfs_language';
 
+  // Fallbacks for runtime stream message codes that should stay user-friendly
+  const RUNTIME_FALLBACKS = {
+    de: {
+      'intf.gtfsimport.done': 'Import abgeschlossen',
+      'intf.gtfsimport.error': 'Import mit Fehler abgeschlossen',
+    },
+    en: {
+      'intf.gtfsimport.done': 'Import completed',
+      'intf.gtfsimport.error': 'Import completed with errors',
+    },
+  };
+
   /**
    * Get translated string for a given key in the current language.
    * Returns the key itself if no translation is found.
@@ -31,8 +43,13 @@ const i18n = (() => {
     let text = languageStrings[key];
     
     if (!text) {
-      console.warn(`Translation key '${key}' not found for language '${_currentLanguage}'`);
-      return key;
+      const fallbackText = RUNTIME_FALLBACKS[_currentLanguage]?.[key];
+      if (fallbackText) {
+        text = fallbackText;
+      } else {
+        console.warn(`Translation key '${key}' not found for language '${_currentLanguage}'`);
+        return key;
+      }
     }
     
     // Simple parameter interpolation: {paramName} in strings
@@ -44,6 +61,21 @@ const i18n = (() => {
     }
     
     return text;
+  }
+
+  function hasTranslation(key) {
+    if (!key || typeof key !== 'string') {
+      return false;
+    }
+
+    const translations = window.translations || {};
+    const languageStrings = translations[_currentLanguage];
+    if (!languageStrings) {
+      return false;
+    }
+
+    return Object.prototype.hasOwnProperty.call(languageStrings, key)
+      || Object.prototype.hasOwnProperty.call(RUNTIME_FALLBACKS[_currentLanguage] || {}, key);
   }
 
   /**
@@ -215,6 +247,7 @@ const i18n = (() => {
   return {
     // Main translation function (also exposed as global function below)
     t: translate,
+    hasTranslation,
     
     // Language management
     setLanguage,

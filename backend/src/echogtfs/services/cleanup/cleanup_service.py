@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import logging
+import os
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from echogtfs.enum.system import ExpiredAlertPolicy
+from echogtfs.enum.system import ExpiredRealtimeObjectPolicy
 from echogtfs.services.datalog import DatalogService
-from echogtfs.services.database import RepositoryInterface
+from echogtfs.services.database import RealtimeRepositoryInterface
+from echogtfs.services.database import SystemRepositoryInterface
 from echogtfs.services.database.models import AppSetting
 
 logger = logging.getLogger("uvicorn")
@@ -21,8 +24,24 @@ class CleanupService:
 
     _scheduler: AsyncIOScheduler | None = None
 
-    def __init__(self, repository: RepositoryInterface):
+    def __init__(
+        self,
+        repository: SystemRepositoryInterface,
+        realtime_repository: RealtimeRepositoryInterface,
+    ):
         self._repository = repository
+        self._realtime_repository = realtime_repository
+        self._scheduler_timezone = self._resolve_scheduler_timezone()
+
+    @staticmethod
+    def _resolve_scheduler_timezone() -> ZoneInfo:
+        timezone_name = os.getenv("TIMEZONE", "UTC").strip() or "UTC"
+
+        try:
+            return ZoneInfo(timezone_name)
+        except ZoneInfoNotFoundError:
+            logger.warning("[Cleanup] Unknown TIMEZONE '%s'. Falling back to UTC", timezone_name)
+            return ZoneInfo("UTC")
 
     @classmethod
     def _get_scheduler(cls) -> AsyncIOScheduler:
@@ -49,7 +68,7 @@ class CleanupService:
                 
                 scheduler.add_job(
                     self.run_cleanup_task,
-                    CronTrigger.from_crontab(cron_expr),
+                    CronTrigger.from_crontab(cron_expr, timezone=self._scheduler_timezone),
                     id=job_id,
                     replace_existing=True,
                 )
@@ -66,7 +85,7 @@ class CleanupService:
 
         try:
             policy_str = await self._repository.get_app_setting(AppSetting.KEY_CLEANUP_EXPIRED_POLICY) or "deactivate"
-            policy = ExpiredAlertPolicy(policy_str)
+            policy = ExpiredRealtimeObjectPolicy(policy_str)
 
             delete_days_value = await self._repository.get_app_setting(AppSetting.KEY_CLEANUP_DELETE_AFTER_DAYS)
             delete_after_days = int(delete_days_value) if delete_days_value is not None else -1
@@ -92,11 +111,11 @@ class CleanupService:
         except Exception as exc:  # noqa: BLE001
             logger.error("[Cleanup] Error during cleanup task: %s", exc, exc_info=True)
 
-    async def _handle_expired_alerts(self, policy: ExpiredAlertPolicy) -> int:
+    async def _handle_expired_alerts(self, policy: ExpiredRealtimeObjectPolicy) -> int:
         current_timestamp = int(datetime.now(UTC).timestamp())
-        alert_ids = await self._repository.list_expired_internal_alert_ids(
+        alert_ids = await self._realtime_repository.list_expired_internal_alert_ids(
             current_timestamp,
-            only_active=policy == ExpiredAlertPolicy.DEACTIVATE,
+            only_active=policy == ExpiredRealtimeObjectPolicy.DEACTIVATE,
         )
 
         if not alert_ids:
@@ -104,11 +123,11 @@ class CleanupService:
             return 0
 
         count = len(alert_ids)
-        if policy == ExpiredAlertPolicy.DEACTIVATE:
-            await self._repository.deactivate_service_alerts(alert_ids)
+        if policy == ExpiredRealtimeObjectPolicy.DEACTIVATE:
+            await self._realtime_repository.deactivate_service_alerts(alert_ids)
             logger.info("[Cleanup] Deactivated %s expired internal alerts", count)
-        elif policy == ExpiredAlertPolicy.DELETE:
-            await self._repository.delete_service_alerts_by_ids(alert_ids)
+        elif policy == ExpiredRealtimeObjectPolicy.DELETE:
+            await self._realtime_repository.delete_service_alerts_by_ids(alert_ids)
             logger.info("[Cleanup] Deleted %s expired internal alerts", count)
 
         return count
@@ -121,13 +140,13 @@ class CleanupService:
         cutoff_datetime = datetime.combine(cutoff_date + timedelta(days=1), datetime.min.time()).replace(tzinfo=UTC)
         cutoff_timestamp = int(cutoff_datetime.timestamp())
 
-        alert_ids = await self._repository.list_internal_alert_ids_expired_before(cutoff_timestamp)
+        alert_ids = await self._realtime_repository.list_internal_alert_ids_expired_before(cutoff_timestamp)
         if not alert_ids:
             logger.info("[Cleanup] No internal alerts older than %s days found", days)
             return 0
 
         count = len(alert_ids)
-        await self._repository.delete_service_alerts_by_ids(alert_ids)
+        await self._realtime_repository.delete_service_alerts_by_ids(alert_ids)
         
         logger.info("[Cleanup] Deleted %s internal alerts expired for more than %s days", count, days)
         

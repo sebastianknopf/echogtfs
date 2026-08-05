@@ -11,20 +11,20 @@ import httpx
 
 from echogtfs.datasources.base import DatasourceBase
 from echogtfs.datasources.transformers import (
-    SwissServiceAlertsTransformer,
     SiriSxServiceAlertsTransformer,
+    SiriSxSwissServiceAlertsTransformer,
 )
 
 logger = logging.getLogger("uvicorn")
 
 
 class SiriLiteDialect(str, Enum):
-    SWISS = "swiss"
     SIRISX = "sirisx"
+    SIRISX_SWISS = "sirisx-swiss"
 
 
 class SiriLiteDatasource(DatasourceBase):
-    """Datasource implementation for SIRI-Lite feeds."""
+    """Datasource implementation for SIRI-Lite feeds (SIRI-SX and SIRI-SX Swiss dialects)."""
 
     CONFIG_SCHEMA: list[dict[str, Any]] = [
         {
@@ -48,7 +48,7 @@ class SiriLiteDatasource(DatasourceBase):
             "type": "enum",
             "label": "adapter.sirilite.dialect.label",
             "required": True,
-            "options": ["swiss", "sirisx"],
+            "options": ["sirisx", "sirisx-swiss"],
             "help_text": "adapter.sirilite.dialect.help_text",
         },
         {
@@ -85,27 +85,32 @@ class SiriLiteDatasource(DatasourceBase):
             if not isinstance(self.config["filter"], str):
                 raise ValueError("'filter' must be a string")
 
-    async def _fetch_records(self) -> dict[str, Any] | list[dict[str, Any]]:
+    async def _fetch_records(self) -> dict[str, Any]:
         root = await self._fetch_and_parse_xml()
         source_name = self.config.get("_source_name", "sirilite")
         filter_value = self.config.get("filter", "")
 
         dialect = SiriLiteDialect(self.config["dialect"])
-        if dialect == SiriLiteDialect.SWISS:
-            transformer = SwissServiceAlertsTransformer(
-                make_unique_id=self._make_unique_id,
-                filter_value=filter_value,
-            )
-        elif dialect == SiriLiteDialect.SIRISX:
+        if dialect == SiriLiteDialect.SIRISX:
             transformer = SiriSxServiceAlertsTransformer(
                 make_unique_id=self._make_unique_id,
                 filter_value=filter_value,
             )
+
+        elif dialect == SiriLiteDialect.SIRISX_SWISS:
+            transformer = SiriSxSwissServiceAlertsTransformer(
+                make_unique_id=self._make_unique_id,
+                filter_value=filter_value,
+            )
+
         else:
             raise ValueError(f"Unknown SIRI Lite dialect: {dialect}")
 
         try:
-            records = transformer.transform({"root": root, "source_name": source_name})
+            records = await self._run_cpu_bound(
+                transformer.transform,
+                {"root": root, "source_name": source_name},
+            )
         except Exception as exc:
             logger.error(f"[SiriLiteDatasource] Failed to transform payload: {exc}", exc_info=True)
             
@@ -170,7 +175,7 @@ class SiriLiteDatasource(DatasourceBase):
         )
 
         try:
-            return ET.fromstring(xml_content)
+            return await self._run_cpu_bound(ET.fromstring, xml_content)
         except ET.ParseError as exc:
             logger.error(f"[SiriLiteDatasource] Failed to parse XML: {exc}")
             

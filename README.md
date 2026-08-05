@@ -2,15 +2,7 @@
 
 # echogtfs
 
-A lightweight CMS for creating and managing GTFS-RT ServiceAlerts based on existing GTFS feeds. The system allows transit agencies to create real-time service alerts and integrate additional data sources such as SIRI-SX.
-
-> [!NOTE]
-> Initially, EchoGTFS was a prototype tool to generate GTFS ServiceAlerts only. However, in future EchoGTFS might be further developed to be a complete GTFS-RT provision platform with the upcoming versions 2.x.
-
-## Overview
-
-
-**echogtfs** is designed to simplify the creation and distribution of GTFS-Realtime ServiceAlerts. For a comprehensive guide, configuration options, and advanced usage, see the [EchoGTFS Manual](docs/manual/README.md).
+A lightweight platform for creating and aggregating GTFS-RT complicant based on existing GTFS feeds. The system allows transit agencies to create real-time ServiceAlerts and integrate additional data sources such as SIRI for providing realtime information such as TripUpdates and VehiclePositions.
 
 It provides:
 
@@ -79,11 +71,19 @@ After logging in, configure your GTFS data source via the settings interface:
 
 ### Accessing GTFS-RT Feeds
 
-ServiceAlerts are available via GTFS-Realtime protocol:
+The GTFS-RT feeds are available at the following paths by default:
 
 ```
 GET /api/realtime/service-alerts.pbf
 ```
+
+```
+GET /api/realtime/trip-updates.pbf
+``` 
+
+```
+GET /api/realtime/vehicle-positions.pbf
+``` 
 
 The endpoint returns protocol buffer formatted GTFS-RT data that can be consumed by trip planners and real-time transit applications. By adding `?json` as query parameter, the output will be in JSON.
 
@@ -104,7 +104,7 @@ You also can configure a different endpoint name in the backend if required.
 
 ### Integrating Additional Data Sources
 
-The system supports integration of additional alert sources such as SIRI-SX. Configure external sources in the settings interface to automatically import and convert alerts to GTFS-RT format.
+The system supports integration of additional alert sources such as SIRI or other GTFS-RT feeds. For each data source a mapping for agencies, routes and stops can be defined.
 
 ## Updating
 

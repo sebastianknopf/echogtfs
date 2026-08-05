@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
-from echogtfs.services.database.intf_repository import RepositoryInterface
+from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
 
 
 class EntityEnrichmentInterface(ABC):
@@ -12,7 +12,7 @@ class EntityEnrichmentInterface(ABC):
     @abstractmethod
     async def initialize(
         self,
-        repository: RepositoryInterface,
+        repository: SystemRepositoryInterface,
         source_id: int,
     ) -> None:
         """Load enrichments once for one pipeline run and store them internally."""

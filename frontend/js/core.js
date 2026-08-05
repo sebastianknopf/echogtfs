@@ -10,31 +10,17 @@ const api = (() => {
   const BASE_URL = '/api';
   
   function translateError(msg, status) {
-    const translations = {
-      'Invalid credentials': window.i18n('error.invalid_credentials'),
-      'User not found': window.i18n('error.user_not_found'),
-      'User already exists': window.i18n('error.user_exists'),
-      'Missing required fields': window.i18n('error.required_fields'),
-      'Invalid email format': window.i18n('error.invalid_email'),
-      'Password too short': window.i18n('error.password_short'),
-      'Current password is incorrect': window.i18n('error.current_password_incorrect'),
-      'Access denied': window.i18n('error.access_denied'),
-      'Data source not found': window.i18n('error.source_not_found'),
-      'Invalid cron expression': window.i18n('error.invalid_cron'),
-      'Alert not found': window.i18n('error.alert_not_found'),
-      'Cannot delete external alert': window.i18n('error.cannot_delete_external'),
-      'Invalid active period': window.i18n('error.invalid_period'),
-      'Missing translation': window.i18n('error.missing_translation'),
-      'Invalid informed entity': window.i18n('error.invalid_entity'),
-    };
+    if (typeof msg === 'string' && window.i18n.hasTranslation(msg)) {
+      return window.i18n(msg);
+    }
     
     if (status === 422) return window.i18n('error.invalid_input');
     if (status === 409) return window.i18n('error.conflict');
     if (status === 500) return window.i18n('error.server_500');
     if (status === 503) return window.i18n('error.server_503');
-    if (status >= 400 && status < 500) return translations[msg] || window.i18n('error.request_failed');
+    if (status >= 400 && status < 500) return (typeof msg === 'string' && msg) || window.i18n('error.request_failed');
     if (status >= 500) return window.i18n('error.server_error');
-    return translations[msg] || msg || window.i18n('error.unknown');
+    return (typeof msg === 'string' && msg) || window.i18n('error.unknown');
   }
 
   async function request(path, options = {}, skipAuthRedirect = false) {
@@ -84,6 +70,186 @@ const api = (() => {
       }
       throw error;
     }
+  }
+
+  async function streamRequest(path, options = {}, onEvent) {
+    const url = path.startsWith('http') ? path : `${BASE_URL}${path}`;
+    const token = localStorage.getItem('auth-token');
+
+    const config = {
+      ...options,
+      headers: {
+        Accept: 'text/event-stream',
+        ...options.headers,
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+      },
+    };
+
+    let response;
+    try {
+      response = await fetch(url, config);
+    } catch (error) {
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error(window.i18n('error.network'));
+      }
+      throw error;
+    }
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('auth-token');
+        localStorage.removeItem('current-user');
+        window.location.reload();
+        return;
+      }
+
+      const contentType = response.headers.get('content-type');
+      const isJson = contentType?.includes('application/json');
+      const errorData = isJson ? await response.json() : await response.text();
+      const detail = isJson && errorData && typeof errorData === 'object' ? errorData.detail : errorData;
+      throw new Error(translateError(detail, response.status));
+    }
+
+    if (!response.body) {
+      return;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    function processEventBlock(rawBlock) {
+      if (!rawBlock.trim()) {
+        return;
+      }
+
+      const lines = rawBlock.split('\n');
+      let eventName = 'message';
+      const dataLines = [];
+
+      for (const line of lines) {
+        if (line.startsWith('event:')) {
+          eventName = line.slice(6).trimStart() || 'message';
+        }
+
+        if (line.startsWith('data:')) {
+          dataLines.push(line.slice(5).trimStart());
+        }
+      }
+
+      if (!dataLines.length) {
+        return;
+      }
+
+      const payloadText = dataLines.join('\n').trim();
+      if (!payloadText) {
+        return;
+      }
+
+      let payload;
+      try {
+        payload = JSON.parse(payloadText);
+      } catch {
+        payload = { message: payloadText };
+      }
+
+      if (payload && typeof payload === 'object' && payload.data !== undefined) {
+        const nested = payload.data;
+
+        if (typeof nested === 'string') {
+          try {
+            payload = JSON.parse(nested);
+          } catch {
+            payload = { message: nested };
+          }
+        } else if (nested && typeof nested === 'object') {
+          payload = nested;
+        }
+      }
+
+      if (payload && typeof payload === 'object') {
+        payload.event = payload.event || eventName;
+      } else {
+        payload = { event: eventName, message: String(payload ?? '') };
+      }
+
+      if (typeof onEvent === 'function') {
+        onEvent(payload);
+      }
+    }
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+
+      let sepIndex = buffer.indexOf('\n\n');
+      while (sepIndex !== -1) {
+        const eventBlock = buffer.slice(0, sepIndex);
+        processEventBlock(eventBlock);
+        buffer = buffer.slice(sepIndex + 2);
+        sepIndex = buffer.indexOf('\n\n');
+      }
+    }
+
+    if (buffer.trim()) {
+      processEventBlock(buffer);
+    }
+  }
+
+  async function downloadRequest(path, options = {}) {
+    const url = path.startsWith('http') ? path : `${BASE_URL}${path}`;
+    const token = localStorage.getItem('auth-token');
+
+    const config = {
+      ...options,
+      headers: {
+        ...options.headers,
+        ...(token && { 'Authorization': `Bearer ${token}` }),
+      },
+    };
+
+    let response;
+    try {
+      response = await fetch(url, config);
+    } catch (error) {
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error(window.i18n('error.network'));
+      }
+      throw error;
+    }
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('auth-token');
+        localStorage.removeItem('current-user');
+        window.location.reload();
+        return null;
+      }
+
+      const contentType = response.headers.get('content-type');
+      const isJson = contentType?.includes('application/json');
+      const errorData = isJson ? await response.json() : await response.text();
+      const detail = isJson && errorData && typeof errorData === 'object' ? errorData.detail : errorData;
+      throw new Error(translateError(detail, response.status));
+    }
+
+    const newToken = response.headers.get('X-New-Token');
+    if (newToken) {
+      localStorage.setItem('auth-token', newToken);
+    }
+
+    const contentDisposition = response.headers.get('Content-Disposition') || '';
+    const filenameMatch = contentDisposition.match(/filename=([^;]+)/i);
+    const filename = filenameMatch ? filenameMatch[1].replace(/['"]/g, '') : 'system-copy.zip';
+
+    return {
+      blob: await response.blob(),
+      filename,
+    };
   }
 
   return {
@@ -194,6 +360,51 @@ const api = (() => {
       return request(`/alerts/${id}/toggle-active`, { method: 'POST' });
     },
 
+    // Trips
+    getTrips(page = 1, limit = 20, sort = 'asc', search = '', filters = {}) {
+      const params = new URLSearchParams({ page, limit, sort });
+      if (search) {
+        params.set('search', search);
+      }
+      if (filters.active !== undefined && filters.inactive !== undefined) {
+        if (filters.active && !filters.inactive) {
+          params.set('is_active', 'true');
+        } else if (!filters.active && filters.inactive) {
+          params.set('is_active', 'false');
+        }
+      }
+      return request(`/trips/?${params}`);
+    },
+
+    toggleTripActive(id) {
+      return request(`/trips/${id}/toggle-active`, { method: 'POST' });
+    },
+
+    // Vehicles
+    getVehicles(page = 1, limit = 200, search = '', filters = {}) {
+      const params = new URLSearchParams({ page, limit });
+      if (search) {
+        params.set('search', search);
+      }
+      if (filters.active !== undefined && filters.inactive !== undefined) {
+        if (filters.active && !filters.inactive) {
+          params.set('is_active', 'true');
+        } else if (!filters.active && filters.inactive) {
+          params.set('is_active', 'false');
+        }
+      }
+      return request(`/vehicles/?${params}`);
+    },
+
+    toggleVehicleActive(id) {
+      return request(`/vehicles/${id}/toggle-active`, { method: 'POST' });
+    },
+
+    // Dashboard
+    getDashboard() {
+      return request('/dashboard/');
+    },
+
     // Data sources
     getSources() {
       return request('/sources/');
@@ -229,6 +440,10 @@ const api = (() => {
 
     runSourceImport(id) {
       return request(`/sources/${id}/run`, { method: 'POST' });
+    },
+
+    streamSourceImport(id, onEvent) {
+      return streamRequest(`/sources/${id}/run`, { method: 'POST' }, onEvent);
     },
 
     toggleSourceActive(id) {
@@ -271,7 +486,9 @@ const api = (() => {
         app_title: 'echogtfs',
         color_primary: '#008c99',
         color_secondary: '#99cc04',
-        gtfs_rt_path: 'realtime/service-alerts.pbf',
+        gtfs_rt_service_alerts_path: 'realtime/service-alerts.pbf',
+        gtfs_rt_trip_updates_path: 'realtime/trip-updates.pbf',
+        gtfs_rt_vehicle_positions_path: 'realtime/vehicle-positions.pbf',
         gtfs_rt_username: '',
         gtfs_rt_password: ''
       });
@@ -293,6 +510,30 @@ const api = (() => {
     triggerGtfsImport() {
       return request('/gtfs/import', {
         method: 'POST',
+      });
+    },
+
+    streamGtfsImport(onEvent) {
+      return streamRequest('/gtfs/import', {
+        method: 'POST',
+      }, onEvent);
+    },
+
+    // System copy
+    exportSystemCopy(selection) {
+      return downloadRequest('/systemcopy/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selection),
+      });
+    },
+
+    importSystemCopy(file) {
+      const formData = new FormData();
+      formData.append('file', file);
+      return request('/systemcopy/import', {
+        method: 'POST',
+        body: formData,
       });
     },
   };

@@ -17,6 +17,7 @@ fake_config.settings = SimpleNamespace(
     secret_key="test-secret-key-that-is-at-least-32-bytes-long",
     algorithm="HS256",
     access_token_expire_minutes=30,
+    global_id_pattern=None,
 )
 fake_config.Settings = object
 sys.modules["echogtfs.common.config"] = fake_config

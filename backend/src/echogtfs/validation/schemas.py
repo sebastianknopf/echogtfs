@@ -7,7 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, EmailStr, field_validator, model_validator
 
 from echogtfs.enum.gtfsrt import AlertCause, AlertEffect, AlertSeverityLevel, PeriodType
-from echogtfs.enum.system import EnrichmentType, ExpiredAlertPolicy, InvalidReferencePolicy, SourceField
+from echogtfs.enum.system import EnrichmentType, ExpiredRealtimeObjectPolicy, InvalidReferencePolicy, SourceField
 
 _HEX_COLOR = re.compile(r'^#[0-9a-fA-F]{6}$')
 
@@ -44,13 +44,15 @@ class AppSettings(BaseModel):
     app_language:    str = 'de'  # 'de' or 'en'
     
     # GTFS-RT endpoint configuration
-    gtfs_rt_path:     str = 'realtime/service-alerts.pbf'
+    gtfs_rt_service_alerts_path:   str = 'realtime/service-alerts.pbf'
+    gtfs_rt_trip_updates_path:     str = 'realtime/trip-updates.pbf'
+    gtfs_rt_vehicle_positions_path: str = 'realtime/vehicle-positions.pbf'
     gtfs_rt_username: str = ''
     gtfs_rt_password: str | None = ''
     
     # Data cleanup configuration
     cleanup_cron:             str = '*/10 * * * *'  # Every 10 minutes
-    cleanup_expired_policy:   ExpiredAlertPolicy = ExpiredAlertPolicy.DEACTIVATE
+    cleanup_expired_policy:   ExpiredRealtimeObjectPolicy = ExpiredRealtimeObjectPolicy.DEACTIVATE
     cleanup_delete_after_days: int = -1  # -1 = never, >= 0 = days after expiration
 
     @field_validator('color_primary', 'color_secondary')
@@ -90,6 +92,33 @@ class PublicAppSettings(BaseModel):
         if not v:
             raise ValueError('App title cannot be empty')
         return v[:80]
+
+
+class DashboardCounter(BaseModel):
+    active: int
+    inactive: int
+
+
+class DashboardCounters(BaseModel):
+    service_alerts: DashboardCounter
+    trip_updates: DashboardCounter
+    vehicle_positions: DashboardCounter
+
+
+class DashboardEndpoint(BaseModel):
+    path: str
+    url: str
+
+
+class DashboardEndpoints(BaseModel):
+    service_alerts: DashboardEndpoint
+    trip_updates: DashboardEndpoint
+    vehicle_positions: DashboardEndpoint
+
+
+class DashboardRead(BaseModel):
+    counts: DashboardCounters
+    endpoints: DashboardEndpoints
     
     
 class GtfsFeedConfig(BaseModel):
@@ -100,6 +129,25 @@ class GtfsFeedConfig(BaseModel):
 class GtfsConfigUpdate(BaseModel):
     feed_url: str | None = None
     cron: str | None = None
+
+
+class SystemCopyExportSelection(BaseModel):
+    system_settings: bool = False
+    gtfs_settings: bool = False
+    users: bool = False
+    datasources: bool = False
+
+
+class SystemCopyDomainSummary(BaseModel):
+    created: int = 0
+    updated: int = 0
+    remapped: int = 0
+
+
+class SystemCopyImportSummary(BaseModel):
+    format_version: int
+    imported_at_utc: str
+    domains: dict[str, SystemCopyDomainSummary]
 
 
 class UserCreate(BaseModel):
@@ -353,6 +401,101 @@ class ServiceAlertListResponse(BaseModel):
     limit: int
     total_pages: int
     items: list[ServiceAlertRead]
+
+
+class StopEventRead(BaseModel):
+    """Read model for realtime stop events."""
+    trip_id: str
+    stop_id: str
+    stop_name: str | None = None
+    stop_sequence: str
+    arrival_time: datetime
+    departure_time: datetime
+    schedule_relationship: str
+    is_valid: bool
+
+    model_config = {"from_attributes": True}
+
+
+class TripRead(BaseModel):
+    """Read model for realtime trips."""
+    id: UUID
+    data_source_id: int | None
+    source: str
+    trip_id: str
+    start_time: str
+    start_date: str
+    route_id: str
+    route_name: str | None = None
+    schedule_relationship: str
+    assignment_type: str
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    is_valid: bool
+    stop_events: list[StopEventRead]
+    data_source_name: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class TripListResponse(BaseModel):
+    """Paginated response for realtime trips list."""
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+    items: list[TripRead]
+
+
+class VehicleTripSummaryRead(BaseModel):
+    """Minimal trip summary embedded in vehicle responses."""
+    trip_id: str
+    route_id: str
+    route_name: str | None = None
+    start_time: str
+    start_date: str
+    schedule_relationship: str
+    is_active: bool
+    is_valid: bool
+
+    model_config = {"from_attributes": True}
+
+
+class VehicleRead(BaseModel):
+    """Read model for realtime vehicle positions."""
+    id: UUID
+    data_source_id: int | None
+    source: str
+    trip_id: str
+    vehicle_id: str
+    vehicle_label: str | None
+    vehicle_license_plate: str | None
+    vehicle_wheelchair_accessible: str
+    timestamp: datetime
+    latitude: float
+    longitude: float
+    current_stop_sequence: int
+    current_status: str
+    assignment_type: str
+    congestion_level: str
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    is_valid: bool
+    data_source_name: str | None = None
+    trip: VehicleTripSummaryRead | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class VehicleListResponse(BaseModel):
+    """Paginated response for realtime vehicles list."""
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+    items: list[VehicleRead]
 
 
 class ServiceAlertTranslationCreate(BaseModel):

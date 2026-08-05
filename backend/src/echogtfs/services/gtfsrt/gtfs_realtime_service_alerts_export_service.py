@@ -7,7 +7,7 @@ from google.protobuf.json_format import MessageToDict
 
 from echogtfs import gtfs_realtime_pb2
 from echogtfs.enum.gtfsrt import PeriodType
-from echogtfs.services.database.intf_repository import RepositoryInterface
+from echogtfs.services.database.intf_realtime_repository import RealtimeRepositoryInterface
 from echogtfs.services.database.models import ServiceAlert
 from echogtfs.services.gtfsrt.intf_gtfs_realtime_export import GtfsRealtimeExportInterface
 
@@ -15,7 +15,7 @@ from echogtfs.services.gtfsrt.intf_gtfs_realtime_export import GtfsRealtimeExpor
 class GtfsRealtimeServiceAlertsExportService(GtfsRealtimeExportInterface):
     """GTFS-Realtime export service for ServiceAlert objects."""
 
-    def __init__(self, repository: RepositoryInterface):
+    def __init__(self, repository: RealtimeRepositoryInterface):
         self._repository = repository
 
     async def export_protobuf(self) -> bytes:

@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 import uuid
 
-from echogtfs.services.database import RepositoryInterface
+from echogtfs.services.database import SystemRepositoryInterface
 from echogtfs.services.database.models import DataSourceLog
 
 logger = logging.getLogger("uvicorn")
@@ -21,7 +21,7 @@ DEFAULT_LOG_DIR = Path("/var/log/echogtfs/datasources")
 class DatalogService:
     """Manages data source request logging and log-file persistence."""
 
-    def __init__(self, repository: RepositoryInterface):
+    def __init__(self, repository: SystemRepositoryInterface):
         self._repository = repository
 
     @staticmethod

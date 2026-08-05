@@ -2,7 +2,22 @@
    SETTINGS MODULE
 ========================================================================== */
 const settings = (() => {
-  let _pollInterval = null;
+  function _isCronValidationError(message) {
+    if (typeof message !== 'string') return false;
+
+    const normalized = message.trim().toLowerCase();
+    const keyMinuteOnly = 'error.cron_minute_only';
+    const keyInvalid = 'error.invalid_cron';
+    const localizedMinuteOnly = window.i18n('error.cron_minute_only').trim().toLowerCase();
+    const localizedInvalid = window.i18n('error.invalid_cron').trim().toLowerCase();
+
+    return (
+      normalized === keyMinuteOnly
+      || normalized === keyInvalid
+      || normalized === localizedMinuteOnly
+      || normalized === localizedInvalid
+    );
+  }
 
   function init() {
     // Sync color pickers with hex inputs
@@ -39,6 +54,20 @@ const settings = (() => {
     if (gtfsImportBtn) {
       gtfsImportBtn.addEventListener('click', () => {
         _triggerImport();
+      });
+    }
+
+    const systemCopyExportBtn = ui.el('settings-system-copy-export-btn');
+    if (systemCopyExportBtn) {
+      systemCopyExportBtn.addEventListener('click', () => {
+        _exportSystemCopy();
+      });
+    }
+
+    const systemCopyImportBtn = ui.el('settings-system-copy-import-btn');
+    if (systemCopyImportBtn) {
+      systemCopyImportBtn.addEventListener('click', () => {
+        _importSystemCopy();
       });
     }
   }
@@ -116,9 +145,19 @@ const settings = (() => {
       secondaryHex.value = secondaryColor;
     }
     
-    const rtPath = ui.el('settings-gtfs-rt-path');
-    if (rtPath) {
-      rtPath.value = settings.gtfs_rt_path || '';
+    const serviceAlertsPath = ui.el('settings-gtfs-rt-service-alerts-path');
+    if (serviceAlertsPath) {
+      serviceAlertsPath.value = settings.gtfs_rt_service_alerts_path || '';
+    }
+
+    const tripUpdatesPath = ui.el('settings-gtfs-rt-trip-updates-path');
+    if (tripUpdatesPath) {
+      tripUpdatesPath.value = settings.gtfs_rt_trip_updates_path || '';
+    }
+
+    const vehiclePositionsPath = ui.el('settings-gtfs-rt-vehicle-positions-path');
+    if (vehiclePositionsPath) {
+      vehiclePositionsPath.value = settings.gtfs_rt_vehicle_positions_path || '';
     }
     
     const rtUsername = ui.el('settings-gtfs-rt-username');
@@ -162,6 +201,15 @@ const settings = (() => {
       : text;
   }
 
+  function _showSystemCopyStatus(text, type = '') {
+    const box = ui.el('settings-system-copy-status');
+    if (!box) return;
+    box.className = 'gtfs-status' + (type ? ` gtfs-status--${type}` : '');
+    box.innerHTML = type === 'running'
+      ? `<span class="gtfs-status__spinner" aria-hidden="true"></span><span>${text}</span>`
+      : text;
+  }
+
   function _renderGtfsStatus(status) {
     if (!status) {
       _showStatus('');
@@ -187,11 +235,16 @@ const settings = (() => {
     } else {
       _showStatus(time ? window.i18n('settings.gtfs_import_last_short', { time }) : window.i18n('settings.gtfs_import_none'));
     }
-    
-    // Continue polling during import
-    if (status.status === 'running') {
-      _startPolling();
-    }
+  }
+
+  function _renderGtfsProgress(progressEvent) {
+    const progressValue = Number(progressEvent?.progress);
+    const progress = Number.isFinite(progressValue) ? progressValue : 0;
+    const percent = Math.max(0, Math.min(100, progress));
+    const messageCode = typeof progressEvent?.message === 'string' ? progressEvent.message : '';
+    const message = messageCode ? window.i18n(messageCode) : window.i18n('settings.gtfs_import_running');
+
+    _showStatus(`${percent.toFixed(1)}% - ${message}`, 'running');
   }
 
   async function _saveSettings() {
@@ -212,7 +265,9 @@ const settings = (() => {
         app_language: ui.el('settings-app-language')?.value || 'de',
         color_primary: ui.el('settings-color-primary')?.value || '#008c99',
         color_secondary: ui.el('settings-color-secondary')?.value || '#99cc04',
-        gtfs_rt_path: ui.el('settings-gtfs-rt-path')?.value || '',
+        gtfs_rt_service_alerts_path: ui.el('settings-gtfs-rt-service-alerts-path')?.value || '',
+        gtfs_rt_trip_updates_path: ui.el('settings-gtfs-rt-trip-updates-path')?.value || '',
+        gtfs_rt_vehicle_positions_path: ui.el('settings-gtfs-rt-vehicle-positions-path')?.value || '',
         gtfs_rt_username: ui.el('settings-gtfs-rt-username')?.value || '',
         gtfs_rt_password: ui.el('settings-gtfs-rt-password')?.value || '',
         cleanup_cron: ui.el('settings-cleanup-cron')?.value || '*/10 * * * *',
@@ -241,7 +296,9 @@ const settings = (() => {
         errorEl.textContent = err.message;
         errorEl.style.display = 'block';
       }
-      ui.toast(err.message, 'error');
+      if (!_isCronValidationError(err.message)) {
+        ui.toast(err.message, 'error');
+      }
     } finally {
       saveBtn.disabled = false;
       spinner.hidden = true;
@@ -263,7 +320,9 @@ const settings = (() => {
         app_language: 'de',
         color_primary: '#008c99',
         color_secondary: '#99cc04',
-        gtfs_rt_path: 'realtime/service-alerts.pbf',
+        gtfs_rt_service_alerts_path: 'realtime/service-alerts.pbf',
+        gtfs_rt_trip_updates_path: 'realtime/trip-updates.pbf',
+        gtfs_rt_vehicle_positions_path: 'realtime/vehicle-positions.pbf',
         gtfs_rt_username: '',
         gtfs_rt_password: '',
         cleanup_cron: '*/10 * * * *',
@@ -311,7 +370,9 @@ const settings = (() => {
         errorEl.textContent = err.message;
         errorEl.style.display = 'block';
       }
-      ui.toast(err.message, 'error');
+      if (!_isCronValidationError(err.message)) {
+        ui.toast(err.message, 'error');
+      }
     } finally {
       saveBtn.disabled = false;
     }
@@ -346,67 +407,199 @@ const settings = (() => {
       _showStatus(window.i18n('settings.gtfs_import_running'), 'running');
       
       await api.updateGtfsFeedUrl({ feed_url: url, cron });
-      await api.triggerGtfsImport();
-      
-      // Start polling for status updates
-      _startPolling();
+      let reachedCompletion = false;
+      await api.streamGtfsImport((event) => {
+        _renderGtfsProgress(event);
+
+        const progressValue = Number(event?.progress);
+        if (Number.isFinite(progressValue) && progressValue >= 100.0) {
+          reachedCompletion = true;
+        }
+      });
+
+      if (reachedCompletion) {
+        const finalStatus = await api.getGtfsStatus();
+        _renderGtfsStatus(finalStatus);
+
+        if (finalStatus?.status === 'success') {
+          ui.toast(window.i18n('settings.gtfs_import_success'));
+        } else if (finalStatus?.status === 'error') {
+          ui.toast(window.i18n('settings.gtfs_import_error'), 'error');
+        }
+      }
       
     } catch (err) {
-      importBtn.disabled = false;
-      spinner.hidden = true;
-      label.textContent = window.i18n('common.import');
-      _showStatus('');
       if (errorEl) {
         errorEl.textContent = err.message;
         errorEl.style.display = 'block';
       }
+      _showStatus('');
+    } finally {
+      importBtn.disabled = false;
+      spinner.hidden = true;
+      label.textContent = window.i18n('common.import');
     }
   }
 
-  function _startPolling() {
-    // Clear existing timer
-    if (_pollInterval) {
-      clearInterval(_pollInterval);
+  function _collectSystemCopySelection() {
+    return {
+      system_settings: ui.el('settings-system-copy-system-settings')?.checked ?? false,
+      gtfs_settings: ui.el('settings-system-copy-gtfs-settings')?.checked ?? false,
+      users: ui.el('settings-system-copy-users')?.checked ?? false,
+      datasources: ui.el('settings-system-copy-datasources')?.checked ?? false,
+    };
+  }
+
+  function _setSystemCopyBusy(type, busy) {
+    const exportBtn = ui.el('settings-system-copy-export-btn');
+    const exportSpinner = ui.el('settings-system-copy-export-spinner');
+    const exportLabel = ui.el('settings-system-copy-export-label');
+    const importBtn = ui.el('settings-system-copy-import-btn');
+    const importSpinner = ui.el('settings-system-copy-import-spinner');
+    const importLabel = ui.el('settings-system-copy-import-label');
+
+    if (type === 'export') {
+      if (exportBtn) exportBtn.disabled = busy;
+      if (importBtn) importBtn.disabled = busy;
+      if (exportSpinner) exportSpinner.hidden = !busy;
+      if (exportLabel) exportLabel.textContent = busy ? window.i18n('loading.exporting') : window.i18n('settings.system_copy.export');
     }
-    
-    let pollCount = 0;
-    const maxPolls = 100; // 5 minutes at 3s interval
-    
-    _pollInterval = setInterval(async () => {
-      try {
-        pollCount++;
-        
-        const status = await api.getGtfsStatus();
-        
-        // Render status update
-        _renderGtfsStatus(status);
-        
-        // Stop polling when complete or error
-        if (status.status === 'success' || status.status === 'error' || pollCount >= maxPolls) {
-          clearInterval(_pollInterval);
-          _pollInterval = null;
-          
-          // Re-enable import button
-          const importBtn = ui.el('settings-gtfs-import-btn');
-          const spinner = ui.el('settings-gtfs-import-spinner');
-          const label = ui.el('settings-gtfs-import-label');
-          
-          if (importBtn) importBtn.disabled = false;
-          if (spinner) spinner.hidden = true;
-          if (label) label.textContent = window.i18n('common.import');
-          
-          if (status.status === 'success') {
-            ui.toast(window.i18n('settings.gtfs_import_success'));
-          } else if (status.status === 'error') {
-            ui.toast(window.i18n('settings.gtfs_import_error'), 'error');
-          }
-        }
-        
-      } catch (err) {
-        clearInterval(_pollInterval);
-        _pollInterval = null;
+
+    if (type === 'import') {
+      if (exportBtn) exportBtn.disabled = busy;
+      if (importBtn) importBtn.disabled = busy;
+      if (importSpinner) importSpinner.hidden = !busy;
+      if (importLabel) importLabel.textContent = busy ? window.i18n('loading.importing') : window.i18n('settings.system_copy.import');
+    }
+  }
+
+  function _downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename || 'system-copy.zip';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  async function _exportSystemCopy() {
+    const errorEl = ui.el('settings-system-copy-error');
+    if (errorEl) {
+      errorEl.style.display = 'none';
+      errorEl.textContent = '';
+    }
+
+    const selection = _collectSystemCopySelection();
+    if (!Object.values(selection).some(Boolean)) {
+      const message = window.i18n('settings.system_copy.selection_required');
+      if (errorEl) {
+        errorEl.textContent = message;
+        errorEl.style.display = 'block';
       }
-    }, 3000);
+      ui.toast(message, 'error');
+      return;
+    }
+
+    try {
+      _setSystemCopyBusy('export', true);
+      _showSystemCopyStatus(window.i18n('settings.system_copy.export_running'), 'running');
+
+      const result = await api.exportSystemCopy(selection);
+      if (!result) return;
+
+      _downloadBlob(result.blob, result.filename);
+      _showSystemCopyStatus(window.i18n('settings.system_copy.export_success'), 'success');
+      ui.toast(window.i18n('settings.system_copy.export_success'), 'success');
+    } catch (err) {
+      const message = err?.message || window.i18n('settings.system_copy.export_error');
+      if (errorEl) {
+        errorEl.textContent = message;
+        errorEl.style.display = 'block';
+      }
+      _showSystemCopyStatus(window.i18n('settings.system_copy.export_error'), 'error');
+      ui.toast(message, 'error');
+    } finally {
+      _setSystemCopyBusy('export', false);
+    }
+  }
+
+  function _renderSystemCopyImportSummary(summary) {
+    const domains = summary?.domains || {};
+    let created = 0;
+    let updated = 0;
+    let remapped = 0;
+
+    Object.values(domains).forEach((domain) => {
+      if (!domain || typeof domain !== 'object') return;
+      created += Number(domain.created || 0);
+      updated += Number(domain.updated || 0);
+      remapped += Number(domain.remapped || 0);
+    });
+
+    return window.i18n('settings.system_copy.import_success_summary', {
+      created,
+      updated,
+      remapped,
+    });
+  }
+
+  async function _importSystemCopy() {
+    const errorEl = ui.el('settings-system-copy-error');
+    if (errorEl) {
+      errorEl.style.display = 'none';
+      errorEl.textContent = '';
+    }
+
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.zip,application/zip';
+    input.style.display = 'none';
+
+    input.addEventListener('change', async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) {
+        document.body.removeChild(input);
+        return;
+      }
+
+      if (!file.name.toLowerCase().endsWith('.zip')) {
+        const message = window.i18n('settings.system_copy.import_file_invalid');
+        if (errorEl) {
+          errorEl.textContent = message;
+          errorEl.style.display = 'block';
+        }
+        ui.toast(message, 'error');
+        document.body.removeChild(input);
+        return;
+      }
+
+      try {
+        _setSystemCopyBusy('import', true);
+        _showSystemCopyStatus(window.i18n('settings.system_copy.import_running'), 'running');
+
+        const summary = await api.importSystemCopy(file);
+        const message = _renderSystemCopyImportSummary(summary);
+        _showSystemCopyStatus(message, 'success');
+        ui.toast(window.i18n('settings.system_copy.import_success'), 'success');
+      } catch (err) {
+        const message = err?.message || window.i18n('settings.system_copy.import_error');
+        if (errorEl) {
+          errorEl.textContent = message;
+          errorEl.style.display = 'block';
+        }
+        _showSystemCopyStatus(window.i18n('settings.system_copy.import_error'), 'error');
+        ui.toast(message, 'error');
+      } finally {
+        _setSystemCopyBusy('import', false);
+        document.body.removeChild(input);
+      }
+    }, { once: true });
+
+    document.body.appendChild(input);
+    input.click();
   }
 
   return { init, load };

@@ -15,6 +15,18 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: .
@@ -25,20 +37,25 @@ services:
       HOST: 0.0.0.0
       PORT: 8000
       DEBUG: ${DEBUG:-false}
+      TIMEZONE: ${TIMEZONE:-UTC}
       SECRET_KEY: ${SECRET_KEY}
       ALGORITHM: ${ALGORITHM:-HS256}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       DOCS_ENABLED: ${DOCS_ENABLED:-false}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
       LOGIN_RATE_LIMIT: ${LOGIN_RATE_LIMIT:-10/minute}
       FIRST_SUPERUSER: ${FIRST_SUPERUSER}
       FIRST_SUPERUSER_EMAIL: ${FIRST_SUPERUSER_EMAIL}
       FIRST_SUPERUSER_PASSWORD: ${FIRST_SUPERUSER_PASSWORD}
+      GLOBAL_ID_PATTERN: ${GLOBAL_ID_PATTERN}
     command: "echogtfs"
     volumes:
       - datasource_logs:/var/log/echogtfs/datasources
     depends_on:
       database:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     expose:
       - "8000"
@@ -53,4 +70,5 @@ services:
 
 volumes:
   pgsqldata:
+  redisdata:
   datasource_logs:

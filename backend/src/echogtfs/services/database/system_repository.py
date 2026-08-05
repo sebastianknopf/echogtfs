@@ -1,57 +1,26 @@
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any
 import uuid
 
-from sqlalchemy import case, delete, func, insert, select, text, update
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import selectinload
 
-from echogtfs.services.database.intf_repository import RepositoryInterface
+from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
 from echogtfs.services.database.models import (
     AppSetting,
     DataSource,
     DataSourceEnrichment,
     DataSourceLog,
     DataSourceMapping,
-    GtfsAgency,
-    GtfsRoute,
-    GtfsStop,
-    ServiceAlert,
-    ServiceAlertActivePeriod,
-    ServiceAlertInformedEntity,
-    ServiceAlertTranslation,
     User,
 )
+from echogtfs.services.database.base import RepositoryBase
 
 
-class SqlAlchemyRepository(RepositoryInterface):
+class SystemRepository(RepositoryBase, SystemRepositoryInterface):
     """SQLAlchemy-based repository for database access."""
-
-    def __init__(self, database_url: str, debug: bool = False):
-        self._engine: AsyncEngine = create_async_engine(database_url, echo=debug)
-        self._session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
-            self._engine,
-            expire_on_commit=False,
-        )
-
-    async def initialize(self) -> None:
-        """Validate database connectivity during application startup."""
-        async with self.get_session() as db:
-            await db.execute(text("SELECT 1"))
-
-    async def close(self) -> None:
-        """Dispose repository-owned engine resources."""
-        await self._engine.dispose()
-
-    @asynccontextmanager
-    async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
-        """Yield a managed session using repository-owned session factory."""
-        async with self._session_factory() as db:
-            yield db
 
     async def get_app_setting(self, key: str) -> str | None:
         """Return one app setting value by key, or None if key is missing."""
@@ -79,6 +48,13 @@ class SqlAlchemyRepository(RepositoryInterface):
             result = await db.execute(stmt)
 
             return {row.key: row.value for row in result.scalars().all()}
+
+    async def list_app_settings(self) -> list[AppSetting]:
+        """Return all app setting rows ordered by key."""
+        stmt = select(AppSetting).order_by(AppSetting.key)
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
 
     async def get_user_by_id(self, user_id: int) -> User | None:
         """Return one user by id, or None when not found."""
@@ -436,25 +412,6 @@ class SqlAlchemyRepository(RepositoryInterface):
 
             return source
 
-    async def delete_alerts_for_data_source(self, source_id: int) -> int:
-        """Delete all alerts for one data source and return deleted row count."""
-        stmt = delete(ServiceAlert).where(ServiceAlert.data_source_id == source_id)
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-
-            await db.commit()
-
-            return int(result.rowcount or 0)
-
-    async def update_service_alert_source_name(self, old_name: str, new_name: str) -> None:
-        """Rename service alert source text."""
-        stmt = update(ServiceAlert).where(ServiceAlert.source == old_name).values(source=new_name)
-
-        async with self.get_session() as db:
-            await db.execute(stmt)
-            await db.commit()
-
     async def list_data_source_mappings(self, source_id: int, entity_type: str) -> list[DataSourceMapping]:
         """Return mappings for one source and entity type."""
         stmt = (
@@ -482,6 +439,13 @@ class SqlAlchemyRepository(RepositoryInterface):
             for mapping in mappings:
                 grouped.setdefault(mapping.entity_type, {})[mapping.key] = mapping.value
             return grouped
+
+    async def list_all_data_source_mappings(self) -> list[DataSourceMapping]:
+        """Return all data source mappings ordered by id."""
+        stmt = select(DataSourceMapping).order_by(DataSourceMapping.id)
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
 
     async def replace_data_source_mappings_for_entity_type(
         self,
@@ -533,6 +497,13 @@ class SqlAlchemyRepository(RepositoryInterface):
                 }
                 for enrichment in enrichments
             ]
+
+    async def list_all_data_source_enrichments(self) -> list[DataSourceEnrichment]:
+        """Return all data source enrichments ordered by id."""
+        stmt = select(DataSourceEnrichment).order_by(DataSourceEnrichment.id)
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
 
     async def get_latest_data_source_log(self, source_id: int) -> DataSourceLog | None:
         """Return latest log entry for a data source."""
@@ -636,162 +607,6 @@ class SqlAlchemyRepository(RepositoryInterface):
 
             return int(result.rowcount or 0)
 
-    async def list_gtfs_entity_ids(self) -> dict[str, set[str]]:
-        """Return GTFS IDs for agency, route, and stop as sets."""
-        async with self.get_session() as db:
-            agencies_result = await db.execute(select(GtfsAgency.gtfs_id))
-            routes_result = await db.execute(select(GtfsRoute.gtfs_id))
-            stops_result = await db.execute(select(GtfsStop.gtfs_id))
-
-            return {
-                "agency": {row[0] for row in agencies_result.fetchall()},
-                "route": {row[0] for row in routes_result.fetchall()},
-                "stop": {row[0] for row in stops_result.fetchall()},
-            }
-        
-    async def list_gtfs_agencies(self) -> list[GtfsAgency]:
-        """Return all GTFS agencies ordered by name."""
-        stmt = select(GtfsAgency).order_by(GtfsAgency.name)
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
-
-    async def list_gtfs_stops(self, *, query: str, limit: int) -> list[GtfsStop]:
-        """Return GTFS stops filtered by query and limited by max rows."""
-        stmt = select(GtfsStop).order_by(GtfsStop.name)
-        if query:
-            stmt = stmt.where(
-                GtfsStop.gtfs_id.ilike(f"%{query}%") | GtfsStop.name.ilike(f"%{query}%")
-            )
-        stmt = stmt.limit(limit)
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
-
-    async def list_gtfs_routes(self, *, query: str, limit: int) -> list[GtfsRoute]:
-        """Return GTFS routes filtered by query and limited by max rows."""
-        stmt = select(GtfsRoute).order_by(GtfsRoute.short_name, GtfsRoute.long_name)
-        if query:
-            stmt = stmt.where(
-                GtfsRoute.gtfs_id.ilike(f"%{query}%")
-                | GtfsRoute.short_name.ilike(f"%{query}%")
-                | GtfsRoute.long_name.ilike(f"%{query}%")
-            )
-        stmt = stmt.limit(limit)
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
-
-    async def replace_gtfs_static_data(
-        self,
-        *,
-        agencies: list[dict[str, str]],
-        stops: list[dict[str, str]],
-        routes: list[dict[str, str]],
-    ) -> None:
-        """Atomically replace all imported GTFS static entities."""
-        async with self.get_session() as db:
-            await db.execute(delete(GtfsAgency))
-            await db.execute(delete(GtfsStop))
-            await db.execute(delete(GtfsRoute))
-
-            if agencies:
-                await db.execute(insert(GtfsAgency), agencies)
-            if stops:
-                await db.execute(insert(GtfsStop), stops)
-            if routes:
-                await db.execute(insert(GtfsRoute), routes)
-
-            await db.commit()
-        
-    async def get_realtime_service_alerts(self) -> list[ServiceAlert]:
-        """Return active realtime alerts with relationships needed for GTFS-RT export."""
-        stmt = (
-            select(ServiceAlert)
-            .where(ServiceAlert.is_active == True)
-            .options(
-                selectinload(ServiceAlert.translations),
-                selectinload(ServiceAlert.active_periods),
-                selectinload(ServiceAlert.informed_entities),
-            )
-            .order_by(ServiceAlert.id)
-        )
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
-    
-    async def list_expired_internal_alert_ids(self, current_timestamp: int, *, only_active: bool) -> list[uuid.UUID]:
-        """Return internal alert ids where all active periods already ended."""
-        subquery = (
-            select(ServiceAlertActivePeriod.alert_id)
-            .group_by(ServiceAlertActivePeriod.alert_id)
-            .having(
-                func.max(ServiceAlertActivePeriod.end_time).isnot(None)
-                & (func.max(ServiceAlertActivePeriod.end_time) < current_timestamp)
-            )
-        )
-
-        stmt = select(ServiceAlert.id).where(
-            ServiceAlert.data_source_id.is_(None),
-            ServiceAlert.id.in_(subquery),
-        )
-        
-        if only_active:
-            stmt = stmt.where(ServiceAlert.is_active == True)
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return [row[0] for row in result.all()]
-
-    async def list_internal_alert_ids_expired_before(self, cutoff_timestamp: int) -> list[uuid.UUID]:
-        """Return internal alert ids where all active periods ended before cutoff timestamp."""
-        subquery = (
-            select(ServiceAlertActivePeriod.alert_id)
-            .group_by(ServiceAlertActivePeriod.alert_id)
-            .having(
-                func.max(ServiceAlertActivePeriod.end_time).isnot(None)
-                & (func.max(ServiceAlertActivePeriod.end_time) < cutoff_timestamp)
-            )
-        )
-
-        stmt = select(ServiceAlert.id).where(
-            ServiceAlert.data_source_id.is_(None),
-            ServiceAlert.id.in_(subquery),
-        )
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return [row[0] for row in result.all()]
-
-    async def deactivate_service_alerts(self, alert_ids: list[uuid.UUID]) -> int:
-        """Deactivate service alerts by id and return affected row count."""
-        if not alert_ids:
-            return 0
-
-        stmt = update(ServiceAlert).where(ServiceAlert.id.in_(alert_ids)).values(is_active=False)
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            await db.commit()
-
-            return int(result.rowcount or 0)
-
-    async def delete_service_alerts_by_ids(self, alert_ids: list[uuid.UUID]) -> int:
-        """Delete service alerts by id and return affected row count."""
-        if not alert_ids:
-            return 0
-
-        stmt = delete(ServiceAlert).where(ServiceAlert.id.in_(alert_ids))
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            await db.commit()
-
-            return int(result.rowcount or 0)
-
     async def get_data_source_invalid_reference_policy(self, source_id: int) -> str:
         """Return invalid reference policy configured for a data source."""
         stmt = select(DataSource.invalid_reference_policy).where(DataSource.id == source_id)
@@ -802,329 +617,3 @@ class SqlAlchemyRepository(RepositoryInterface):
             if policy is None:
                 raise ValueError(f"Data source {source_id} not found")
             return policy.value if hasattr(policy, "value") else str(policy)
-
-    async def list_service_alerts_for_data_source(self, source_id: int) -> list[ServiceAlert]:
-        """Return alerts linked to one data source."""
-        stmt = select(ServiceAlert).where(ServiceAlert.data_source_id == source_id)
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
-
-    async def list_service_alerts_paginated(
-        self,
-        *,
-        page: int,
-        limit: int,
-        sort: str,
-        search: str,
-        is_active: bool | None,
-        has_data_source: bool | None,
-    ) -> tuple[list[ServiceAlert], int]:
-        """Return paginated service alerts and total count with required relationships loaded."""
-        page = max(1, page)
-        limit = max(1, min(100, limit))
-        offset = (page - 1) * limit
-        normalized_sort = sort.lower() if sort in ["newest", "oldest"] else "newest"
-
-        subq = (
-            select(
-                ServiceAlertActivePeriod.alert_id,
-                func.min(ServiceAlertActivePeriod.start_time).label("first_start"),
-            )
-            .group_by(ServiceAlertActivePeriod.alert_id)
-            .subquery()
-        )
-
-        where_conditions = []
-        trimmed_search = search.strip()
-        if trimmed_search:
-            search_pattern = f"%{trimmed_search}%"
-            where_conditions.append(
-                ServiceAlert.id.in_(
-                    select(ServiceAlertTranslation.alert_id)
-                    .where(ServiceAlertTranslation.header_text.ilike(search_pattern))
-                    .distinct()
-                )
-            )
-
-        if is_active is not None:
-            where_conditions.append(ServiceAlert.is_active == is_active)
-
-        if has_data_source is not None:
-            if has_data_source:
-                where_conditions.append(ServiceAlert.data_source_id.is_not(None))
-            else:
-                where_conditions.append(ServiceAlert.data_source_id.is_(None))
-
-        count_stmt = select(func.count(ServiceAlert.id))
-        if where_conditions:
-            count_stmt = count_stmt.where(*where_conditions)
-
-        sort_expr = subq.c.first_start.desc() if normalized_sort == "newest" else subq.c.first_start.asc()
-
-        stmt = select(ServiceAlert).outerjoin(subq, ServiceAlert.id == subq.c.alert_id)
-        if where_conditions:
-            stmt = stmt.where(*where_conditions)
-
-        stmt = stmt.options(
-            selectinload(ServiceAlert.translations),
-            selectinload(ServiceAlert.active_periods),
-            selectinload(ServiceAlert.informed_entities),
-            selectinload(ServiceAlert.data_source),
-        ).order_by(
-            case((subq.c.first_start.is_(None), 0), else_=1),
-            sort_expr.nulls_last(),
-        ).offset(offset).limit(limit)
-
-        async with self.get_session() as db:
-            count_result = await db.execute(count_stmt)
-            total = int(count_result.scalar_one())
-
-            result = await db.execute(stmt)
-            items = list(result.scalars().all())
-            return items, total
-
-    async def get_service_alert_by_id_with_relations(self, alert_id: uuid.UUID) -> ServiceAlert | None:
-        """Return one service alert by id with required relationships loaded."""
-        stmt = (
-            select(ServiceAlert)
-            .where(ServiceAlert.id == alert_id)
-            .options(
-                selectinload(ServiceAlert.data_source),
-                selectinload(ServiceAlert.translations),
-                selectinload(ServiceAlert.active_periods),
-                selectinload(ServiceAlert.informed_entities),
-            )
-        )
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return result.scalar_one_or_none()
-
-    async def create_service_alert(
-        self,
-        *,
-        cause: str,
-        effect: str,
-        severity_level: str,
-        is_active: bool,
-        translations: list[dict[str, Any]],
-        active_periods: list[dict[str, Any]],
-        informed_entities: list[dict[str, Any]],
-    ) -> ServiceAlert:
-        """Create one internal service alert and return it with relationships loaded."""
-        async with self.get_session() as db:
-            alert = ServiceAlert(
-                cause=cause,
-                effect=effect,
-                severity_level=severity_level,
-                is_active=is_active,
-            )
-            db.add(alert)
-            await db.flush()
-
-            for translation_data in translations:
-                db.add(ServiceAlertTranslation(alert_id=alert.id, **translation_data))
-
-            for period_data in active_periods:
-                db.add(ServiceAlertActivePeriod(alert_id=alert.id, **period_data))
-
-            for entity_data in informed_entities:
-                db.add(ServiceAlertInformedEntity(alert_id=alert.id, **entity_data))
-
-            await db.commit()
-
-            stmt = (
-                select(ServiceAlert)
-                .where(ServiceAlert.id == alert.id)
-                .options(
-                    selectinload(ServiceAlert.data_source),
-                    selectinload(ServiceAlert.translations),
-                    selectinload(ServiceAlert.active_periods),
-                    selectinload(ServiceAlert.informed_entities),
-                )
-            )
-            result = await db.execute(stmt)
-            return result.scalar_one()
-
-    async def update_service_alert(
-        self,
-        alert_id: uuid.UUID,
-        *,
-        cause: str | None = None,
-        effect: str | None = None,
-        severity_level: str | None = None,
-        is_active: bool | None = None,
-        translations: list[dict[str, Any]] | None = None,
-        active_periods: list[dict[str, Any]] | None = None,
-        informed_entities: list[dict[str, Any]] | None = None,
-    ) -> ServiceAlert | None:
-        """Update one service alert and optionally replace child rows."""
-        stmt = (
-            select(ServiceAlert)
-            .where(ServiceAlert.id == alert_id)
-            .options(
-                selectinload(ServiceAlert.data_source),
-                selectinload(ServiceAlert.translations),
-                selectinload(ServiceAlert.active_periods),
-                selectinload(ServiceAlert.informed_entities),
-            )
-        )
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            alert = result.scalar_one_or_none()
-            if alert is None:
-                return None
-
-            if cause is not None:
-                alert.cause = cause
-            if effect is not None:
-                alert.effect = effect
-            if severity_level is not None:
-                alert.severity_level = severity_level
-            if is_active is not None:
-                alert.is_active = is_active
-
-            if translations is not None:
-                await db.execute(
-                    delete(ServiceAlertTranslation).where(ServiceAlertTranslation.alert_id == alert_id)
-                )
-                for translation_data in translations:
-                    db.add(ServiceAlertTranslation(alert_id=alert_id, **translation_data))
-
-            if active_periods is not None:
-                await db.execute(
-                    delete(ServiceAlertActivePeriod).where(ServiceAlertActivePeriod.alert_id == alert_id)
-                )
-                for period_data in active_periods:
-                    db.add(ServiceAlertActivePeriod(alert_id=alert_id, **period_data))
-
-            if informed_entities is not None:
-                await db.execute(
-                    delete(ServiceAlertInformedEntity).where(ServiceAlertInformedEntity.alert_id == alert_id)
-                )
-                for entity_data in informed_entities:
-                    db.add(ServiceAlertInformedEntity(alert_id=alert_id, **entity_data))
-
-            await db.commit()
-
-            refreshed = await db.execute(stmt)
-            return refreshed.scalar_one_or_none()
-
-    async def toggle_service_alert_active(self, alert_id: uuid.UUID) -> ServiceAlert | None:
-        """Toggle the is_active flag for one service alert and return updated model."""
-        stmt = (
-            select(ServiceAlert)
-            .where(ServiceAlert.id == alert_id)
-            .options(
-                selectinload(ServiceAlert.data_source),
-                selectinload(ServiceAlert.translations),
-                selectinload(ServiceAlert.active_periods),
-                selectinload(ServiceAlert.informed_entities),
-            )
-        )
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            alert = result.scalar_one_or_none()
-            if alert is None:
-                return None
-
-            alert.is_active = not alert.is_active
-            await db.commit()
-
-            refreshed = await db.execute(stmt)
-            return refreshed.scalar_one_or_none()
-
-    async def list_service_alerts_by_ids(self, alert_ids: list[uuid.UUID]) -> list[ServiceAlert]:
-        """Return alerts by IDs."""
-        if not alert_ids:
-            return []
-
-        stmt = select(ServiceAlert).where(ServiceAlert.id.in_(alert_ids))
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
-
-    async def delete_service_alerts_for_data_source_by_ids(
-        self,
-        source_id: int,
-        alert_ids: list[uuid.UUID],
-    ) -> int:
-        """Delete alerts by IDs only for the given data source."""
-        if not alert_ids:
-            return 0
-
-        stmt = delete(ServiceAlert).where(
-            ServiceAlert.data_source_id == source_id,
-            ServiceAlert.id.in_(alert_ids),
-        )
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            await db.commit()
-            return int(result.rowcount or 0)
-
-    async def upsert_service_alert_from_sync(
-        self,
-        *,
-        alert_id: uuid.UUID,
-        source_id: int,
-        source_name: str,
-        cause: str,
-        effect: str,
-        severity_level: str,
-        is_active_on_create: bool,
-        translations: list[dict[str, Any]],
-        active_periods: list[dict[str, Any]],
-        informed_entities: list[dict[str, Any]],
-    ) -> str:
-        """Create or update a synchronized alert and replace child records."""
-        async with self.get_session() as db:
-            existing = await db.get(ServiceAlert, alert_id)
-
-            action = "updated"
-            if existing is None:
-                action = "created"
-                existing = ServiceAlert(
-                    id=alert_id,
-                    cause=cause,
-                    effect=effect,
-                    severity_level=severity_level,
-                    source=source_name,
-                    data_source_id=source_id,
-                    is_active=is_active_on_create,
-                )
-                db.add(existing)
-                await db.flush()
-            else:
-                existing.cause = cause
-                existing.effect = effect
-                existing.severity_level = severity_level
-                existing.source = source_name
-                existing.data_source_id = source_id
-
-            await db.execute(
-                delete(ServiceAlertTranslation).where(ServiceAlertTranslation.alert_id == alert_id)
-            )
-            await db.execute(
-                delete(ServiceAlertActivePeriod).where(ServiceAlertActivePeriod.alert_id == alert_id)
-            )
-            await db.execute(
-                delete(ServiceAlertInformedEntity).where(ServiceAlertInformedEntity.alert_id == alert_id)
-            )
-
-            for translation_data in translations:
-                db.add(ServiceAlertTranslation(alert_id=alert_id, **translation_data))
-
-            for period_data in active_periods:
-                db.add(ServiceAlertActivePeriod(alert_id=alert_id, **period_data))
-
-            for entity_data in informed_entities:
-                db.add(ServiceAlertInformedEntity(alert_id=alert_id, **entity_data))
-
-            await db.commit()
-            return action

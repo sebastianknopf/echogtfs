@@ -2,19 +2,26 @@
 Data sources router
 """
 import asyncio
+import json
 import logging
 import os
 import tempfile
 from typing import Annotated, List
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, status
 from fastapi.responses import StreamingResponse, FileResponse
 
-from echogtfs.services.database import RepositoryInterface, get_repository
+from echogtfs.services.database import (
+    RealtimeRepositoryInterface,
+    SystemRepositoryInterface,
+    get_realtime_repository,
+    get_system_repository,
+)
 from echogtfs.services.database.models import DataSource
 from echogtfs.services.scheduler import get_datasource_scheduler_service
 from echogtfs.validation.schemas import DataSourceCreate, DataSourceRead, DataSourceUpdate, DataSourceLogRead
 from echogtfs.common.security import CurrentPoweruser
+from echogtfs.common.report_progress_queue import ReportProgressQueue
 from echogtfs.datasources import DATASOURCE_REGISTRY
 from echogtfs.services.datalog import DatalogService
 from echogtfs.services.mapping import MappingExportService, MappingImportService, MappingServiceError
@@ -22,10 +29,13 @@ from echogtfs.services.mapping import MappingExportService, MappingImportService
 router = APIRouter()
 logger = logging.getLogger("uvicorn")
 
-_Repo = Annotated[RepositoryInterface, Depends(get_repository)]
+_ERR_SOURCE_NOT_FOUND = "error.source_not_found"
+
+_Repo = Annotated[SystemRepositoryInterface, Depends(get_system_repository)]
+_RealtimeRepo = Annotated[RealtimeRepositoryInterface, Depends(get_realtime_repository)]
 
 
-async def _enrich_source_with_error_flag(source: DataSource, repository: RepositoryInterface) -> DataSourceRead:
+async def _enrich_source_with_error_flag(source: DataSource, repository: SystemRepositoryInterface) -> DataSourceRead:
     """
     Convert a DataSource model to DataSourceRead schema with error flag.
     
@@ -119,7 +129,7 @@ async def get_source(
     """
     source = await repository.get_data_source_by_id(source_id)
     if not source:
-        raise HTTPException(status_code=404, detail="Data source not found")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
 
     return await _enrich_source_with_error_flag(source, repository)
 
@@ -181,7 +191,7 @@ async def list_source_logs(
     
     # Check if source exists
     if await repository.get_data_source_by_id(source_id) is None:
-        raise HTTPException(status_code=404, detail="Data source not found")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
 
     logs = await repository.list_data_source_logs(source_id, limit=limit)
     
@@ -311,12 +321,12 @@ async def create_source(
     return await _enrich_source_with_error_flag(source, repository)
 
 
-@router.post("/{source_id}/run", status_code=202)
+@router.post("/{source_id}/run")
 async def run_source_import(
     source_id: int,
     _: CurrentPoweruser,
     repository: _Repo,
-):
+) -> StreamingResponse:
     """
     Manually trigger an import for a specific data source.
     Requires poweruser or admin role.
@@ -325,14 +335,44 @@ async def run_source_import(
         Accepted response - import runs in background
     """
     # Check if source exists
-    source = await repository.get_data_source_by_id(source_id)
-    if not source:
-        raise HTTPException(status_code=404, detail="Data source not found")
+    if await repository.get_data_source_by_id(source_id) is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
 
     # Trigger import task asynchronously
-    asyncio.create_task(get_datasource_scheduler_service().run_import_task(source_id))
+    queue: ReportProgressQueue = ReportProgressQueue()
+
+    async def run_import_with_boundaries() -> None:
+        await queue.report_progress(progress=0.0, message="intf.sources.running")
+
+        try:
+            await get_datasource_scheduler_service().run_import_task(source_id)
+        finally:
+            await queue.report_progress(progress=100.0, message="intf.sources.completed")
+
+    asyncio.create_task(run_import_with_boundaries())
     
-    return {"message": f"Import for data source '{source.name}' has been triggered"}
+    async def stream():
+        async for event in queue:
+            event_name = event.get("event", "progress")
+            event_data = json.dumps(
+                {
+                    "progress": event.get("progress", 0.0),
+                    "message": event.get("message", ""),
+                }
+            )
+
+            yield f"event: {event_name}\ndata: {event_data}\n\n".encode("utf-8")
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        status_code=status.HTTP_200_OK,
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.post("/{source_id}/toggle-active", response_model=DataSourceRead)
@@ -340,10 +380,11 @@ async def toggle_source_active(
     source_id: int,
     _: CurrentPoweruser,
     repository: _Repo,
+    realtime_repository: _RealtimeRepo,
 ) -> DataSourceRead:
     """
     Toggle the is_active flag of a data source (requires poweruser/admin).
-    When deactivating, all alerts from this source will be deleted.
+    When deactivating, all alerts, trips, and vehicles from this source will be deleted.
     
     Returns:
         Updated data source
@@ -352,22 +393,25 @@ async def toggle_source_active(
     
     if not source:
         raise HTTPException(
-            status_code=404,
-            detail="Data source not found"
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_ERR_SOURCE_NOT_FOUND,
         )
     
     old_status = source.is_active
     source = await repository.toggle_data_source_active(source_id)
     if source is None:
-        raise HTTPException(status_code=404, detail="Data source not found")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
     
     # If deactivating, delete all alerts from this source
     if old_status and not source.is_active:
-        deleted_count = await repository.delete_alerts_for_data_source(source_id)
+        deleted_alerts = await realtime_repository.delete_alerts_for_data_source(source_id)
+        deleted_trips = await realtime_repository.delete_trips_for_data_source(source_id)
+        deleted_vehicles = await realtime_repository.delete_vehicles_for_data_source(source_id)
 
         logger.info(
             f"Deactivated data source {source_id} '{source.name}': "
-            f"Deleted {deleted_count} associated alerts"
+            f"Deleted {deleted_alerts} alerts, {deleted_trips} trips, "
+            f"and {deleted_vehicles} vehicles"
         )
     
     # Update cron job: remove if deactivated, add if activated
@@ -380,7 +424,7 @@ async def toggle_source_active(
     
     source = await repository.get_data_source_by_id(source.id)
     if source is None:
-        raise HTTPException(status_code=404, detail="Data source not found")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
 
     return await _enrich_source_with_error_flag(source, repository)
 
@@ -435,6 +479,7 @@ async def update_source(
     source_data: DataSourceUpdate,
     _: CurrentPoweruser,
     repository: _Repo,
+    realtime_repository: _RealtimeRepo,
 ):
     """
     Update a data source and optionally replace its mappings and enrichments.
@@ -442,7 +487,7 @@ async def update_source(
     """
     source = await repository.get_data_source_by_id(source_id)
     if not source:
-        raise HTTPException(status_code=404, detail="Data source not found")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
     
     # Update basic fields
     old_name = source.name
@@ -450,19 +495,22 @@ async def update_source(
         # Check if new name conflicts with another source
         if await repository.data_source_name_exists(source_data.name, exclude_id=source_id):
             raise HTTPException(status_code=400, detail="Data source with this name already exists")
-        await repository.update_service_alert_source_name(old_name, source_data.name)
+        await realtime_repository.update_service_alert_source_name(old_name, source_data.name)
     
     # Handle is_active changes
     if source_data.is_active is not None:
         old_status = source.is_active
 
-        # If deactivating, delete all alerts from this source
+        # If deactivating, delete all realtime data from this source
         if old_status and not source_data.is_active:
-            deleted_count = await repository.delete_alerts_for_data_source(source_id)
+            deleted_alerts = await realtime_repository.delete_alerts_for_data_source(source_id)
+            deleted_trips = await realtime_repository.delete_trips_for_data_source(source_id)
+            deleted_vehicles = await realtime_repository.delete_vehicles_for_data_source(source_id)
 
             logger.info(
                 f"Deactivated data source {source_id} '{source.name}': "
-                f"Deleted {deleted_count} associated alerts"
+                f"Deleted {deleted_alerts} alerts, {deleted_trips} trips, "
+                f"and {deleted_vehicles} vehicles"
             )
 
     source = await repository.update_data_source(
@@ -502,7 +550,7 @@ async def update_source(
     )
 
     if source is None:
-        raise HTTPException(status_code=404, detail="Data source not found")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
     
     # Update cron job: only schedule if active, otherwise remove
     if source.is_active and source.cron:
@@ -526,7 +574,7 @@ async def delete_source(
     """
     source = await repository.get_data_source_by_id(source_id)
     if not source:
-        raise HTTPException(status_code=404, detail="Data source not found")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
     
     # Delete log files before deleting the data source
     # (DB entries will be cascade-deleted automatically)

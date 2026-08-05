@@ -5,13 +5,15 @@ from fastapi.security import OAuth2PasswordRequestForm
 
 from echogtfs.common.config import settings
 from echogtfs.common.extensions import limiter
-from echogtfs.services.database import RepositoryInterface, get_repository
+from echogtfs.services.database import SystemRepositoryInterface, get_system_repository
 from echogtfs.services.security import get_security_service
 from echogtfs.validation.schemas import Token
 
 router = APIRouter()
 
-_Repo = Annotated[RepositoryInterface, Depends(get_repository)]
+_ERR_INVALID_CREDENTIALS = "error.invalid_credentials"
+
+_Repo = Annotated[SystemRepositoryInterface, Depends(get_system_repository)]
 
 
 @router.post("/token", response_model=Token)
@@ -29,8 +31,8 @@ async def login(
         user.hashed_password,
     ):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_ERR_INVALID_CREDENTIALS,
             headers={"WWW-Authenticate": "Bearer"},
         )
     

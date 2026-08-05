@@ -5,7 +5,7 @@ import re
 from typing import Any
 
 from echogtfs.enum.system import EnrichmentType, SourceField
-from echogtfs.services.database.intf_repository import RepositoryInterface
+from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
 from echogtfs.services.enrichment.intf_entity_enrichment import EntityEnrichmentInterface
 
 logger = logging.getLogger("uvicorn")
@@ -19,7 +19,7 @@ class EntityEnrichmentService(EntityEnrichmentInterface):
 
     async def initialize(
         self,
-        repository: RepositoryInterface,
+        repository: SystemRepositoryInterface,
         source_id: int,
     ) -> None:
         """Load enrichment rules for one data source."""

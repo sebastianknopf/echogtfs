@@ -7,7 +7,7 @@ import jwt
 from fastapi import HTTPException, Request, status
 
 from echogtfs.common.config import settings
-from echogtfs.services.database import RepositoryInterface
+from echogtfs.services.database import SystemRepositoryInterface
 from echogtfs.services.database.models import User
 from echogtfs.services.security.intf_security import SecurityServiceInterface
 
@@ -17,13 +17,13 @@ class SecurityService(SecurityServiceInterface):
 
     _instance: SecurityService | None = None
 
-    def __new__(cls, repository: RepositoryInterface) -> SecurityService:
+    def __new__(cls, repository: SystemRepositoryInterface) -> SecurityService:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
 
         return cls._instance
 
-    def __init__(self, repository: RepositoryInterface):
+    def __init__(self, repository: SystemRepositoryInterface):
         self._repository = repository
 
     @staticmethod

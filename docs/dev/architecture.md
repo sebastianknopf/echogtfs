@@ -11,6 +11,7 @@ The application is composed of three Docker containers defined in `docker-compos
 - `backend`: Python/FastAPI HTTP service, port 8000 (internal only).
 - `frontend`: NGINX web server that serves the static single-page application and reverse-proxies `/api` requests to the backend. Exposed on the host at the port defined by `FRONTEND_PORT` (default 80).
 - `database`: PostgreSQL 16. Accessible only to the backend container.
+- `redis`: Redis service used for caching and event streaming inside the application.
 
 All runtime configuration is injected via environment variables. The canonical source of variable names is `.env.example`.
 
@@ -49,9 +50,9 @@ echogtfs/
 3. `AlembicMigrationService` applies all pending numbered SQL migrations.
 4. If the `sys_users` table is empty, a first superuser is created from `FIRST_SUPERUSER*` environment variables.
 5. Scheduled jobs are configured:
-   - `schedule_import_from_cron`: Reads the `gtfs_cron` key from the `app_settings` table and registers a GTFS Static feed import job.
-   - `schedule_all_data_sources`: Queries all active `DataSource` rows whose `cron` column is set and registers one polling job per data source. Cron expressions are stored per data source in the `data_sources` table, not in `app_settings`.
-   - `schedule_cleanup_from_settings`: Reads cleanup configuration from `app_settings` and registers the alert expiry cleanup job.
+   - `GtfsImportService.schedule_from_settings`: Reads the `gtfs_cron` key from the `app_settings` table and registers a GTFS Static feed import job.
+   - `DatasourceSchedulerService.schedule_all_data_sources`: Queries all active `DataSource` rows whose `cron` column is set and registers one polling job per data source. Cron expressions are stored per data source in the `data_sources` table, not in `app_settings`.
+   - `CleanupService.schedule_from_settings`: Reads cleanup configuration from `app_settings` and registers the alert expiry cleanup job.
 6. FastAPI app starts accepting requests.
 
 ## API Routers
@@ -61,6 +62,7 @@ Each router file under `routers/` maps to a URL prefix registered in `main.py`:
 | File | Prefix | Description |
 |---|---|---|
 | `auth.py` | `/api/auth` | OAuth2 password-flow login, returns JWT |
+| `dashboard.py` | `/api/dashboard` | Dashboard data endpoint |
 | `alerts.py` | `/api/alerts` | ServiceAlert CRUD |
 | `sources.py` | `/api/sources` | External data source CRUD and manual trigger |
 | `users.py` | `/api/users` | User management (superuser only) |
@@ -77,6 +79,7 @@ Services are meant to encapsulate all the logic which is not a) direct database 
 Most services are instantiated when they're used in the code. Some special services are meant to be single-instance services used globally around the whole python process. These services are currently:
 
 - `SecurityService` (related for security related issues)
+- `CachingService` (abstraction layer for redis access)
 - `DatasourceSchedulerService` (responsible for scheduling datasources by their cron job)
 
 The single instance services are initialized in the `main.py` module during the startup sequence of the application and also used across other modules and services.
@@ -84,7 +87,6 @@ The single instance services are initialized in the `main.py` module during the 
 Other services initialized in `main.py` are:
 
 - `AlembicMigrationService` (responsible for running the Alembic migrations)
-- `SqlAlchemyRepository` (responsible for database access (not really a service, but also located in the services package))
 - `GtfsImportService` (responsible for loading and updating the GTFS static nominal data)
 - `CleanupService` (responsible for cleanup of **internal** deprecated GTFS-RT entities and datasource logs)
 
@@ -100,6 +102,16 @@ Tables are split into `sys_` tables which are internal application tables, `gtfs
 
 Migrations are generated for running with Alembic. All pending migrations are applied during application startup.
 
+### Repositories
+
+There're several repositories for structured database access. The repositories are grouped into domain specific repositories. The repositories are initialized in the `main.py` module during application lifecycle startup. Current repositories are:
+
+- `SystemRepository`: responsible for general database access especially for `sys_` tables
+- `GtfsRepository`: reponsible for GTFS nominal data access of `gtfs_` tables
+- `RealtimeRepository`: responsible for GTFS-RT data access of `realtime_` tables
+
+Each repository has an interface defined for testing purposes.
+
 ## External Data Sources
 
 External datasources live in `backend/src/echogtfs/datasources` and inherit from `DatasourceBase` (`base.py`). The `DatasourceBase` encapsulates all main logic for calling the mapping service, the enrichment service and the finally the matching if the entities could not be matched to a GTFS entity by ID.
@@ -108,9 +120,17 @@ The specific datasource implementation encapsulates source related specifics lik
 
 For reading and parsing the external data, the transformers are implemented in `backend/src/echogtfs/datasources/transformers`. There's one transformer interface for each GTFS-RT entity and several specific transformer implementations. The transformers are kept as generic as possible, however, proprietary transformers may be required to include arbitrary data.
 
+Compared to other cron-based tasks (e.g. GTFS import, cleanup), the datasources **can be defined with a second based cron expression with 6 places** like this:
+
+`*/30 * * * * *`
+
+This cron expression would run the datasource every 30 seconds (on ':00 and on ':30).
+
+The scheduler service ensures that each data source can **only be running once** at the same time concurrently. This means, that if a data source run takes longer than the cron expression would run the data source, the run is skipped.
+
 ## GTFS-Realtime Feed
 
-The `/api/realtime/feed` endpoint is the public output endpoint. It serializes realtime data to GTFS-RT compliant protobuf stream. The endpoint also supports a `?format=json` query parameter for JSON output. 
+The GTFS-RT endpoint is the public output endpoint. It serializes realtime data to GTFS-RT compliant protobuf stream. The endpoint also supports a `?format=json` query parameter for JSON output. 
 
 Optional Basic Auth can be enabled for the realtime endpoint by storing `gtfs_rt_username` and `gtfs_rt_password` in `app_settings`.
 

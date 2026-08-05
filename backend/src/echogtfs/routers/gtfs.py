@@ -9,13 +9,20 @@ Endpoints:
     PUT  /api/gtfs/feed-url    – persist feed URL (admin)
 """
 
+import asyncio
+import json
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from apscheduler.triggers.cron import CronTrigger
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 
-from echogtfs.services.database import RepositoryInterface, get_repository
+from echogtfs.services.database import get_gtfs_repository, get_system_repository
+from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
+from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
 from echogtfs.services.database.models import GtfsAgency, GtfsRoute, GtfsStop
 from echogtfs.common.security import CurrentUser, CurrentPoweruser
+from echogtfs.common.report_progress_queue import ReportProgressQueue
 from echogtfs.services.gtfs import (
     GtfsImportInterface,
     GtfsImportService,
@@ -25,15 +32,41 @@ from echogtfs.validation.schemas import AgencyRead, GtfsStatusRead, RouteRead, S
 
 router = APIRouter()
 
-_Repo = Annotated[RepositoryInterface, Depends(get_repository)]
+_ERR_CRON_MINUTE_ONLY = "error.cron_minute_only"
+_ERR_INVALID_CRON = "error.invalid_cron"
+
+_Repo = Annotated[SystemRepositoryInterface, Depends(get_system_repository)]
+_GtfsRepo = Annotated[GtfsRepositoryInterface, Depends(get_gtfs_repository)]
 
 
-def create_gtfs_import_service(repository: _Repo) -> GtfsImportInterface:
+def create_gtfs_import_service(repository: _Repo, gtfs_repository: _GtfsRepo) -> GtfsImportInterface:
     """Create a GTFS import service instance for the current dependency scope."""
-    return GtfsImportService(repository)
+    return GtfsImportService(repository, gtfs_repository)
 
 
 _GtfsImport = Annotated[GtfsImportInterface, Depends(create_gtfs_import_service)]
+
+
+def _validate_minute_cron_expression(cron_expr: str) -> str:
+    normalized = cron_expr.strip()
+    if not normalized:
+        return normalized
+
+    if len(normalized.split()) != 5:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_ERR_CRON_MINUTE_ONLY,
+        )
+
+    try:
+        CronTrigger.from_crontab(normalized)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_ERR_INVALID_CRON,
+        ) from exc
+
+    return normalized
 
 
 @router.get("/status", response_model=GtfsStatusRead)
@@ -44,14 +77,14 @@ async def get_status(_: CurrentPoweruser, service: _GtfsImport) -> GtfsStatusRea
 
 
 @router.get("/agencies", response_model=list[AgencyRead])
-async def list_agencies(_: CurrentUser, repository: _Repo) -> list[GtfsAgency]:
+async def list_agencies(_: CurrentUser, repository: _GtfsRepo) -> list[GtfsAgency]:
     return await repository.list_gtfs_agencies()
 
 
 @router.get("/stops", response_model=list[StopRead])
 async def list_stops(
     _: CurrentUser,
-    repository: _Repo,
+    repository: _GtfsRepo,
     q: Annotated[str, Query(max_length=100)] = "",
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> list[GtfsStop]:
@@ -61,22 +94,21 @@ async def list_stops(
 @router.get("/routes", response_model=list[RouteRead])
 async def list_routes(
     _: CurrentUser,
-    repository: _Repo,
+    repository: _GtfsRepo,
     q: Annotated[str, Query(max_length=100)] = "",
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> list[GtfsRoute]:
     return await repository.list_gtfs_routes(query=q, limit=limit)
 
 
-@router.post("/import", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/import")
 async def trigger_import(
     _: CurrentPoweruser,
-    background_tasks: BackgroundTasks,
     service: _GtfsImport,
-) -> dict[str, str]:
+) -> StreamingResponse:
     """
-    Enqueue a background import.  Returns 202 immediately; poll /status for
-    progress.  Returns 409 if an import is already running.
+    Enqueue a background import and stream progress via SSE.
+    Returns 409 if an import is already running.
     """
     # Check whether an import is already in progress
     if await service.is_import_running():
@@ -85,8 +117,32 @@ async def trigger_import(
             detail="An import is already running.",
         )
 
-    background_tasks.add_task(service.run_import_task)
-    return {"status": GtfsImportService.STATUS_RUNNING}
+    queue = ReportProgressQueue()
+
+    asyncio.create_task(service.run_import_task(queue))
+
+    async def stream():
+        async for event in queue:
+            event_name = event.get("event", "progress")
+            event_data = json.dumps(
+                {
+                    "progress": event.get("progress", 0.0),
+                    "message": event.get("message", ""),
+                }
+            )
+
+            yield f"event: {event_name}\ndata: {event_data}\n\n".encode("utf-8")
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        status_code=status.HTTP_200_OK,
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.put("/feed-url", status_code=200)
@@ -96,4 +152,8 @@ async def update_feed_url(
     service: _GtfsImport,
 ) -> dict[str, str]:
     """Update GTFS feed URL and/or cron expression."""
-    return await service.update_configuration(feed_url=data.feed_url, cron=data.cron)
+    cron = data.cron
+    if cron is not None:
+        cron = _validate_minute_cron_expression(cron)
+
+    return await service.update_configuration(feed_url=data.feed_url, cron=cron)
