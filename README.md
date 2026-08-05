@@ -2,7 +2,9 @@
 
 # echogtfs
 
-A lightweight platform for creating and aggregating GTFS-RT complicant based on existing GTFS feeds. The system allows transit agencies to create real-time ServiceAlerts and integrate additional data sources such as SIRI for providing realtime information such as TripUpdates and VehiclePositions.
+A lightweight data integration platform for creating and aggregating GTFS-RT complicant based on existing GTFS feeds. The system allows transit agencies to create real-time data in GTFS-RT format.
+
+See the user manual here: [sebastianknopf.github.io/echogtfs](sebastianknopf.github.io/echogtfs)
 
 It provides:
 
@@ -23,99 +25,11 @@ It provides:
 - HTML/CSS/JavaScript
 - NGINX web server
 
-## Prerequisites
+## Requirements
 
 - Docker and Docker Compose
 - An existing GTFS static feed
-
-## Installation
-
-### Using Docker Compose (Recommended)
-
-1. **Clone the repository:**
-   ```bash
-   git clone `https://github.com/sebastianknopf/echogtfs.git`
-   cd echogtfs
-   ```
-
-2. **Create environment configuration:**
-   ```bash
-   cp .env.example .env
-   ```
-
-3. **Edit the `.env` file and configure:**
-   - `SECRET_KEY` – Generate a secure key (e.g., `openssl rand -hex 32`)
-   - `POSTGRES_PASSWORD` – Set a strong database password (required)
-   - `FIRST_SUPERUSER_PASSWORD` – Admin password for initial login (required)
-   - `FRONTEND_PORT` – Port for web interface (default: 80)
-   
-   **Important:** All password fields are required and have no defaults for security reasons.
-
-4. **Start the application:**
-   ```bash
-   docker-compose up -d --build
-   ```
-
-5. **Access the web interface:**
-   - Open your browser at http://localhost (or the configured port or via a reverse proxy on a public server)
-
-## Initial Setup
-
-### GTFS Feed Configuration
-
-After logging in, configure your GTFS data source via the settings interface:
-
-1. Navigate to **Settings**
-2. Add your GTFS feed URL or upload a GTFS file
-3. The system will import the static GTFS data
-
-### Accessing GTFS-RT Feeds
-
-The GTFS-RT feeds are available at the following paths by default:
-
-```
-GET /api/realtime/service-alerts.pbf
-```
-
-```
-GET /api/realtime/trip-updates.pbf
-``` 
-
-```
-GET /api/realtime/vehicle-positions.pbf
-``` 
-
-The endpoint returns protocol buffer formatted GTFS-RT data that can be consumed by trip planners and real-time transit applications. By adding `?json` as query parameter, the output will be in JSON.
-
-You also can configure a different endpoint name in the backend if required.
-
-## Usage
-
-### Managing ServiceAlerts
-
-1. **Log in** with your admin credentials
-2. Navigate to **Alerts**
-3. **Create a new alert:**
-   - Select affected routes, stops, or trips from your GTFS feed
-   - Set alert severity and effect
-   - Add descriptions in multiple languages if needed
-   - Define active periods
-4. **Publish** the alert to make it available via the GTFS-RT feed
-
-### Integrating Additional Data Sources
-
-The system supports integration of additional alert sources such as SIRI or other GTFS-RT feeds. For each data source a mapping for agencies, routes and stops can be defined.
-
-## Updating
-
-To update to the latest version:
-
-```bash
-git pull
-docker-compose down
-docker-compose build
-docker-compose up -d
-```
+- At least 8GB RAM
 
 ## Development
 
