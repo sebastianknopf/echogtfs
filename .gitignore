@@ -66,3 +66,7 @@ logs/
 
 # Alembic (generated migrations kept, but not the compiled cache)
 alembic/versions/__pycache__/
+
+# Sphinx manual build artifacts
+docs/manual/_build/
+docs/manual/source/locale/**/*.mo
