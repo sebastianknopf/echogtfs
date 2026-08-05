@@ -107,6 +107,10 @@ class SiriSxDatasource(DatasourceBase):
                 f"Invalid dialect '{self.config['dialect']}'. Valid options: {', '.join(valid_dialects)}"
             )
 
+        if "filter" in self.config and self.config["filter"]:
+            if not isinstance(self.config["filter"], str):
+                raise ValueError("'filter' must be a string")
+
     def _resolve_placeholders(self, url: str) -> str:
         return re.sub(
             r"\{participantRef\}",
