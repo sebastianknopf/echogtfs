@@ -23,24 +23,21 @@
   function createSelector(versions, currentVersion, versionRoot) {
     var container = document.createElement("div");
     container.id = "docs-version-switcher";
-    container.style.position = "fixed";
-    container.style.top = "0.75rem";
-    container.style.right = "0.75rem";
-    container.style.zIndex = "1000";
-    container.style.background = "var(--color-background-primary)";
-    container.style.border = "1px solid var(--color-background-border)";
-    container.style.borderRadius = "0.5rem";
-    container.style.padding = "0.35rem 0.5rem";
+    container.className = "docs-version-switcher";
+
+    var legend = document.createElement("span");
+    legend.className = "docs-version-switcher__legend";
+    legend.textContent = "Docs";
 
     var label = document.createElement("label");
     label.htmlFor = "docs-version-select";
-    label.textContent = "Version:";
-    label.style.marginRight = "0.35rem";
-    label.style.fontSize = "0.85rem";
+    label.className = "docs-version-switcher__label";
+    label.textContent = "Version";
 
     var select = document.createElement("select");
     select.id = "docs-version-select";
-    select.style.fontSize = "0.85rem";
+    select.className = "docs-version-switcher__select";
+    select.setAttribute("aria-label", "Documentation version");
 
     versions.forEach(function (entry) {
       var option = document.createElement("option");
@@ -58,6 +55,7 @@
       window.location.href = target.replace(/\/+/g, "/");
     });
 
+    container.appendChild(legend);
     container.appendChild(label);
     container.appendChild(select);
     document.body.appendChild(container);
