@@ -4,7 +4,7 @@
 
 A lightweight data integration platform for creating and aggregating GTFS-RT complicant based on existing GTFS feeds. The system allows transit agencies to create real-time data in GTFS-RT format.
 
-See the user manual here: [sebastianknopf.github.io/echogtfs](sebastianknopf.github.io/echogtfs)
+See the user manual here: [sebastianknopf.github.io/echogtfs](https://sebastianknopf.github.io/echogtfs)
 
 It provides:
 
