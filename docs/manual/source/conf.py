@@ -90,4 +90,4 @@ html_theme = "furo"
 html_title = "EchoGTFS Handbuch"
 html_static_path = ["_static"]
 html_css_files = ["version-selector.css"]
-html_js_files = ["version-selector.js"]
+html_js_files = ["version-selector.js", "language-selector.js"]

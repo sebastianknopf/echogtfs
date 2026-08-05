@@ -1,6 +1,6 @@
-#docs-version-switcher.docs-version-switcher {
+#docs-version-switcher.docs-version-switcher,
+#docs-language-switcher.docs-language-switcher {
   position: fixed;
-  top: 1rem;
   right: 1rem;
   z-index: 1200;
   display: flex;
@@ -14,28 +14,23 @@
   backdrop-filter: blur(6px);
 }
 
-.docs-version-switcher__legend {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 2.2rem;
-  padding: 0.18rem 0.45rem;
-  border-radius: 999px;
-  background: var(--color-brand-primary);
-  color: var(--color-brand-content);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+#docs-version-switcher.docs-version-switcher {
+  top: 1rem;
+}
+
+#docs-language-switcher.docs-language-switcher {
+  top: 4.2rem;
 }
 
 .docs-version-switcher__label {
+.docs-language-switcher__label {
   color: var(--color-foreground-muted);
   font-size: 0.8rem;
   font-weight: 600;
 }
 
 .docs-version-switcher__select {
+.docs-language-switcher__select {
   appearance: none;
   min-width: 8.25rem;
   border: 1px solid var(--color-background-border);
@@ -56,26 +51,42 @@
 }
 
 .docs-version-switcher__select:hover {
+.docs-language-switcher__select:hover {
   border-color: var(--color-brand-primary);
   background-color: var(--color-background-primary);
 }
 
 .docs-version-switcher__select:focus-visible {
+.docs-language-switcher__select:focus-visible {
   outline: none;
   border-color: var(--color-brand-primary);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand-primary) 28%, transparent);
 }
 
+.docs-language-switcher__select:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
 @media (max-width: 900px) {
-  #docs-version-switcher.docs-version-switcher {
+  #docs-version-switcher.docs-version-switcher,
+  #docs-language-switcher.docs-language-switcher {
     top: auto;
     right: 0.75rem;
-    bottom: 0.75rem;
     left: 0.75rem;
     justify-content: space-between;
   }
 
-  .docs-version-switcher__select {
+  #docs-version-switcher.docs-version-switcher {
+    bottom: 4.7rem;
+  }
+
+  #docs-language-switcher.docs-language-switcher {
+    bottom: 0.75rem;
+  }
+
+  .docs-version-switcher__select,
+  .docs-language-switcher__select {
     min-width: 0;
     width: 100%;
   }

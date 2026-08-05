@@ -83,6 +83,7 @@ jobs:
         versions.extend(sorted(semver_dirs, key=_key, reverse=True))
 
         (site / "versions.json").write_text(json.dumps(versions, indent=2), encoding="utf-8")
+        (site / "languages.json").write_text(json.dumps(["de"], indent=2), encoding="utf-8")
         (site / ".nojekyll").write_text("", encoding="utf-8")
         (site / "index.html").write_text(
             "<!doctype html>\n"

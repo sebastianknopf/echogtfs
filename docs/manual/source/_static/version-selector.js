@@ -25,10 +25,6 @@
     container.id = "docs-version-switcher";
     container.className = "docs-version-switcher";
 
-    var legend = document.createElement("span");
-    legend.className = "docs-version-switcher__legend";
-    legend.textContent = "Docs";
-
     var label = document.createElement("label");
     label.htmlFor = "docs-version-select";
     label.className = "docs-version-switcher__label";
@@ -55,7 +51,6 @@
       window.location.href = target.replace(/\/+/g, "/");
     });
 
-    container.appendChild(legend);
     container.appendChild(label);
     container.appendChild(select);
     document.body.appendChild(container);
