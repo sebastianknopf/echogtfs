@@ -15,6 +15,26 @@
         ]
       },
       "problemMatcher": []
+    },
+    {
+      "label": "excman",
+      "type": "shell",
+      "windows": {
+        "command": "${workspaceFolder}/venv/Scripts/sphinx-autobuild.exe",
+        "args": [
+          "${workspaceFolder}/docs/manual/source",
+          "${workspaceFolder}/docs/manual/_build/html"
+        ]
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
     }
   ]
 }
