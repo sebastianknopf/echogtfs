@@ -18,6 +18,8 @@ Im Abschnitt "Allgemein" und "Erscheinungsbild" können Sie folgende Einstellung
 - **Primär- und Sekundärfarbe**: Farbschema im Frontend von EchoGTFS
 - **Sprache**: Standardmäßig gewählte Sprache im Frontend von EchoGTFS
 
+(h-system-settings-gtfs-rt)=
+
 ## GTFS-Realtime
 
 Im Abschnitt "GTFS-Realtime" können Sie folgende Einstellungen vornehmen:
@@ -27,6 +29,8 @@ Im Abschnitt "GTFS-Realtime" können Sie folgende Einstellungen vornehmen:
 - **GTFS-RT VehiclePositions Pfad**: Pfad zum öffentlichen GTFS-RT Endpunkt für VehiclePositions
 - **BasicAuth Benutzername:** _(optional)_ Benutzername um die GTFS-RT Endpunkte mit BasicAuth abzusichern
 - **BasicAuth Passwort:** _(optional)_ Password um die GTFS-RT Endpunkte mit BasicAuth abzusichern
+
+(h-system-settings-cleanup)=
 
 ## Datenbereinigung
 
