@@ -1,3 +1,5 @@
+(h-initial-setup-first-setup)=
+
 # Ersteinrichtung
 
 Die wichtigste Datengrundlage von EchoGTFS ist ein statischer GTFS-Feed. Basierend auf diesem GTFS-Feed werden die gültigen Referenzen der GTFS-RT-Daten aufgebaut.
