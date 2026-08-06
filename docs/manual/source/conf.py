@@ -1,10 +1,9 @@
 from __future__ import annotations
 
+from datetime import datetime
+from pathlib import Path
 import re
 import subprocess
-
-from pathlib import Path
-from datetime import datetime
 
 
 project = "EchoGTFS Manual"
@@ -20,7 +19,7 @@ def _find_git_root(start: Path) -> Path:
 
 
 def _normalize_tag(tag: str) -> str:
-    # Match setuptools_scm-style normalization for common v-prefixed tags.
+    # Match common setuptools_scm-style normalization for v-prefixed tags.
     return tag[1:] if tag.startswith("v") else tag
 
 
@@ -71,9 +70,7 @@ def _version_from_git() -> str:
 release = _version_from_git()
 version = release.split("+")[0]
 
-extensions = [
-    "myst_parser",
-]
+extensions = ["myst_parser"]
 
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
