@@ -1674,6 +1674,23 @@ body {
 .modal__actions   { padding: 8px 16px 16px; display: flex; justify-content: flex-end; gap: 8px; }
 .modal__switches  { display: flex; gap: 24px; flex-wrap: wrap; padding-top: 4px; }
 .modal__switches + .md-field__helper { margin-top: 8px; margin-left: 0; line-height: 1.5; }
+.source-switch-grid {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  padding-top: 4px;
+}
+
+.source-switch-item {
+  flex: 1 1 260px;
+}
+
+.source-switch-item .md-field__helper {
+  margin: 0;
+  margin-top: 8px;
+  line-height: 1.5;
+}
 
 /* -- Modal sections (for data sources) --------------------------------------- */
 .modal__section {

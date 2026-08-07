@@ -41,9 +41,10 @@ class DatalogService:
         response_headers: dict[str, Any] | None = None,
         response_mimetype: str | None = None,
         status_code: int | None = None,
+        save_dump: bool = True,
     ) -> DataSourceLog:
-        """Create a new log entry and persist payload to log file."""
-        log_uuid = uuid.uuid4()
+        """Create a new log entry and optionally persist payload to log file."""
+        log_uuid: uuid.UUID | None = None
 
         if isinstance(response_content, str):
             content_bytes = response_content.encode("utf-8")
@@ -59,32 +60,35 @@ class DatalogService:
             data_source_id,
         )
 
-        log_dir = self.get_log_directory()
-        log_file_path = log_dir / str(log_uuid)
+        actual_size = content_size_before
+        if save_dump:
+            log_uuid = uuid.uuid4()
+            log_dir = self.get_log_directory()
+            log_file_path = log_dir / str(log_uuid)
 
-        try:
-            log_file_path.write_bytes(content_bytes)
-            logger.info("[DataLog] Saved log file: %s", log_file_path)
-        except Exception as exc:  # noqa: BLE001
-            logger.error("[DataLog] Failed to save log file %s: %s", log_file_path, exc)
-            raise
+            try:
+                log_file_path.write_bytes(content_bytes)
+                logger.info("[DataLog] Saved log file: %s", log_file_path)
+            except Exception as exc:  # noqa: BLE001
+                logger.error("[DataLog] Failed to save log file %s: %s", log_file_path, exc)
+                raise
 
-        actual_size = log_file_path.stat().st_size
+            actual_size = log_file_path.stat().st_size
 
-        logger.info(
-            "[DataLog] File written successfully. Size on disk: %s bytes (%.2f KB, %.2f MB)",
-            actual_size,
-            actual_size / 1024,
-            actual_size / (1024 * 1024),
-        )
-
-        if content_size_before != actual_size:
-            logger.warning(
-                "[DataLog] Size mismatch! Content size: %s bytes, File size: %s bytes (difference: %s bytes)",
-                content_size_before,
+            logger.info(
+                "[DataLog] File written successfully. Size on disk: %s bytes (%.2f KB, %.2f MB)",
                 actual_size,
-                abs(content_size_before - actual_size),
+                actual_size / 1024,
+                actual_size / (1024 * 1024),
             )
+
+            if content_size_before != actual_size:
+                logger.warning(
+                    "[DataLog] Size mismatch! Content size: %s bytes, File size: %s bytes (difference: %s bytes)",
+                    content_size_before,
+                    actual_size,
+                    abs(content_size_before - actual_size),
+                )
 
         request_headers_json = json.dumps(request_headers) if request_headers else None
         response_headers_json = json.dumps(response_headers) if response_headers else None
@@ -105,7 +109,7 @@ class DatalogService:
             "[DataLog] Created log entry %s for data source %s (file: %s)",
             log_entry.id,
             data_source_id,
-            log_uuid,
+            log_uuid if log_uuid is not None else "not persisted",
         )
 
         return log_entry

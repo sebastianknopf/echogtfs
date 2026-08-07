@@ -193,6 +193,7 @@ class DataSourceCreate(BaseModel):
     config: str = "{}"
     cron: str | None = None
     is_active: bool = True
+    log_dumps: bool = False
     invalid_reference_policy: InvalidReferencePolicy = InvalidReferencePolicy.NOT_SPECIFIED
     mappings: list[DataSourceMappingCreate] = []
     enrichments: list[DataSourceEnrichmentCreate] = []
@@ -205,6 +206,7 @@ class DataSourceUpdate(BaseModel):
     config: str | None = None
     cron: str | None = None
     is_active: bool | None = None
+    log_dumps: bool | None = None
     invalid_reference_policy: InvalidReferencePolicy | None = None
     mappings: list[DataSourceMappingCreate] | None = None
     enrichments: list[DataSourceEnrichmentCreate] | None = None
@@ -218,6 +220,7 @@ class DataSourceRead(BaseModel):
     config: str
     cron: str | None
     is_active: bool
+    log_dumps: bool
     invalid_reference_policy: InvalidReferencePolicy
     last_run_at: datetime | None
     created_at: datetime
@@ -311,7 +314,7 @@ class DataSourceLogRead(BaseModel):
     response_mimetype: str | None
     status_code: int | None
     response_size: int | None
-    log_file_uuid: UUID
+    log_file_uuid: UUID | None
     created_at: datetime
     model_config = {"from_attributes": True}
 

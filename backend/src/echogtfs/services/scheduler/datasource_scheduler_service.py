@@ -212,6 +212,7 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
                     self._gtfs_repository,
                     source.id,
                     source.name,
+                    source.log_dumps,
                 )
 
                 logger.info(

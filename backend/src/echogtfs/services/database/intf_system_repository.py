@@ -143,6 +143,7 @@ class SystemRepositoryInterface(ABC):
         config: str,
         cron: str | None,
         is_active: bool,
+        log_dumps: bool,
         invalid_reference_policy: str,
         mappings: list[dict[str, str]],
         enrichments: list[dict[str, str | int]],
@@ -160,6 +161,7 @@ class SystemRepositoryInterface(ABC):
         config: str | None = None,
         cron: str | None = None,
         is_active: bool | None = None,
+        log_dumps: bool | None = None,
         invalid_reference_policy: str | None = None,
         mappings: list[dict[str, str]] | None = None,
         enrichments: list[dict[str, str | int]] | None = None,
@@ -244,7 +246,7 @@ class SystemRepositoryInterface(ABC):
         response_mimetype: str | None,
         status_code: int | None,
         response_size: int,
-        log_file_uuid: uuid.UUID,
+        log_file_uuid: uuid.UUID | None,
     ) -> DataSourceLog:
         """Create one data source log entry and return persisted model."""
         raise NotImplementedError

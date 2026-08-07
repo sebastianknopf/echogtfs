@@ -316,6 +316,7 @@ window.translations = {
     'logs.details.response_headers': 'Antwort-Header',
     'logs.details.no_headers': 'Keine Header vorhanden',
     'logs.download': 'Herunterladen',
+    'logs.download.unavailable': 'Kein Dump verfügbar',
     'logs.download.error': 'Fehler beim Herunterladen der Log-Datei.',
     
     // === SOURCES MODAL ===
@@ -336,7 +337,9 @@ window.translations = {
     'source.invalid_reference_policy.discard_invalid_elements': 'ungültige Bezugselemente verwerfen',
     'source.invalid_reference_policy.keep_object_disabled': 'gesamtes Objekt deaktivieren',
     'source.active': 'Aktiv',
+    'source.log_dumps': 'Log Dumps',
     'source.inactive.helper': 'Inaktive Datenquellen führen keine Importe durch und deren Objekte werden gelöscht.',
+    'source.log_dumps.helper': 'Wenn deaktiviert, werden nur Log-Metadaten gespeichert und keine Antwort-Dumps als Datei abgelegt.',
     'source.error.required': 'Name und Typ sind erforderlich.',
     'source.error.save_first': 'Bitte speichern Sie die Datenquelle zuerst.',
     'source.error.enrichment_value_required': 'Bitte wählen Sie für alle Anreicherungen einen gültigen Wert aus.',
@@ -915,6 +918,7 @@ window.translations = {
     'logs.details.response_headers': 'Response Headers',
     'logs.details.no_headers': 'No headers available',
     'logs.download': 'Download',
+    'logs.download.unavailable': 'No dump available',
     'logs.download.error': 'Error downloading log file.',
     
     // === SOURCES MODAL ===
@@ -935,7 +939,9 @@ window.translations = {
     'source.invalid_reference_policy.discard_invalid_elements': 'discard invalid reference elements',
     'source.invalid_reference_policy.keep_object_disabled': 'deactivate entire object',
     'source.active': 'Active',
+    'source.log_dumps': 'Log Dumps',
     'source.inactive.helper': 'Inactive data sources do not perform imports and their objects are deleted.',
+    'source.log_dumps.helper': 'When disabled, only log metadata is stored and no response dump files are persisted.',
     'source.error.required': 'Name and type are required.',
     'source.error.save_first': 'Please save the data source first.',
     'source.error.enrichment_value_required': 'Please select a valid value for all enrichments.',

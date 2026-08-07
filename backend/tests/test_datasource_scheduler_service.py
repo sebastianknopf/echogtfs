@@ -24,6 +24,7 @@ class _DataSourceStub:
     config: str = "{}"
     cron: str | None = None
     is_active: bool = True
+    log_dumps: bool = False
 
 
 class _FakeScheduler:
@@ -105,7 +106,14 @@ class TestDatasourceSchedulerService(unittest.IsolatedAsyncioTestCase):
         with patch.object(DatasourceSchedulerService, "_get_datasource", return_value=datasource):
             await service.run_import_task(7)
 
-        datasource.sync_records.assert_awaited_once_with(repository, realtime_repository, gtfs_repository, 7, "Alpha")
+        datasource.sync_records.assert_awaited_once_with(
+            repository,
+            realtime_repository,
+            gtfs_repository,
+            7,
+            "Alpha",
+            False,
+        )
         repository.update_data_source_last_run_at.assert_awaited_once()
 
     async def test_run_import_task_rolls_back_and_updates_last_run_at_on_error(self):
@@ -122,7 +130,14 @@ class TestDatasourceSchedulerService(unittest.IsolatedAsyncioTestCase):
         ):
             await service.run_import_task(11)
 
-        datasource.sync_records.assert_awaited_once_with(repository, realtime_repository, gtfs_repository, 11, "Broken")
+        datasource.sync_records.assert_awaited_once_with(
+            repository,
+            realtime_repository,
+            gtfs_repository,
+            11,
+            "Broken",
+            False,
+        )
         repository.update_data_source_last_run_at.assert_awaited_once()
 
     async def test_schedule_data_source_import_uses_timezone_from_environment(self):

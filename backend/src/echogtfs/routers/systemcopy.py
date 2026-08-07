@@ -37,7 +37,7 @@ async def export_system_copy(
     try:
         archive_bytes = await service.export_zip(payload.model_dump())
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
     timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     filename = f"system-copy-{timestamp}.zip"
@@ -60,20 +60,20 @@ async def import_system_copy(
     """Import a previously exported system copy ZIP archive."""
     if not file.filename or not file.filename.lower().endswith(".zip"):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=_ERR_INVALID_INPUT,
         )
 
     archive_bytes = await file.read()
     if not archive_bytes:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=_ERR_INVALID_INPUT,
         )
 
     try:
         summary = await service.import_zip(archive_bytes)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
     return SystemCopyImportSummary.model_validate(summary)
