@@ -152,7 +152,10 @@ class DatasourceBase(DatasourceInterface):
             return
 
         try:
-            await DatalogService(get_system_repository()).create_log_entry(
+            save_dump = bool(self.config.get("_log_dumps", False))
+            repository = get_system_repository()
+
+            await DatalogService(repository).create_log_entry(
                 data_source_id=source_id,
                 request_url=request_url,
                 response_content=response_content,
@@ -160,6 +163,7 @@ class DatasourceBase(DatasourceInterface):
                 response_headers=dict(response_headers) if response_headers else None,
                 response_mimetype=response_content_type,
                 status_code=response_status_code,
+                save_dump=save_dump,
             )
         except Exception as exc:
             logger.error(
@@ -515,7 +519,8 @@ class DatasourceBase(DatasourceInterface):
         realtime_repository: RealtimeRepositoryInterface,
         gtfs_repository: GtfsRepositoryInterface,
         source_id: int, 
-        source_name: str
+        source_name: str,
+        log_dumps: bool,
     ) -> dict[str, int]:
         """
         Synchronize records from the external data source to the database.
@@ -537,6 +542,7 @@ class DatasourceBase(DatasourceInterface):
         # Inject source_name and source_id into config so adapters can use them
         self.config["_source_name"] = source_name
         self.config["_source_id"] = source_id
+        self.config["_log_dumps"] = bool(log_dumps)
         
         # Fetch records from external source.
         # Record shape and record type are defined by the selected dialect transformer.

@@ -31,6 +31,7 @@ class DatasourceInterface(ABC):
         gtfs_repository: GtfsRepositoryInterface,
         source_id: int,
         source_name: str,
+        log_dumps: bool,
     ) -> dict[str, int]:
         """Synchronize datasource records into the database."""
 

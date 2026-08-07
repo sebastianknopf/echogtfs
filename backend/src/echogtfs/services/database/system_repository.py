@@ -229,6 +229,7 @@ class SystemRepository(RepositoryBase, SystemRepositoryInterface):
         config: str,
         cron: str | None,
         is_active: bool,
+        log_dumps: bool,
         invalid_reference_policy: str,
         mappings: list[dict[str, str]],
         enrichments: list[dict[str, str | int]],
@@ -241,6 +242,7 @@ class SystemRepository(RepositoryBase, SystemRepositoryInterface):
                 config=config,
                 cron=cron,
                 is_active=is_active,
+                log_dumps=log_dumps,
                 invalid_reference_policy=invalid_reference_policy,
             )
             db.add(source)
@@ -292,6 +294,7 @@ class SystemRepository(RepositoryBase, SystemRepositoryInterface):
         config: str | None = None,
         cron: str | None = None,
         is_active: bool | None = None,
+        log_dumps: bool | None = None,
         invalid_reference_policy: str | None = None,
         mappings: list[dict[str, str]] | None = None,
         enrichments: list[dict[str, str | int]] | None = None,
@@ -322,6 +325,8 @@ class SystemRepository(RepositoryBase, SystemRepositoryInterface):
                 source.cron = cron
             if is_active is not None:
                 source.is_active = is_active
+            if log_dumps is not None:
+                source.log_dumps = log_dumps
             if invalid_reference_policy is not None:
                 source.invalid_reference_policy = invalid_reference_policy
 
@@ -550,7 +555,7 @@ class SystemRepository(RepositoryBase, SystemRepositoryInterface):
         response_mimetype: str | None,
         status_code: int | None,
         response_size: int,
-        log_file_uuid: uuid.UUID,
+        log_file_uuid: uuid.UUID | None,
     ) -> DataSourceLog:
         """Create one data source log entry and return persisted model."""
         async with self.get_session() as db:
@@ -573,11 +578,14 @@ class SystemRepository(RepositoryBase, SystemRepositoryInterface):
 
     async def list_data_source_log_uuids_for_data_source(self, data_source_id: int) -> list[uuid.UUID]:
         """Return data source log file UUIDs for one data source."""
-        stmt = select(DataSourceLog.log_file_uuid).where(DataSourceLog.data_source_id == data_source_id)
+        stmt = select(DataSourceLog.log_file_uuid).where(
+            DataSourceLog.data_source_id == data_source_id,
+            DataSourceLog.log_file_uuid.is_not(None),
+        )
 
         async with self.get_session() as db:
             result = await db.execute(stmt)
-            return [row[0] for row in result.all()]
+            return [row[0] for row in result.all() if row[0] is not None]
 
     async def delete_data_source_logs_for_data_source(self, data_source_id: int) -> int:
         """Delete all data source log rows for one data source and return affected row count."""
@@ -591,11 +599,14 @@ class SystemRepository(RepositoryBase, SystemRepositoryInterface):
 
     async def list_data_source_log_uuids_before(self, cutoff_time: datetime) -> list[uuid.UUID]:
         """Return data source log file UUIDs older than cutoff time."""
-        stmt = select(DataSourceLog.log_file_uuid).where(DataSourceLog.timestamp < cutoff_time)
+        stmt = select(DataSourceLog.log_file_uuid).where(
+            DataSourceLog.timestamp < cutoff_time,
+            DataSourceLog.log_file_uuid.is_not(None),
+        )
 
         async with self.get_session() as db:
             result = await db.execute(stmt)
-            return [row[0] for row in result.all()]
+            return [row[0] for row in result.all() if row[0] is not None]
 
     async def delete_data_source_logs_before(self, cutoff_time: datetime) -> int:
         """Delete data source logs older than cutoff time and return affected row count."""
