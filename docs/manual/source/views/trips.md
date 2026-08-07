@@ -9,6 +9,7 @@ Im Bereich "Fahrten" werden alle aktuellen Fahrten angezeigt.
 - Im oberen Bereich besteht die Möglichkeit, die Fahrten nach Datum zu sortieren:
     - **nach Start aufsteigend**: Zeigt die Fahrten nach ihrer Startzeit aufsteigend sortiert an
     - **nach Start absteigend**: Zeigt die Fahrten nach ihrer Startzeit absteigend sortiert an
+- Der "Schnellfilter" ermöglicht die Suche nach Fahrten anhand ihrer Fahrt-ID, der Start- oder Endhaltestelle oder der zugeorneten Linie oder Fahrt
 - Über den "Filter" lassen sich die Meldungen wie folgt filtern:
     - **aktive Fahrten**: Es werden alle aktivierten Fahrten mit einbezogen
     - **inaktive Fahrten**: Es werden alle deaktivierten Fahrten mit einbezogen

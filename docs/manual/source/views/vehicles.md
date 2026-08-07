@@ -6,6 +6,7 @@ Im Bereich "Fahrzeuge" werden alle aktuellen Fahrzeugpositionen angezeigt.
 :name: img-vehicles-overview-screen
 ```
 
+- Der "Schnellfilter" ermöglicht die Suche nach Fahrzeugen anhand ihrer Bezeichnung oder der zugeorneten Linie oder Fahrt
 - Über den "Filter" lassen sich die Meldungen wie folgt filtern:
     - **aktive Fahrzeuge**: Es werden alle aktivierten Fahrzeuge mit einbezogen
     - **inaktive Fahrzeuge**: Es werden alle deaktivierten Fahrzeuge mit einbezogen

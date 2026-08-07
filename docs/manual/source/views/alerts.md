@@ -10,6 +10,7 @@ Im Bereich "Meldungen" werden alle aktuellen Meldungen angezeigt.
     - **neueste zuerst**: Zeigt die Meldungen mit dem aktuellsten Zeitstempel zuerst an
     - **älteste zuerst**: Zeigt die Meldungen mit dem ältesten Zeitstempel zuerst an
     - **Hinweis**: Meldungen ohne zeitlichen Bezug werden grundsätzlich am Anfang der Liste angezeigt
+- Der "Schnellfilter" ermöglicht die Suche nach Meldungen anhand ihres Titels
 - Über den "Filter" lassen sich die Meldungen wie folgt filtern:
     - **aktive Meldungen**: Es werden alle aktivierten Meldungen mit einbezogen
     - **inaktive Meldungen**: Es werden alle deaktivierten Meldungen mit einbezogen
