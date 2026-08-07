@@ -328,21 +328,18 @@ class GtfsStatusRead(BaseModel):
 
 
 class AgencyRead(BaseModel):
-    id:      int
     gtfs_id: str
     name:    str
     model_config = {"from_attributes": True}
 
 
 class StopRead(BaseModel):
-    id:      int
     gtfs_id: str
     name:    str
     model_config = {"from_attributes": True}
 
 
 class RouteRead(BaseModel):
-    id:         int
     gtfs_id:    str
     short_name: str
     long_name:  str
