@@ -726,7 +726,7 @@ const sources = (() => {
   }
 
   // Source modal management
-  function _openSourceModal({ title, name = '', type = '', config = {}, cron = '', is_active = true, invalid_reference_policy = 'not_specified', mappings = [], enrichments = [] } = {}) {
+  function _openSourceModal({ title, name = '', type = '', config = {}, cron = '', is_active = true, log_dumps = false, invalid_reference_policy = 'not_specified', mappings = [], enrichments = [] } = {}) {
     ui.el('source-modal-title').textContent = title;
     ui.el('source-name').value = name;
     ui.el('source-name').readOnly = false;
@@ -750,6 +750,7 @@ const sources = (() => {
     
     ui.el('source-cron').value = cron || '';
     ui.el('source-is-active').checked = is_active;
+    ui.el('source-log-dumps').checked = !!log_dumps;
     ui.el('source-invalid-reference-policy').value = invalid_reference_policy || 'not_specified';
     
     // Initialize mappings
@@ -820,6 +821,7 @@ const sources = (() => {
       type: '',
       config: {},
       cron: '',
+      log_dumps: false,
       mappings: [],
       enrichments: []
     });
@@ -853,6 +855,7 @@ const sources = (() => {
         config: configObj,
         cron: source.cron || '',
         is_active: source.is_active !== undefined ? source.is_active : true,
+        log_dumps: source.log_dumps !== undefined ? source.log_dumps : false,
         invalid_reference_policy: source.invalid_reference_policy || 'not_specified',
         mappings: source.mappings || [],
         enrichments: source.enrichments || []
@@ -872,6 +875,7 @@ const sources = (() => {
     const type = ui.el('source-type').value;
     const cron = ui.el('source-cron').value.trim();
     const isActive = ui.el('source-is-active').checked;
+    const logDumps = ui.el('source-log-dumps').checked;
     const invalidReferencePolicy = ui.el('source-invalid-reference-policy').value;
 
     if (!name || !type) {
@@ -911,6 +915,7 @@ const sources = (() => {
         config: JSON.stringify(config), 
         cron: cron || null,
         is_active: isActive,
+        log_dumps: logDumps,
         invalid_reference_policy: invalidReferencePolicy,
         mappings,
         enrichments
@@ -1197,6 +1202,10 @@ const sources = (() => {
         const statusCode = log.status_code || '—';
         const endpoint = ui.esc(log.request_url || '—');
         const size = formatBytes(log.response_size);
+        const canDownload = !!log.log_file_uuid;
+        const downloadTitle = canDownload
+          ? window.i18n('logs.download')
+          : window.i18n('logs.download.unavailable');
         
         tr.innerHTML = `
           <td style="white-space: nowrap;">${ui.esc(timestamp)}</td>
@@ -1209,7 +1218,7 @@ const sources = (() => {
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
             </button>
             <button class="icon-btn" data-action="download-log" data-log-id="${log.id}"
-              title="${window.i18n('logs.download')}" aria-label="${window.i18n('logs.download')}" data-ripple>
+              title="${downloadTitle}" aria-label="${downloadTitle}" data-ripple ${canDownload ? '' : 'disabled'}>
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
             </button>
           </div></td>`;
@@ -1482,6 +1491,9 @@ const sources = (() => {
       // Download log button
       const btn = e.target.closest('[data-action="download-log"]');
       if (btn) {
+        if (btn.disabled) {
+          return;
+        }
         const logId = parseInt(btn.dataset.logId);
         if (logId) {
           _downloadLogFile(logId);

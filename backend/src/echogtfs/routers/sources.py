@@ -66,6 +66,7 @@ async def _enrich_source_with_error_flag(source: DataSource, repository: SystemR
         "config": source.config,
         "cron": source.cron,
         "is_active": source.is_active,
+        "log_dumps": source.log_dumps,
         "invalid_reference_policy": source.invalid_reference_policy,
         "last_run_at": source.last_run_at,
         "created_at": source.created_at,
@@ -226,6 +227,9 @@ async def download_log_file(
     
     if not log_entry:
         raise HTTPException(status_code=404, detail="Log entry not found")
+
+    if log_entry.log_file_uuid is None:
+        raise HTTPException(status_code=404, detail="Log dump not available for this entry")
     
     # Get log file content
     log_content = await DatalogService(repository).get_log_content(log_entry.log_file_uuid)
@@ -293,6 +297,7 @@ async def create_source(
         config=source_data.config,
         cron=source_data.cron,
         is_active=source_data.is_active,
+        log_dumps=source_data.log_dumps,
         invalid_reference_policy=source_data.invalid_reference_policy,
         mappings=[
             {
@@ -520,6 +525,7 @@ async def update_source(
         config=source_data.config,
         cron=source_data.cron,
         is_active=source_data.is_active,
+        log_dumps=source_data.log_dumps,
         invalid_reference_policy=source_data.invalid_reference_policy,
         mappings=(
             [
