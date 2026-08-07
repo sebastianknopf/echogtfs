@@ -700,6 +700,7 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
             gtfs_repository=gtfs_repository,
             source_id=2,
             source_name="Demo",
+            log_dumps=False,
         )
 
         self.assertEqual(result, {"added": 1, "updated": 0, "deleted": 0})
@@ -739,6 +740,7 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
             gtfs_repository=gtfs_repository,
             source_id=2,
             source_name="Demo",
+            log_dumps=False,
         )
 
         self.assertEqual(result, {"added": 1, "updated": 0, "deleted": 0})
