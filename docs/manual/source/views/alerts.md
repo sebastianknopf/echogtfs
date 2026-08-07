@@ -57,7 +57,7 @@ Wählen Sie hier einen passenden Grund und eine Folge, sowie den Schweregrad der
 
 Wenn Sie hier keinen Zeitraum angeben, ist die Meldung automatisch immer gültig und hat somit auch kein Ablaufdatum. Meldungen, die in EchoGTFS mit einem Ablaufdatum erstellt wurden, werden durch die {ref}`h-system-settings-cleanup` entsprechend deaktiviert und gelöscht.
 
-Im nächsten Schritt können Sie auswählen, auf welche Objekte sich eine Meldung bezieht:
+Im nächsten Schritt können Sie mittels **Bezügen** auswählen, auf welche Objekte sich eine Meldung bezieht:
 
 ```{figure} ../_static/images/alerts-references-screen.png
 :name: img-alerts-references-screen
@@ -65,7 +65,9 @@ Im nächsten Schritt können Sie auswählen, auf welche Objekte sich eine Meldun
 
 Sobald Sie in die Eingabefelder einen Text eingeben, unterstützt Sie EchoGTFS bei der Auswahl mit passenden Vorschlägen.
 
-Die **Bezugselemente** (Unternehmen, Linie, Haltestelle, Linientyp, Richtung) werden dabei immer als UND-Verknüpfung interpretiert. Wenn Sie beispielsweise eine Meldung für die Linie _701_ und die Haltestelle _Hauptbahnhof_ anlegen, wird diese Meldung von gängingen Auskunftssystemen nur für die Linie _701 an der Haltestelle Hauptbahnhof_ angezeigt. Soll die Meldung hingegen für mehrere Linien oder Haltestellen (oder andere Objekte) gleichzeitig gelten, müssen diese jeweils als eigene **Bezüge** angelegt werden.
+Die **Bezugselemente** (Unternehmen, Linie, Haltestelle, Linientyp, Richtung) werden dabei immer als UND-Verknüpfung interpretiert. Wenn Sie beispielsweise eine Meldung für die Linie _701_ und die Haltestelle _Hauptbahnhof_ anlegen, wird diese Meldung von gängingen Auskunftssystemen nur für die Linie _701 an der Haltestelle Hauptbahnhof_ angezeigt. Soll die Meldung hingegen für mehrere Linien oder Haltestellen (oder andere Objekte) unabhängig voneinander gelten, müssen diese jeweils als eigene Bezüge angelegt werden. Die einzelnen Bezüge werden jeweils als ODER-Verknüpfung interpretiert.
+
+Wenn Sie hier keinen Bezug angeben, ist die Meldung automatisch immer für alle Objekte aus dem GTFS-Feed gültig.
 
 Im letzten Schritt geben Sie mindestens eine Übersetzung mit einem Titel und/oder Beschreibung an:
 
