@@ -114,6 +114,9 @@ class DataSource(Base):
     
     # Active status - inactive sources don't run and their alerts are deleted
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    # Controls whether response dump files should be persisted for this source
+    log_dumps: Mapped[bool] = mapped_column(Boolean, default=False)
     
     # Policy for handling invalid entity references
     invalid_reference_policy: Mapped[InvalidReferencePolicy] = mapped_column(
@@ -249,7 +252,7 @@ class DataSourceLog(Base):
     response_size: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     
     # Reference to log file (UUID filename in named volume)
-    log_file_uuid: Mapped[uuid.UUID] = mapped_column(Uuid)
+    log_file_uuid: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
     
     # Creation timestamp
     created_at: Mapped[datetime] = mapped_column(
