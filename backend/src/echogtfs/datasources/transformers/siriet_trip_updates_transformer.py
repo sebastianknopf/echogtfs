@@ -54,13 +54,12 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
                     filtered_by_operator += 1
                     continue
 
-                is_complete_stop_sequence = self._parse_bool(
-                    self._get_text(journey.find("siri:IsCompleteStopSequence", self._siri_ns)),
-                    default=False,
-                )
-
-                if not is_complete_stop_sequence:
+                if not self._is_new_trip_valid(journey):
                     filtered_incomplete += 1
+                    logger.warning(
+                        "[SiriEtTripUpdatesTransformer] Discarding NEW trip because IsCompleteStopSequence is not true."
+                    )
+
                     continue
 
                 trip = self._parse_estimated_vehicle_journey(journey)
@@ -95,6 +94,21 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
         )
 
         return trips
+
+    def _is_new_trip_valid(self, journey: ET.Element) -> bool:
+        extra_journey = self._parse_bool(
+            self._get_text(journey.find("siri:ExtraJourney", self._siri_ns)),
+            default=False,
+        )
+        if not extra_journey:
+            return True
+
+        is_complete_stop_sequence = self._parse_bool(
+            self._get_text(journey.find("siri:IsCompleteStopSequence", self._siri_ns)),
+            default=False,
+        )
+
+        return is_complete_stop_sequence
 
     def _parse_estimated_vehicle_journey(self, journey: ET.Element) -> dict[str, Any] | None:
         route_id = self._get_text(journey.find("siri:LineRef", self._siri_ns))
