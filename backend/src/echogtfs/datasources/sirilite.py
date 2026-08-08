@@ -11,6 +11,7 @@ import httpx
 
 from echogtfs.datasources.base import DatasourceBase
 from echogtfs.datasources.transformers import (
+    SiriEtTripUpdatesTransformer,
     SiriSxServiceAlertsTransformer,
     SiriSxSwissServiceAlertsTransformer,
 )
@@ -21,6 +22,7 @@ logger = logging.getLogger("uvicorn")
 class SiriLiteDialect(str, Enum):
     SIRISX = "sirisx"
     SIRISX_SWISS = "sirisx-swiss"
+    SIRIET = "siriet"
 
 
 class SiriLiteDatasource(DatasourceBase):
@@ -48,7 +50,7 @@ class SiriLiteDatasource(DatasourceBase):
             "type": "enum",
             "label": "adapter.sirilite.dialect.label",
             "required": True,
-            "options": ["sirisx", "sirisx-swiss"],
+            "options": ["sirisx", "sirisx-swiss", "siriet"],
             "help_text": "adapter.sirilite.dialect.help_text",
         },
         {
@@ -91,17 +93,26 @@ class SiriLiteDatasource(DatasourceBase):
         filter_value = self.config.get("filter", "")
 
         dialect = SiriLiteDialect(self.config["dialect"])
+        
         if dialect == SiriLiteDialect.SIRISX:
             transformer = SiriSxServiceAlertsTransformer(
                 make_unique_id=self._make_unique_id,
                 filter_value=filter_value,
             )
+            record_type = "service_alerts"
 
         elif dialect == SiriLiteDialect.SIRISX_SWISS:
             transformer = SiriSxSwissServiceAlertsTransformer(
                 make_unique_id=self._make_unique_id,
                 filter_value=filter_value,
             )
+            record_type = "service_alerts"
+
+        elif dialect == SiriLiteDialect.SIRIET:
+            transformer = SiriEtTripUpdatesTransformer(
+                filter_value=filter_value,
+            )
+            record_type = "trip_updates"
 
         else:
             raise ValueError(f"Unknown SIRI Lite dialect: {dialect}")
@@ -127,7 +138,7 @@ class SiriLiteDatasource(DatasourceBase):
             raise ValueError(f"Failed to transform SIRI-Lite payload: {exc}") from exc
             
         return {
-            "record_type": "service_alerts",
+            "record_type": record_type,
             "records": records,
         }
 
