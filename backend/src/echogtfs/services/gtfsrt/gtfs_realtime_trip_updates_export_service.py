@@ -169,6 +169,25 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
 
         return f"{total_hours:02d}:{total_minutes:02d}:{total_seconds:02d}"
 
+    @staticmethod
+    def _normalize_start_date(start_date: object) -> str:
+        if not isinstance(start_date, str):
+            return ""
+
+        value = start_date.strip()
+        if not value:
+            return ""
+
+        try:
+            return datetime.strptime(value, "%Y%m%d").strftime("%Y%m%d")
+        except ValueError:
+            pass
+
+        try:
+            return datetime.strptime(value, "%Y-%m-%d").strftime("%Y%m%d")
+        except ValueError:
+            return value
+
     def _build_feed_message(self, trips: list[Trip]) -> gtfs_realtime_pb2.FeedMessage:
         """Build GTFS-RT FeedMessage from Trip models."""
         feed = gtfs_realtime_pb2.FeedMessage()
@@ -193,7 +212,7 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
             trip_descriptor.trip_id = trip_model.trip_id
             trip_descriptor.route_id = trip_model.route_id
             trip_descriptor.start_time = self._localize_start_time(trip_model.start_date, trip_model.start_time)
-            trip_descriptor.start_date = trip_model.start_date
+            trip_descriptor.start_date = self._normalize_start_date(trip_model.start_date)
 
             trip_schedule_relationship = self._trip_schedule_relationship_to_enum(trip_model.schedule_relationship)
             if trip_schedule_relationship is not None:
@@ -201,9 +220,17 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
 
             if trip_model.vehicle is not None:
                 vehicle_descriptor = trip_update.vehicle
-                vehicle_descriptor.id = str(trip_model.vehicle.id)
-                vehicle_descriptor.label = trip_model.vehicle.vehicle_label
-                vehicle_descriptor.license_plate = trip_model.vehicle.vehicle_license_plate
+                vehicle_id_value = str(
+                    getattr(trip_model.vehicle, "vehicle_id", None)
+                    or trip_model.vehicle.id
+                )
+                vehicle_descriptor.id = vehicle_id_value
+
+                if trip_model.vehicle.vehicle_label is not None:
+                    vehicle_descriptor.label = trip_model.vehicle.vehicle_label
+
+                if trip_model.vehicle.vehicle_license_plate is not None:
+                    vehicle_descriptor.license_plate = trip_model.vehicle.vehicle_license_plate
 
                 wheelchair_accessible = self._wheelchair_accessible_to_enum(
                     trip_model.vehicle.vehicle_wheelchair_accessible

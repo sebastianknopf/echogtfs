@@ -113,6 +113,20 @@ class TestGtfsRealtimeVehiclePositionsExportService(unittest.IsolatedAsyncioTest
 
         self.assertEqual(feed.entity[0].vehicle.trip.start_time, "10:00:00")
 
+    def test_build_feed_message_normalizes_trip_start_date_to_yyyymmdd(self):
+        vehicle = self._make_vehicle(start_date="2026-07-21")
+        with patch.object(
+            GtfsRealtimeVehiclePositionsExportService,
+            "_configured_timezone_name",
+            return_value="UTC",
+        ):
+            service = GtfsRealtimeVehiclePositionsExportService(SimpleNamespace())
+
+        with patch("echogtfs.services.gtfsrt.gtfs_realtime_vehicle_positions_export_service.time.time", return_value=1700000000):
+            feed = service._build_feed_message([vehicle])
+
+        self.assertEqual(feed.entity[0].vehicle.trip.start_date, "20260721")
+
     def test_build_feed_message_formats_next_day_departure_above_23_hours(self):
         vehicle = self._make_vehicle(start_time="23:30:00")
         with patch.object(
@@ -150,12 +164,13 @@ class TestGtfsRealtimeVehiclePositionsExportService(unittest.IsolatedAsyncioTest
         schedule_relationship: str = "SCHEDULED",
         vehicle_id: str = "BUS-1",
         start_time: str = "08:00:00",
+        start_date: str = "20260721",
     ) -> SimpleNamespace:
         trip = SimpleNamespace(
             trip_id="TRIP-1",
             route_id="ROUTE-1",
             start_time=start_time,
-            start_date="20260721",
+            start_date=start_date,
             schedule_relationship=schedule_relationship,
         )
         return SimpleNamespace(
