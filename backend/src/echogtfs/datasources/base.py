@@ -1271,6 +1271,12 @@ class DatasourceBase(DatasourceInterface):
             for vehicle in await realtime_repository.list_vehicles_for_data_source(source_id)
         }
         existing_vehicle_ids = set(existing_vehicles.keys())
+        vehicle_uuid_by_trip_id = {
+            str(vehicle.trip_id): vehicle.id
+            for vehicle in existing_vehicles.values()
+            if getattr(vehicle, "trip_id", None)
+        }
+        processed_vehicle_ids = set(existing_vehicle_ids)
 
         if incoming_vehicle_ids:
             vehicles_by_id = {
@@ -1303,7 +1309,6 @@ class DatasourceBase(DatasourceInterface):
         deleted_vehicle_ids: set[uuid.UUID] = set(vehicles_to_delete)
 
         for record in records:
-            vehicle_uuid = self._record_uuid(record, source_name, fallback_key="vehicle_id", kind="Vehicle-position")
             try:
                 trip_payload = self._extract_vehicle_trip_payload(record)
             except ValueError as exc:
@@ -1374,6 +1379,7 @@ class DatasourceBase(DatasourceInterface):
                 else:
                     trip_assignment_type = AssignmentType.NO_MATCH_GENERAL.value
                     vehicle_assignment_type = AssignmentType.NO_MATCH_GENERAL.value
+                    trip_payload["is_active_on_create"] = False
 
             has_invalid_reference = (not route_is_valid) or (not stop_reference_is_valid) or (not trip_reference_is_valid)
 
@@ -1420,6 +1426,17 @@ class DatasourceBase(DatasourceInterface):
             )
 
             trip_payload["trip_id"] = resolved_trip_id
+            trip_id_key = str(trip_payload["trip_id"])
+
+            vehicle_uuid = vehicle_uuid_by_trip_id.get(trip_id_key)
+            if vehicle_uuid is None:
+                vehicle_uuid = self._record_uuid(
+                    record,
+                    source_name,
+                    fallback_key="vehicle_id",
+                    kind="Vehicle-position",
+                )
+                vehicle_uuid_by_trip_id[trip_id_key] = vehicle_uuid
 
             existing_trip_uuid = existing_trip_uuid_by_trip_id.get(str(resolved_trip_id))
             if existing_trip_uuid is not None:
@@ -1428,10 +1445,11 @@ class DatasourceBase(DatasourceInterface):
                 trip_uuid = self._make_unique_id(trip_payload["trip_id"], source_name)
                 existing_trip_uuid_by_trip_id[str(resolved_trip_id)] = trip_uuid
 
-            if vehicle_uuid in vehicles_to_update:
+            if vehicle_uuid in processed_vehicle_ids:
                 stats_updated += 1
             else:
                 stats_created += 1
+                processed_vehicle_ids.add(vehicle_uuid)
 
             current_stop_sequence_raw = record.get("current_stop_sequence")
             try:
