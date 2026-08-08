@@ -54,6 +54,20 @@ class SiriLiteDatasource(DatasourceBase):
             "help_text": "adapter.sirilite.dialect.help_text",
         },
         {
+            "name": "treat_unexpected_stop_as_added_stop",
+            "type": "boolean",
+            "label": "adapter.sirilite.treat_unexpected_stop_as_added_stop.label",
+            "required": True,
+            "help_text": "adapter.sirilite.treat_unexpected_stop_as_added_stop.help_text",
+        },
+        {
+            "name": "treat_missing_stop_as_canceled_stop",
+            "type": "boolean",
+            "label": "adapter.sirilite.treat_missing_stop_as_canceled_stop.label",
+            "required": True,
+            "help_text": "adapter.sirilite.treat_missing_stop_as_canceled_stop.help_text",
+        },
+        {
             "name": "filter",
             "type": "text",
             "label": "adapter.sirilite.filter.label",
@@ -64,6 +78,9 @@ class SiriLiteDatasource(DatasourceBase):
     ]
 
     def _validate_config(self) -> None:
+        self.config.setdefault("treat_unexpected_stop_as_added_stop", False)
+        self.config.setdefault("treat_missing_stop_as_canceled_stop", False)
+
         if "endpoint" not in self.config:
             raise ValueError("SiriLite datasource requires 'endpoint' in config")
 
@@ -83,6 +100,14 @@ class SiriLiteDatasource(DatasourceBase):
             valid_dialects = [dialect.value for dialect in SiriLiteDialect]
             raise ValueError(f"'dialect' must be one of: {', '.join(valid_dialects)}")
 
+        for boolean_field in (
+            "treat_unexpected_stop_as_added_stop",
+            "treat_missing_stop_as_canceled_stop",
+        ):
+            if boolean_field in self.config and self.config[boolean_field] is not None:
+                if not isinstance(self.config[boolean_field], bool):
+                    raise ValueError(f"'{boolean_field}' must be a boolean")
+
         if "filter" in self.config and self.config["filter"]:
             if not isinstance(self.config["filter"], str):
                 raise ValueError("'filter' must be a string")
@@ -91,6 +116,12 @@ class SiriLiteDatasource(DatasourceBase):
         root = await self._fetch_and_parse_xml()
         source_name = self.config.get("_source_name", "sirilite")
         filter_value = self.config.get("filter", "")
+        self.config["treat_unexpected_stop_as_added_stop"] = bool(
+            self.config.get("treat_unexpected_stop_as_added_stop", False)
+        )
+        self.config["treat_missing_stop_as_canceled_stop"] = bool(
+            self.config.get("treat_missing_stop_as_canceled_stop", False)
+        )
 
         dialect = SiriLiteDialect(self.config["dialect"])
         

@@ -44,6 +44,8 @@ window.translations = {
     'common.save': 'Speichern',
     'common.cancel': 'Abbrechen',
     'common.delete': 'Löschen',
+    'common.yes': 'Ja',
+    'common.no': 'Nein',
     'common.edit': 'Bearbeiten',
     'common.close': 'Schließen',
     'common.add': 'Hinzufügen',
@@ -587,6 +589,10 @@ window.translations = {
     'adapter.sirilite.filter.label': 'Filter',
     'adapter.sirilite.filter.placeholder': 'Optionaler Filter-Ausdruck',
     'adapter.sirilite.filter.help_text': 'Filter zur Einschränkung der Datenquelle',
+    'adapter.sirilite.treat_unexpected_stop_as_added_stop.label': 'Unerwartete Halte als Zusatzhalt behandeln',
+    'adapter.sirilite.treat_unexpected_stop_as_added_stop.help_text': 'Behandelt unerwartete Stops in den Eingangsdaten als Zusatzhalt.',
+    'adapter.sirilite.treat_missing_stop_as_canceled_stop.label': 'Fehlende Halte als Haltausfall behandeln',
+    'adapter.sirilite.treat_missing_stop_as_canceled_stop.help_text': 'Behandelt fehlende Stops in den Eingangsdaten als Haltausfall.',
 
     // SIRI-ET Adapter
     'adapter.siriet.endpoint.label': 'Endpoint URL',
@@ -623,6 +629,10 @@ window.translations = {
     'adapter.siriet.filter.label': 'Filter',
     'adapter.siriet.filter.placeholder': 'Optionaler Filter-Ausdruck',
     'adapter.siriet.filter.help_text': 'Filter zur Einschränkung der Datenquelle',
+    'adapter.siriet.treat_unexpected_stop_as_added_stop.label': 'Treat unexpected stops as added',
+    'adapter.siriet.treat_unexpected_stop_as_added_stop.help_text': 'Treat unexpected stops in the input data as added stops.',
+    'adapter.siriet.treat_missing_stop_as_canceled_stop.label': 'Treat missing stops as canceled',
+    'adapter.siriet.treat_missing_stop_as_canceled_stop.help_text': 'Treat missing stops in the input data as canceled stops.',
     
     // SIRI-SX Adapter
     'adapter.sirisx.endpoint.label': 'Endpoint URL',
@@ -683,6 +693,8 @@ window.translations = {
     'common.save': 'Save',
     'common.cancel': 'Cancel',
     'common.delete': 'Delete',
+    'common.yes': 'Yes',
+    'common.no': 'No',
     'common.edit': 'Edit',
     'common.close': 'Close',
     'common.add': 'Add',
