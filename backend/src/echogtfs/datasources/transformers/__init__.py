@@ -15,6 +15,9 @@ from echogtfs.datasources.transformers.gtfsrt_service_alerts_transformer import 
 from echogtfs.datasources.transformers.siriet_trip_updates_transformer import (
     SiriEtTripUpdatesTransformer,
 )
+from echogtfs.datasources.transformers.sirivm_vehicle_positions_transformer import (
+    SiriVmVehiclePositionsTransformer,
+)
 from echogtfs.datasources.transformers.sirisx_swiss_service_alerts_transformer import (
     SiriSxSwissServiceAlertsTransformer,
 )
@@ -28,6 +31,7 @@ __all__ = [
     "VehiclePositionsTransformerInterface",
     "GtfsRtServiceAlertsTransformer",
     "SiriEtTripUpdatesTransformer",
+    "SiriVmVehiclePositionsTransformer",
     "SwissServiceAlertsTransformer",
     "SiriSxServiceAlertsTransformer",
 ]
