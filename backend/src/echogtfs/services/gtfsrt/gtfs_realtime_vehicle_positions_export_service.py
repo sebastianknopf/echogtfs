@@ -204,8 +204,12 @@ class GtfsRealtimeVehiclePositionsExportService(GtfsRealtimeExportInterface):
             if vehicle_model.vehicle_id:
                 vehicle_descriptor = vehicle_position.vehicle
                 vehicle_descriptor.id = self._vehicle_id_value(vehicle_model)
-                vehicle_descriptor.label = vehicle_model.vehicle_label
-                vehicle_descriptor.license_plate = vehicle_model.vehicle_license_plate
+
+                if vehicle_model.vehicle_label is not None:
+                    vehicle_descriptor.label = vehicle_model.vehicle_label
+
+                if vehicle_model.vehicle_license_plate is not None:
+                    vehicle_descriptor.license_plate = vehicle_model.vehicle_license_plate
 
                 wheelchair_accessible = self._wheelchair_accessible_to_enum(
                     vehicle_model.vehicle_wheelchair_accessible
