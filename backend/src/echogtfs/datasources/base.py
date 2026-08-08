@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 import logging
 import uuid
+from time import perf_counter
 from typing import Any
 
 from echogtfs.datasources.intf_datasource import DatasourceInterface
@@ -537,8 +538,10 @@ class DatasourceBase(DatasourceInterface):
         Returns:
             Dictionary with keys 'added', 'updated', 'deleted' containing counts
         """
-        logger.info(f"[{self.get_adapter_type()}] Starting import from '{source_name}'")
-        
+        adapter_type = self.get_adapter_type()
+        logger.info(f"[{adapter_type}] Starting import from '{source_name}'")
+        total_start = perf_counter()
+
         # Inject source_name and source_id into config so adapters can use them
         self.config["_source_name"] = source_name
         self.config["_source_id"] = source_id
@@ -546,47 +549,66 @@ class DatasourceBase(DatasourceInterface):
         
         # Fetch records from external source.
         # Record shape and record type are defined by the selected dialect transformer.
+        extract_start = perf_counter()
         fetched_payload = await self._fetch_records()
+        extract_elapsed_ms = (perf_counter() - extract_start) * 1000
+        transform_start = perf_counter()
         record_type, records = self._normalize_fetched_payload(fetched_payload)
+        transform_elapsed_ms = (perf_counter() - transform_start) * 1000
 
         logger.info(
-            f"[{self.get_adapter_type()}] Fetched {len(records)} records from source "
+            f"[{adapter_type}] Fetched {len(records)} records from source "
             f"(record_type={record_type})"
         )
 
-        if record_type == "service_alerts":
-            return await self._sync_service_alert_records(
-                repository=repository,
-                realtime_repository=realtime_repository,
-                gtfs_repository=gtfs_repository,
-                source_id=source_id,
-                source_name=source_name,
-                records=records,
+        load_start = perf_counter()
+        try:
+            if record_type == "service_alerts":
+                result = await self._sync_service_alert_records(
+                    repository=repository,
+                    realtime_repository=realtime_repository,
+                    gtfs_repository=gtfs_repository,
+                    source_id=source_id,
+                    source_name=source_name,
+                    records=records,
+                )
+            elif record_type == "trip_updates":
+                result = await self._sync_trip_update_records(
+                    repository=repository,
+                    realtime_repository=realtime_repository,
+                    gtfs_repository=gtfs_repository,
+                    source_id=source_id,
+                    source_name=source_name,
+                    records=records,
+                )
+            elif record_type == "vehicle_positions":
+                result = await self._sync_vehicle_position_records(
+                    repository=repository,
+                    realtime_repository=realtime_repository,
+                    gtfs_repository=gtfs_repository,
+                    source_id=source_id,
+                    source_name=source_name,
+                    records=records,
+                )
+            else:
+                raise NotImplementedError(
+                    f"Record type '{record_type}' is not supported by sync_records yet"
+                )
+        finally:
+            load_elapsed_ms = (perf_counter() - load_start) * 1000
+            total_elapsed_ms = (perf_counter() - total_start) * 1000
+            logger.info(
+                "[%s] datasource run completed for '%s' (record_type=%s, total=%.2fms, extract=%.2fms, transform=%.2fms, load=%.2fms)",
+                adapter_type,
+                source_name,
+                record_type,
+                total_elapsed_ms,
+                extract_elapsed_ms,
+                transform_elapsed_ms,
+                load_elapsed_ms,
             )
 
-        if record_type == "trip_updates":
-            return await self._sync_trip_update_records(
-                repository=repository,
-                realtime_repository=realtime_repository,
-                gtfs_repository=gtfs_repository,
-                source_id=source_id,
-                source_name=source_name,
-                records=records,
-            )
-
-        if record_type == "vehicle_positions":
-            return await self._sync_vehicle_position_records(
-                repository=repository,
-                realtime_repository=realtime_repository,
-                gtfs_repository=gtfs_repository,
-                source_id=source_id,
-                source_name=source_name,
-                records=records,
-            )
-
-        raise NotImplementedError(
-            f"Record type '{record_type}' is not supported by sync_records yet"
-        )
+        return result
 
     async def _sync_service_alert_records(
         self,
