@@ -1,4 +1,4 @@
-"""SIRI-SX datasource for realtime data import."""
+"""SIRI-ET datasource for trip-update data import."""
 
 from __future__ import annotations
 
@@ -12,78 +12,95 @@ from typing import Any
 import httpx
 
 from echogtfs.datasources.base import DatasourceBase
-from echogtfs.datasources.transformers import SiriSxServiceAlertsTransformer
+from echogtfs.datasources.transformers import SiriEtTripUpdatesTransformer
 
 logger = logging.getLogger("uvicorn")
 
 
-class SiriSxMethod(str, Enum):
+class SiriEtMethod(str, Enum):
     REQUEST_RESPONSE = "request/response"
     PUBLISH_SUBSCRIBE = "publish/subscribe"
 
 
-class SiriSxDialect(str, Enum):
-    SIRISX = "sirisx"
+class SiriEtDialect(str, Enum):
+    SIRIET = "siriet"
 
 
-class SiriSxDatasource(DatasourceBase):
-    """Datasource implementation for SIRI-SX feeds."""
+class SiriEtDatasource(DatasourceBase):
+    """Datasource implementation for SIRI-ET feeds."""
 
     CONFIG_SCHEMA: list[dict[str, Any]] = [
         {
             "name": "endpoint",
             "type": "url",
-            "label": "adapter.sirisx.endpoint.label",
+            "label": "adapter.siriet.endpoint.label",
             "required": True,
-            "placeholder": "adapter.sirisx.endpoint.placeholder",
-            "help_text": "adapter.sirisx.endpoint.help_text",
+            "placeholder": "adapter.siriet.endpoint.placeholder",
+            "help_text": "adapter.siriet.endpoint.help_text",
         },
         {
             "name": "participantref",
             "type": "text",
-            "label": "adapter.sirisx.participantref.label",
+            "label": "adapter.siriet.participantref.label",
             "required": True,
-            "placeholder": "adapter.sirisx.participantref.placeholder",
-            "help_text": "adapter.sirisx.participantref.help_text",
+            "placeholder": "adapter.siriet.participantref.placeholder",
+            "help_text": "adapter.siriet.participantref.help_text",
         },
         {
             "name": "method",
             "type": "enum",
-            "label": "adapter.sirisx.method.label",
+            "label": "adapter.siriet.method.label",
             "required": True,
             "options": ["request/response", "publish/subscribe"],
-            "help_text": "adapter.sirisx.method.help_text",
+            "help_text": "adapter.siriet.method.help_text",
         },
         {
             "name": "dialect",
             "type": "enum",
-            "label": "adapter.sirisx.dialect.label",
+            "label": "adapter.siriet.dialect.label",
             "required": True,
-            "options": ["sirisx"],
-            "help_text": "adapter.sirisx.dialect.help_text",
+            "options": ["siriet"],
+            "help_text": "adapter.siriet.dialect.help_text",
+        },
+        {
+            "name": "treat_unexpected_stop_as_added_stop",
+            "type": "boolean",
+            "label": "adapter.siriet.treat_unexpected_stop_as_added_stop.label",
+            "required": True,
+            "help_text": "adapter.siriet.treat_unexpected_stop_as_added_stop.help_text",
+        },
+        {
+            "name": "treat_missing_stop_as_canceled_stop",
+            "type": "boolean",
+            "label": "adapter.siriet.treat_missing_stop_as_canceled_stop.label",
+            "required": True,
+            "help_text": "adapter.siriet.treat_missing_stop_as_canceled_stop.help_text",
         },
         {
             "name": "filter",
             "type": "text",
-            "label": "adapter.sirisx.filter.label",
+            "label": "adapter.siriet.filter.label",
             "required": False,
-            "placeholder": "adapter.sirisx.filter.placeholder",
-            "help_text": "adapter.sirisx.filter.help_text",
+            "placeholder": "adapter.siriet.filter.placeholder",
+            "help_text": "adapter.siriet.filter.help_text",
         },
     ]
 
     def _validate_config(self) -> None:
+        self.config.setdefault("treat_unexpected_stop_as_added_stop", False)
+        self.config.setdefault("treat_missing_stop_as_canceled_stop", False)
+
         if "endpoint" not in self.config:
-            raise ValueError("SiriSx datasource requires 'endpoint' in config")
+            raise ValueError("SiriEt datasource requires 'endpoint' in config")
 
         if "participantref" not in self.config:
-            raise ValueError("SiriSx datasource requires 'participantref' in config")
+            raise ValueError("SiriEt datasource requires 'participantref' in config")
 
         if "method" not in self.config:
-            raise ValueError("SiriSx datasource requires 'method' in config")
+            raise ValueError("SiriEt datasource requires 'method' in config")
 
         if "dialect" not in self.config:
-            raise ValueError("SiriSx datasource requires 'dialect' in config")
+            raise ValueError("SiriEt datasource requires 'dialect' in config")
 
         if not isinstance(self.config["endpoint"], str):
             raise ValueError("'endpoint' must be a string")
@@ -92,20 +109,28 @@ class SiriSxDatasource(DatasourceBase):
             raise ValueError("'participantref' must be a string")
 
         try:
-            SiriSxMethod(self.config["method"])
+            SiriEtMethod(self.config["method"])
         except ValueError:
-            valid_methods = [method.value for method in SiriSxMethod]
+            valid_methods = [method.value for method in SiriEtMethod]
             raise ValueError(
                 f"Invalid method '{self.config['method']}'. Valid options: {', '.join(valid_methods)}"
             )
 
         try:
-            SiriSxDialect(self.config["dialect"])
+            SiriEtDialect(self.config["dialect"])
         except ValueError:
-            valid_dialects = [dialect.value for dialect in SiriSxDialect]
+            valid_dialects = [dialect.value for dialect in SiriEtDialect]
             raise ValueError(
                 f"Invalid dialect '{self.config['dialect']}'. Valid options: {', '.join(valid_dialects)}"
             )
+
+        for boolean_field in (
+            "treat_unexpected_stop_as_added_stop",
+            "treat_missing_stop_as_canceled_stop",
+        ):
+            if boolean_field in self.config and self.config[boolean_field] is not None:
+                if not isinstance(self.config[boolean_field], bool):
+                    raise ValueError(f"'{boolean_field}' must be a boolean")
 
         if "filter" in self.config and self.config["filter"]:
             if not isinstance(self.config["filter"], str):
@@ -131,39 +156,44 @@ class SiriSxDatasource(DatasourceBase):
         requestor_ref = ET.SubElement(service_request, "RequestorRef")
         requestor_ref.text = self.config.get("participantref", "")
 
-        situation_exchange = ET.SubElement(
+        estimated_timetable = ET.SubElement(
             service_request,
-            "SituationExchangeRequest",
+            "EstimatedTimetableRequest",
             attrib={"version": "2.0"},
         )
 
-        sx_timestamp = ET.SubElement(situation_exchange, "RequestTimestamp")
-        sx_timestamp.text = timestamp
+        et_timestamp = ET.SubElement(estimated_timetable, "RequestTimestamp")
+        et_timestamp.text = timestamp
 
         xml_string = ET.tostring(siri, encoding="unicode", method="xml")
         return f'<?xml version="1.0" encoding="UTF-8"?>{xml_string}'
 
     async def _fetch_records(self) -> dict[str, Any]:
         root = await self._fetch_and_parse_xml()
-        source_name = self.config.get("_source_name", "sirisx")
-        
-        dialect = SiriSxDialect(self.config["dialect"])
-        if dialect == SiriSxDialect.SIRISX:
-            transformer = SiriSxServiceAlertsTransformer(
-                make_unique_id=self._make_unique_id,
+        source_name = self.config.get("_source_name", "siriet")
+        self.config["treat_unexpected_stop_as_added_stop"] = bool(
+            self.config.get("treat_unexpected_stop_as_added_stop", False)
+        )
+        self.config["treat_missing_stop_as_canceled_stop"] = bool(
+            self.config.get("treat_missing_stop_as_canceled_stop", False)
+        )
+
+        dialect = SiriEtDialect(self.config["dialect"])
+        if dialect == SiriEtDialect.SIRIET:
+            transformer = SiriEtTripUpdatesTransformer(
                 filter_value=self.config.get("filter", ""),
             )
         else:
-            raise ValueError(f"Unknown SIRI-SX dialect: {dialect}")
-        
+            raise ValueError(f"Unknown SIRI-ET dialect: {dialect}")
+
         try:
             records = await self._run_cpu_bound(
                 transformer.transform,
                 {"root": root, "source_name": source_name},
             )
         except Exception as exc:
-            logger.error(f"[SiriSxDatasource] Failed to transform payload: {exc}", exc_info=True)
-            
+            logger.error(f"[SiriEtDatasource] Failed to transform payload: {exc}", exc_info=True)
+
             await self._log_request(
                 source_id=self.config.get("_source_id"),
                 request_url=self.config.get("endpoint", ""),
@@ -174,16 +204,16 @@ class SiriSxDatasource(DatasourceBase):
                 response_content_type="text/plain",
             )
 
-            raise ValueError(f"Failed to transform SIRI-SX payload: {exc}") from exc
+            raise ValueError(f"Failed to transform SIRI-ET payload: {exc}") from exc
 
         return {
-            "record_type": "service_alerts",
+            "record_type": "trip_updates",
             "records": records,
             "_transform_runtime_ms": transformer.get_runtime_duration_ms(),
         }
-    
+
     async def _fetch_and_parse_xml(self) -> ET.Element:
-        if self.config.get("method") == SiriSxMethod.PUBLISH_SUBSCRIBE.value:
+        if self.config.get("method") == SiriEtMethod.PUBLISH_SUBSCRIBE.value:
             raise NotImplementedError(
                 "Method 'publish/subscribe' is not yet supported. Please use 'request/response' instead."
             )
@@ -194,8 +224,8 @@ class SiriSxDatasource(DatasourceBase):
         response = None
         request_headers = {"Content-Type": "application/xml; charset=utf-8"}
         try:
-            logger.info(f"[SiriSxDatasource] Fetching SIRI-SX feed from {endpoint_url}")
-            
+            logger.info(f"[SiriEtDatasource] Fetching SIRI-ET feed from {endpoint_url}")
+
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
                     endpoint_url,
@@ -206,8 +236,8 @@ class SiriSxDatasource(DatasourceBase):
                 response.raise_for_status()
                 xml_content = response.text
         except httpx.HTTPError as exc:
-            logger.error(f"[SiriSxDatasource] HTTP error fetching feed: {exc}")
-            
+            logger.error(f"[SiriEtDatasource] HTTP error fetching feed: {exc}")
+
             await self._log_request(
                 source_id=self.config.get("_source_id"),
                 request_url=endpoint_url,
@@ -218,7 +248,7 @@ class SiriSxDatasource(DatasourceBase):
                 response_content_type="text/plain",
             )
 
-            raise ValueError(f"Failed to fetch SIRI-SX feed: {exc}") from exc
+            raise ValueError(f"Failed to fetch SIRI-ET feed: {exc}") from exc
 
         await self._log_request(
             source_id=self.config.get("_source_id"),
@@ -233,8 +263,8 @@ class SiriSxDatasource(DatasourceBase):
         try:
             return await self._run_cpu_bound(ET.fromstring, xml_content)
         except ET.ParseError as exc:
-            logger.error(f"[SiriSxDatasource] Failed to parse XML: {exc}")
-            
+            logger.error(f"[SiriEtDatasource] Failed to parse XML: {exc}")
+
             await self._log_request(
                 source_id=self.config.get("_source_id"),
                 request_url=endpoint_url,
@@ -245,4 +275,4 @@ class SiriSxDatasource(DatasourceBase):
                 response_content_type="text/plain",
             )
 
-            raise ValueError(f"Failed to parse SIRI-SX XML: {exc}") from exc
+            raise ValueError(f"Failed to parse SIRI-ET XML: {exc}") from exc

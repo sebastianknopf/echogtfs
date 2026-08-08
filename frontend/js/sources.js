@@ -883,11 +883,30 @@ const sources = (() => {
       return;
     }
 
-    // Parse config from form - include input, textarea, and select elements
+    // Parse config from form - include input, textarea, select, and checkbox elements
     let config = {};
     document.querySelectorAll('#source-config-fields input, #source-config-fields textarea, #source-config-fields select').forEach(input => {
       const fieldName = input.name.replace('config-', '');
+      if (input.type === 'checkbox') {
+        config[fieldName] = input.checked;
+        return;
+      }
+
       const value = input.value.trim();
+      if (input.tagName === 'SELECT' && fieldName) {
+        const isBooleanField = input.closest('.md-field')?.querySelector('select') === input && input.options.length > 0 && Array.from(input.options).some(option => option.value === 'true' || option.value === 'false');
+        if (isBooleanField) {
+          if (value === 'true') {
+            config[fieldName] = true;
+          } else if (value === 'false') {
+            config[fieldName] = false;
+          } else {
+            config[fieldName] = false;
+          }
+          return;
+        }
+      }
+
       if (value) {
         config[fieldName] = value;
       }
@@ -1069,11 +1088,42 @@ const sources = (() => {
       const fieldDiv = document.createElement('div');
       fieldDiv.className = 'md-field';
       
-      const value = configValues[field.name] || '';
+      const value = configValues[field.name] ?? '';
       
       // Translate field properties
       const translatedLabel = window.i18n(field.label);
       const translatedHelpText = field.help_text ? window.i18n(field.help_text) : '';
+      
+      // Handle boolean type as a localized dropdown
+      if (field.type === 'boolean') {
+        const currentValue = value === true || value === 'true' || value === 1 || value === '1';
+        const selectedTrue = currentValue === true ? 'selected' : '';
+        const selectedFalse = currentValue === false || value === '' || value === null || value === undefined ? 'selected' : '';
+        fieldDiv.innerHTML = `
+          <select class="md-field__input" name="config-${field.name}" ${field.required ? ' required' : ''}>
+            <option value="true" ${selectedTrue}>${ui.esc(window.i18n('common.yes'))}</option>
+            <option value="false" ${selectedFalse}>${ui.esc(window.i18n('common.no'))}</option>
+          </select>
+          <label class="md-field__label" for="config-${field.name}">${ui.esc(translatedLabel)}</label>
+          ${translatedHelpText ? `<div class="md-field__helper">${ui.esc(translatedHelpText)}</div>` : ''}
+        `;
+
+        const select = fieldDiv.querySelector('select');
+        select.addEventListener('change', function() {
+          if (this.value) {
+            fieldDiv.classList.add('md-field--has-value');
+          } else {
+            fieldDiv.classList.remove('md-field--has-value');
+          }
+        });
+
+        if (value !== '' && value !== null && value !== undefined) {
+          fieldDiv.classList.add('md-field--has-value');
+        }
+
+        container.appendChild(fieldDiv);
+        return;
+      }
       
       // Handle enum type as dropdown
       if (field.type === 'enum') {

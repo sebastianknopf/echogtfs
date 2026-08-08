@@ -127,6 +127,70 @@ class TestDatasourceBaseHelpers(unittest.TestCase):
 
 
 class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
+    async def test_sync_records_logs_runtime_steps(self):
+        repository = _SystemRepositoryStub()
+        realtime_repository = _RealtimeRepositoryStub()
+        gtfs_repository = _GtfsRepositoryStub()
+        datasource = _TestDatasource({})
+
+        async def fake_fetch_records():
+            return {"record_type": "service_alerts", "records": []}
+
+        async def fake_sync_service_alerts(**kwargs):
+            return {"added": 0, "updated": 0, "deleted": 0}
+
+        datasource._fetch_records = fake_fetch_records
+        datasource._sync_service_alert_records = fake_sync_service_alerts
+
+        with self.assertLogs("uvicorn", level="INFO") as captured:
+            result = await datasource.sync_records(
+                repository=repository,
+                realtime_repository=realtime_repository,
+                gtfs_repository=gtfs_repository,
+                source_id=2,
+                source_name="Demo",
+                log_dumps=False,
+            )
+
+        self.assertEqual(result, {"added": 0, "updated": 0, "deleted": 0})
+        logs = "\n".join(captured.output)
+        self.assertIn("datasource run", logs.lower())
+        self.assertIn("extract", logs.lower())
+        self.assertIn("transform", logs.lower())
+        self.assertIn("load", logs.lower())
+
+    async def test_sync_records_uses_transformer_runtime_from_payload(self):
+        repository = _SystemRepositoryStub()
+        realtime_repository = _RealtimeRepositoryStub()
+        gtfs_repository = _GtfsRepositoryStub()
+        datasource = _TestDatasource({})
+
+        async def fake_fetch_records():
+            return {
+                "record_type": "service_alerts",
+                "records": [],
+                "_transform_runtime_ms": 42.5,
+            }
+
+        async def fake_sync_service_alerts(**kwargs):
+            return {"added": 0, "updated": 0, "deleted": 0}
+
+        datasource._fetch_records = fake_fetch_records
+        datasource._sync_service_alert_records = fake_sync_service_alerts
+
+        with self.assertLogs("uvicorn", level="INFO") as captured:
+            await datasource.sync_records(
+                repository=repository,
+                realtime_repository=realtime_repository,
+                gtfs_repository=gtfs_repository,
+                source_id=2,
+                source_name="Demo",
+                log_dumps=False,
+            )
+
+        logs = "\n".join(captured.output)
+        self.assertIn("transform=42.50ms", logs)
+
     async def test_sync_service_alert_records_applies_policy_and_upserts(self):
         repository = _SystemRepositoryStub()
         realtime_repository = _RealtimeRepositoryStub()

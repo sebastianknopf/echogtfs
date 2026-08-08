@@ -6,6 +6,7 @@ import locale
 import logging
 import re
 import time
+from time import perf_counter
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from typing import Any, Callable
@@ -29,14 +30,18 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         self._make_unique_id = make_unique_id
         self._filter_value = (filter_value or "").strip()
         self._siri_ns = {"siri": "http://www.siri.org.uk/siri"}
+        self._runtime_duration_ms = 0.0
 
     def transform(self, raw_data: Any) -> list[dict[str, Any]]:
         """Transform SIRI-SX XML root to internal service-alert dictionaries."""
+        self._runtime_duration_ms = 0.0
+        start_time = perf_counter()
         root = raw_data["root"]
         source_name = raw_data["source_name"]
 
         situations = root.findall(".//siri:PtSituationElement", self._siri_ns)
         if not situations:
+            self._runtime_duration_ms = (perf_counter() - start_time) * 1000
             return []
 
         alerts = []
@@ -44,42 +49,48 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         filtered_by_participant = 0
         current_timestamp = int(time.time())
 
-        for situation in situations:
-            try:
-                if not self._matches_participant_filter(situation):
-                    filtered_by_participant += 1
-                    continue
+        try:
+            for situation in situations:
+                try:
+                    if not self._matches_participant_filter(situation):
+                        filtered_by_participant += 1
+                        continue
 
-                if not self._is_in_publication_window(situation, current_timestamp):
-                    filtered_out_of_window += 1
-                    continue
+                    if not self._is_in_publication_window(situation, current_timestamp):
+                        filtered_out_of_window += 1
+                        continue
 
-                alert = self._parse_situation_element_sirisx(
-                    situation,
-                    source_name,
-                    current_timestamp,
-                )
+                    alert = self._parse_situation_element_sirisx(
+                        situation,
+                        source_name,
+                        current_timestamp,
+                    )
 
-                if alert:
-                    alerts.append(alert)
-            except Exception as exc:
-                situation_number_elem = situation.find("siri:SituationNumber", self._siri_ns)
-                situation_number = (
-                    situation_number_elem.text if situation_number_elem is not None else "unknown"
-                )
+                    if alert:
+                        alerts.append(alert)
+                except Exception as exc:
+                    situation_number_elem = situation.find("siri:SituationNumber", self._siri_ns)
+                    situation_number = (
+                        situation_number_elem.text if situation_number_elem is not None else "unknown"
+                    )
 
-                logger.error(
-                    f"[SiriSxTransformer] Error parsing situation {situation_number}: {exc}"
-                )
+                    logger.error(
+                        f"[SiriSxTransformer] Error parsing situation {situation_number}: {exc}"
+                    )
 
-        logger.info(
-            "[SiriSxTransformer] Processed %s alerts (filtered: %s participant, %s window)",
-            len(alerts),
-            filtered_by_participant,
-            filtered_out_of_window,
-        )
+            logger.info(
+                "[SiriSxTransformer] Processed %s alerts (filtered: %s participant, %s window)",
+                len(alerts),
+                filtered_by_participant,
+                filtered_out_of_window,
+            )
 
-        return alerts
+            return alerts
+        finally:
+            self._runtime_duration_ms = (perf_counter() - start_time) * 1000
+
+    def get_runtime_duration_ms(self) -> float:
+        return float(self._runtime_duration_ms)
 
     def _parse_situation_element_sirisx(
         self,

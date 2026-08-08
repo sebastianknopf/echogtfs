@@ -176,4 +176,5 @@ class GtfsRealtimeDatasource(DatasourceBase):
         return {
             "record_type": "service_alerts",
             "records": records,
+            "_transform_runtime_ms": transformer.get_runtime_duration_ms(),
         }

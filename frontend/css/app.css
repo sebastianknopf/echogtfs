@@ -472,6 +472,29 @@ body {
 .md-field__helper { font-size: .75rem; margin: 4px 16px 0; color: var(--md-on-surface-medium); }
 .md-field.is-error .md-field__helper { color: var(--md-error); }
 
+.md-field__checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 0 16px;
+  border: 1px solid var(--md-outline);
+  border-radius: var(--md-shape-s);
+  background: var(--md-surface);
+  color: var(--md-on-surface);
+}
+
+.md-field__checkbox input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+.md-field__checkbox-label {
+  font-size: 0.95rem;
+  line-height: 1.4;
+}
+
 /* Inline variant for use in headers (e.g., filters) */
 .md-field--inline {
   padding-top: 0;
