@@ -19,6 +19,13 @@ A transformer must return this envelope shape:
 
 DatasourceBase expects dictionary records per record_type. These dictionaries are processed in this order:
 
+Implementation notes for the concrete transformers are collected in [transformers/README.md](transformers/README.md). The most relevant notes are:
+
+- [transformers/gtfsrt_service_alerts_transformer.md](transformers/gtfsrt_service_alerts_transformer.md)
+- [transformers/sirisx_service_alerts_transformer.md](transformers/sirisx_service_alerts_transformer.md)
+- [transformers/sirisx_swiss_service_alerts_transformer.md](transformers/sirisx_swiss_service_alerts_transformer.md)
+- [transformers/siriet_trip_updates_transformer.md](transformers/siriet_trip_updates_transformer.md)
+
 1. Fetch records from transformer.
 2. Normalize payload into (record_type, records).
 3. Initialize mapping/enrichment/matching dependencies.
