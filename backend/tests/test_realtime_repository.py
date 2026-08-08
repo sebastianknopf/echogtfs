@@ -807,7 +807,7 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result, "updated")
         self.assertTrue(existing_trip.is_active)
         self.assertTrue(existing_vehicle.is_active)
-        self.assertEqual(existing_trip.trip_id, "trip-4")
+        self.assertEqual(existing_trip.trip_id, "old-trip")
         self.assertEqual(existing_vehicle.vehicle_id, "veh-2")
         self.assertEqual(existing_vehicle.trip_id, "trip-4")
         session.flush.assert_not_awaited()

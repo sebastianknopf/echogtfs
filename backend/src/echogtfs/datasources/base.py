@@ -1309,6 +1309,7 @@ class DatasourceBase(DatasourceInterface):
         deleted_vehicle_ids: set[uuid.UUID] = set(vehicles_to_delete)
 
         for record in records:
+            vehicle_uuid = self._record_uuid(record, source_name, fallback_key="vehicle_id", kind="Vehicle-position")
             try:
                 trip_payload = self._extract_vehicle_trip_payload(record)
             except ValueError as exc:

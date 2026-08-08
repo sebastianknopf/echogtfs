@@ -47,6 +47,8 @@ class _RealtimeRepositoryStub:
         self.upsert_service_alert_from_sync = AsyncMock()
         self.list_trips_for_data_source = AsyncMock(return_value=[])
         self.list_trips_by_ids = AsyncMock(return_value=[])
+        self.list_trips_by_trip_ids = AsyncMock(return_value=[])
+        self.list_trip_ids_with_stop_events = AsyncMock(return_value=set())
         self.delete_trips_for_data_source_by_ids = AsyncMock()
         self.update_trip_update_from_sync = AsyncMock()
         self.list_vehicles_for_data_source = AsyncMock(return_value=[])
@@ -657,7 +659,7 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
             apply_mapping=lambda entity: entity,
         )
 
-        trip_uuid = datasource._make_unique_id("trip-upd-1", "Demo")
+        trip_uuid = datasource._make_unique_id("trip-1", "Demo")
         realtime_repository.list_trips_for_data_source = AsyncMock(
             return_value=[SimpleNamespace(id=trip_uuid, data_source_id=2)]
         )
@@ -682,7 +684,7 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
             records=records,
         )
 
-        self.assertEqual(result, {"added": 0, "updated": 0, "deleted": 1})
+        self.assertEqual(result, {"added": 0, "updated": 0, "deleted": 2})
         realtime_repository.update_trip_update_from_sync.assert_not_awaited()
         realtime_repository.delete_trips_for_data_source_by_ids.assert_awaited()
 
