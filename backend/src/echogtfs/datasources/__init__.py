@@ -6,12 +6,14 @@ from typing import Any
 
 from echogtfs.datasources.base import DatasourceBase
 from echogtfs.datasources.gtfsrt import GtfsRealtimeDatasource
+from echogtfs.datasources.siriet import SiriEtDatasource
 from echogtfs.datasources.sirilite import SiriLiteDatasource
 from echogtfs.datasources.sirisx import SiriSxDatasource
 
 __all__ = [
     "DatasourceBase",
     "GtfsRealtimeDatasource",
+    "SiriEtDatasource",
     "SiriLiteDatasource",
     "SiriSxDatasource",
     "DATASOURCE_REGISTRY",
@@ -21,6 +23,7 @@ __all__ = [
 
 DATASOURCE_REGISTRY: dict[str, type[DatasourceBase]] = {
     "gtfsrt": GtfsRealtimeDatasource,
+    "siriet": SiriEtDatasource,
     "sirilite": SiriLiteDatasource,
     "sirisx": SiriSxDatasource,
 }
