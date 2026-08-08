@@ -600,14 +600,15 @@ class Vehicle(Base):
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     latitude: Mapped[float] = mapped_column(Float)
     longitude: Mapped[float] = mapped_column(Float)
-    current_stop_sequence: Mapped[int] = mapped_column(Integer)
+    current_stop_sequence: Mapped[int | None] = mapped_column(Integer, nullable=True)
     current_status: Mapped[VehicleStopStatus] = mapped_column(
         Enum(VehicleStopStatus, name="vehicle_stop_status"),
         default=VehicleStopStatus.IN_TRANSIT_TO,
     )
     assignment_type: Mapped[AssignmentType] = mapped_column(String(64))
     congestion_level: Mapped[CongestionLevel] = mapped_column(
-        String(64), default=CongestionLevel.UNKNOWN_CONGESTION_LEVEL
+        Enum(CongestionLevel, name="congestion_level"),
+        default=CongestionLevel.UNKNOWN_CONGESTION_LEVEL,
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(

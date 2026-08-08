@@ -1433,6 +1433,16 @@ class DatasourceBase(DatasourceInterface):
             else:
                 stats_created += 1
 
+            current_stop_sequence_raw = record.get("current_stop_sequence")
+            try:
+                current_stop_sequence = (
+                    int(current_stop_sequence_raw)
+                    if current_stop_sequence_raw is not None
+                    else None
+                )
+            except (TypeError, ValueError):
+                current_stop_sequence = None
+
             await realtime_repository.update_vehicle_position_from_sync(
                 vehicle_uuid=vehicle_uuid,
                 source_id=source_id,
@@ -1453,7 +1463,7 @@ class DatasourceBase(DatasourceInterface):
                 timestamp=record["timestamp"],
                 latitude=float(record["latitude"]),
                 longitude=float(record["longitude"]),
-                current_stop_sequence=int(record.get("current_stop_sequence", 0)),
+                current_stop_sequence=current_stop_sequence,
                 current_status=str(record.get("current_status", "IN_TRANSIT_TO")),
                 assignment_type=vehicle_assignment_type,
                 congestion_level=str(record.get("congestion_level", "UNKNOWN_CONGESTION_LEVEL")),

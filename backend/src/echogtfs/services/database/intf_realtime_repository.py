@@ -306,7 +306,7 @@ class RealtimeRepositoryInterface(ABC):
         timestamp: Any,
         latitude: float,
         longitude: float,
-        current_stop_sequence: int,
+        current_stop_sequence: int | None,
         current_status: str,
         assignment_type: str,
         congestion_level: str,

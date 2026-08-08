@@ -186,7 +186,9 @@ class GtfsRealtimeVehiclePositionsExportService(GtfsRealtimeExportInterface):
 
             vehicle_position = entity.vehicle
             vehicle_position.timestamp = self._timestamp_value(vehicle_model.timestamp) or int(time.time())
-            vehicle_position.current_stop_sequence = self._stop_sequence_value(vehicle_model.current_stop_sequence) or 0
+            current_stop_sequence = self._stop_sequence_value(vehicle_model.current_stop_sequence)
+            if current_stop_sequence is not None:
+                vehicle_position.current_stop_sequence = current_stop_sequence
 
             trip_descriptor = vehicle_position.trip
             trip = vehicle_model.trip

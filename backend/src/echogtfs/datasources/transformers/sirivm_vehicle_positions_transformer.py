@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from time import perf_counter
 from typing import Any
 
+from echogtfs.enum.gtfsrt import CongestionLevel, VehicleStopStatus, WheelchairAccessible
 from echogtfs.datasources.transformers.intf_vehicle_positions_transformer import (
     VehiclePositionsTransformerInterface,
 )
@@ -193,7 +194,11 @@ class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
                         trip_id,
                     )
 
-        current_status = "AT_STOP" if vehicle_at_stop else "IN_TRANSIT_TO"
+        current_status = (
+            VehicleStopStatus.STOPPED_AT.value
+            if vehicle_at_stop
+            else VehicleStopStatus.IN_TRANSIT_TO.value
+        )
 
         scheduled_start_stop_id = self._get_text(
             monitored_journey.find("siri:OriginRef", self._siri_ns)
@@ -227,11 +232,13 @@ class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
             },
             "vehicle_id": vehicle_ref,
             "vehicle_label": vehicle_ref,
+            "vehicle_wheelchair_accessible": WheelchairAccessible.UNKNOWN.value,
             "timestamp": timestamp,
             "latitude": latitude,
             "longitude": longitude,
             "current_stop_sequence": current_stop_sequence,
             "current_status": current_status,
+            "congestion_level": CongestionLevel.UNKNOWN_CONGESTION_LEVEL.value,
             "stop_id": stop_id,
             "scheduled_start_stop_id": scheduled_start_stop_id,
             "scheduled_start_time": None,
