@@ -989,6 +989,7 @@ class DatasourceBase(DatasourceInterface):
         for record in records:
             trip_uuid = self._record_uuid(record, source_name, fallback_key="trip_id", kind="Trip-update")
             is_complete_stop_sequence = bool(record.get("is_complete_stop_sequence", False))
+            schedule_relationship = str(record.get("schedule_relationship", "SCHEDULED") or "SCHEDULED").upper()
 
             mapped_trip = self._identifier_mapping_service.apply_mapping(
                 {
@@ -997,6 +998,7 @@ class DatasourceBase(DatasourceInterface):
             )
             mapped_route_id = str(mapped_trip.get("route_id") or "")
             route_is_valid = bool(mapped_route_id) and mapped_route_id in gtfs_entities.get("route", set())
+            is_new_trip = schedule_relationship == "NEW"
 
             stop_events = []
             has_invalid_stop_reference = False
@@ -1020,7 +1022,7 @@ class DatasourceBase(DatasourceInterface):
             derived_trip_id = str(record["trip_id"])
             resolved_trip_id = derived_trip_id
             assignment_type = AssignmentType.DIRECT_BY_ID.value
-            trip_reference_is_valid = derived_trip_id in nominal_trip_ids
+            trip_reference_is_valid = True if is_new_trip else derived_trip_id in nominal_trip_ids
 
             mapped_match_start_stop = self._identifier_mapping_service.apply_mapping(
                 {
@@ -1038,7 +1040,7 @@ class DatasourceBase(DatasourceInterface):
             scheduled_start_stop_id = mapped_match_start_stop.get("stop_id")
             scheduled_end_stop_id = mapped_match_end_stop.get("stop_id")
 
-            if not trip_reference_is_valid:
+            if not is_new_trip and not trip_reference_is_valid:
                 matched_trip_id = await self._matching_service.match(
                     trip_id=derived_trip_id,
                     route_id=str(mapped_trip.get("route_id") or "") or None,
@@ -1063,16 +1065,17 @@ class DatasourceBase(DatasourceInterface):
                 else:
                     assignment_type = AssignmentType.NO_MATCH_GENERAL.value
 
-            nominal_trip = await gtfs_repository.get_gtfs_trip_with_stop_times(resolved_trip_id)
-            nominal_stop_times = list(nominal_trip.stop_times) if nominal_trip is not None else []
-            stop_events = await self._run_cpu_bound(
-                self._propagate_trip_update_stop_events,
-                stop_events,
-                nominal_stop_times,
-                treat_unexpected_stop_as_added_stop=treat_unexpected_stop_as_added_stop,
-                treat_missing_stop_as_canceled_stop=treat_missing_stop_as_canceled_stop,
-                is_complete_stop_sequence=is_complete_stop_sequence,
-            )
+            if not is_new_trip:
+                nominal_trip = await gtfs_repository.get_gtfs_trip_with_stop_times(resolved_trip_id)
+                nominal_stop_times = list(nominal_trip.stop_times) if nominal_trip is not None else []
+                stop_events = await self._run_cpu_bound(
+                    self._propagate_trip_update_stop_events,
+                    stop_events,
+                    nominal_stop_times,
+                    treat_unexpected_stop_as_added_stop=treat_unexpected_stop_as_added_stop,
+                    treat_missing_stop_as_canceled_stop=treat_missing_stop_as_canceled_stop,
+                    is_complete_stop_sequence=is_complete_stop_sequence,
+                )
 
             has_invalid_stop_reference = any(not bool(event.get("is_valid", True)) for event in stop_events)
 
