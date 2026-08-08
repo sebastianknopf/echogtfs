@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from time import perf_counter
 from typing import Any, Callable
 
 from echogtfs.datasources.transformers.intf_service_alerts_transformer import (
@@ -19,8 +20,11 @@ class GtfsRtServiceAlertsTransformer(ServiceAlertsTransformerInterface):
 
     def __init__(self, make_unique_id: Callable[[str, str], Any]):
         self._make_unique_id = make_unique_id
+        self._runtime_duration_ms = 0.0
 
     def transform(self, raw_data: Any) -> list[dict[str, Any]]:
+        self._runtime_duration_ms = 0.0
+        start_time = perf_counter()
         feed = raw_data["feed"]
         source_name = raw_data["source_name"]
 
@@ -28,169 +32,175 @@ class GtfsRtServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         filtered_not_yet_valid = 0
         filtered_expired = 0
 
-        for entity in feed.entity:
-            if not entity.HasField("alert"):
-                continue
-
-            alert = entity.alert
-            alert_id = self._make_unique_id(entity.id, source_name)
-
-            cause = self._map_cause(alert.cause) if alert.HasField("cause") else "UNKNOWN_CAUSE"
-            effect = self._map_effect(alert.effect) if alert.HasField("effect") else "UNKNOWN_EFFECT"
-            severity = (
-                self._map_severity(alert.severity_level)
-                if alert.HasField("severity_level")
-                else "UNKNOWN_SEVERITY"
-            )
-
-            translations = []
-            if alert.HasField("header_text"):
-                for translation in alert.header_text.translation:
-                    language = translation.language if translation.HasField("language") else "de-DE"
-                    header = translation.text if translation.HasField("text") else None
-
-                    description = None
-                    if alert.HasField("description_text"):
-                        for desc_trans in alert.description_text.translation:
-                            if (
-                                desc_trans.HasField("language")
-                                and desc_trans.language == language
-                            ) or (
-                                not desc_trans.HasField("language") and language == "de-DE"
-                            ):
-                                description = (
-                                    desc_trans.text if desc_trans.HasField("text") else None
-                                )
-                                break
-
-                    url = None
-                    if alert.HasField("url"):
-                        for url_trans in alert.url.translation:
-                            if (
-                                url_trans.HasField("language") and url_trans.language == language
-                            ) or (
-                                not url_trans.HasField("language") and language == "de-DE"
-                            ):
-                                url = url_trans.text if url_trans.HasField("text") else None
-                                break
-
-                    translations.append(
-                        {
-                            "language": language,
-                            "header_text": header,
-                            "description_text": description,
-                            "url": url,
-                        }
-                    )
-
-            if not translations:
-                translations.append(
-                    {
-                        "language": "de-DE",
-                        "header_text": "Service Alert",
-                        "description_text": None,
-                        "url": None,
-                    }
-                )
-
-            active_periods = []
-            if hasattr(alert, "impact_period"):
-                for period in alert.impact_period:
-                    active_periods.append(
-                        {
-                            "period_type": PeriodType.IMPACT_PERIOD,
-                            "start_time": period.start if period.HasField("start") else None,
-                            "end_time": period.end if period.HasField("end") else None,
-                        }
-                    )
-
-            if hasattr(alert, "communication_period"):
-                for period in alert.communication_period:
-                    active_periods.append(
-                        {
-                            "period_type": PeriodType.COMMUNICATION_PERIOD,
-                            "start_time": period.start if period.HasField("start") else None,
-                            "end_time": period.end if period.HasField("end") else None,
-                        }
-                    )
-
-            if not active_periods and alert.active_period:
-                for period in alert.active_period:
-                    active_periods.append(
-                        {
-                            "period_type": PeriodType.IMPACT_PERIOD,
-                            "start_time": period.start if period.HasField("start") else None,
-                            "end_time": period.end if period.HasField("end") else None,
-                        }
-                    )
-
-            if active_periods:
-                current_timestamp = int(time.time())
-                start_times = [p["start_time"] for p in active_periods if p["start_time"] is not None]
-                if start_times:
-                    earliest_start = min(start_times)
-                    one_month = 30 * 24 * 60 * 60
-                    if earliest_start > current_timestamp + one_month:
-                        filtered_not_yet_valid += 1
-                        continue
-
-                end_times = [p["end_time"] for p in active_periods if p["end_time"] is not None]
-                if end_times and max(end_times) < current_timestamp:
-                    filtered_expired += 1
+        try:
+            for entity in feed.entity:
+                if not entity.HasField("alert"):
                     continue
 
-            informed_entities = []
-            for entity_selector in alert.informed_entity:
-                informed_entities.append(
+                alert = entity.alert
+                alert_id = self._make_unique_id(entity.id, source_name)
+
+                cause = self._map_cause(alert.cause) if alert.HasField("cause") else "UNKNOWN_CAUSE"
+                effect = self._map_effect(alert.effect) if alert.HasField("effect") else "UNKNOWN_EFFECT"
+                severity = (
+                    self._map_severity(alert.severity_level)
+                    if alert.HasField("severity_level")
+                    else "UNKNOWN_SEVERITY"
+                )
+
+                translations = []
+                if alert.HasField("header_text"):
+                    for translation in alert.header_text.translation:
+                        language = translation.language if translation.HasField("language") else "de-DE"
+                        header = translation.text if translation.HasField("text") else None
+
+                        description = None
+                        if alert.HasField("description_text"):
+                            for desc_trans in alert.description_text.translation:
+                                if (
+                                    desc_trans.HasField("language")
+                                    and desc_trans.language == language
+                                ) or (
+                                    not desc_trans.HasField("language") and language == "de-DE"
+                                ):
+                                    description = (
+                                        desc_trans.text if desc_trans.HasField("text") else None
+                                    )
+                                    break
+
+                        url = None
+                        if alert.HasField("url"):
+                            for url_trans in alert.url.translation:
+                                if (
+                                    url_trans.HasField("language") and url_trans.language == language
+                                ) or (
+                                    not url_trans.HasField("language") and language == "de-DE"
+                                ):
+                                    url = url_trans.text if url_trans.HasField("text") else None
+                                    break
+
+                        translations.append(
+                            {
+                                "language": language,
+                                "header_text": header,
+                                "description_text": description,
+                                "url": url,
+                            }
+                        )
+
+                if not translations:
+                    translations.append(
+                        {
+                            "language": "de-DE",
+                            "header_text": "Service Alert",
+                            "description_text": None,
+                            "url": None,
+                        }
+                    )
+
+                active_periods = []
+                if hasattr(alert, "impact_period"):
+                    for period in alert.impact_period:
+                        active_periods.append(
+                            {
+                                "period_type": PeriodType.IMPACT_PERIOD,
+                                "start_time": period.start if period.HasField("start") else None,
+                                "end_time": period.end if period.HasField("end") else None,
+                            }
+                        )
+
+                if hasattr(alert, "communication_period"):
+                    for period in alert.communication_period:
+                        active_periods.append(
+                            {
+                                "period_type": PeriodType.COMMUNICATION_PERIOD,
+                                "start_time": period.start if period.HasField("start") else None,
+                                "end_time": period.end if period.HasField("end") else None,
+                            }
+                        )
+
+                if not active_periods and alert.active_period:
+                    for period in alert.active_period:
+                        active_periods.append(
+                            {
+                                "period_type": PeriodType.IMPACT_PERIOD,
+                                "start_time": period.start if period.HasField("start") else None,
+                                "end_time": period.end if period.HasField("end") else None,
+                            }
+                        )
+
+                if active_periods:
+                    current_timestamp = int(time.time())
+                    start_times = [p["start_time"] for p in active_periods if p["start_time"] is not None]
+                    if start_times:
+                        earliest_start = min(start_times)
+                        one_month = 30 * 24 * 60 * 60
+                        if earliest_start > current_timestamp + one_month:
+                            filtered_not_yet_valid += 1
+                            continue
+
+                    end_times = [p["end_time"] for p in active_periods if p["end_time"] is not None]
+                    if end_times and max(end_times) < current_timestamp:
+                        filtered_expired += 1
+                        continue
+
+                informed_entities = []
+                for entity_selector in alert.informed_entity:
+                    informed_entities.append(
+                        {
+                            "agency_id": entity_selector.agency_id
+                            if entity_selector.HasField("agency_id")
+                            else None,
+                            "route_id": entity_selector.route_id
+                            if entity_selector.HasField("route_id")
+                            else None,
+                            "route_type": entity_selector.route_type
+                            if entity_selector.HasField("route_type")
+                            else None,
+                            "stop_id": entity_selector.stop_id
+                            if entity_selector.HasField("stop_id")
+                            else None,
+                            "trip_id": entity_selector.trip.trip_id
+                            if entity_selector.HasField("trip")
+                            and entity_selector.trip.HasField("trip_id")
+                            else None,
+                            "direction_id": entity_selector.trip.direction_id
+                            if entity_selector.HasField("trip")
+                            and entity_selector.trip.HasField("direction_id")
+                            else None,
+                        }
+                    )
+
+                alerts.append(
                     {
-                        "agency_id": entity_selector.agency_id
-                        if entity_selector.HasField("agency_id")
-                        else None,
-                        "route_id": entity_selector.route_id
-                        if entity_selector.HasField("route_id")
-                        else None,
-                        "route_type": entity_selector.route_type
-                        if entity_selector.HasField("route_type")
-                        else None,
-                        "stop_id": entity_selector.stop_id
-                        if entity_selector.HasField("stop_id")
-                        else None,
-                        "trip_id": entity_selector.trip.trip_id
-                        if entity_selector.HasField("trip")
-                        and entity_selector.trip.HasField("trip_id")
-                        else None,
-                        "direction_id": entity_selector.trip.direction_id
-                        if entity_selector.HasField("trip")
-                        and entity_selector.trip.HasField("direction_id")
-                        else None,
+                        "id": alert_id,
+                        "cause": cause,
+                        "effect": effect,
+                        "severity_level": severity,
+                        "is_active": True,
+                        "translations": translations,
+                        "active_periods": active_periods,
+                        "informed_entities": informed_entities,
                     }
                 )
 
-            alerts.append(
-                {
-                    "id": alert_id,
-                    "cause": cause,
-                    "effect": effect,
-                    "severity_level": severity,
-                    "is_active": True,
-                    "translations": translations,
-                    "active_periods": active_periods,
-                    "informed_entities": informed_entities,
-                }
-            )
+            total_filtered = filtered_not_yet_valid + filtered_expired
+            if total_filtered > 0:
+                logger.info(
+                    "[GtfsRtTransformer] Filtered %s alerts: %s not yet valid, %s expired",
+                    total_filtered,
+                    filtered_not_yet_valid,
+                    filtered_expired,
+                )
 
-        total_filtered = filtered_not_yet_valid + filtered_expired
-        if total_filtered > 0:
-            logger.info(
-                "[GtfsRtTransformer] Filtered %s alerts: %s not yet valid, %s expired",
-                total_filtered,
-                filtered_not_yet_valid,
-                filtered_expired,
-            )
+            logger.info("[GtfsRtTransformer] Transformed %s valid alerts", len(alerts))
 
-        logger.info("[GtfsRtTransformer] Transformed %s valid alerts", len(alerts))
+            return alerts
+        finally:
+            self._runtime_duration_ms = (perf_counter() - start_time) * 1000
 
-        return alerts
+    def get_runtime_duration_ms(self) -> float:
+        return float(self._runtime_duration_ms)
 
     def _map_cause(self, gtfs_cause: int) -> str:
         cause_mapping = {

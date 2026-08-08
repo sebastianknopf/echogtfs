@@ -12,3 +12,7 @@ class VehiclePositionsTransformerInterface(ABC):
     @abstractmethod
     def transform(self, raw_data: Any) -> list[dict[str, Any]]:
         """Transform raw input payload into vehicle-position dictionaries."""
+
+    @abstractmethod
+    def get_runtime_duration_ms(self) -> float:
+        """Return the duration of the last transform run in milliseconds."""

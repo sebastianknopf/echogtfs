@@ -552,9 +552,14 @@ class DatasourceBase(DatasourceInterface):
         extract_start = perf_counter()
         fetched_payload = await self._fetch_records()
         extract_elapsed_ms = (perf_counter() - extract_start) * 1000
-        transform_start = perf_counter()
-        record_type, records = self._normalize_fetched_payload(fetched_payload)
-        transform_elapsed_ms = (perf_counter() - transform_start) * 1000
+        transform_runtime_ms = fetched_payload.get("_transform_runtime_ms")
+        if transform_runtime_ms is None:
+            transform_start = perf_counter()
+            record_type, records = self._normalize_fetched_payload(fetched_payload)
+            transform_elapsed_ms = (perf_counter() - transform_start) * 1000
+        else:
+            record_type, records = self._normalize_fetched_payload(fetched_payload)
+            transform_elapsed_ms = float(transform_runtime_ms)
 
         logger.info(
             f"[{adapter_type}] Fetched {len(records)} records from source "

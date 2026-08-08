@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from time import perf_counter
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from typing import Any, Callable
@@ -27,13 +28,17 @@ class SiriSxSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         self._make_unique_id = make_unique_id
         self._filter_value = (filter_value or "").strip()
         self._siri_ns = {"siri": "http://www.siri.org.uk/siri"}
+        self._runtime_duration_ms = 0.0
 
     def transform(self, raw_data: Any) -> list[dict[str, Any]]:
+        self._runtime_duration_ms = 0.0
+        start_time = perf_counter()
         root = raw_data["root"]
         source_name = raw_data["source_name"]
 
         situations = root.findall(".//siri:PtSituationElement", self._siri_ns)
         if not situations:
+            self._runtime_duration_ms = (perf_counter() - start_time) * 1000
             return []
 
         alerts = []
@@ -41,33 +46,39 @@ class SiriSxSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         filtered_by_participant = 0
         current_timestamp = int(time.time())
 
-        for situation in situations:
-            try:
-                if not self._matches_participant_filter(situation):
-                    filtered_by_participant += 1
-                    continue
+        try:
+            for situation in situations:
+                try:
+                    if not self._matches_participant_filter(situation):
+                        filtered_by_participant += 1
+                        continue
 
-                if not self._is_in_publication_window(situation, current_timestamp):
-                    filtered_out_of_window += 1
-                    continue
+                    if not self._is_in_publication_window(situation, current_timestamp):
+                        filtered_out_of_window += 1
+                        continue
 
-                alert = self._parse_situation(situation, source_name)
-                if alert:
-                    alerts.append(alert)
-            except Exception as exc:
-                logger.error(
-                    f"[SiriSxSwissServiceAlertsTransformer] Error processing situation: {exc}",
-                    exc_info=True,
-                )
+                    alert = self._parse_situation(situation, source_name)
+                    if alert:
+                        alerts.append(alert)
+                except Exception as exc:
+                    logger.error(
+                        f"[SiriSxSwissServiceAlertsTransformer] Error processing situation: {exc}",
+                        exc_info=True,
+                    )
 
-        logger.info(
-            "[SiriSxSwissServiceAlertsTransformer] Processed %s alerts (filtered: %s participant, %s window)",
-            len(alerts),
-            filtered_by_participant,
-            filtered_out_of_window,
-        )
+            logger.info(
+                "[SiriSxSwissServiceAlertsTransformer] Processed %s alerts (filtered: %s participant, %s window)",
+                len(alerts),
+                filtered_by_participant,
+                filtered_out_of_window,
+            )
 
-        return alerts
+            return alerts
+        finally:
+            self._runtime_duration_ms = (perf_counter() - start_time) * 1000
+
+    def get_runtime_duration_ms(self) -> float:
+        return float(self._runtime_duration_ms)
 
     def _matches_participant_filter(self, situation: ET.Element) -> bool:
         if not self._filter_value:

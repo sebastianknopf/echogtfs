@@ -179,6 +179,7 @@ class SiriSxDatasource(DatasourceBase):
         return {
             "record_type": "service_alerts",
             "records": records,
+            "_transform_runtime_ms": transformer.get_runtime_duration_ms(),
         }
     
     async def _fetch_and_parse_xml(self) -> ET.Element:

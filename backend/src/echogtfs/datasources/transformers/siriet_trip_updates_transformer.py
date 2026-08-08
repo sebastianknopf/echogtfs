@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, timedelta, timezone
+from time import perf_counter
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -23,13 +24,17 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
         self._filter_value = (filter_value or "").strip()
         self._siri_ns = {"siri": "http://www.siri.org.uk/siri"}
         self._target_timezone = self._resolve_timezone(self._configured_timezone_name())
+        self._runtime_duration_ms = 0.0
 
     def transform(self, raw_data: Any) -> list[dict[str, Any]]:
         """Transform SIRI-ET XML root to internal trip-update dictionaries."""
+        self._runtime_duration_ms = 0.0
+        start_time = perf_counter()
         root = raw_data["root"]
 
         journeys = root.findall(".//siri:EstimatedVehicleJourney", self._siri_ns)
         if not journeys:
+            self._runtime_duration_ms = (perf_counter() - start_time) * 1000
             return []
 
         trips: list[dict[str, Any]] = []
@@ -39,61 +44,67 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
         filtered_window = 0
         filtered_invalid = 0
 
-        for journey in journeys:
-            try:
-                monitored = self._parse_bool(
-                    self._get_text(journey.find("siri:Monitored", self._siri_ns)),
-                    default=True,
-                )
-
-                if not monitored:
-                    filtered_unmonitored += 1
-                    continue
-
-                if not self._matches_operator_filter(journey):
-                    filtered_by_operator += 1
-                    continue
-
-                if not self._is_new_trip_valid(journey):
-                    filtered_incomplete += 1
-                    logger.warning(
-                        "[SiriEtTripUpdatesTransformer] Discarding NEW trip because IsCompleteStopSequence is not true."
+        try:
+            for journey in journeys:
+                try:
+                    monitored = self._parse_bool(
+                        self._get_text(journey.find("siri:Monitored", self._siri_ns)),
+                        default=True,
                     )
 
-                    continue
+                    if not monitored:
+                        filtered_unmonitored += 1
+                        continue
 
-                trip = self._parse_estimated_vehicle_journey(journey)
-                if trip is None:
-                    filtered_invalid += 1
-                    continue
+                    if not self._matches_operator_filter(journey):
+                        filtered_by_operator += 1
+                        continue
 
-                if not self._is_in_trip_window(trip):
-                    filtered_window += 1
-                    continue
+                    if not self._is_new_trip_valid(journey):
+                        filtered_incomplete += 1
+                        logger.warning(
+                            "[SiriEtTripUpdatesTransformer] Discarding NEW trip because IsCompleteStopSequence is not true."
+                        )
 
-                trips.append(trip)
-            except Exception as exc:
-                trip_ref = self._get_text(
-                    journey.find("siri:FramedVehicleJourneyRef/siri:DatedVehicleJourneyRef", self._siri_ns)
-                ) or "unknown"
+                        continue
 
-                logger.error(
-                    "[SiriEtTripUpdatesTransformer] Error parsing journey %s: %s",
-                    trip_ref,
-                    exc,
-                )
+                    trip = self._parse_estimated_vehicle_journey(journey)
+                    if trip is None:
+                        filtered_invalid += 1
+                        continue
 
-        logger.info(
-            "[SiriEtTripUpdatesTransformer] Processed %s trip updates (filtered: %s unmonitored, %s operator, %s incomplete, %s window, %s invalid)",
-            len(trips),
-            filtered_unmonitored,
-            filtered_by_operator,
-            filtered_incomplete,
-            filtered_window,
-            filtered_invalid,
-        )
+                    if not self._is_in_trip_window(trip):
+                        filtered_window += 1
+                        continue
 
-        return trips
+                    trips.append(trip)
+                except Exception as exc:
+                    trip_ref = self._get_text(
+                        journey.find("siri:FramedVehicleJourneyRef/siri:DatedVehicleJourneyRef", self._siri_ns)
+                    ) or "unknown"
+
+                    logger.error(
+                        "[SiriEtTripUpdatesTransformer] Error parsing journey %s: %s",
+                        trip_ref,
+                        exc,
+                    )
+
+            logger.info(
+                "[SiriEtTripUpdatesTransformer] Processed %s trip updates (filtered: %s unmonitored, %s operator, %s incomplete, %s window, %s invalid)",
+                len(trips),
+                filtered_unmonitored,
+                filtered_by_operator,
+                filtered_incomplete,
+                filtered_window,
+                filtered_invalid,
+            )
+
+            return trips
+        finally:
+            self._runtime_duration_ms = (perf_counter() - start_time) * 1000
+
+    def get_runtime_duration_ms(self) -> float:
+        return float(self._runtime_duration_ms)
 
     def _is_new_trip_valid(self, journey: ET.Element) -> bool:
         extra_journey = self._parse_bool(
