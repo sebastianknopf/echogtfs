@@ -652,6 +652,24 @@ window.translations = {
     'adapter.sirisx.filter.label': 'Filter',
     'adapter.sirisx.filter.placeholder': 'Optionaler Filter-Ausdruck',
     'adapter.sirisx.filter.help_text': 'Filter zur Einschränkung der Datenquelle',
+
+    // SIRI-VM Adapter
+    'adapter.sirivm.endpoint.label': 'Endpoint URL',
+    'adapter.sirivm.endpoint.placeholder': 'https://api.example.com/siri-vm?RequestorRef={participantRef}',
+    'adapter.sirivm.endpoint.help_text': 'URL zum SIRI-VM Feed',
+    'adapter.sirivm.participantref.label': 'Participant Reference',
+    'adapter.sirivm.participantref.placeholder': 'YOUR_PARTICIPANT_ID',
+    'adapter.sirivm.participantref.help_text': 'Leitstellenkennung',
+    'adapter.sirivm.method.label': 'Methode',
+    'adapter.sirivm.method.help_text': 'Anfrage-Methode (Request/Response oder Publish/Subscribe)',
+    'adapter.sirivm.method.option.request_response': 'Request/Response',
+    'adapter.sirivm.method.option.publish_subscribe': 'Publish/Subscribe',
+    'adapter.sirivm.dialect.label': 'Dialekt',
+    'adapter.sirivm.dialect.help_text': 'Regionale Implementierungsvariante (SIRI-VM)',
+    'adapter.sirivm.dialect.option.sirivm': 'SIRI-VM',
+    'adapter.sirivm.filter.label': 'Filter',
+    'adapter.sirivm.filter.placeholder': 'Optionaler Filter-Ausdruck',
+    'adapter.sirivm.filter.help_text': 'Filter zur Einschränkung der Datenquelle',
   },
   
   en: {
@@ -1258,5 +1276,23 @@ window.translations = {
     'adapter.sirisx.filter.label': 'Filter',
     'adapter.sirisx.filter.placeholder': 'Optional filter expression',
     'adapter.sirisx.filter.help_text': 'Filter to restrict the data source',
+
+    // SIRI-VM Adapter
+    'adapter.sirivm.endpoint.label': 'Endpoint URL',
+    'adapter.sirivm.endpoint.placeholder': 'https://api.example.com/siri-vm?RequestorRef={participantRef}',
+    'adapter.sirivm.endpoint.help_text': 'URL to the SIRI-VM feed',
+    'adapter.sirivm.participantref.label': 'Participant Reference',
+    'adapter.sirivm.participantref.placeholder': 'YOUR_PARTICIPANT_ID',
+    'adapter.sirivm.participantref.help_text': 'Participant identifier',
+    'adapter.sirivm.method.label': 'Method',
+    'adapter.sirivm.method.help_text': 'Request method (Request/Response or Publish/Subscribe)',
+    'adapter.sirivm.method.option.request_response': 'Request/Response',
+    'adapter.sirivm.method.option.publish_subscribe': 'Publish/Subscribe',
+    'adapter.sirivm.dialect.label': 'Dialect',
+    'adapter.sirivm.dialect.help_text': 'Regional implementation variant (SIRI-VM)',
+    'adapter.sirivm.dialect.option.sirivm': 'SIRI-VM',
+    'adapter.sirivm.filter.label': 'Filter',
+    'adapter.sirivm.filter.placeholder': 'Optional filter expression',
+    'adapter.sirivm.filter.help_text': 'Filter to restrict the data source',
   }
 };

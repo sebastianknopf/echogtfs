@@ -31,6 +31,18 @@ class TestDatasourceRegistry(unittest.TestCase):
             ).get_datasource_type(),
             "sirisx",
         )
+        self.assertEqual(
+            get_datasource(
+                "sirivm",
+                {
+                    "endpoint": "https://x/{participantRef}",
+                    "participantref": "P1",
+                    "method": "request/response",
+                    "dialect": "sirivm",
+                },
+            ).get_datasource_type(),
+            "sirivm",
+        )
 
     def test_get_datasource_unknown_type_raises(self):
         with self.assertRaises(ValueError):
