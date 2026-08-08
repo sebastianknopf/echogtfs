@@ -2,7 +2,7 @@
 from typing import ClassVar
 import uuid
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, Uuid, func
+from sqlalchemy import BigInteger, Boolean, DateTime, Enum, Float, ForeignKey, Index, Integer, String, Text, Uuid, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from echogtfs.enum.gtfsrt import (
@@ -594,14 +594,16 @@ class Vehicle(Base):
     vehicle_label: Mapped[str | None] = mapped_column(Text, nullable=True)
     vehicle_license_plate: Mapped[str | None] = mapped_column(Text, nullable=True)
     vehicle_wheelchair_accessible: Mapped[WheelchairAccessible] = mapped_column(
-        String(64), default=WheelchairAccessible.NO_VALUE
+        Enum(WheelchairAccessible, name="vehicle_wheelchair_accessible"),
+        default=WheelchairAccessible.NO_VALUE,
     )
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     latitude: Mapped[float] = mapped_column(Float)
     longitude: Mapped[float] = mapped_column(Float)
     current_stop_sequence: Mapped[int] = mapped_column(Integer)
     current_status: Mapped[VehicleStopStatus] = mapped_column(
-        String(64), default=VehicleStopStatus.IN_TRANSIT_TO
+        Enum(VehicleStopStatus, name="vehicle_stop_status"),
+        default=VehicleStopStatus.IN_TRANSIT_TO,
     )
     assignment_type: Mapped[AssignmentType] = mapped_column(String(64))
     congestion_level: Mapped[CongestionLevel] = mapped_column(

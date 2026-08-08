@@ -973,17 +973,35 @@ class DatasourceBase(DatasourceInterface):
         if self._matching_service is None:
             self._matching_service = MatchingService(gtfs_repository, get_caching_service())
 
-        incoming_trip_ids = {
-            self._record_uuid(record, source_name, fallback_key="trip_id", kind="Trip-update")
-            for record in records
-        }
-
         existing_trips = {
             trip.id: trip
             for trip in await realtime_repository.list_trips_for_data_source(source_id)
         }
 
         existing_trip_ids = set(existing_trips.keys())
+
+        incoming_trip_reference_ids = {
+            str(record.get("trip_id") or "")
+            for record in records
+            if record.get("trip_id")
+        }
+
+        existing_trip_uuid_by_trip_id = {
+            str(trip.trip_id): trip.id
+            for trip in await realtime_repository.list_trips_by_trip_ids(
+                list(incoming_trip_reference_ids)
+            )
+        }
+
+        incoming_trip_ids = {
+            existing_trip_uuid_by_trip_id.get(
+                str(record.get("trip_id") or ""),
+                self._record_uuid(record, source_name, fallback_key="trip_id", kind="Trip-update"),
+            )
+            for record in records
+        }
+
+        existing_trip_ids.update(existing_trip_uuid_by_trip_id.values())
 
         if incoming_trip_ids:
             trips_by_id = {
@@ -996,7 +1014,6 @@ class DatasourceBase(DatasourceInterface):
                     existing_trips[trip_id] = trip
                     existing_trip_ids.add(trip_id)
 
-        trips_to_update = incoming_trip_ids & existing_trip_ids
         trips_to_delete = {
             trip_id for trip_id, trip in existing_trips.items()
             if trip.data_source_id == source_id and trip_id not in incoming_trip_ids
@@ -1014,7 +1031,6 @@ class DatasourceBase(DatasourceInterface):
             )
 
         for record in records:
-            trip_uuid = self._record_uuid(record, source_name, fallback_key="trip_id", kind="Trip-update")
             is_complete_stop_sequence = bool(record.get("is_complete_stop_sequence", False))
             schedule_relationship = str(record.get("schedule_relationship", "SCHEDULED") or "SCHEDULED").upper()
 
@@ -1092,6 +1108,10 @@ class DatasourceBase(DatasourceInterface):
                 else:
                     assignment_type = AssignmentType.NO_MATCH_GENERAL.value
 
+            persisted_trip_uuid = existing_trip_uuid_by_trip_id.get(str(resolved_trip_id))
+            if persisted_trip_uuid is None:
+                persisted_trip_uuid = self._make_unique_id(resolved_trip_id, source_name)
+
             if not is_new_trip:
                 nominal_trip = await gtfs_repository.get_gtfs_trip_with_stop_times(resolved_trip_id)
                 nominal_stop_times = list(nominal_trip.stop_times) if nominal_trip is not None else []
@@ -1116,8 +1136,8 @@ class DatasourceBase(DatasourceInterface):
             if has_invalid_reference:
                 if policy == InvalidReferencePolicy.DISCARD_ENTIRE_OBJECT:
                     should_skip_trip = True
-                    if trip_uuid in existing_trip_ids:
-                        policy_based_deletes.add(trip_uuid)
+                    if persisted_trip_uuid in existing_trip_ids:
+                        policy_based_deletes.add(persisted_trip_uuid)
 
                 elif policy in (
                     InvalidReferencePolicy.DISCARD_INVALID,
@@ -1152,13 +1172,16 @@ class DatasourceBase(DatasourceInterface):
                 and not has_invalid_stop_reference
             )
 
-            if trip_uuid in trips_to_update:
+            if persisted_trip_uuid in existing_trip_ids:
                 stats_updated += 1
             else:
                 stats_created += 1
+                existing_trip_ids.add(persisted_trip_uuid)
+
+            existing_trip_uuid_by_trip_id[str(resolved_trip_id)] = persisted_trip_uuid
 
             await realtime_repository.update_trip_update_from_sync(
-                trip_uuid=trip_uuid,
+                trip_uuid=persisted_trip_uuid,
                 source_id=source_id,
                 source_name=source_name,
                 trip_id=resolved_trip_id,
@@ -1227,6 +1250,22 @@ class DatasourceBase(DatasourceInterface):
             for record in records
         }
 
+        incoming_vehicle_trip_ids: set[str] = set()
+        for record in records:
+            try:
+                vehicle_trip_payload = self._extract_vehicle_trip_payload(record)
+            except ValueError:
+                continue
+
+            incoming_vehicle_trip_ids.add(str(vehicle_trip_payload.get("trip_id") or ""))
+
+        incoming_vehicle_trip_ids.discard("")
+
+        existing_trip_uuid_by_trip_id = {
+            str(trip.trip_id): trip.id
+            for trip in await realtime_repository.list_trips_by_trip_ids(list(incoming_vehicle_trip_ids))
+        }
+
         existing_vehicles = {
             vehicle.id: vehicle
             for vehicle in await realtime_repository.list_vehicles_for_data_source(source_id)
@@ -1260,6 +1299,8 @@ class DatasourceBase(DatasourceInterface):
                 source_id,
                 list(vehicles_to_delete),
             )
+
+        deleted_vehicle_ids: set[uuid.UUID] = set(vehicles_to_delete)
 
         for record in records:
             vehicle_uuid = self._record_uuid(record, source_name, fallback_key="vehicle_id", kind="Vehicle-position")
@@ -1380,7 +1421,12 @@ class DatasourceBase(DatasourceInterface):
 
             trip_payload["trip_id"] = resolved_trip_id
 
-            trip_uuid = self._make_unique_id(trip_payload["trip_id"], source_name)
+            existing_trip_uuid = existing_trip_uuid_by_trip_id.get(str(resolved_trip_id))
+            if existing_trip_uuid is not None:
+                trip_uuid = existing_trip_uuid
+            else:
+                trip_uuid = self._make_unique_id(trip_payload["trip_id"], source_name)
+                existing_trip_uuid_by_trip_id[str(resolved_trip_id)] = trip_uuid
 
             if vehicle_uuid in vehicles_to_update:
                 stats_updated += 1
@@ -1421,6 +1467,37 @@ class DatasourceBase(DatasourceInterface):
                 list(policy_based_deletes),
             )
             stats_deleted += len(policy_based_deletes)
+            deleted_vehicle_ids.update(policy_based_deletes)
+
+        deleted_vehicle_trip_ids = {
+            str(existing_vehicles[vehicle_id].trip_id)
+            for vehicle_id in deleted_vehicle_ids
+            if vehicle_id in existing_vehicles and getattr(existing_vehicles[vehicle_id], "trip_id", None)
+        }
+
+        if deleted_vehicle_trip_ids:
+            trip_ids_with_stop_events = await realtime_repository.list_trip_ids_with_stop_events(
+                list(deleted_vehicle_trip_ids)
+            )
+
+            deletable_trip_ids = deleted_vehicle_trip_ids - trip_ids_with_stop_events
+
+            if deletable_trip_ids:
+                deletable_trips = await realtime_repository.list_trips_by_trip_ids(
+                    list(deletable_trip_ids)
+                )
+                
+                deletable_trip_uuids = [
+                    trip.id
+                    for trip in deletable_trips
+                    if trip.data_source_id == source_id
+                ]
+
+                if deletable_trip_uuids:
+                    await realtime_repository.delete_trips_for_data_source_by_ids(
+                        source_id,
+                        deletable_trip_uuids,
+                    )
 
         logger.info(
             f"[{self.get_adapter_type()}] Vehicle-position import completed for '{source_name}': "

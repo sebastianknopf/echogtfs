@@ -600,6 +600,30 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
             result = await db.execute(stmt)
             return list(result.scalars().all())
 
+    async def list_trips_by_trip_ids(self, trip_ids: list[str]) -> list[Trip]:
+        """Return realtime trips by trip_id values."""
+        if not trip_ids:
+            return []
+
+        stmt = select(Trip).where(Trip.trip_id.in_(trip_ids))
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+
+            return list(result.scalars().all())
+
+    async def list_trip_ids_with_stop_events(self, trip_ids: list[str]) -> set[str]:
+        """Return trip_id values that have at least one realtime stop event."""
+        if not trip_ids:
+            return set()
+
+        stmt = select(StopEvent.trip_id).where(StopEvent.trip_id.in_(trip_ids)).distinct()
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            
+            return {str(value) for value in result.scalars().all()}
+
     async def delete_trips_for_data_source_by_ids(
         self,
         source_id: int,
@@ -872,16 +896,6 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                 )
                 db.add(existing_trip)
                 await db.flush()
-            else:
-                existing_trip.data_source_id = source_id
-                existing_trip.source = source_name
-                existing_trip.trip_id = trip_id
-                existing_trip.start_time = trip_start_time
-                existing_trip.start_date = trip_start_date
-                existing_trip.route_id = trip_route_id
-                existing_trip.schedule_relationship = trip_schedule_relationship
-                existing_trip.assignment_type = trip_assignment_type
-                existing_trip.is_valid = trip_is_valid
 
             existing_vehicle = await db.get(Vehicle, vehicle_uuid)
 
