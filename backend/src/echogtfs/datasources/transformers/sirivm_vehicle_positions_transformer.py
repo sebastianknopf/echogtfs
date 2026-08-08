@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from time import perf_counter
 from typing import Any
 
@@ -80,6 +80,12 @@ class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
             self._get_text(activity.find("siri:ValidUntilTime", self._siri_ns))
         )
         if valid_until is not None and self._to_utc(valid_until) < datetime.now(timezone.utc):
+            return None
+
+        recorded_at_time = self._parse_datetime(
+            self._get_text(activity.find("siri:RecordedAtTime", self._siri_ns))
+        )
+        if recorded_at_time is not None and self._to_utc(recorded_at_time) < datetime.now(timezone.utc) - timedelta(minutes=5):
             return None
 
         monitored_journey = activity.find("siri:MonitoredVehicleJourney", self._siri_ns)
@@ -208,9 +214,7 @@ class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
             monitored_journey.find("siri:DestinationRef", self._siri_ns)
         )
 
-        timestamp = self._parse_datetime(
-            self._get_text(activity.find("siri:RecordedAtTime", self._siri_ns))
-        )
+        timestamp = recorded_at_time
 
         if timestamp is None:
             timestamp = valid_until or datetime.now(timezone.utc)
