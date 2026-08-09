@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from echogtfs.common.global_id import GlobalId
-from echogtfs.matching.intf_matching_service import MatchingServiceInterface
+from echogtfs.services.matching.intf_matching_service import MatchingServiceInterface
 from echogtfs.services.caching import CachingServiceInterface
 from echogtfs.services.database import GtfsRepositoryInterface
 

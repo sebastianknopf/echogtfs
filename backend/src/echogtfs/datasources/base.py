@@ -11,8 +11,8 @@ from typing import Any
 from echogtfs.datasources.intf_datasource import DatasourceInterface
 from echogtfs.enum.gtfsrt import AssignmentType
 from echogtfs.enum.system import InvalidReferencePolicy
-from echogtfs.matching.intf_matching_service import MatchingServiceInterface
-from echogtfs.matching.matching_service import MatchingService
+from echogtfs.services.matching.intf_matching_service import MatchingServiceInterface
+from echogtfs.services.matching.matching_service import MatchingService
 from echogtfs.services.caching import get_caching_service
 from echogtfs.services.database import get_system_repository
 from echogtfs.services.datalog import DatalogService

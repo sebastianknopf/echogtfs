@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key-that-is-at-least-32-bytes-long")
 
-from echogtfs.matching.matching_service import MatchingService
+from echogtfs.services.matching.matching_service import MatchingService
 
 
 class TestMatchingService(unittest.IsolatedAsyncioTestCase):
