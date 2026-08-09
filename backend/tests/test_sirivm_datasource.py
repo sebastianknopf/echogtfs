@@ -18,6 +18,23 @@ from echogtfs.datasources.sirivm import SiriVmDatasource
 
 
 class TestSirivmDatasource(unittest.IsolatedAsyncioTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._logger_error_patcher = patch.object(sirivm_module.logger, "error")
+        cls._logger_warning_patcher = patch.object(sirivm_module.logger, "warning")
+        cls._logger_info_patcher = patch.object(sirivm_module.logger, "info")
+        cls._logger_error_patcher.start()
+        cls._logger_warning_patcher.start()
+        cls._logger_info_patcher.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._logger_info_patcher.stop()
+        cls._logger_warning_patcher.stop()
+        cls._logger_error_patcher.stop()
+        super().tearDownClass()
+
     def test_validate_config_rejects_invalid_method(self):
         with self.assertRaises(ValueError):
             SiriVmDatasource(

@@ -10,6 +10,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key-that-is-at-least-32-bytes-long")
 
+from echogtfs.datasources.transformers import (
+    sirivm_vehicle_positions_transformer as sirivm_vehicle_positions_transformer_module,
+)
 from echogtfs.datasources.transformers.sirivm_vehicle_positions_transformer import (
     SiriVmVehiclePositionsTransformer,
 )
@@ -17,6 +20,32 @@ from echogtfs.enum.gtfsrt import VehicleStopStatus
 
 
 class TestSiriVmVehiclePositionsTransformer(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        super().setUpClass()
+        cls._logger_error_patcher = patch.object(
+            sirivm_vehicle_positions_transformer_module.logger,
+            "error",
+        )
+        cls._logger_warning_patcher = patch.object(
+            sirivm_vehicle_positions_transformer_module.logger,
+            "warning",
+        )
+        cls._logger_info_patcher = patch.object(
+            sirivm_vehicle_positions_transformer_module.logger,
+            "info",
+        )
+        cls._logger_error_patcher.start()
+        cls._logger_warning_patcher.start()
+        cls._logger_info_patcher.start()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls._logger_info_patcher.stop()
+        cls._logger_warning_patcher.stop()
+        cls._logger_error_patcher.stop()
+        super().tearDownClass()
+
     def setUp(self) -> None:
         self.transformer = SiriVmVehiclePositionsTransformer()
 
@@ -199,7 +228,7 @@ class TestSiriVmVehiclePositionsTransformer(unittest.TestCase):
 
         monitored_journey = ET.fromstring(
             f"""
-<siri:MonitoredVehicleJourney xmlns:siri="http://www.siri.org.uk/siri">
+<siri:MonitoredVehicleJourney xmlns:siri=\"http://www.siri.org.uk/siri\">
   <siri:PreviousCalls>
     <siri:PreviousCall>
       <siri:StopPointRef>STOP_PREV</siri:StopPointRef>
@@ -242,7 +271,7 @@ class TestSiriVmVehiclePositionsTransformer(unittest.TestCase):
 
     def _payload(self, *activities: str) -> str:
         body = "\n".join(activities)
-        return f"""<siri:Root xmlns:siri="http://www.siri.org.uk/siri">{body}</siri:Root>"""
+        return f"""<siri:Root xmlns:siri=\"http://www.siri.org.uk/siri\">{body}</siri:Root>"""
 
     def _activity(
         self,
