@@ -8,3 +8,4 @@ This directory contains implementation-oriented notes for the concrete transform
 - [sirisx_service_alerts_transformer.md](sirisx_service_alerts_transformer.md): technical notes for the standard SIRI-SX service-alert transformer.
 - [sirisx_swiss_service_alerts_transformer.md](sirisx_swiss_service_alerts_transformer.md): technical notes for the Swiss SIRI-SX service-alert transformer.
 - [siriet_trip_updates_transformer.md](siriet_trip_updates_transformer.md): technical notes for the SIRI-ET trip-updates transformer.
+- [sirivm_vehicle_positions_transformer.md](sirivm_vehicle_positions_transformer.md): technical notes for the SIRI-VM vehicle-positions transformer.
