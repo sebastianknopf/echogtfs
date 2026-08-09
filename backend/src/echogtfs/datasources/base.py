@@ -1082,6 +1082,27 @@ class DatasourceBase(DatasourceInterface):
             scheduled_end_time = self._coerce_datetime(record.get("scheduled_end_time"))
             scheduled_start_stop_id = mapped_match_start_stop.get("stop_id")
             scheduled_end_stop_id = mapped_match_end_stop.get("stop_id")
+            scheduled_intermediate_stops: list[tuple[str, datetime]] = []
+
+            intermediate_candidates = record.get("scheduled_intermediate_stops")
+            if isinstance(intermediate_candidates, list):
+                for candidate in intermediate_candidates:
+                    if not isinstance(candidate, tuple) or len(candidate) != 2:
+                        continue
+
+                    candidate_stop_id, candidate_time = candidate
+                    mapped_intermediate_stop = self._identifier_mapping_service.apply_mapping(
+                        {
+                            "stop_id": candidate_stop_id,
+                        }
+                    )
+                    mapped_stop_id = mapped_intermediate_stop.get("stop_id")
+                    coerced_time = self._coerce_datetime(candidate_time)
+
+                    if mapped_stop_id is None or coerced_time is None:
+                        continue
+
+                    scheduled_intermediate_stops.append((str(mapped_stop_id), coerced_time))
 
             if not is_new_trip and not trip_reference_is_valid:
                 matched_trip_id = await self._matching_service.match(
@@ -1099,6 +1120,7 @@ class DatasourceBase(DatasourceInterface):
                         if scheduled_end_stop_id is not None
                         else None
                     ),
+                    scheduled_intermediate_stops=scheduled_intermediate_stops,
                 )
 
                 if matched_trip_id is not None:
@@ -1353,6 +1375,28 @@ class DatasourceBase(DatasourceInterface):
             scheduled_end_time = self._coerce_datetime(record.get("scheduled_end_time"))
             scheduled_start_stop_id = mapped_match_start_stop.get("stop_id")
             scheduled_end_stop_id = mapped_match_end_stop.get("stop_id")
+            scheduled_intermediate_stops: list[tuple[str, datetime]] = []
+
+            intermediate_candidates = trip_payload.get("scheduled_intermediate_stops")
+            if isinstance(intermediate_candidates, list):
+                for candidate in intermediate_candidates:
+                    if not isinstance(candidate, tuple) or len(candidate) != 2:
+                        continue
+
+                    candidate_stop_id, candidate_time = candidate
+                    mapped_intermediate_stop = self._identifier_mapping_service.apply_mapping(
+                        {
+                            "stop_id": candidate_stop_id,
+                        }
+                    )
+                    
+                    mapped_stop_id = mapped_intermediate_stop.get("stop_id")
+                    coerced_time = self._coerce_datetime(candidate_time)
+
+                    if mapped_stop_id is None or coerced_time is None:
+                        continue
+
+                    scheduled_intermediate_stops.append((str(mapped_stop_id), coerced_time))
 
             if not trip_reference_is_valid:
                 matched_trip_id = await self._matching_service.match(
@@ -1370,6 +1414,7 @@ class DatasourceBase(DatasourceInterface):
                         if scheduled_end_stop_id is not None
                         else None
                     ),
+                    scheduled_intermediate_stops=scheduled_intermediate_stops,
                 )
 
                 if matched_trip_id is not None:
