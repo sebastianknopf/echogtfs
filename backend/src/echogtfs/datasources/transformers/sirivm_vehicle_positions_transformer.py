@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import random
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from time import perf_counter
@@ -206,6 +207,23 @@ class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
             else VehicleStopStatus.IN_TRANSIT_TO.value
         )
 
+        is_complete_stop_sequence = self._parse_bool(
+            self._get_text(monitored_journey.find("siri:IsCompleteStopSequence", self._siri_ns)),
+            default=False,
+        )
+
+        call_candidates = self._collect_call_candidates(monitored_journey)
+        call_time_tuples = self._extract_call_stop_time_tuples(call_candidates)
+        if is_complete_stop_sequence and not call_time_tuples:
+            logger.warning(
+                "[SiriVmVehiclePositionsTransformer] Skipping vehicle activity %s due to missing usable aimed times in complete stop sequence calls",
+                trip_id,
+            )
+            
+            return None
+
+        scheduled_intermediate_stops: list[tuple[str, datetime]] = []
+
         scheduled_start_stop_id = self._get_text(
             monitored_journey.find("siri:OriginRef", self._siri_ns)
         )
@@ -213,6 +231,19 @@ class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
         scheduled_end_stop_id = self._get_text(
             monitored_journey.find("siri:DestinationRef", self._siri_ns)
         )
+        scheduled_start_time: datetime | None = None
+        scheduled_end_time: datetime | None = None
+
+        if is_complete_stop_sequence:
+            first_stop_id, first_time = call_time_tuples[0]
+            last_stop_id, last_time = call_time_tuples[-1]
+            scheduled_start_stop_id = first_stop_id
+            scheduled_start_time = first_time
+            scheduled_end_stop_id = last_stop_id
+            scheduled_end_time = last_time
+        else:
+            sample_size = min(3, len(call_time_tuples))
+            scheduled_intermediate_stops = random.sample(call_time_tuples, sample_size)
 
         timestamp = recorded_at_time
 
@@ -230,9 +261,10 @@ class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
                 "is_active": True,
                 "is_valid": True,
                 "scheduled_start_stop_id": scheduled_start_stop_id,
-                "scheduled_start_time": None,
+                "scheduled_start_time": scheduled_start_time,
                 "scheduled_end_stop_id": scheduled_end_stop_id,
-                "scheduled_end_time": None,
+                "scheduled_end_time": scheduled_end_time,
+                "scheduled_intermediate_stops": scheduled_intermediate_stops,
             },
             "vehicle_id": vehicle_ref,
             "vehicle_label": vehicle_ref,
@@ -245,10 +277,46 @@ class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
             "congestion_level": CongestionLevel.UNKNOWN_CONGESTION_LEVEL.value,
             "stop_id": stop_id,
             "scheduled_start_stop_id": scheduled_start_stop_id,
-            "scheduled_start_time": None,
+            "scheduled_start_time": scheduled_start_time,
             "scheduled_end_stop_id": scheduled_end_stop_id,
-            "scheduled_end_time": None,
+            "scheduled_end_time": scheduled_end_time,
+            "scheduled_intermediate_stops": scheduled_intermediate_stops,
         }
+
+    def _collect_call_candidates(self, monitored_journey: ET.Element) -> list[ET.Element]:
+        previous_calls = monitored_journey.findall("siri:PreviousCalls/siri:PreviousCall", self._siri_ns)
+        onward_calls = monitored_journey.findall("siri:OnwardCalls/siri:OnwardCall", self._siri_ns)
+        monitored_call = monitored_journey.find("siri:MonitoredCall", self._siri_ns)
+
+        ordered_calls: list[ET.Element] = []
+        ordered_calls.extend(previous_calls)
+
+        if monitored_call is not None:
+            ordered_calls.append(monitored_call)
+
+        ordered_calls.extend(onward_calls)
+
+        return ordered_calls
+
+    def _extract_call_stop_time_tuples(self, calls: list[ET.Element]) -> list[tuple[str, datetime]]:
+        extracted: list[tuple[str, datetime]] = []
+        for call in calls:
+            stop_id = self._get_text(call.find("siri:StopPointRef", self._siri_ns))
+
+            aimed_departure = self._parse_datetime(
+                self._get_text(call.find("siri:AimedDepartureTime", self._siri_ns))
+            )
+
+            aimed_arrival = self._parse_datetime(
+                self._get_text(call.find("siri:AimedArrivalTime", self._siri_ns))
+            )
+            
+            aimed_time = aimed_departure or aimed_arrival
+
+            if stop_id and aimed_time is not None:
+                extracted.append((stop_id, aimed_time))
+
+        return extracted
 
     @staticmethod
     def _get_text(element: ET.Element | None) -> str | None:

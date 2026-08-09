@@ -152,6 +152,7 @@ Allowed data model:
     "scheduled_start_time": datetime | None,
     "scheduled_end_stop_id": str | None,
     "scheduled_end_time": datetime | None,
+    "scheduled_intermediate_stops": list[tuple[str, datetime]],
     "stop_events": [
         {
             "trip_id": str,
@@ -181,6 +182,7 @@ Processed top-level fields:
 - scheduled_start_time: nullable, coerced to datetime and passed to matching when trip_id is non-nominal.
 - scheduled_end_stop_id: nullable, mapped and passed to matching when trip_id is non-nominal.
 - scheduled_end_time: nullable, coerced to datetime and passed to matching when trip_id is non-nominal.
+- scheduled_intermediate_stops: optional list of `(stop_id, datetime)` tuples for additional scheduled anchors.
 - stop_events: optional list, default [].
 
 Processed stop_events[*] fields:
@@ -245,6 +247,7 @@ Allowed data model:
         "scheduled_start_time": datetime | None,
         "scheduled_end_stop_id": str | None,
         "scheduled_end_time": datetime | None,
+        "scheduled_intermediate_stops": list[tuple[str, datetime]],
     },
     "vehicle_id": str,
     "vehicle_label": str | None,
@@ -297,6 +300,7 @@ Trip payload processing rules:
 - trip is_valid defaults to True.
 - mapped `route_id` replaces the original route ID in the normalized trip payload.
 - trip.scheduled_start_stop_id, trip.scheduled_start_time, trip.scheduled_end_stop_id, and trip.scheduled_end_time are nullable and passed to matching.
+- trip.scheduled_intermediate_stops is an optional list of `(stop_id, datetime)` tuples for additional scheduled anchors.
 
 Derived matching inputs for vehicle_positions:
 
