@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 import uuid
 
 from sqlalchemy import case, delete, func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from echogtfs.services.database.base import RepositoryBase
@@ -19,8 +21,249 @@ from echogtfs.services.database.models import (
 )
 
 
+logger = logging.getLogger("uvicorn")
+
+
 class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
     """SQLAlchemy repository for realtime-table access."""
+
+    SYNC_BATCH_SIZE = 1000
+
+    @staticmethod
+    def _chunked(items: list[Any], chunk_size: int) -> list[list[Any]]:
+        if not items:
+            return []
+
+        return [items[idx:idx + chunk_size] for idx in range(0, len(items), chunk_size)]
+
+    async def _upsert_service_alert_from_sync_in_session(
+        self,
+        db: AsyncSession,
+        *,
+        alert_id: uuid.UUID,
+        source_id: int,
+        source_name: str,
+        cause: str,
+        effect: str,
+        severity_level: str,
+        is_active_on_create: bool,
+        translations: list[dict[str, Any]],
+        active_periods: list[dict[str, Any]],
+        informed_entities: list[dict[str, Any]],
+    ) -> str:
+        existing = await db.get(ServiceAlert, alert_id)
+
+        action = "updated"
+        if existing is None:
+            action = "created"
+            existing = ServiceAlert(
+                id=alert_id,
+                cause=cause,
+                effect=effect,
+                severity_level=severity_level,
+                source=source_name,
+                data_source_id=source_id,
+                is_active=is_active_on_create,
+            )
+
+            db.add(existing)
+            await db.flush()
+        else:
+            existing.cause = cause
+            existing.effect = effect
+            existing.severity_level = severity_level
+            existing.source = source_name
+            existing.data_source_id = source_id
+
+        await db.execute(
+            delete(ServiceAlertTranslation).where(ServiceAlertTranslation.alert_id == alert_id)
+        )
+
+        await db.execute(
+            delete(ServiceAlertActivePeriod).where(ServiceAlertActivePeriod.alert_id == alert_id)
+        )
+
+        await db.execute(
+            delete(ServiceAlertInformedEntity).where(ServiceAlertInformedEntity.alert_id == alert_id)
+        )
+
+        for translation_data in translations:
+            db.add(ServiceAlertTranslation(alert_id=alert_id, **translation_data))
+
+        for period_data in active_periods:
+            db.add(ServiceAlertActivePeriod(alert_id=alert_id, **period_data))
+
+        for entity_data in informed_entities:
+            db.add(ServiceAlertInformedEntity(alert_id=alert_id, **entity_data))
+
+        await db.flush()
+
+        return action
+
+    async def _update_trip_update_from_sync_in_session(
+        self,
+        db: AsyncSession,
+        *,
+        trip_uuid: uuid.UUID,
+        source_id: int,
+        source_name: str,
+        trip_id: str,
+        start_time: str,
+        start_date: str,
+        route_id: str,
+        schedule_relationship: str,
+        assignment_type: str,
+        is_active_on_create: bool,
+        is_valid: bool,
+        stop_events: list[dict[str, Any]],
+    ) -> str:
+        existing = await db.get(Trip, trip_uuid)
+
+        action = "updated"
+        previous_trip_id = trip_id
+        if existing is None:
+            action = "created"
+            existing = Trip(
+                id=trip_uuid,
+                data_source_id=source_id,
+                source=source_name,
+                trip_id=trip_id,
+                start_time=start_time,
+                start_date=start_date,
+                route_id=route_id,
+                schedule_relationship=schedule_relationship,
+                assignment_type=assignment_type,
+                is_active=is_active_on_create,
+                is_valid=is_valid,
+            )
+
+            db.add(existing)
+            await db.flush()
+        else:
+            previous_trip_id = existing.trip_id
+            existing.data_source_id = source_id
+            existing.source = source_name
+            existing.trip_id = trip_id
+            existing.start_time = start_time
+            existing.start_date = start_date
+            existing.route_id = route_id
+            existing.schedule_relationship = schedule_relationship
+            existing.assignment_type = assignment_type
+            existing.is_valid = is_valid
+
+        trip_ids_to_clear = [trip_id]
+        if previous_trip_id != trip_id:
+            trip_ids_to_clear.append(previous_trip_id)
+
+        await db.execute(delete(StopEvent).where(StopEvent.trip_id.in_(trip_ids_to_clear)))
+
+        for event_data in stop_events:
+            payload = dict(event_data)
+            payload.pop("trip_id", None)
+            db.add(StopEvent(trip_id=trip_id, **payload))
+
+        await db.flush()
+
+        return action
+
+    async def _update_vehicle_position_from_sync_in_session(
+        self,
+        db: AsyncSession,
+        *,
+        vehicle_uuid: uuid.UUID,
+        source_id: int,
+        source_name: str,
+        trip_uuid: uuid.UUID,
+        trip_id: str,
+        trip_start_time: str,
+        trip_start_date: str,
+        trip_route_id: str,
+        trip_schedule_relationship: str,
+        trip_assignment_type: str,
+        trip_is_active_on_create: bool,
+        trip_is_valid: bool,
+        vehicle_id: str,
+        vehicle_label: str | None,
+        vehicle_license_plate: str | None,
+        vehicle_wheelchair_accessible: str,
+        timestamp: Any,
+        latitude: float,
+        longitude: float,
+        current_stop_sequence: int | None,
+        current_status: str,
+        assignment_type: str,
+        congestion_level: str,
+        is_active_on_create: bool,
+        is_valid: bool,
+    ) -> str:
+        existing_trip = await db.get(Trip, trip_uuid)
+        if existing_trip is None:
+            existing_trip = Trip(
+                id=trip_uuid,
+                data_source_id=source_id,
+                source=source_name,
+                trip_id=trip_id,
+                start_time=trip_start_time,
+                start_date=trip_start_date,
+                route_id=trip_route_id,
+                schedule_relationship=trip_schedule_relationship,
+                assignment_type=trip_assignment_type,
+                is_active=trip_is_active_on_create,
+                is_valid=trip_is_valid,
+            )
+
+            db.add(existing_trip)
+
+            await db.flush()
+
+        existing_vehicle = await db.get(Vehicle, vehicle_uuid)
+
+        action = "updated"
+        if existing_vehicle is None:
+            action = "created"
+            existing_vehicle = Vehicle(
+                id=vehicle_uuid,
+                data_source_id=source_id,
+                source=source_name,
+                trip_id=trip_id,
+                vehicle_id=vehicle_id,
+                vehicle_label=vehicle_label,
+                vehicle_license_plate=vehicle_license_plate,
+                vehicle_wheelchair_accessible=vehicle_wheelchair_accessible,
+                timestamp=timestamp,
+                latitude=latitude,
+                longitude=longitude,
+                current_stop_sequence=current_stop_sequence,
+                current_status=current_status,
+                assignment_type=assignment_type,
+                congestion_level=congestion_level,
+                is_active=is_active_on_create,
+                is_valid=is_valid,
+            )
+
+            db.add(existing_vehicle)
+
+            await db.flush()
+        else:
+            existing_vehicle.data_source_id = source_id
+            existing_vehicle.source = source_name
+            existing_vehicle.trip_id = trip_id
+            existing_vehicle.vehicle_id = vehicle_id
+            existing_vehicle.vehicle_label = vehicle_label
+            existing_vehicle.vehicle_license_plate = vehicle_license_plate
+            existing_vehicle.vehicle_wheelchair_accessible = vehicle_wheelchair_accessible
+            existing_vehicle.timestamp = timestamp
+            existing_vehicle.latitude = latitude
+            existing_vehicle.longitude = longitude
+            existing_vehicle.current_stop_sequence = current_stop_sequence
+            existing_vehicle.current_status = current_status
+            existing_vehicle.assignment_type = assignment_type
+            existing_vehicle.congestion_level = congestion_level
+            existing_vehicle.is_valid = is_valid
+
+        await db.flush()
+        
+        return action
 
     async def delete_alerts_for_data_source(self, source_id: int) -> int:
         """Delete all alerts for one data source and return deleted row count."""
@@ -118,13 +361,16 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
         if not alert_ids:
             return 0
 
-        stmt = delete(ServiceAlert).where(ServiceAlert.id.in_(alert_ids))
+        deleted_count = 0
+        for chunk in self._chunked(alert_ids, self.SYNC_BATCH_SIZE):
+            stmt = delete(ServiceAlert).where(ServiceAlert.id.in_(chunk))
 
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            await db.commit()
+            async with self.get_session() as db:
+                result = await db.execute(stmt)
+                await db.commit()
+                deleted_count += int(result.rowcount or 0)
 
-            return int(result.rowcount or 0)
+        return deleted_count
 
     async def list_service_alerts_for_data_source(self, source_id: int) -> list[ServiceAlert]:
         """Return alerts linked to one data source."""
@@ -381,15 +627,64 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
         if not alert_ids:
             return 0
 
-        stmt = delete(ServiceAlert).where(
-            ServiceAlert.data_source_id == source_id,
-            ServiceAlert.id.in_(alert_ids),
-        )
+        deleted_count = 0
+        for chunk in self._chunked(alert_ids, self.SYNC_BATCH_SIZE):
+            stmt = delete(ServiceAlert).where(
+                ServiceAlert.data_source_id == source_id,
+                ServiceAlert.id.in_(chunk),
+            )
 
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            await db.commit()
-            return int(result.rowcount or 0)
+            async with self.get_session() as db:
+                result = await db.execute(stmt)
+                await db.commit()
+                deleted_count += int(result.rowcount or 0)
+
+        return deleted_count
+
+    async def batch_upsert_service_alerts_from_sync(
+        self,
+        payloads: list[dict[str, Any]],
+    ) -> dict[str, list[Any]]:
+        """Batch upsert synchronized alerts with best-effort behavior."""
+        result: dict[str, list[Any]] = {
+            "created": [],
+            "updated": [],
+            "failed": [],
+        }
+
+        for payload_chunk in self._chunked(payloads, self.SYNC_BATCH_SIZE):
+            async with self.get_session() as db:
+                for payload in payload_chunk:
+                    alert_id = payload.get("alert_id")
+                    savepoint = await db.begin_nested()
+                    try:
+                        action = await self._upsert_service_alert_from_sync_in_session(
+                            db,
+                            alert_id=payload["alert_id"],
+                            source_id=payload["source_id"],
+                            source_name=payload["source_name"],
+                            cause=payload["cause"],
+                            effect=payload["effect"],
+                            severity_level=payload["severity_level"],
+                            is_active_on_create=payload["is_active_on_create"],
+                            translations=payload["translations"],
+                            active_periods=payload["active_periods"],
+                            informed_entities=payload["informed_entities"],
+                        )
+                        await savepoint.commit()
+                        result[action].append(alert_id)
+                    except Exception as exc:
+                        await savepoint.rollback()
+                        logger.error(
+                            "[realtime_repository] Alert batch upsert failed for %s: %s",
+                            alert_id,
+                            exc,
+                        )
+                        result["failed"].append({"id": alert_id, "error": str(exc)})
+
+                await db.commit()
+
+        return result
 
     async def upsert_service_alert_from_sync(
         self,
@@ -407,48 +702,19 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
     ) -> str:
         """Create or update a synchronized alert and replace child records."""
         async with self.get_session() as db:
-            existing = await db.get(ServiceAlert, alert_id)
-
-            action = "updated"
-            if existing is None:
-                action = "created"
-                existing = ServiceAlert(
-                    id=alert_id,
-                    cause=cause,
-                    effect=effect,
-                    severity_level=severity_level,
-                    source=source_name,
-                    data_source_id=source_id,
-                    is_active=is_active_on_create,
-                )
-                db.add(existing)
-                await db.flush()
-            else:
-                existing.cause = cause
-                existing.effect = effect
-                existing.severity_level = severity_level
-                existing.source = source_name
-                existing.data_source_id = source_id
-
-            await db.execute(
-                delete(ServiceAlertTranslation).where(ServiceAlertTranslation.alert_id == alert_id)
+            action = await self._upsert_service_alert_from_sync_in_session(
+                db,
+                alert_id=alert_id,
+                source_id=source_id,
+                source_name=source_name,
+                cause=cause,
+                effect=effect,
+                severity_level=severity_level,
+                is_active_on_create=is_active_on_create,
+                translations=translations,
+                active_periods=active_periods,
+                informed_entities=informed_entities,
             )
-            await db.execute(
-                delete(ServiceAlertActivePeriod).where(ServiceAlertActivePeriod.alert_id == alert_id)
-            )
-            await db.execute(
-                delete(ServiceAlertInformedEntity).where(ServiceAlertInformedEntity.alert_id == alert_id)
-            )
-
-            for translation_data in translations:
-                db.add(ServiceAlertTranslation(alert_id=alert_id, **translation_data))
-
-            for period_data in active_periods:
-                db.add(ServiceAlertActivePeriod(alert_id=alert_id, **period_data))
-
-            for entity_data in informed_entities:
-                db.add(ServiceAlertInformedEntity(alert_id=alert_id, **entity_data))
-
             await db.commit()
             return action
 
@@ -633,15 +899,66 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
         if not trip_ids:
             return 0
 
-        stmt = delete(Trip).where(
-            Trip.data_source_id == source_id,
-            Trip.id.in_(trip_ids),
-        )
+        deleted_count = 0
+        for chunk in self._chunked(trip_ids, self.SYNC_BATCH_SIZE):
+            stmt = delete(Trip).where(
+                Trip.data_source_id == source_id,
+                Trip.id.in_(chunk),
+            )
 
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            await db.commit()
-            return int(result.rowcount or 0)
+            async with self.get_session() as db:
+                result = await db.execute(stmt)
+                await db.commit()
+                deleted_count += int(result.rowcount or 0)
+
+        return deleted_count
+
+    async def batch_upsert_trip_updates_from_sync(
+        self,
+        payloads: list[dict[str, Any]],
+    ) -> dict[str, list[Any]]:
+        """Batch upsert synchronized trip updates with best-effort behavior."""
+        result: dict[str, list[Any]] = {
+            "created": [],
+            "updated": [],
+            "failed": [],
+        }
+
+        for payload_chunk in self._chunked(payloads, self.SYNC_BATCH_SIZE):
+            async with self.get_session() as db:
+                for payload in payload_chunk:
+                    trip_uuid = payload.get("trip_uuid")
+                    savepoint = await db.begin_nested()
+                    try:
+                        action = await self._update_trip_update_from_sync_in_session(
+                            db,
+                            trip_uuid=payload["trip_uuid"],
+                            source_id=payload["source_id"],
+                            source_name=payload["source_name"],
+                            trip_id=payload["trip_id"],
+                            start_time=payload["start_time"],
+                            start_date=payload["start_date"],
+                            route_id=payload["route_id"],
+                            schedule_relationship=payload["schedule_relationship"],
+                            assignment_type=payload["assignment_type"],
+                            is_active_on_create=payload["is_active_on_create"],
+                            is_valid=payload["is_valid"],
+                            stop_events=payload["stop_events"],
+                        )
+                        await savepoint.commit()
+                        result[action].append(trip_uuid)
+                    except Exception as exc:
+                        await savepoint.rollback()
+                        logger.error(
+                            "[realtime_repository] Trip batch upsert failed for %s: %s",
+                            trip_uuid,
+                            exc,
+                        )
+                        result["failed"].append({"id": trip_uuid, "error": str(exc)})
+
+                await db.commit()
+
+        return result
 
     async def update_trip_update_from_sync(
         self,
@@ -661,51 +978,21 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
     ) -> str:
         """Create or update a synchronized trip update and replace stop events."""
         async with self.get_session() as db:
-            existing = await db.get(Trip, trip_uuid)
-
-            action = "updated"
-            previous_trip_id = trip_id
-            if existing is None:
-                action = "created"
-                existing = Trip(
-                    id=trip_uuid,
-                    data_source_id=source_id,
-                    source=source_name,
-                    trip_id=trip_id,
-                    start_time=start_time,
-                    start_date=start_date,
-                    route_id=route_id,
-                    schedule_relationship=schedule_relationship,
-                    assignment_type=assignment_type,
-                    is_active=is_active_on_create,
-                    is_valid=is_valid,
-                )
-                
-                db.add(existing)
-                await db.flush()
-            else:
-                previous_trip_id = existing.trip_id
-                existing.data_source_id = source_id
-                existing.source = source_name
-                existing.trip_id = trip_id
-                existing.start_time = start_time
-                existing.start_date = start_date
-                existing.route_id = route_id
-                existing.schedule_relationship = schedule_relationship
-                existing.assignment_type = assignment_type
-                existing.is_valid = is_valid
-
-            trip_ids_to_clear = [trip_id]
-            if previous_trip_id != trip_id:
-                trip_ids_to_clear.append(previous_trip_id)
-
-            await db.execute(delete(StopEvent).where(StopEvent.trip_id.in_(trip_ids_to_clear)))
-
-            for event_data in stop_events:
-                payload = dict(event_data)
-                payload.pop("trip_id", None)
-                db.add(StopEvent(trip_id=trip_id, **payload))
-
+            action = await self._update_trip_update_from_sync_in_session(
+                db,
+                trip_uuid=trip_uuid,
+                source_id=source_id,
+                source_name=source_name,
+                trip_id=trip_id,
+                start_time=start_time,
+                start_date=start_date,
+                route_id=route_id,
+                schedule_relationship=schedule_relationship,
+                assignment_type=assignment_type,
+                is_active_on_create=is_active_on_create,
+                is_valid=is_valid,
+                stop_events=stop_events,
+            )
             await db.commit()
             return action
 
@@ -838,15 +1125,79 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
         if not vehicle_ids:
             return 0
 
-        stmt = delete(Vehicle).where(
-            Vehicle.data_source_id == source_id,
-            Vehicle.id.in_(vehicle_ids),
-        )
+        deleted_count = 0
+        for chunk in self._chunked(vehicle_ids, self.SYNC_BATCH_SIZE):
+            stmt = delete(Vehicle).where(
+                Vehicle.data_source_id == source_id,
+                Vehicle.id.in_(chunk),
+            )
 
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            await db.commit()
-            return int(result.rowcount or 0)
+            async with self.get_session() as db:
+                result = await db.execute(stmt)
+                await db.commit()
+                deleted_count += int(result.rowcount or 0)
+
+        return deleted_count
+
+    async def batch_upsert_vehicle_positions_from_sync(
+        self,
+        payloads: list[dict[str, Any]],
+    ) -> dict[str, list[Any]]:
+        """Batch upsert synchronized vehicle positions with best-effort behavior."""
+        result: dict[str, list[Any]] = {
+            "created": [],
+            "updated": [],
+            "failed": [],
+        }
+
+        for payload_chunk in self._chunked(payloads, self.SYNC_BATCH_SIZE):
+            async with self.get_session() as db:
+                for payload in payload_chunk:
+                    vehicle_uuid = payload.get("vehicle_uuid")
+                    savepoint = await db.begin_nested()
+                    try:
+                        action = await self._update_vehicle_position_from_sync_in_session(
+                            db,
+                            vehicle_uuid=payload["vehicle_uuid"],
+                            source_id=payload["source_id"],
+                            source_name=payload["source_name"],
+                            trip_uuid=payload["trip_uuid"],
+                            trip_id=payload["trip_id"],
+                            trip_start_time=payload["trip_start_time"],
+                            trip_start_date=payload["trip_start_date"],
+                            trip_route_id=payload["trip_route_id"],
+                            trip_schedule_relationship=payload["trip_schedule_relationship"],
+                            trip_assignment_type=payload["trip_assignment_type"],
+                            trip_is_active_on_create=payload["trip_is_active_on_create"],
+                            trip_is_valid=payload["trip_is_valid"],
+                            vehicle_id=payload["vehicle_id"],
+                            vehicle_label=payload["vehicle_label"],
+                            vehicle_license_plate=payload["vehicle_license_plate"],
+                            vehicle_wheelchair_accessible=payload["vehicle_wheelchair_accessible"],
+                            timestamp=payload["timestamp"],
+                            latitude=payload["latitude"],
+                            longitude=payload["longitude"],
+                            current_stop_sequence=payload["current_stop_sequence"],
+                            current_status=payload["current_status"],
+                            assignment_type=payload["assignment_type"],
+                            congestion_level=payload["congestion_level"],
+                            is_active_on_create=payload["is_active_on_create"],
+                            is_valid=payload["is_valid"],
+                        )
+                        await savepoint.commit()
+                        result[action].append(vehicle_uuid)
+                    except Exception as exc:
+                        await savepoint.rollback()
+                        logger.error(
+                            "[realtime_repository] Vehicle batch upsert failed for %s: %s",
+                            vehicle_uuid,
+                            exc,
+                        )
+                        result["failed"].append({"id": vehicle_uuid, "error": str(exc)})
+
+                await db.commit()
+
+        return result
 
     async def update_vehicle_position_from_sync(
         self,
@@ -879,66 +1230,33 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
     ) -> str:
         """Create or update a synchronized vehicle position and ensure linked trip exists."""
         async with self.get_session() as db:
-            existing_trip = await db.get(Trip, trip_uuid)
-            if existing_trip is None:
-                existing_trip = Trip(
-                    id=trip_uuid,
-                    data_source_id=source_id,
-                    source=source_name,
-                    trip_id=trip_id,
-                    start_time=trip_start_time,
-                    start_date=trip_start_date,
-                    route_id=trip_route_id,
-                    schedule_relationship=trip_schedule_relationship,
-                    assignment_type=trip_assignment_type,
-                    is_active=trip_is_active_on_create,
-                    is_valid=trip_is_valid,
-                )
-                db.add(existing_trip)
-                await db.flush()
-
-            existing_vehicle = await db.get(Vehicle, vehicle_uuid)
-
-            action = "updated"
-            if existing_vehicle is None:
-                action = "created"
-                existing_vehicle = Vehicle(
-                    id=vehicle_uuid,
-                    data_source_id=source_id,
-                    source=source_name,
-                    trip_id=trip_id,
-                    vehicle_id=vehicle_id,
-                    vehicle_label=vehicle_label,
-                    vehicle_license_plate=vehicle_license_plate,
-                    vehicle_wheelchair_accessible=vehicle_wheelchair_accessible,
-                    timestamp=timestamp,
-                    latitude=latitude,
-                    longitude=longitude,
-                    current_stop_sequence=current_stop_sequence,
-                    current_status=current_status,
-                    assignment_type=assignment_type,
-                    congestion_level=congestion_level,
-                    is_active=is_active_on_create,
-                    is_valid=is_valid,
-                )
-                db.add(existing_vehicle)
-                await db.flush()
-            else:
-                existing_vehicle.data_source_id = source_id
-                existing_vehicle.source = source_name
-                existing_vehicle.trip_id = trip_id
-                existing_vehicle.vehicle_id = vehicle_id
-                existing_vehicle.vehicle_label = vehicle_label
-                existing_vehicle.vehicle_license_plate = vehicle_license_plate
-                existing_vehicle.vehicle_wheelchair_accessible = vehicle_wheelchair_accessible
-                existing_vehicle.timestamp = timestamp
-                existing_vehicle.latitude = latitude
-                existing_vehicle.longitude = longitude
-                existing_vehicle.current_stop_sequence = current_stop_sequence
-                existing_vehicle.current_status = current_status
-                existing_vehicle.assignment_type = assignment_type
-                existing_vehicle.congestion_level = congestion_level
-                existing_vehicle.is_valid = is_valid
-
+            action = await self._update_vehicle_position_from_sync_in_session(
+                db,
+                vehicle_uuid=vehicle_uuid,
+                source_id=source_id,
+                source_name=source_name,
+                trip_uuid=trip_uuid,
+                trip_id=trip_id,
+                trip_start_time=trip_start_time,
+                trip_start_date=trip_start_date,
+                trip_route_id=trip_route_id,
+                trip_schedule_relationship=trip_schedule_relationship,
+                trip_assignment_type=trip_assignment_type,
+                trip_is_active_on_create=trip_is_active_on_create,
+                trip_is_valid=trip_is_valid,
+                vehicle_id=vehicle_id,
+                vehicle_label=vehicle_label,
+                vehicle_license_plate=vehicle_license_plate,
+                vehicle_wheelchair_accessible=vehicle_wheelchair_accessible,
+                timestamp=timestamp,
+                latitude=latitude,
+                longitude=longitude,
+                current_stop_sequence=current_stop_sequence,
+                current_status=current_status,
+                assignment_type=assignment_type,
+                congestion_level=congestion_level,
+                is_active_on_create=is_active_on_create,
+                is_valid=is_valid,
+            )
             await db.commit()
             return action
