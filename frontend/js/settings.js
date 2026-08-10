@@ -229,7 +229,9 @@ const settings = (() => {
       );
     } else if (status.status === 'error') {
       _showStatus(
-        (time ? window.i18n('settings.gtfs_import_error_time', { time, message: status.message ?? '' }) : window.i18n('settings.gtfs_import_error_short', { message: status.message ?? '' })),
+        status.message
+          ? window.i18n('settings.gtfs_import_error_status', { message: status.message })
+          : window.i18n('settings.gtfs_import_error_status_empty'),
         'error',
       );
     } else {

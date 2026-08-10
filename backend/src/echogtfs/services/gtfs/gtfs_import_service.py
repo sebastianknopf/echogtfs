@@ -78,6 +78,13 @@ class GtfsImportService(GtfsImportInterface):
 
         return {key: all_settings.get(key) for key in keys}
 
+    async def _set_import_state(self, status: str, *, message: str | None = None) -> None:
+        await self._repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_STATUS, status)
+        await self._repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_TIME, self._now_iso())
+
+        if message is not None:
+            await self._repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_MESSAGE, message)
+
     async def get_status(self) -> dict[str, str | None]:
         settings = await self._get_filtered_settings(
             [
@@ -156,8 +163,7 @@ class GtfsImportService(GtfsImportInterface):
     async def run_import_task(self, progress_report_interface: ReportProgressInterface) -> None:
         logger.info("[GTFS] Import task started")
 
-        await self._repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_STATUS, self.STATUS_RUNNING)
-        await self._repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_TIME, self._now_iso())
+        await self._set_import_state(self.STATUS_RUNNING)
 
         try:
             result = await self._import_feed(progress_report_interface)
@@ -178,17 +184,13 @@ class GtfsImportService(GtfsImportInterface):
 
             logger.info("[GTFS] Import successful: %s", message)
 
-            await self._repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_STATUS, self.STATUS_SUCCESS)
-            await self._repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_MESSAGE, message)
-            await self._repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_TIME, self._now_iso())
+            await self._set_import_state(self.STATUS_SUCCESS, message=message)
 
             await progress_report_interface.report_progress(progress=100.0, message="intf.gtfsimport.done")
         except Exception as exc:  # noqa: BLE001
             logger.error("[GTFS] Import error: %s", exc)
 
-            await self._repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_STATUS, self.STATUS_ERROR)
-            await self._repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_MESSAGE, str(exc))
-            await self._repository.set_app_setting(AppSetting.KEY_GTFS_IMPORT_TIME, self._now_iso())
+            await self._set_import_state(self.STATUS_ERROR, message=str(exc))
 
             await progress_report_interface.report_progress(progress=100.0, message="intf.gtfsimport.error")
 
