@@ -47,6 +47,7 @@ class TestGtfsRealtimeTripUpdatesExportService(unittest.IsolatedAsyncioTestCase)
         self.assertEqual(entity["id"], "trip-row-id")
         self.assertEqual(entity["trip_update"]["trip"]["trip_id"], "TRIP-1")
         self.assertEqual(entity["trip_update"]["trip"]["schedule_relationship"], "SCHEDULED")
+        self.assertEqual(entity["trip_update"]["vehicle"]["id"], "BUS-1")
         self.assertEqual(entity["trip_update"]["vehicle"]["wheelchair_accessible"], "WHEELCHAIR_ACCESSIBLE")
         self.assertEqual(
             entity["trip_update"]["stop_time_update"][0]["schedule_relationship"],
@@ -103,6 +104,7 @@ class TestGtfsRealtimeTripUpdatesExportService(unittest.IsolatedAsyncioTestCase)
     def test_build_feed_message_ignores_invalid_optional_values(self):
         invalid_vehicle = SimpleNamespace(
             id="vehicle-row-id",
+            vehicle_id="BUS-1",
             vehicle_label="Label",
             vehicle_license_plate="Plate",
             vehicle_wheelchair_accessible="NOT_VALID",
@@ -154,6 +156,20 @@ class TestGtfsRealtimeTripUpdatesExportService(unittest.IsolatedAsyncioTestCase)
 
         self.assertEqual(feed.entity[0].trip_update.trip.start_time, "10:00:00")
 
+    def test_build_feed_message_normalizes_trip_start_date_to_yyyymmdd(self):
+        trip = self._make_trip(start_date="2026-07-21")
+        with patch.object(
+            GtfsRealtimeTripUpdatesExportService,
+            "_configured_timezone_name",
+            return_value="UTC",
+        ):
+            service = GtfsRealtimeTripUpdatesExportService(SimpleNamespace())
+
+        with patch("echogtfs.services.gtfsrt.gtfs_realtime_trip_updates_export_service.time.time", return_value=1700000000):
+            feed = service._build_feed_message([trip])
+
+        self.assertEqual(feed.entity[0].trip_update.trip.start_date, "20260721")
+
     def test_build_feed_message_formats_next_day_departure_above_23_hours(self):
         trip = self._make_trip(start_time="23:30:00")
         with patch.object(
@@ -184,6 +200,7 @@ class TestGtfsRealtimeTripUpdatesExportService(unittest.IsolatedAsyncioTestCase)
         *,
         schedule_relationship: str = "SCHEDULED",
         start_time: str = "08:00:00",
+        start_date: str = "20260721",
         stop_events: list[SimpleNamespace] | None = None,
         vehicle: SimpleNamespace | None = None,
     ) -> SimpleNamespace:
@@ -201,6 +218,7 @@ class TestGtfsRealtimeTripUpdatesExportService(unittest.IsolatedAsyncioTestCase)
         if vehicle is None:
             vehicle = SimpleNamespace(
                 id="vehicle-row-id",
+                vehicle_id="BUS-1",
                 vehicle_label="Vehicle Label",
                 vehicle_license_plate="ABC-123",
                 vehicle_wheelchair_accessible="WHEELCHAIR_ACCESSIBLE",
@@ -211,7 +229,7 @@ class TestGtfsRealtimeTripUpdatesExportService(unittest.IsolatedAsyncioTestCase)
             trip_id="TRIP-1",
             route_id="ROUTE-1",
             start_time=start_time,
-            start_date="20260721",
+            start_date=start_date,
             schedule_relationship=schedule_relationship,
             updated_at=1700000001,
             stop_events=stop_events,

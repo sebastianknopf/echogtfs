@@ -14,6 +14,7 @@ from echogtfs.datasources.transformers import (
     SiriEtTripUpdatesTransformer,
     SiriSxServiceAlertsTransformer,
     SiriSxSwissServiceAlertsTransformer,
+    SiriVmVehiclePositionsTransformer,
 )
 
 logger = logging.getLogger("uvicorn")
@@ -23,6 +24,7 @@ class SiriLiteDialect(str, Enum):
     SIRISX = "sirisx"
     SIRISX_SWISS = "sirisx-swiss"
     SIRIET = "siriet"
+    SIRIVM = "sirivm"
 
 
 class SiriLiteDatasource(DatasourceBase):
@@ -50,7 +52,7 @@ class SiriLiteDatasource(DatasourceBase):
             "type": "enum",
             "label": "adapter.sirilite.dialect.label",
             "required": True,
-            "options": ["sirisx", "sirisx-swiss", "siriet"],
+            "options": ["sirisx", "sirisx-swiss", "siriet", "sirivm"],
             "help_text": "adapter.sirilite.dialect.help_text",
         },
         {
@@ -144,6 +146,10 @@ class SiriLiteDatasource(DatasourceBase):
                 filter_value=filter_value,
             )
             record_type = "trip_updates"
+
+        elif dialect == SiriLiteDialect.SIRIVM:
+            transformer = SiriVmVehiclePositionsTransformer()
+            record_type = "vehicle_positions"
 
         else:
             raise ValueError(f"Unknown SIRI Lite dialect: {dialect}")

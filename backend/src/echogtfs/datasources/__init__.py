@@ -8,6 +8,7 @@ from echogtfs.datasources.base import DatasourceBase
 from echogtfs.datasources.gtfsrt import GtfsRealtimeDatasource
 from echogtfs.datasources.siriet import SiriEtDatasource
 from echogtfs.datasources.sirilite import SiriLiteDatasource
+from echogtfs.datasources.sirivm import SiriVmDatasource
 from echogtfs.datasources.sirisx import SiriSxDatasource
 
 __all__ = [
@@ -15,6 +16,7 @@ __all__ = [
     "GtfsRealtimeDatasource",
     "SiriEtDatasource",
     "SiriLiteDatasource",
+    "SiriVmDatasource",
     "SiriSxDatasource",
     "DATASOURCE_REGISTRY",
     "get_datasource",
@@ -25,6 +27,7 @@ DATASOURCE_REGISTRY: dict[str, type[DatasourceBase]] = {
     "gtfsrt": GtfsRealtimeDatasource,
     "siriet": SiriEtDatasource,
     "sirilite": SiriLiteDatasource,
+    "sirivm": SiriVmDatasource,
     "sirisx": SiriSxDatasource,
 }
 

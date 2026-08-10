@@ -366,11 +366,11 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         if not self._filter_value:
             return True
 
-        allowed_participants = {
+        allowed_patterns = [
             participant.strip()
             for participant in self._filter_value.split(",")
             if participant.strip()
-        }
+        ]
 
         participant_ref_elem = situation.find("siri:ParticipantRef", self._siri_ns)
         participant_ref = (
@@ -379,7 +379,15 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
             else None
         )
 
-        return bool(participant_ref and participant_ref in allowed_participants)
+        if not participant_ref:
+            return False
+
+        return any(self._wildcard_matches(pattern, participant_ref) for pattern in allowed_patterns)
+
+    @staticmethod
+    def _wildcard_matches(pattern: str, value: str) -> bool:
+        regex = re.escape(pattern).replace(r"\*", ".*")
+        return bool(re.fullmatch(regex, value))
 
     def _is_in_publication_window(
         self,

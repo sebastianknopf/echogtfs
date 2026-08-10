@@ -152,6 +152,7 @@ Allowed data model:
     "scheduled_start_time": datetime | None,
     "scheduled_end_stop_id": str | None,
     "scheduled_end_time": datetime | None,
+    "scheduled_intermediate_stops": list[tuple[str, datetime]],
     "stop_events": [
         {
             "trip_id": str,
@@ -181,6 +182,7 @@ Processed top-level fields:
 - scheduled_start_time: nullable, coerced to datetime and passed to matching when trip_id is non-nominal.
 - scheduled_end_stop_id: nullable, mapped and passed to matching when trip_id is non-nominal.
 - scheduled_end_time: nullable, coerced to datetime and passed to matching when trip_id is non-nominal.
+- scheduled_intermediate_stops: optional list of `(stop_id, datetime)` tuples for additional scheduled anchors.
 - stop_events: optional list, default [].
 
 Processed stop_events[*] fields:
@@ -204,6 +206,13 @@ Derived matching inputs for trip_updates:
 - scheduled_end_time: taken from transformer field scheduled_end_time and coerced to datetime, or None.
 - scheduled_start_stop_id: taken from transformer field scheduled_start_stop_id, mapped via stop mapping, or None.
 - scheduled_end_stop_id: taken from transformer field scheduled_end_stop_id, mapped via stop mapping, or None.
+- scheduled_intermediate_stops: optional mapped list of `(stop_id, datetime)` tuples used only as fallback matching anchors.
+
+Intermediate fallback matching for trip_updates:
+
+- Used only when both `scheduled_start_time` and `scheduled_end_time` are `None`.
+- Each fallback anchor compares mapped stop IDs on GlobalId level 3.
+- Matching is done against `gtfs_stop_times.departure_time` with a bias of +/- 60 seconds.
 
 Assignment behavior for trip_updates:
 
@@ -245,6 +254,7 @@ Allowed data model:
         "scheduled_start_time": datetime | None,
         "scheduled_end_stop_id": str | None,
         "scheduled_end_time": datetime | None,
+        "scheduled_intermediate_stops": list[tuple[str, datetime]],
     },
     "vehicle_id": str,
     "vehicle_label": str | None,
@@ -297,6 +307,7 @@ Trip payload processing rules:
 - trip is_valid defaults to True.
 - mapped `route_id` replaces the original route ID in the normalized trip payload.
 - trip.scheduled_start_stop_id, trip.scheduled_start_time, trip.scheduled_end_stop_id, and trip.scheduled_end_time are nullable and passed to matching.
+- trip.scheduled_intermediate_stops is an optional list of `(stop_id, datetime)` tuples for additional scheduled anchors.
 
 Derived matching inputs for vehicle_positions:
 
@@ -304,6 +315,13 @@ Derived matching inputs for vehicle_positions:
 - scheduled_end_time: taken from transformer field trip.scheduled_end_time and coerced to datetime, or None.
 - scheduled_start_stop_id: taken from transformer field trip.scheduled_start_stop_id, mapped via stop mapping, or None.
 - scheduled_end_stop_id: taken from transformer field trip.scheduled_end_stop_id, mapped via stop mapping, or None.
+- scheduled_intermediate_stops: optional mapped list of `(stop_id, datetime)` tuples from vehicle payload, or trip payload fallback.
+
+Intermediate fallback matching for vehicle_positions:
+
+- Used only when both `scheduled_start_time` and `scheduled_end_time` are `None`.
+- Each fallback anchor compares mapped stop IDs on GlobalId level 3.
+- Matching is done against `gtfs_stop_times.departure_time` with a bias of +/- 60 seconds.
 
 Assignment behavior for vehicle_positions:
 

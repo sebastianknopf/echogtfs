@@ -169,6 +169,25 @@ class GtfsRealtimeVehiclePositionsExportService(GtfsRealtimeExportInterface):
         return f"{total_hours:02d}:{total_minutes:02d}:{total_seconds:02d}"
 
     @staticmethod
+    def _normalize_start_date(start_date: object) -> str:
+        if not isinstance(start_date, str):
+            return ""
+
+        value = start_date.strip()
+        if not value:
+            return ""
+
+        try:
+            return datetime.strptime(value, "%Y%m%d").strftime("%Y%m%d")
+        except ValueError:
+            pass
+
+        try:
+            return datetime.strptime(value, "%Y-%m-%d").strftime("%Y%m%d")
+        except ValueError:
+            return value
+
+    @staticmethod
     def _vehicle_id_value(vehicle_model: Vehicle) -> str:
         return vehicle_model.vehicle_id or str(vehicle_model.id)
 
@@ -186,14 +205,16 @@ class GtfsRealtimeVehiclePositionsExportService(GtfsRealtimeExportInterface):
 
             vehicle_position = entity.vehicle
             vehicle_position.timestamp = self._timestamp_value(vehicle_model.timestamp) or int(time.time())
-            vehicle_position.current_stop_sequence = self._stop_sequence_value(vehicle_model.current_stop_sequence) or 0
+            current_stop_sequence = self._stop_sequence_value(vehicle_model.current_stop_sequence)
+            if current_stop_sequence is not None:
+                vehicle_position.current_stop_sequence = current_stop_sequence
 
             trip_descriptor = vehicle_position.trip
             trip = vehicle_model.trip
             trip_descriptor.trip_id = trip.trip_id
             trip_descriptor.route_id = trip.route_id
             trip_descriptor.start_time = self._localize_start_time(trip.start_date, trip.start_time)
-            trip_descriptor.start_date = trip.start_date
+            trip_descriptor.start_date = self._normalize_start_date(trip.start_date)
 
             trip_schedule_relationship = self._trip_schedule_relationship_to_enum(trip.schedule_relationship)
             if trip_schedule_relationship is not None:
@@ -202,8 +223,12 @@ class GtfsRealtimeVehiclePositionsExportService(GtfsRealtimeExportInterface):
             if vehicle_model.vehicle_id:
                 vehicle_descriptor = vehicle_position.vehicle
                 vehicle_descriptor.id = self._vehicle_id_value(vehicle_model)
-                vehicle_descriptor.label = vehicle_model.vehicle_label
-                vehicle_descriptor.license_plate = vehicle_model.vehicle_license_plate
+
+                if vehicle_model.vehicle_label is not None:
+                    vehicle_descriptor.label = vehicle_model.vehicle_label
+
+                if vehicle_model.vehicle_license_plate is not None:
+                    vehicle_descriptor.license_plate = vehicle_model.vehicle_license_plate
 
                 wheelchair_accessible = self._wheelchair_accessible_to_enum(
                     vehicle_model.vehicle_wheelchair_accessible

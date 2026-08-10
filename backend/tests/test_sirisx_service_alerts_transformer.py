@@ -55,3 +55,49 @@ class TestSiriSxServiceAlertsTransformer(unittest.TestCase):
 
         records = transformer.transform({"root": root, "source_name": "sx"})
         self.assertEqual(records, [])
+
+    def test_transform_allows_participant_filter_wildcard(self):
+        xml_payload = """
+        <Siri xmlns="http://www.siri.org.uk/siri">
+          <PtSituationElement>
+            <SituationNumber>42</SituationNumber>
+            <ParticipantRef>P2-ABC</ParticipantRef>
+            <PublicationWindow>
+              <StartTime>2026-01-01T00:00:00Z</StartTime>
+              <EndTime>2099-01-01T00:00:00Z</EndTime>
+            </PublicationWindow>
+            <Summary xml:lang="en">Line disruption</Summary>
+          </PtSituationElement>
+        </Siri>
+        """
+        root = ET.fromstring(xml_payload)
+        transformer = SiriSxServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filter_value="P2-*",
+        )
+
+        records = transformer.transform({"root": root, "source_name": "sx"})
+        self.assertEqual(len(records), 1)
+
+    def test_transform_rejects_non_matching_participant_filter_wildcard(self):
+        xml_payload = """
+        <Siri xmlns="http://www.siri.org.uk/siri">
+          <PtSituationElement>
+            <SituationNumber>42</SituationNumber>
+            <ParticipantRef>X2-ABC</ParticipantRef>
+            <PublicationWindow>
+              <StartTime>2026-01-01T00:00:00Z</StartTime>
+              <EndTime>2099-01-01T00:00:00Z</EndTime>
+            </PublicationWindow>
+            <Summary xml:lang="en">Line disruption</Summary>
+          </PtSituationElement>
+        </Siri>
+        """
+        root = ET.fromstring(xml_payload)
+        transformer = SiriSxServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filter_value="P2-*",
+        )
+
+        records = transformer.transform({"root": root, "source_name": "sx"})
+        self.assertEqual(records, [])

@@ -53,11 +53,16 @@ Bestätigen Sie den Dialog mit Klick auf "Speichern". Im Anschluss wird die Date
 
 Wenn ein Objekt nach dem Mapping keinem Objekt aus dem GTFS-Feed zugeordnet werden kann, gibt es verschiedene Verfahrensweisen zum Umgang mit diesem Objekt.
 
-- **keine Angabe**: Auch bei ungültigen Bezügen wird das aus der Datenquelle synchronisierte Objekt unverändert gespeichert
-- **gesamtes Objekt verwerfen**: Sobald an einem aus der Datenquelle synchronisierten Objekt ein Bezug ungültig ist, wird das gesamte Objekt verworfen
-- **ungültige Bezüge verwerfen**: Bezüge an einem aus der Datenquelle synchronisierten Objekt werden vollständig verworfen, wenn sie ungültig sind. Bei Meldungen werden die jeweiligen Bezüge verworfen. Bei Fahrten werden ungültige Bezüge zu Haltestellen verworfen, ungültige Bezüge zu Linien und Fahrten führen zur kompletten Verwerfung der Fahrt. Bei Fahrzeugen wird das gesamte Objekt verworfen, sofern keine gültiger Bezug zu einer Fahrt hergestellt werden kann.
-- **ungültige Bezugselemente verwerfen**: Ungültige Bezugselemente bei Bezügen mit mehreren Referenzen werden verworfen. _Aktuell nur für Meldungen einsetzbar, da nur dort Bezüge mit mehreren Bezugselementen vorkommen können._
-- **gesamtes Objekt deaktivieren**: Sobald an einem aus der Datenquelle synchronisierten Objekt ein Bezug ungültig ist, wird das gesamte Objekt zwar gespeichert, aber deaktiviert und damit in der GTFS-RT Ausgabe unterdrückt. _Empfohlene Verfahrensweise für Fahrten und Fahrzeuge._
+- **keine Angabe**: Auch bei ungültigen Bezügen wird das aus der Datenquelle synchronisierte Objekt gespeichert.
+- **gesamtes Objekt verwerfen**: Sobald an einem synchronisierten Objekt ein Bezug ungültig ist, wird das Objekt aus dem aktuellen Lauf verworfen. Existiert bereits ein passendes Objekt aus derselben Datenquelle, wird es gelöscht.
+- **ungültige Bezüge verwerfen**:
+	- Bei **Meldungen** werden ungültige Bezüge entfernt.
+	- Bei **Fahrten** werden ungültige Haltestellenbezüge aus den Halteereignissen entfernt. Ungültige Linienbezüge werden nicht übernommen. Wenn kein gültiger Fahrtbezug vorliegt, wird die Fahrt deaktiviert.
+	- Bei **Fahrzeugpositionen** werden ungültige Linienbezüge nicht übernommen. Wenn kein gültiger Fahrtbezug vorliegt, wird das Fahrzeug deaktiviert.
+- **ungültige Bezugselemente verwerfen**:
+	- Bei **Meldungen** werden ungültige Bezugselemente innerhalb eines Bezugs entfernt.
+	- Bei **Fahrten** und **Fahrzeugpositionen** entspricht das Verhalten derzeit der Option **ungültige Bezüge verwerfen**.
+- **gesamtes Objekt deaktivieren**: Das Objekt wird gespeichert, aber bei ungültigen Bezügen deaktiviert und dadurch in der GTFS-RT-Ausgabe unterdrückt. _Empfohlene Verfahrensweise für Fahrten und Fahrzeugpositionen._
 
 (h-datasources-general-mapping)=
 

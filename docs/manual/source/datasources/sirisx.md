@@ -4,7 +4,7 @@ Die SIRI-SX-Datenquelle wird verwendet, um Daten aus einem SIRI-SX-Feed in EchoG
 
 ## Verwendung
 
-Für die Nutzung der Datenquelle wird ein SIRI-SX-Endpunkt benötigt, der die Daten im SIRI-Format bereitstellt. In der Konfiguration können Sie festlegen, welcher Endpoint verwendet werden soll, welche Filterkriterien für die Verarbeitung genutzt werden und wie der Import mit Sonderbehandlungen bei Haltestellen verhalten soll.
+Für die Nutzung der Datenquelle wird ein SIRI-SX-Endpunkt benötigt, der die Daten im SIRI-Format bereitstellt. In der Konfiguration können Sie festlegen, welcher Endpoint verwendet werden soll und welche Filterkriterien für die Verarbeitung genutzt werden.
 
 Die Datenquelle verarbeitet die eingehenden Meldungen automatisch und stellt sie für die weitere Nutzung in EchoGTFS bereit.
 
@@ -14,11 +14,13 @@ Die folgenden Parameter können in der Konfiguration der Datenquelle gesetzt wer
 
 - **Endpunkt**: Die URL des SIRI-SX-Endpoints, von dem die Daten abgerufen werden.
   - Ergebnis: Die Datenquelle fragt diesen Endpunkt beim Ausführen ab und verarbeitet die gelieferten Meldungen.
-- **Token**: Optionales Zugriffstoken für geschützte Endpunkte.
-  - Ergebnis: Wenn ein Token hinterlegt ist, wird er bei der Anfrage mitgesendet.
+- **Leitstellenkennung**: Die vereinbarte Leitstellenkennung des anfragenden Systems.
+  - Ergebnis: Diese Angabe wird in die Anfrage übernommen und hilft, die Anforderung eindeutig zuzuordnen.
+- **Methode**: Auswahl zwischen "request/response" und "publish/subscribe".
+  - Ergebnis: Derzeit wird "request/response" unterstützt. "publish/subscribe" ist noch nicht verfügbar.
 - **Dialekt**: Die zu verwendende SIRI-SX-Implementierungsvariante.
 - **Filter**: Optionaler Filter für Betreiberkennungen.
-  - Ergebnis: Wenn ein Filter gesetzt ist, werden nur Meldungen aus den angegebenen Betreiberreferenzen berücksichtigt.
+  - Ergebnis: Wenn ein Filter gesetzt ist, werden nur Meldungen aus passenden Betreiberreferenzen berücksichtigt. `*` wird als Wildcard behandelt und steht für beliebig viele beliebige Zeichen.
 
 ## Verfügbare Dialekte
 

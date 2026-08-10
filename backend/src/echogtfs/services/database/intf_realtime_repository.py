@@ -199,6 +199,16 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def list_trips_by_trip_ids(self, trip_ids: list[str]) -> list[Trip]:
+        """Return realtime trips by trip_id values."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_trip_ids_with_stop_events(self, trip_ids: list[str]) -> set[str]:
+        """Return trip_id values that currently have at least one realtime stop event."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def delete_trips_for_data_source_by_ids(
         self,
         source_id: int,
@@ -296,7 +306,7 @@ class RealtimeRepositoryInterface(ABC):
         timestamp: Any,
         latitude: float,
         longitude: float,
-        current_stop_sequence: int,
+        current_stop_sequence: int | None,
         current_status: str,
         assignment_type: str,
         congestion_level: str,
