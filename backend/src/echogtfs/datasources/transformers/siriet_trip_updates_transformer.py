@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, timedelta, timezone
 from time import perf_counter
@@ -400,17 +401,22 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
         if not self._filter_value:
             return True
 
-        allowed_operators = {
+        allowed_patterns = [
             operator.strip()
             for operator in self._filter_value.split(",")
             if operator.strip()
-        }
+        ]
 
         operator_ref = self._get_text(journey.find("siri:OperatorRef", self._siri_ns))
         if not operator_ref:
             return False
 
-        return operator_ref in allowed_operators
+        return any(self._wildcard_matches(pattern, operator_ref) for pattern in allowed_patterns)
+
+    @staticmethod
+    def _wildcard_matches(pattern: str, value: str) -> bool:
+        regex = re.escape(pattern).replace(r"\*", ".*")
+        return bool(re.fullmatch(regex, value))
 
     def _collect_all_calls(self, journey: ET.Element) -> list[ET.Element]:
         recorded_calls = journey.findall("siri:RecordedCalls/siri:RecordedCall", self._siri_ns)

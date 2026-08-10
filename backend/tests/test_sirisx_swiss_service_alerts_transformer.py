@@ -76,3 +76,71 @@ class TestSiriSxSwissServiceAlertsTransformer(unittest.TestCase):
 
         records = transformer.transform({"root": root, "source_name": "sirisx-swiss"})
         self.assertEqual(records, [])
+
+    def test_transform_allows_participant_filter_wildcard(self):
+        xml_payload = """
+        <Siri xmlns="http://www.siri.org.uk/siri">
+          <PtSituationElement>
+            <SituationNumber>SN-1</SituationNumber>
+            <ParticipantRef>P1-ABC</ParticipantRef>
+            <PublicationWindow>
+              <StartTime>2026-01-01T00:00:00Z</StartTime>
+              <EndTime>2099-01-01T00:00:00Z</EndTime>
+            </PublicationWindow>
+            <PublishingActions>
+              <PublishingAction>
+                <PassengerInformationAction>
+                  <Perspective>general</Perspective>
+                  <TextualContent>
+                    <SummaryContent>
+                      <SummaryText xml:lang="de">Warnung</SummaryText>
+                    </SummaryContent>
+                  </TextualContent>
+                </PassengerInformationAction>
+              </PublishingAction>
+            </PublishingActions>
+          </PtSituationElement>
+        </Siri>
+        """
+        root = ET.fromstring(xml_payload)
+        transformer = SiriSxSwissServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filter_value="P1-*",
+        )
+
+        records = transformer.transform({"root": root, "source_name": "sirisx-swiss"})
+        self.assertEqual(len(records), 1)
+
+    def test_transform_rejects_non_matching_participant_filter_wildcard(self):
+        xml_payload = """
+        <Siri xmlns="http://www.siri.org.uk/siri">
+          <PtSituationElement>
+            <SituationNumber>SN-1</SituationNumber>
+            <ParticipantRef>X1-ABC</ParticipantRef>
+            <PublicationWindow>
+              <StartTime>2026-01-01T00:00:00Z</StartTime>
+              <EndTime>2099-01-01T00:00:00Z</EndTime>
+            </PublicationWindow>
+            <PublishingActions>
+              <PublishingAction>
+                <PassengerInformationAction>
+                  <Perspective>general</Perspective>
+                  <TextualContent>
+                    <SummaryContent>
+                      <SummaryText xml:lang="de">Warnung</SummaryText>
+                    </SummaryContent>
+                  </TextualContent>
+                </PassengerInformationAction>
+              </PublishingAction>
+            </PublishingActions>
+          </PtSituationElement>
+        </Siri>
+        """
+        root = ET.fromstring(xml_payload)
+        transformer = SiriSxSwissServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filter_value="P1-*",
+        )
+
+        records = transformer.transform({"root": root, "source_name": "sirisx-swiss"})
+        self.assertEqual(records, [])

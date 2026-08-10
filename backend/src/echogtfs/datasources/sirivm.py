@@ -165,7 +165,9 @@ class SiriVmDatasource(DatasourceBase):
 
         dialect = SiriVmDialect(self.config["dialect"])
         if dialect == SiriVmDialect.SIRIVM:
-            transformer = SiriVmVehiclePositionsTransformer()
+            transformer = SiriVmVehiclePositionsTransformer(
+                filter_value=self.config.get("filter"),
+            )
         else:
             raise ValueError(f"Unknown SIRI-VM dialect: {dialect}")
 

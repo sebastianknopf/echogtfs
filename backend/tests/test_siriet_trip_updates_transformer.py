@@ -50,12 +50,37 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
         self.assertEqual(len(trips), 1)
         self.assertEqual(trips[0]["schedule_relationship"], "CANCELED")
 
+    def test_operator_filter_supports_wildcard(self) -> None:
+        transformer = SiriEtTripUpdatesTransformer(filter_value="OP-*")
+        payload = self._build_payload(
+            extra_journey="false",
+            complete_sequence="false",
+            operator_ref="OP-ABC",
+        )
+
+        trips = transformer.transform({"root": payload})
+
+        self.assertEqual(len(trips), 1)
+
+    def test_operator_filter_rejects_non_matching_wildcard(self) -> None:
+        transformer = SiriEtTripUpdatesTransformer(filter_value="OP-*")
+        payload = self._build_payload(
+            extra_journey="false",
+            complete_sequence="false",
+            operator_ref="AGENCY-1",
+        )
+
+        trips = transformer.transform({"root": payload})
+
+        self.assertEqual(trips, [])
+
     def _build_payload(
         self,
         *,
         extra_journey: str,
         complete_sequence: str,
         cancellation: str | None = None,
+        operator_ref: str = "OP1",
     ) -> ET.Element:
         departure_time = (datetime.now(timezone.utc) + timedelta(hours=1)).strftime(
             "%Y-%m-%dT%H:%M:%S+00:00"
@@ -63,6 +88,7 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
         xml = f"""<siri:Root xmlns:siri=\"http://www.siri.org.uk/siri\">
   <siri:EstimatedVehicleJourney>
     <siri:Monitored>true</siri:Monitored>
+        <siri:OperatorRef>{operator_ref}</siri:OperatorRef>
     <siri:ExtraJourney>{extra_journey}</siri:ExtraJourney>
     <siri:IsCompleteStopSequence>{complete_sequence}</siri:IsCompleteStopSequence>
     <siri:LineRef>LINE1</siri:LineRef>
