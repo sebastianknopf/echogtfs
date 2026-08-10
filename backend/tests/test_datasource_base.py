@@ -266,6 +266,10 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
             {
                 "id": "trip-upd-1",
                 "trip_id": "trip-1",
+                "scheduled_start_stop_id": "stop-1",
+                "scheduled_end_stop_id": "stop-2",
+                "scheduled_start_time": datetime(2026, 8, 1, 8, 0, 0, tzinfo=timezone.utc),
+                "scheduled_end_time": datetime(2026, 8, 1, 9, 0, 0, tzinfo=timezone.utc),
                 "start_time": "08:00:00",
                 "start_date": "20260801",
                 "route_id": "r1",
@@ -299,6 +303,11 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
         realtime_repository.update_trip_update_from_sync.assert_awaited_once()
         kwargs = realtime_repository.update_trip_update_from_sync.await_args.kwargs
         self.assertEqual(kwargs["trip_id"], "trip-1")
+        self.assertEqual(kwargs["original_trip_id"], "trip-1")
+        self.assertEqual(kwargs["scheduled_start_stop_id"], "mapped-stop")
+        self.assertEqual(kwargs["scheduled_end_stop_id"], "stop-2")
+        self.assertEqual(kwargs["scheduled_start_time"], datetime(2026, 8, 1, 8, 0, 0, tzinfo=timezone.utc))
+        self.assertEqual(kwargs["scheduled_end_time"], datetime(2026, 8, 1, 9, 0, 0, tzinfo=timezone.utc))
         self.assertEqual(kwargs["route_id"], "mapped-route")
         self.assertEqual(kwargs["stop_events"][0]["stop_id"], "mapped-stop")
         self.assertEqual(kwargs["assignment_type"], "DIRECT_BY_ID")

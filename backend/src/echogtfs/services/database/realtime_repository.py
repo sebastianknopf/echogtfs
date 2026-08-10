@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 import uuid
 
@@ -658,6 +659,11 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
         is_active_on_create: bool,
         is_valid: bool,
         stop_events: list[dict[str, Any]],
+        original_trip_id: str | None = None,
+        scheduled_start_stop_id: str | None = None,
+        scheduled_end_stop_id: str | None = None,
+        scheduled_start_time: datetime | None = None,
+        scheduled_end_time: datetime | None = None,
     ) -> str:
         """Create or update a synchronized trip update and replace stop events."""
         async with self.get_session() as db:
@@ -672,6 +678,11 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                     data_source_id=source_id,
                     source=source_name,
                     trip_id=trip_id,
+                    original_trip_id=original_trip_id,
+                    scheduled_start_stop_id=scheduled_start_stop_id,
+                    scheduled_end_stop_id=scheduled_end_stop_id,
+                    scheduled_start_time=scheduled_start_time,
+                    scheduled_end_time=scheduled_end_time,
                     start_time=start_time,
                     start_date=start_date,
                     route_id=route_id,
@@ -680,7 +691,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                     is_active=is_active_on_create,
                     is_valid=is_valid,
                 )
-                
+
                 db.add(existing)
                 await db.flush()
             else:
@@ -688,6 +699,11 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                 existing.data_source_id = source_id
                 existing.source = source_name
                 existing.trip_id = trip_id
+                existing.original_trip_id = original_trip_id
+                existing.scheduled_start_stop_id = scheduled_start_stop_id
+                existing.scheduled_end_stop_id = scheduled_end_stop_id
+                existing.scheduled_start_time = scheduled_start_time
+                existing.scheduled_end_time = scheduled_end_time
                 existing.start_time = start_time
                 existing.start_date = start_date
                 existing.route_id = route_id

@@ -1063,6 +1063,7 @@ class DatasourceBase(DatasourceInterface):
                 stop_events.append(mapped_event)
 
             derived_trip_id = str(record["trip_id"])
+            original_trip_id = derived_trip_id
             resolved_trip_id = derived_trip_id
             assignment_type = AssignmentType.DIRECT_BY_ID.value
             trip_reference_is_valid = True if is_new_trip else derived_trip_id in nominal_trip_ids
@@ -1215,6 +1216,19 @@ class DatasourceBase(DatasourceInterface):
                 is_active_on_create=is_active_on_create,
                 is_valid=trip_is_valid,
                 stop_events=stop_events_to_persist,
+                original_trip_id=original_trip_id,
+                scheduled_start_stop_id=(
+                    str(scheduled_start_stop_id)
+                    if scheduled_start_stop_id is not None
+                    else None
+                ),
+                scheduled_end_stop_id=(
+                    str(scheduled_end_stop_id)
+                    if scheduled_end_stop_id is not None
+                    else None
+                ),
+                scheduled_start_time=scheduled_start_time,
+                scheduled_end_time=scheduled_end_time,
             )
 
         if policy_based_deletes:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
+from datetime import datetime
 from typing import Any
 import uuid
 
@@ -233,6 +234,11 @@ class RealtimeRepositoryInterface(ABC):
         is_active_on_create: bool,
         is_valid: bool,
         stop_events: list[dict[str, Any]],
+        original_trip_id: str | None = None,
+        scheduled_start_stop_id: str | None = None,
+        scheduled_end_stop_id: str | None = None,
+        scheduled_start_time: datetime | None = None,
+        scheduled_end_time: datetime | None = None,
     ) -> str:
         """Create or update one synchronized trip update and replace stop event records."""
         raise NotImplementedError
