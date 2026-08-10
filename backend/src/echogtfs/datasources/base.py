@@ -689,6 +689,8 @@ class DatasourceBase(DatasourceInterface):
                     existing_alerts[alert_id] = alert
                     existing_alert_ids.add(alert_id)
         
+        # Determine which alerts to add, update, or delete
+        alerts_to_update = incoming_alert_ids & existing_alert_ids
         # Only delete alerts that belong to this data source
         alerts_to_delete = {
             aid for aid, alert in existing_alerts.items() 
@@ -704,8 +706,6 @@ class DatasourceBase(DatasourceInterface):
         stats_updated = 0
         stats_deleted = len(alerts_to_delete)
         stats_policy_discarded = 0
-        stats_failed = 0
-        alert_upsert_payloads: list[dict[str, Any]] = []
         
         # Delete alerts that are no longer in the feed
         if alerts_to_delete:
@@ -868,37 +868,44 @@ class DatasourceBase(DatasourceInterface):
             if should_skip_alert:
                 continue
             
-            is_active_on_create = bool(alert_data.get("is_active", True))
-            if should_deactivate_alert:
-                is_active_on_create = False
-                if alert_id not in existing_alert_ids:
+            if alert_id in alerts_to_update:
+                logger.debug(f"[{self.get_adapter_type()}] Updating alert {alert_id}")
+                stats_updated += 1
+                await realtime_repository.upsert_service_alert_from_sync(
+                    alert_id=alert_id,
+                    source_id=source_id,
+                    source_name=source_name,
+                    cause=alert_data["cause"],
+                    effect=alert_data["effect"],
+                    severity_level=alert_data["severity_level"],
+                    is_active_on_create=False,
+                    translations=translations_data,
+                    active_periods=periods_data,
+                    informed_entities=entities_to_create,
+                )
+            else:
+                # INSERT new alert
+                logger.debug(f"[{self.get_adapter_type()}] Creating new alert {alert_id}")
+                
+                # Set is_active based on policy
+                if should_deactivate_alert:
+                    alert_data["is_active"] = False
                     stats_created_inactive += 1
+                
+                stats_created += 1
 
-            alert_upsert_payloads.append(
-                {
-                    "alert_id": alert_id,
-                    "source_id": source_id,
-                    "source_name": source_name,
-                    "cause": alert_data["cause"],
-                    "effect": alert_data["effect"],
-                    "severity_level": alert_data["severity_level"],
-                    "is_active_on_create": is_active_on_create,
-                    "translations": translations_data,
-                    "active_periods": periods_data,
-                    "informed_entities": entities_to_create,
-                }
-            )
-
-            existing_alert_ids.add(alert_id)
-
-        if alert_upsert_payloads:
-            batch_result = await realtime_repository.batch_upsert_service_alerts_from_sync(
-                alert_upsert_payloads
-            )
-
-            stats_created = len(batch_result.get("created", []))
-            stats_updated = len(batch_result.get("updated", []))
-            stats_failed = len(batch_result.get("failed", []))
+                await realtime_repository.upsert_service_alert_from_sync(
+                    alert_id=alert_id,
+                    source_id=source_id,
+                    source_name=source_name,
+                    cause=alert_data["cause"],
+                    effect=alert_data["effect"],
+                    severity_level=alert_data["severity_level"],
+                    is_active_on_create=alert_data.get("is_active", True),
+                    translations=translations_data,
+                    active_periods=periods_data,
+                    informed_entities=entities_to_create,
+                )
         
         # Delete alerts that were discarded due to policy
         if policy_based_deletes:
@@ -917,7 +924,7 @@ class DatasourceBase(DatasourceInterface):
             f"[{self.get_adapter_type()}] Import completed for '{source_name}': "
             f"fetched={total_fetched}, created={stats_created} "
             f"(inactive={stats_created_inactive}), updated={stats_updated}, "
-            f"deleted={stats_deleted}, failed={stats_failed}, policy_discarded={stats_policy_discarded}"
+            f"deleted={stats_deleted}, policy_discarded={stats_policy_discarded}"
         )
         
         return {
@@ -1015,9 +1022,7 @@ class DatasourceBase(DatasourceInterface):
         stats_created = 0
         stats_updated = 0
         stats_deleted = len(trips_to_delete)
-        stats_failed = 0
         policy_based_deletes: set[uuid.UUID] = set()
-        trip_upsert_payloads: list[dict[str, Any]] = []
 
         if trips_to_delete:
             await realtime_repository.delete_trips_for_data_source_by_ids(
@@ -1189,34 +1194,28 @@ class DatasourceBase(DatasourceInterface):
                 and not has_invalid_stop_reference
             )
 
+            if persisted_trip_uuid in existing_trip_ids:
+                stats_updated += 1
+            else:
+                stats_created += 1
+                existing_trip_ids.add(persisted_trip_uuid)
+
             existing_trip_uuid_by_trip_id[str(resolved_trip_id)] = persisted_trip_uuid
-            existing_trip_ids.add(persisted_trip_uuid)
 
-            trip_upsert_payloads.append(
-                {
-                    "trip_uuid": persisted_trip_uuid,
-                    "source_id": source_id,
-                    "source_name": source_name,
-                    "trip_id": resolved_trip_id,
-                    "start_time": str(record["start_time"]),
-                    "start_date": str(record["start_date"]),
-                    "route_id": route_id_to_persist,
-                    "schedule_relationship": str(record.get("schedule_relationship", "SCHEDULED")),
-                    "assignment_type": assignment_type,
-                    "is_active_on_create": is_active_on_create,
-                    "is_valid": trip_is_valid,
-                    "stop_events": stop_events_to_persist,
-                }
+            await realtime_repository.update_trip_update_from_sync(
+                trip_uuid=persisted_trip_uuid,
+                source_id=source_id,
+                source_name=source_name,
+                trip_id=resolved_trip_id,
+                start_time=str(record["start_time"]),
+                start_date=str(record["start_date"]),
+                route_id=route_id_to_persist,
+                schedule_relationship=str(record.get("schedule_relationship", "SCHEDULED")),
+                assignment_type=assignment_type,
+                is_active_on_create=is_active_on_create,
+                is_valid=trip_is_valid,
+                stop_events=stop_events_to_persist,
             )
-
-        if trip_upsert_payloads:
-            batch_result = await realtime_repository.batch_upsert_trip_updates_from_sync(
-                trip_upsert_payloads
-            )
-
-            stats_created = len(batch_result.get("created", []))
-            stats_updated = len(batch_result.get("updated", []))
-            stats_failed = len(batch_result.get("failed", []))
 
         if policy_based_deletes:
             await realtime_repository.delete_trips_for_data_source_by_ids(
@@ -1227,8 +1226,7 @@ class DatasourceBase(DatasourceInterface):
 
         logger.info(
             f"[{self.get_adapter_type()}] Trip-update import completed for '{source_name}': "
-            f"fetched={len(records)}, created={stats_created}, updated={stats_updated}, "
-            f"deleted={stats_deleted}, failed={stats_failed}"
+            f"fetched={len(records)}, created={stats_created}, updated={stats_updated}, deleted={stats_deleted}"
         )
 
         return {
@@ -1300,6 +1298,7 @@ class DatasourceBase(DatasourceInterface):
             for vehicle in existing_vehicles.values()
             if getattr(vehicle, "trip_id", None)
         }
+        processed_vehicle_ids = set(existing_vehicle_ids)
 
         if incoming_vehicle_ids:
             vehicles_by_id = {
@@ -1312,6 +1311,7 @@ class DatasourceBase(DatasourceInterface):
                     existing_vehicles[vehicle_id] = vehicle
                     existing_vehicle_ids.add(vehicle_id)
 
+        vehicles_to_update = incoming_vehicle_ids & existing_vehicle_ids
         vehicles_to_delete = {
             vehicle_id for vehicle_id, vehicle in existing_vehicles.items()
             if vehicle.data_source_id == source_id and vehicle_id not in incoming_vehicle_ids
@@ -1320,9 +1320,7 @@ class DatasourceBase(DatasourceInterface):
         stats_created = 0
         stats_updated = 0
         stats_deleted = len(vehicles_to_delete)
-        stats_failed = 0
         policy_based_deletes: set[uuid.UUID] = set()
-        vehicle_upsert_payloads: list[dict[str, Any]] = []
 
         if vehicles_to_delete:
             await realtime_repository.delete_vehicles_for_data_source_by_ids(
@@ -1331,7 +1329,6 @@ class DatasourceBase(DatasourceInterface):
             )
 
         deleted_vehicle_ids: set[uuid.UUID] = set(vehicles_to_delete)
-        known_vehicle_ids = set(existing_vehicle_ids)
 
         for record in records:
             vehicle_uuid = self._record_uuid(record, source_name, fallback_key="vehicle_id", kind="Vehicle-position")
@@ -1438,7 +1435,7 @@ class DatasourceBase(DatasourceInterface):
             if has_invalid_reference:
                 if policy == InvalidReferencePolicy.DISCARD_ENTIRE_OBJECT:
                     should_skip_vehicle = True
-                    if vehicle_uuid in known_vehicle_ids:
+                    if vehicle_uuid in existing_vehicle_ids:
                         policy_based_deletes.add(vehicle_uuid)
 
                 elif policy in (
@@ -1494,7 +1491,11 @@ class DatasourceBase(DatasourceInterface):
                 trip_uuid = self._make_unique_id(trip_payload["trip_id"], source_name)
                 existing_trip_uuid_by_trip_id[str(resolved_trip_id)] = trip_uuid
 
-            known_vehicle_ids.add(vehicle_uuid)
+            if vehicle_uuid in processed_vehicle_ids:
+                stats_updated += 1
+            else:
+                stats_created += 1
+                processed_vehicle_ids.add(vehicle_uuid)
 
             current_stop_sequence_raw = record.get("current_stop_sequence")
             try:
@@ -1506,44 +1507,33 @@ class DatasourceBase(DatasourceInterface):
             except (TypeError, ValueError):
                 current_stop_sequence = None
 
-            vehicle_upsert_payloads.append(
-                {
-                    "vehicle_uuid": vehicle_uuid,
-                    "source_id": source_id,
-                    "source_name": source_name,
-                    "trip_uuid": trip_uuid,
-                    "trip_id": trip_payload["trip_id"],
-                    "trip_start_time": trip_payload["start_time"],
-                    "trip_start_date": trip_payload["start_date"],
-                    "trip_route_id": trip_payload["route_id"],
-                    "trip_schedule_relationship": trip_payload["schedule_relationship"],
-                    "trip_assignment_type": trip_assignment_type,
-                    "trip_is_active_on_create": trip_payload["is_active_on_create"],
-                    "trip_is_valid": trip_is_valid,
-                    "vehicle_id": str(record["vehicle_id"]),
-                    "vehicle_label": record.get("vehicle_label"),
-                    "vehicle_license_plate": record.get("vehicle_license_plate"),
-                    "vehicle_wheelchair_accessible": str(record.get("vehicle_wheelchair_accessible", "NO_VALUE")),
-                    "timestamp": record["timestamp"],
-                    "latitude": float(record["latitude"]),
-                    "longitude": float(record["longitude"]),
-                    "current_stop_sequence": current_stop_sequence,
-                    "current_status": str(record.get("current_status", "IN_TRANSIT_TO")),
-                    "assignment_type": vehicle_assignment_type,
-                    "congestion_level": str(record.get("congestion_level", "UNKNOWN_CONGESTION_LEVEL")),
-                    "is_active_on_create": vehicle_is_active_on_create,
-                    "is_valid": vehicle_is_valid,
-                }
+            await realtime_repository.update_vehicle_position_from_sync(
+                vehicle_uuid=vehicle_uuid,
+                source_id=source_id,
+                source_name=source_name,
+                trip_uuid=trip_uuid,
+                trip_id=trip_payload["trip_id"],
+                trip_start_time=trip_payload["start_time"],
+                trip_start_date=trip_payload["start_date"],
+                trip_route_id=trip_payload["route_id"],
+                trip_schedule_relationship=trip_payload["schedule_relationship"],
+                trip_assignment_type=trip_assignment_type,
+                trip_is_active_on_create=trip_payload["is_active_on_create"],
+                trip_is_valid=trip_is_valid,
+                vehicle_id=str(record["vehicle_id"]),
+                vehicle_label=record.get("vehicle_label"),
+                vehicle_license_plate=record.get("vehicle_license_plate"),
+                vehicle_wheelchair_accessible=str(record.get("vehicle_wheelchair_accessible", "NO_VALUE")),
+                timestamp=record["timestamp"],
+                latitude=float(record["latitude"]),
+                longitude=float(record["longitude"]),
+                current_stop_sequence=current_stop_sequence,
+                current_status=str(record.get("current_status", "IN_TRANSIT_TO")),
+                assignment_type=vehicle_assignment_type,
+                congestion_level=str(record.get("congestion_level", "UNKNOWN_CONGESTION_LEVEL")),
+                is_active_on_create=vehicle_is_active_on_create,
+                is_valid=vehicle_is_valid,
             )
-
-        if vehicle_upsert_payloads:
-            batch_result = await realtime_repository.batch_upsert_vehicle_positions_from_sync(
-                vehicle_upsert_payloads
-            )
-            
-            stats_created = len(batch_result.get("created", []))
-            stats_updated = len(batch_result.get("updated", []))
-            stats_failed = len(batch_result.get("failed", []))
 
         if policy_based_deletes:
             await realtime_repository.delete_vehicles_for_data_source_by_ids(
@@ -1585,8 +1575,7 @@ class DatasourceBase(DatasourceInterface):
 
         logger.info(
             f"[{self.get_adapter_type()}] Vehicle-position import completed for '{source_name}': "
-            f"fetched={len(records)}, created={stats_created}, updated={stats_updated}, "
-            f"deleted={stats_deleted}, failed={stats_failed}"
+            f"fetched={len(records)}, created={stats_created}, updated={stats_updated}, deleted={stats_deleted}"
         )
 
         return {

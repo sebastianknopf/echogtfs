@@ -156,14 +156,6 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def batch_upsert_service_alerts_from_sync(
-        self,
-        payloads: list[dict[str, Any]],
-    ) -> dict[str, list[Any]]:
-        """Batch create/update synchronized alerts with best-effort error handling."""
-        raise NotImplementedError
-
-    @abstractmethod
     async def get_realtime_trips(self) -> list[Trip]:
         """Return active realtime trips with stop events and vehicle relations loaded."""
         raise NotImplementedError
@@ -246,14 +238,6 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def batch_upsert_trip_updates_from_sync(
-        self,
-        payloads: list[dict[str, Any]],
-    ) -> dict[str, list[Any]]:
-        """Batch create/update synchronized trip updates with best-effort error handling."""
-        raise NotImplementedError
-
-    @abstractmethod
     async def get_realtime_vehicles(self) -> list[Vehicle]:
         """Return active realtime vehicle positions with trip relations loaded."""
         raise NotImplementedError
@@ -330,12 +314,4 @@ class RealtimeRepositoryInterface(ABC):
         is_valid: bool,
     ) -> str:
         """Create or update one synchronized vehicle position and ensure linked trip exists."""
-        raise NotImplementedError
-
-    @abstractmethod
-    async def batch_upsert_vehicle_positions_from_sync(
-        self,
-        payloads: list[dict[str, Any]],
-    ) -> dict[str, list[Any]]:
-        """Batch create/update synchronized vehicle positions with best-effort error handling."""
         raise NotImplementedError
