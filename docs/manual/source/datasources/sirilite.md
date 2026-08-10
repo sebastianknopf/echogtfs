@@ -22,7 +22,7 @@ Die folgenden Parameter können in der Konfiguration der Datenquelle gesetzt wer
 - **Fehlende Halte als ausgefallene Halte behandeln**:  _(nur wirksam bei SIRI-ET!)_ Aktiviert die Behandlung fehlender Halte als ausgefallene Halte.
   - Ergebnis: Fehlende Halte werden im Importverlauf wie ausgefallene Halte behandelt. Wenn die Option deaktiviert ist, werden fehlende Halte in den Eingangsdaten ignoriert.
 - **Filter**: Optionaler Filter für Betreiberkennungen.
-  - Ergebnis: Wenn ein Filter gesetzt ist, werden nur die angegebenen Betreibergruppen berücksichtigt.
+  - Ergebnis: Wenn ein Filter gesetzt ist, werden nur passende Betreibergruppen berücksichtigt. `*` wird als Wildcard behandelt und steht für beliebig viele beliebige Zeichen.
 
 ## Verfügbare Dialekte
 

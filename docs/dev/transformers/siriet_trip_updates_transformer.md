@@ -12,7 +12,7 @@
 2. Read all `EstimatedVehicleJourney` nodes.
 3. For each journey, apply pre-parse filters in this order:
 	- `Monitored` filter.
-	- Operator filter (`OperatorRef` against configured allow-list).
+	- Operator filter (`OperatorRef` against configured wildcard patterns).
 	- NEW-trip completeness filter (`ExtraJourney=true` requires `IsCompleteStopSequence=true`).
 4. Parse journey into an internal trip dictionary.
 5. Apply trip time-window filter.
@@ -24,7 +24,7 @@
 A journey is skipped when any of these conditions is met.
 
 1. `Monitored` is present and not `true`.
-2. Configured operator filter is set and `OperatorRef` is missing or not allowed.
+2. Configured operator filter is set and `OperatorRef` is missing or does not match any configured pattern.
 3. `ExtraJourney=true` and `IsCompleteStopSequence` is not `true`.
 4. Parsing fails because required core fields/calls are missing.
 5. Parsed trip is outside the active time window.
@@ -131,7 +131,9 @@ For normalized sync and persistence semantics, see `docs/dev/transformation.md`.
 - `_parse_bool(value, default=...)`: only `true` (case-insensitive) maps to `True`.
 - `_parse_datetime(value)`: parses ISO datetimes and handles `Z`; invalid values return `None` and log warning.
 - `_event_timestamp(stop_event)`: chooses earliest of arrival/departure when both exist.
-- `_matches_operator_filter()`: allow-list is comma-separated and exact-match after trimming.
+- `_matches_operator_filter()`: pattern list is comma-separated after trimming.
+- `*` in a filter pattern matches any number of any characters.
+- Matching uses regex full-match semantics (`re.fullmatch`) after converting `*` to `.*`.
 
 ## Runtime Metric
 

@@ -21,7 +21,13 @@
 
 A situation is skipped when any of these conditions is met.
 
-1. Participant filter is configured and `ParticipantRef` is missing or not in allow-list.
+1. Participant filter is configured and `ParticipantRef` is missing or does not match any configured pattern.
+
+Participant filter pattern behavior:
+
+- Filter patterns are comma-separated.
+- `*` matches any number of any characters.
+- Matching uses full-value regex matching (`re.fullmatch`) after escaping literals and replacing `*` with `.*`.
 2. Publication window check fails.
 3. `SituationNumber` is missing.
 4. No usable summary text can be extracted.

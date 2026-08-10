@@ -20,7 +20,7 @@ Die folgenden Parameter können in der Konfiguration der Datenquelle gesetzt wer
   - Ergebnis: Derzeit wird "request/response" unterstützt. "publish/subscribe" ist noch nicht verfügbar.
 - **Dialekt**: Die zu verwendende SIRI-SX-Implementierungsvariante.
 - **Filter**: Optionaler Filter für Betreiberkennungen.
-  - Ergebnis: Wenn ein Filter gesetzt ist, werden nur Meldungen aus den angegebenen Betreiberreferenzen berücksichtigt.
+  - Ergebnis: Wenn ein Filter gesetzt ist, werden nur Meldungen aus passenden Betreiberreferenzen berücksichtigt. `*` wird als Wildcard behandelt und steht für beliebig viele beliebige Zeichen.
 
 ## Verfügbare Dialekte
 

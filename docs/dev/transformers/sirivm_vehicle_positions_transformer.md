@@ -27,13 +27,20 @@ A `VehicleActivity` is discarded (`None`) when any of these conditions is true.
 2. `RecordedAtTime` is present and older than 5 minutes.
 3. `MonitoredVehicleJourney` is missing.
 4. `Monitored` is present and not `true`.
-5. `VehicleStatus` equals `completed` (case-insensitive).
-6. `FramedVehicleJourneyRef/DatedVehicleJourneyRef` (`trip_id`) is missing.
-7. `LineRef` (`route_id`) is missing.
-8. `VehicleRef` (`vehicle_id`) is missing.
-9. `VehicleLocation/Longitude` or `VehicleLocation/Latitude` is missing.
-10. Longitude/latitude cannot be parsed to float.
-11. `IsCompleteStopSequence` is `true` and no usable call aimed times can be extracted from calls.
+5. Configured operator filter is set and `OperatorRef` is missing or does not match any configured pattern.
+6. `VehicleStatus` equals `completed` (case-insensitive).
+7. `FramedVehicleJourneyRef/DatedVehicleJourneyRef` (`trip_id`) is missing.
+8. `LineRef` (`route_id`) is missing.
+9. `VehicleRef` (`vehicle_id`) is missing.
+10. `VehicleLocation/Longitude` or `VehicleLocation/Latitude` is missing.
+11. Longitude/latitude cannot be parsed to float.
+12. `IsCompleteStopSequence` is `true` and no usable call aimed times can be extracted from calls.
+
+Operator filter pattern behavior:
+
+- Filter patterns are comma-separated.
+- `*` matches any number of any characters.
+- Matching uses full-value regex matching (`re.fullmatch`) after escaping literals and replacing `*` with `.*`.
 
 ## Field Extraction Rules
 

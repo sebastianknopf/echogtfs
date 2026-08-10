@@ -24,7 +24,7 @@ Die folgenden Parameter können in der Konfiguration der Datenquelle gesetzt wer
 - **Fehlende Halte als ausgefallene Halte behandeln**: Aktiviert die Behandlung fehlender Halte als ausgefallene Halte.
   - Ergebnis: Fehlende Halte werden im Importverlauf wie ausgefallene Halte behandelt. Wenn die Option deaktiviert ist, werden fehlende Halte in den Eingangsdaten ignoriert.
 - **Filter**: Optionaler Filter für Betreiberkennungen.
-  - Ergebnis: Wenn ein Filter gesetzt ist, werden nur Fahrten aus den angegebenen Betreiberreferenzen berücksichtigt.
+  - Ergebnis: Wenn ein Filter gesetzt ist, werden nur Fahrten aus passenden Betreiberreferenzen berücksichtigt. `*` wird als Wildcard behandelt und steht für beliebig viele beliebige Zeichen.
 
 ## Verfügbare Dialekte
 
