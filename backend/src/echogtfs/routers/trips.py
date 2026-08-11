@@ -60,6 +60,18 @@ def _enrich_trips_with_entity_names(
         if trip.get("route_id"):
             trip["route_name"] = entity_names["route"].get(trip["route_id"], trip["route_id"])
 
+        if trip.get("scheduled_start_stop_id") and trip.get("scheduled_start_stop_name") is None:
+            trip["scheduled_start_stop_name"] = entity_names["stop"].get(
+                trip["scheduled_start_stop_id"],
+                trip["scheduled_start_stop_id"],
+            )
+
+        if trip.get("scheduled_end_stop_id") and trip.get("scheduled_end_stop_name") is None:
+            trip["scheduled_end_stop_name"] = entity_names["stop"].get(
+                trip["scheduled_end_stop_id"],
+                trip["scheduled_end_stop_id"],
+            )
+
         has_invalid_stop_event = False
         for stop_event in trip.get("stop_events", []):
             if stop_event.get("stop_id"):

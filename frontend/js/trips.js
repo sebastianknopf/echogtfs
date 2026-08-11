@@ -175,19 +175,25 @@ const trips = (() => {
     const firstStopEvent = stopEvents[0] || null;
     const lastStopEvent = stopEvents.length ? stopEvents[stopEvents.length - 1] : null;
 
-    const startDate = _parseServiceDateTime(item.start_date, item.start_time);
-    const endDate = lastStopEvent?.arrival_time ? new Date(lastStopEvent.arrival_time) : startDate;
+    const scheduledStartTime = _coerceDate(item.scheduled_start_time);
+    const scheduledEndTime = _coerceDate(item.scheduled_end_time);
+    const startDate = scheduledStartTime || _parseServiceDateTime(item.start_date, item.start_time);
+    const endDate = scheduledEndTime || startDate;
     const hasInvalidStopEvent = stopEvents.some((stopEvent) => stopEvent?.is_valid === false);
     const isValid = Boolean(item.is_valid) && !hasInvalidStopEvent;
 
-    const scheduledStartTime = _coerceDate(item.scheduled_start_time);
-    const scheduledEndTime = _coerceDate(item.scheduled_end_time);
     const scheduledStartStopId = item.scheduled_start_stop_id != null && item.scheduled_start_stop_id !== ''
       ? String(item.scheduled_start_stop_id)
       : null;
     const scheduledEndStopId = item.scheduled_end_stop_id != null && item.scheduled_end_stop_id !== ''
       ? String(item.scheduled_end_stop_id)
       : null;
+    const scheduledStartStopName = item.scheduled_start_stop_name != null && item.scheduled_start_stop_name !== ''
+      ? String(item.scheduled_start_stop_name)
+      : (scheduledStartStopId || null);
+    const scheduledEndStopName = item.scheduled_end_stop_name != null && item.scheduled_end_stop_name !== ''
+      ? String(item.scheduled_end_stop_name)
+      : (scheduledEndStopId || null);
 
     const normalizedStopEvents = stopEvents.map((stopEvent) => {
       const arrivalDate = stopEvent?.arrival_time ? new Date(stopEvent.arrival_time) : null;
@@ -203,8 +209,8 @@ const trips = (() => {
       };
     });
 
-    const scheduleStartStopName = _resolveScheduledStopName(scheduledStartStopId, stopEvents, firstStopEvent?.stop_id || scheduledStartStopId || '-');
-    const scheduleEndStopName = _resolveScheduledStopName(scheduledEndStopId, stopEvents, lastStopEvent?.stop_id || scheduledEndStopId || '-');
+    const startStopName = scheduledStartStopName || scheduledStartStopId || firstStopEvent?.stop_name || firstStopEvent?.stop_id || '-';
+    const endStopName = scheduledEndStopName || scheduledEndStopId || lastStopEvent?.stop_name || lastStopEvent?.stop_id || '-';
 
     const hasScheduledDisplayData = Boolean(
       scheduledStartStopId && scheduledEndStopId && scheduledStartTime && scheduledEndTime
@@ -218,16 +224,16 @@ const trips = (() => {
       assignmentType: item.assignment_type || '-',
       startDate,
       endDate,
-      startStopName: firstStopEvent?.stop_name || firstStopEvent?.stop_id || '-',
-      startStopId: firstStopEvent?.stop_id || '-',
-      endStopName: lastStopEvent?.stop_name || lastStopEvent?.stop_id || '-',
-      endStopId: lastStopEvent?.stop_id || '-',
+      startStopName,
+      startStopId: scheduledStartStopId || firstStopEvent?.stop_id || '-',
+      endStopName,
+      endStopId: scheduledEndStopId || lastStopEvent?.stop_id || '-',
       scheduledStartTime,
       scheduledEndTime,
       scheduledStartStopId,
       scheduledEndStopId,
-      scheduledStartStopName: scheduleStartStopName,
-      scheduledEndStopName: scheduleEndStopName,
+      scheduledStartStopName,
+      scheduledEndStopName,
       hasScheduledDisplayData,
       sourceName: item.data_source_name || item.source || window.i18n('alerts.badge.external'),
       isInternal: !item.data_source_id,

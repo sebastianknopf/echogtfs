@@ -426,6 +426,8 @@ class TripRead(BaseModel):
     original_trip_id: str | None = None
     scheduled_start_stop_id: str | None = None
     scheduled_end_stop_id: str | None = None
+    scheduled_start_stop_name: str | None = None
+    scheduled_end_stop_name: str | None = None
     scheduled_start_time: datetime | None = None
     scheduled_end_time: datetime | None = None
     start_time: str
