@@ -425,10 +425,12 @@ class DatasourceBase(DatasourceInterface):
         propagated_events = [dict(event) for event in stop_events]
 
         nominal_by_stop_id: dict[str, Any] = {}
+        nominal_order: list[str] = []
         for stop_time in nominal_stop_times:
             stop_id = str(stop_time.stop_id)
             if stop_id not in nominal_by_stop_id:
                 nominal_by_stop_id[stop_id] = stop_time
+                nominal_order.append(stop_id)
 
         if treat_unexpected_stop_as_added_stop:
             for event in propagated_events:
@@ -436,7 +438,7 @@ class DatasourceBase(DatasourceInterface):
                 if stop_id and stop_id not in nominal_by_stop_id:
                     event["schedule_relationship"] = "ADDED"
 
-        if treat_missing_stop_as_canceled_stop:
+        if treat_missing_stop_as_canceled_stop and is_complete_stop_sequence:
             realtime_stop_ids = {
                 str(event.get("stop_id") or "")
                 for event in propagated_events
@@ -464,13 +466,29 @@ class DatasourceBase(DatasourceInterface):
 
         def sort_key(event: dict[str, Any]) -> tuple[int, int, datetime, str]:
             stop_id = str(event.get("stop_id") or "")
-            nominal = nominal_by_stop_id.get(stop_id)
-            nominal_rank = int(nominal.stop_sequence) if nominal is not None else 10**9
+            nominal_rank = nominal_order.index(stop_id) if stop_id in nominal_by_stop_id else len(nominal_order)
             departure_rank = self._coerce_stop_time_for_sort(
                 event.get("departure_time") or event.get("arrival_time")
             )
+            explicit_sequence = event.get("stop_sequence")
+            explicit_sequence_value: int | None = None
+            if explicit_sequence not in (None, ""):
+                try:
+                    explicit_sequence_value = int(str(explicit_sequence))
+                except (TypeError, ValueError):
+                    explicit_sequence_value = None
+
+            if explicit_sequence_value is not None:
+                return (
+                    0,
+                    explicit_sequence_value,
+                    nominal_rank,
+                    departure_rank,
+                    stop_id,
+                )
+
             return (
-                0 if nominal is not None else 1,
+                1,
                 nominal_rank,
                 departure_rank,
                 stop_id,
@@ -478,7 +496,9 @@ class DatasourceBase(DatasourceInterface):
 
         merged_events = sorted(propagated_events, key=sort_key)
         for idx, event in enumerate(merged_events, start=1):
-            event["stop_sequence"] = str(idx)
+            existing_sequence = event.get("stop_sequence")
+            if existing_sequence in (None, ""):
+                event["stop_sequence"] = str(idx)
 
         return merged_events
 

@@ -127,6 +127,37 @@ class TestDatasourceBaseHelpers(unittest.TestCase):
         ]
         self.assertEqual(len(self.datasource._deduplicate_entities(entities)), 1)
 
+    def test_propagate_trip_update_stop_events_preserves_existing_stop_sequences(self):
+        same_time = datetime(2026, 8, 1, 8, 0, 0, tzinfo=timezone.utc)
+        stop_events = [
+            {
+                "stop_id": "s2",
+                "stop_sequence": "20",
+                "departure_time": same_time,
+                "schedule_relationship": "SCHEDULED",
+            },
+            {
+                "stop_id": "s1",
+                "stop_sequence": "10",
+                "departure_time": same_time,
+                "schedule_relationship": "SCHEDULED",
+            },
+        ]
+        nominal_stop_times = [
+            SimpleNamespace(stop_id="s1", stop_sequence=1, arrival_time=None, departure_time=same_time),
+            SimpleNamespace(stop_id="s2", stop_sequence=2, arrival_time=None, departure_time=same_time),
+        ]
+
+        propagated = self.datasource._propagate_trip_update_stop_events(
+            stop_events,
+            nominal_stop_times,
+            treat_unexpected_stop_as_added_stop=False,
+            treat_missing_stop_as_canceled_stop=False,
+            is_complete_stop_sequence=True,
+        )
+
+        self.assertEqual([event["stop_sequence"] for event in propagated], ["10", "20"])
+
 
 class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
     async def test_sync_records_logs_runtime_steps(self):
