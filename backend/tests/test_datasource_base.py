@@ -127,6 +127,31 @@ class TestDatasourceBaseHelpers(unittest.TestCase):
         ]
         self.assertEqual(len(self.datasource._deduplicate_entities(entities)), 1)
 
+    def test_propagate_trip_update_stop_events_matches_global_ids_at_level_3(self):
+        same_time = datetime(2026, 8, 1, 8, 0, 0, tzinfo=timezone.utc)
+        stop_events = [
+            {
+                "stop_id": "de:1:2:3",
+                "stop_sequence": "10",
+                "departure_time": same_time,
+                "schedule_relationship": "SCHEDULED",
+            }
+        ]
+        nominal_stop_times = [
+            SimpleNamespace(stop_id="de:1:2:4", stop_sequence=1, arrival_time=None, departure_time=same_time),
+        ]
+
+        propagated = self.datasource._propagate_trip_update_stop_events(
+            stop_events,
+            nominal_stop_times,
+            treat_unexpected_stop_as_added_stop=False,
+            treat_missing_stop_as_canceled_stop=False,
+            is_complete_stop_sequence=True,
+        )
+
+        self.assertEqual(len(propagated), 1)
+        self.assertEqual(propagated[0]["stop_id"], "de:1:2:3")
+
     def test_propagate_trip_update_stop_events_preserves_existing_stop_sequences(self):
         same_time = datetime(2026, 8, 1, 8, 0, 0, tzinfo=timezone.utc)
         stop_events = [
@@ -975,6 +1000,62 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
         canceled_events = [e for e in kwargs["stop_events"] if e.get("schedule_relationship") == "CANCELED"]
         self.assertEqual(len(canceled_events), 1)
         self.assertEqual(canceled_events[0]["stop_id"], "s2")
+
+    async def test_sync_trip_update_records_discards_unexpected_stops_when_flag_disabled(self):
+        repository = _SystemRepositoryStub()
+        realtime_repository = _RealtimeRepositoryStub()
+        gtfs_repository = _GtfsRepositoryStub()
+        datasource = _TestDatasource({})
+        datasource._matching_service = SimpleNamespace(match=AsyncMock(return_value=None))
+        datasource._identifier_mapping_service = SimpleNamespace(
+            initialize=AsyncMock(),
+            get_loaded_mapping_count=lambda: 0,
+            apply_mapping=lambda entity: entity,
+        )
+
+        nominal_stop_1 = SimpleNamespace(
+            stop_id="s1",
+            stop_sequence=1,
+            arrival_time=datetime(2026, 8, 1, 8, 0, tzinfo=timezone.utc),
+            departure_time=datetime(2026, 8, 1, 8, 1, tzinfo=timezone.utc),
+        )
+        gtfs_repository.get_gtfs_trip_with_stop_times = AsyncMock(
+            return_value=SimpleNamespace(gtfs_id="trip-1", stop_times=[nominal_stop_1])
+        )
+
+        records = [
+            {
+                "id": "trip-upd-1",
+                "trip_id": "trip-1",
+                "start_time": "08:00:00",
+                "start_date": "20260801",
+                "route_id": "r1",
+                "is_complete_stop_sequence": True,
+                "stop_events": [
+                    {
+                        "stop_id": "s-extra",
+                        "stop_sequence": "99",
+                        "arrival_time": "2026-08-01T08:00:00Z",
+                        "departure_time": "2026-08-01T08:01:00Z",
+                        "is_valid": True,
+                    }
+                ],
+            }
+        ]
+
+        await datasource._sync_trip_update_records(
+            repository=repository,
+            realtime_repository=realtime_repository,
+            gtfs_repository=gtfs_repository,
+            source_id=2,
+            source_name="Demo",
+            records=records,
+        )
+
+        kwargs = realtime_repository.update_trip_update_from_sync.await_args.kwargs
+        self.assertEqual(len(kwargs["stop_events"]), 1)
+        self.assertEqual(kwargs["stop_events"][0]["stop_id"], "s1")
+        self.assertEqual(kwargs["stop_events"][0]["schedule_relationship"], "NO_DATA")
 
     async def test_sync_trip_update_records_merges_complete_sequence_order(self):
         repository = _SystemRepositoryStub()
