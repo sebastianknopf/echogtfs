@@ -51,6 +51,32 @@ async def _load_gtfs_entity_names(repository: GtfsRepositoryInterface) -> dict[s
     return entity_names
 
 
+def _filter_trips_with_stop_events(trips: list[dict]) -> list[dict]:
+    """Return only trips that contain at least one stop event."""
+    return [
+        trip for trip in trips
+        if isinstance(trip.get("stop_events"), list) and len(trip.get("stop_events", [])) > 0
+    ]
+
+
+def _build_trip_response_payload(trip: object) -> dict:
+    """Convert a repository trip object into a response payload, preserving the linked vehicle."""
+    trip_read = TripRead.model_validate(trip)
+    trip_dict = trip_read.model_dump()
+
+    vehicle = getattr(trip, "vehicle", None)
+    if vehicle is not None:
+        trip_dict["vehicle"] = {
+            "vehicle_label": getattr(vehicle, "vehicle_label", None),
+            "vehicle_license_plate": getattr(vehicle, "vehicle_license_plate", None),
+            "vehicle_id": getattr(vehicle, "vehicle_id", None),
+        }
+    else:
+        trip_dict["vehicle"] = None
+
+    return trip_dict
+
+
 def _enrich_trips_with_entity_names(
     trips: list[dict],
     entity_names: dict[str, dict[str, str]],
@@ -59,6 +85,20 @@ def _enrich_trips_with_entity_names(
     for trip in trips:
         if trip.get("route_id"):
             trip["route_name"] = entity_names["route"].get(trip["route_id"], trip["route_id"])
+
+        vehicle = trip.get("vehicle")
+        if vehicle is not None:
+            vehicle_display_text = None
+            if vehicle.get("vehicle_label"):
+                vehicle_display_text = vehicle.get("vehicle_label")
+            elif vehicle.get("vehicle_license_plate"):
+                vehicle_display_text = vehicle.get("vehicle_license_plate")
+            elif vehicle.get("vehicle_id"):
+                vehicle_display_text = vehicle.get("vehicle_id")
+
+            trip["vehicle_display_text"] = vehicle_display_text
+        else:
+            trip["vehicle_display_text"] = None
 
         if trip.get("scheduled_start_stop_id") and trip.get("scheduled_start_stop_name") is None:
             trip["scheduled_start_stop_name"] = entity_names["stop"].get(
@@ -118,7 +158,14 @@ async def list_trips(
 
     entity_names = await _load_gtfs_entity_names(gtfs_repository)
     response_dict = response.model_dump()
-    _enrich_trips_with_entity_names(response_dict["items"], entity_names)
+    response_items = _filter_trips_with_stop_events(
+        [_build_trip_response_payload(trip) for trip in items]
+    )
+    response_dict["items"] = response_items
+    _enrich_trips_with_entity_names(response_items, entity_names)
+
+    response_dict["total"] = len(response_items)
+    response_dict["total_pages"] = (len(response_items) + limit - 1) // limit if response_items else 1
 
     return response_dict
 
@@ -139,8 +186,7 @@ async def toggle_trip_active(
             detail="Trip not found",
         )
 
-    trip_read = TripRead.model_validate(trip)
-    trip_dict = trip_read.model_dump()
+    trip_dict = _build_trip_response_payload(trip)
 
     entity_names = await _load_gtfs_entity_names(gtfs_repository)
     _enrich_trips_with_entity_names([trip_dict], entity_names)

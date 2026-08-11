@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 import uuid
 
-from sqlalchemy import case, delete, func, select, update
+from sqlalchemy import case, delete, exists, func, select, update
 from sqlalchemy.orm import selectinload
 
 from echogtfs.services.database.base import RepositoryBase
@@ -501,14 +501,18 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
         if is_active is not None:
             where_conditions.append(Trip.is_active == is_active)
 
-        count_stmt = select(func.count(Trip.id))
+        count_stmt = select(func.count(Trip.id)).where(
+            exists(select(StopEvent.trip_id).where(StopEvent.trip_id == Trip.trip_id))
+        )
         if where_conditions:
             count_stmt = count_stmt.where(*where_conditions)
 
         sort_date = Trip.start_date.desc() if normalized_sort == "desc" else Trip.start_date.asc()
         sort_time = Trip.start_time.desc() if normalized_sort == "desc" else Trip.start_time.asc()
 
-        stmt = select(Trip)
+        stmt = select(Trip).where(
+            exists(select(StopEvent.trip_id).where(StopEvent.trip_id == Trip.trip_id))
+        )
         if where_conditions:
             stmt = stmt.where(*where_conditions)
 

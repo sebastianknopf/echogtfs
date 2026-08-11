@@ -434,6 +434,7 @@ class TripRead(BaseModel):
     start_date: str
     route_id: str
     route_name: str | None = None
+    vehicle_display_text: str | None = None
     schedule_relationship: str
     assignment_type: str
     is_active: bool

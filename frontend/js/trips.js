@@ -219,6 +219,7 @@ const trips = (() => {
     return {
       id: item.id,
       line: item.route_name || item.route_id || '-',
+      vehicleDisplayText: item.vehicle_display_text || '-',
       tripId: item.trip_id || '-',
       originalTripId: item.original_trip_id || '-',
       assignmentType: item.assignment_type || '-',
@@ -258,6 +259,7 @@ const trips = (() => {
       : ` <span class="view-item__warning" title="${ui.esc(window.i18n('trips.resolution.warning'))}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${WARNING_ICON_PATH}"/></svg></span>`;
     const modalTitle = window.i18n('trips.modal.view');
     const lineLabel = window.i18n('trips.field.line');
+    const vehicleLabel = window.i18n('trips.view.vehicle');
     titleElement.innerHTML = `${ui.esc(modalTitle)}: ${ui.esc(lineLabel)} ${ui.esc(trip.line)} / ${ui.esc(trip.tripId)}${headerWarning}`;
 
     const startTimeLabel = _formatLocalTime(trip.startDate);
@@ -306,6 +308,10 @@ const trips = (() => {
         <div class="view-item">
           <div class="view-item__label">${ui.esc(window.i18n('trips.view.route'))}</div>
           <div class="view-item__content">${ui.esc(trip.line)}</div>
+        </div>
+        <div class="view-item">
+          <div class="view-item__label">${ui.esc(vehicleLabel)}</div>
+          <div class="view-item__content">${ui.esc(trip.vehicleDisplayText || '-')}</div>
         </div>
         ${scheduledOverview}
         <div class="view-item">
