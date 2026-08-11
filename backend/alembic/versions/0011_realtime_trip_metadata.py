@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "0011_realtime_trip_metadata"
-down_revision: Union[str, None] = "0007_realtime_is_valid_flag"
+down_revision: Union[str, None] = "0010_vhc_stop_seq_nullable"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
