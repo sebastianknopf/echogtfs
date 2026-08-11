@@ -962,7 +962,7 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(added_events), 1)
         self.assertEqual(added_events[0]["stop_id"], "s-extra")
 
-    async def test_sync_trip_update_records_adds_missing_as_canceled_when_enabled(self):
+    async def test_sync_trip_update_records_adds_missing_as_skipped_when_enabled(self):
         repository = _SystemRepositoryStub()
         realtime_repository = _RealtimeRepositoryStub()
         gtfs_repository = _GtfsRepositoryStub()
@@ -1019,9 +1019,9 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
         )
 
         kwargs = realtime_repository.update_trip_update_from_sync.await_args.kwargs
-        canceled_events = [e for e in kwargs["stop_events"] if e.get("schedule_relationship") == "CANCELED"]
-        self.assertEqual(len(canceled_events), 1)
-        self.assertEqual(canceled_events[0]["stop_id"], "s2")
+        skipped_events = [e for e in kwargs["stop_events"] if e.get("schedule_relationship") == "SKIPPED"]
+        self.assertEqual(len(skipped_events), 1)
+        self.assertEqual(skipped_events[0]["stop_id"], "s2")
 
     async def test_sync_trip_update_records_discards_unexpected_stops_when_flag_disabled(self):
         repository = _SystemRepositoryStub()
