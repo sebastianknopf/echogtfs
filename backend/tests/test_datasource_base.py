@@ -183,6 +183,28 @@ class TestDatasourceBaseHelpers(unittest.TestCase):
 
         self.assertEqual([event["stop_sequence"] for event in propagated], ["10", "20"])
 
+    def test_propagate_trip_update_stop_events_skips_propagation_without_nominal_stop_times(self):
+        same_time = datetime(2026, 8, 1, 8, 0, 0, tzinfo=timezone.utc)
+        stop_events = [
+            {
+                "stop_id": "s1",
+                "stop_sequence": "10",
+                "departure_time": same_time,
+                "schedule_relationship": "SCHEDULED",
+            }
+        ]
+
+        propagated = self.datasource._propagate_trip_update_stop_events(
+            stop_events,
+            [],
+            treat_unexpected_stop_as_added_stop=True,
+            treat_missing_stop_as_canceled_stop=True,
+            is_complete_stop_sequence=True,
+        )
+
+        self.assertEqual(len(propagated), 1)
+        self.assertEqual(propagated[0]["schedule_relationship"], "SCHEDULED")
+
 
 class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
     async def test_sync_records_logs_runtime_steps(self):

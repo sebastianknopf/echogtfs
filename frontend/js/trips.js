@@ -199,12 +199,17 @@ const trips = (() => {
       const arrivalDate = stopEvent?.arrival_time ? new Date(stopEvent.arrival_time) : null;
       const departureDate = stopEvent?.departure_time ? new Date(stopEvent.departure_time) : null;
 
+      const statusCode = String(stopEvent?.schedule_relationship || '');
+      const statusLabel = statusCode === 'ADDED'
+        ? window.i18n('trips.stop_event.added')
+        : (statusCode === 'SKIPPED' ? window.i18n('trips.stop_event.skipped') : _getScheduleRelationshipText(stopEvent?.schedule_relationship));
+
       return {
         stopDisplayName: stopEvent?.stop_name || stopEvent?.stop_id || '-',
         arrivalTimeLabel: _formatLocalTime(arrivalDate),
         departureTimeLabel: _formatLocalTime(departureDate),
-        statusCode: String(stopEvent?.schedule_relationship || ''),
-        statusLabel: _getScheduleRelationshipText(stopEvent?.schedule_relationship),
+        statusCode,
+        statusLabel,
         isValid: stopEvent?.is_valid !== false,
       };
     });

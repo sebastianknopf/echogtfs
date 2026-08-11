@@ -438,6 +438,9 @@ class DatasourceBase(DatasourceInterface):
         is_complete_stop_sequence: bool,
     ) -> list[dict[str, Any]]:
         """Apply nominal-stop propagation and merge rules for one trip-update stop-event list."""
+        if not nominal_stop_times:
+            return [dict(event) for event in stop_events]
+
         propagated_events = [dict(event) for event in stop_events]
 
         nominal_by_stop_id: dict[str, Any] = {}
@@ -447,14 +450,6 @@ class DatasourceBase(DatasourceInterface):
             if stop_id not in nominal_by_stop_id:
                 nominal_by_stop_id[stop_id] = stop_time
                 nominal_order.append(stop_id)
-
-        if not nominal_stop_times:
-            if treat_unexpected_stop_as_added_stop:
-                for event in propagated_events:
-                    stop_id = str(event.get("stop_id") or "")
-                    if stop_id and stop_id not in nominal_by_stop_id:
-                        event["schedule_relationship"] = "ADDED"
-            return propagated_events
 
         unexpected_stop_added = False
         if treat_unexpected_stop_as_added_stop:
@@ -487,7 +482,7 @@ class DatasourceBase(DatasourceInterface):
                     "stop_sequence": str(stop_time.stop_sequence),
                     "arrival_time": stop_time.arrival_time,
                     "departure_time": stop_time.departure_time,
-                    "schedule_relationship": "CANCELED" if treat_missing_stop_as_canceled_stop else "NO_DATA",
+                    "schedule_relationship": "SKIPPED" if treat_missing_stop_as_canceled_stop else "NO_DATA",
                     "is_valid": True,
                 }
             )
