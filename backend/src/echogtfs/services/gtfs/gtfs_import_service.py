@@ -158,15 +158,24 @@ class GtfsImportService(GtfsImportInterface):
             logger.info("[GTFS] Scheduler: no cron expression set, no job scheduled")
 
     async def _run_scheduled_import(self) -> None:
-        await self.run_import_task(_NullProgressReporter())
+        operation_day = self.get_current_operation_day()
+        await self.run_import_task(_NullProgressReporter(), operation_day)
 
-    async def run_import_task(self, progress_report_interface: ReportProgressInterface) -> None:
+    def get_current_operation_day(self) -> date:
+        """Return today's date in the configured server timezone."""
+        return datetime.now(self._server_timezone).date()
+
+    async def run_import_task(
+        self,
+        progress_report_interface: ReportProgressInterface,
+        operation_day: date | None = None,
+    ) -> None:
         logger.info("[GTFS] Import task started")
 
         await self._set_import_state(self.STATUS_RUNNING)
 
         try:
-            result = await self._import_feed(progress_report_interface)
+            result = await self._import_feed(progress_report_interface, operation_day)
             
             agencies_count = int(result.get("agencies", 0))
             stops_count = int(result.get("stops", 0))
@@ -194,7 +203,11 @@ class GtfsImportService(GtfsImportInterface):
 
             await progress_report_interface.report_progress(progress=100.0, message="intf.gtfsimport.error")
 
-    async def _import_feed(self, progress_report_interface: ReportProgressInterface) -> dict[str, int]:
+    async def _import_feed(
+        self,
+        progress_report_interface: ReportProgressInterface,
+        operation_day: date | None = None,
+    ) -> dict[str, int]:
         settings = await self._get_filtered_settings([AppSetting.KEY_GTFS_FEED_URL])
         feed_url = (settings.get(AppSetting.KEY_GTFS_FEED_URL) or "").strip()
 
@@ -209,7 +222,7 @@ class GtfsImportService(GtfsImportInterface):
                 await progress_report_interface.report_progress(progress=10, message="intf.gtfsimport.parsing")
                 agency_rows = list(self._iter_csv_rows(zip_file, "agency.txt"))
                 feed_timezone = self._extract_feed_timezone(agency_rows)
-                service_date = datetime.now(feed_timezone).date()
+                service_date = operation_day or datetime.now(feed_timezone).date()
 
                 await progress_report_interface.report_progress(progress=20, message="intf.gtfsimport.mapping.agencies")
                 agencies = self._map_agencies(agency_rows)
@@ -223,10 +236,18 @@ class GtfsImportService(GtfsImportInterface):
                 stop_ids = {row["gtfs_id"] for row in stops}
                 route_ids = {row["gtfs_id"] for row in routes}
 
+                await progress_report_interface.report_progress(progress=45, message="intf.gtfsimport.mapping.calendar")
+                valid_service_ids = self._compute_valid_service_ids(
+                    self._iter_csv_rows_optional(zip_file, "calendar.txt"),
+                    self._iter_csv_rows_optional(zip_file, "calendar_dates.txt"),
+                    operation_day=service_date,
+                )
+
                 await progress_report_interface.report_progress(progress=50, message="intf.gtfsimport.mapping.trips")
                 trip_meta = self._map_trips(
                     self._iter_csv_rows(zip_file, "trips.txt"),
                     route_ids=route_ids,
+                    valid_service_ids=valid_service_ids,
                 )
 
                 await progress_report_interface.report_progress(progress=60, message="intf.gtfsimport.mapping.stop_times")
@@ -241,7 +262,7 @@ class GtfsImportService(GtfsImportInterface):
                 )
 
                 await progress_report_interface.report_progress(progress=70, message="intf.gtfsimport.completing")
-                trip_rows = self._derive_trip_rows(trip_meta, trip_windows)
+                trip_rows = self._derive_trip_rows(trip_meta, trip_windows, service_date=service_date)
 
             await progress_report_interface.report_progress(progress=80, message="intf.gtfsimport.clearing")
             await self._gtfs_repository.clear_gtfs_static_data()
@@ -309,19 +330,80 @@ class GtfsImportService(GtfsImportInterface):
 
         raise KeyError(f"'{filename}' not found in GTFS ZIP")
 
+    @classmethod
+    def _iter_csv_rows_optional(cls, zip_file: zipfile.ZipFile, filename: str) -> Iterator[dict[str, str]]:
+        try:
+            yield from cls._iter_csv_rows(zip_file, filename)
+        except KeyError:
+            return
+
+    @staticmethod
+    def _parse_gtfs_date(value: str) -> date | None:
+        if len(value) != 8:
+            return None
+
+        try:
+            return datetime.strptime(value, "%Y%m%d").date()
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _compute_valid_service_ids(
+        calendar_rows: Iterable[dict[str, str]],
+        calendar_dates_rows: Iterable[dict[str, str]],
+        *,
+        operation_day: date,
+    ) -> set[str]:
+        weekday_columns = (
+            "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+        )
+        weekday_column = weekday_columns[operation_day.weekday()]
+
+        service_ids: set[str] = set()
+        for row in calendar_rows:
+            service_id = row.get("service_id") or ""
+            if not service_id or (row.get(weekday_column) or "0") != "1":
+                continue
+
+            start_date = GtfsImportService._parse_gtfs_date(row.get("start_date") or "")
+            end_date = GtfsImportService._parse_gtfs_date(row.get("end_date") or "")
+            if start_date is None or end_date is None or not (start_date <= operation_day <= end_date):
+                continue
+
+            service_ids.add(service_id)
+
+        operation_day_str = operation_day.strftime("%Y%m%d")
+        for row in calendar_dates_rows:
+            service_id = row.get("service_id") or ""
+            if not service_id or (row.get("date") or "") != operation_day_str:
+                continue
+
+            exception_type = row.get("exception_type") or ""
+            if exception_type == "1":
+                service_ids.add(service_id)
+            elif exception_type == "2":
+                service_ids.discard(service_id)
+
+        return service_ids
+
     @staticmethod
     def _map_trips(
         rows: Iterable[dict[str, str]],
         *,
         route_ids: set[str],
+        valid_service_ids: set[str],
     ) -> dict[str, tuple[str, int]]:
         trips: dict[str, tuple[str, int]] = {}
 
         for row in rows:
             trip_id = row.get("trip_id") or ""
             route_id = row.get("route_id") or ""
+            service_id = row.get("service_id") or ""
 
             if not trip_id or not route_id or route_id not in route_ids:
+                continue
+
+            if service_id not in valid_service_ids:
                 continue
 
             direction_raw = row.get("direction_id") or "0"
@@ -475,8 +557,10 @@ class GtfsImportService(GtfsImportInterface):
     def _derive_trip_rows(
         trip_meta: dict[str, tuple[str, int]],
         trip_windows: dict[str, _TripWindow],
-    ) -> list[dict[str, str | int | datetime]]:
-        trips: list[dict[str, str | int | datetime]] = []
+        *,
+        service_date: date,
+    ) -> list[dict[str, str | int | datetime | date]]:
+        trips: list[dict[str, str | int | datetime | date]] = []
 
         for trip_id, (route_id, direction_id) in trip_meta.items():
             window = trip_windows.get(trip_id)
@@ -497,6 +581,7 @@ class GtfsImportService(GtfsImportInterface):
                     "start_stop_id": window.first_stop_id,
                     "end_time": end_time,
                     "end_stop_id": window.last_stop_id,
+                    "operation_day_date": service_date,
                 }
             )
 

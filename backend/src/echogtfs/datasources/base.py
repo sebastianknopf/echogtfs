@@ -2,7 +2,7 @@
 
 import asyncio
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import date, datetime
 import logging
 import uuid
 from time import perf_counter
@@ -386,6 +386,17 @@ class DatasourceBase(DatasourceInterface):
             return value
 
         return None
+
+    @staticmethod
+    def _parse_operation_day(start_date: Any) -> date | None:
+        """Parse a GTFS-RT start_date (YYYYMMDD) into a date, or None if invalid."""
+        if not isinstance(start_date, str) or not start_date:
+            return None
+
+        try:
+            return datetime.strptime(start_date, "%Y%m%d").date()
+        except ValueError:
+            return None
 
     def _record_uuid(self, record: dict[str, Any], source_name: str, *, fallback_key: str, kind: str) -> uuid.UUID:
         """Build deterministic UUID for one record using id or fallback key."""
@@ -1147,6 +1158,7 @@ class DatasourceBase(DatasourceInterface):
                 matched_trip_id = await self._matching_service.match(
                     trip_id=derived_trip_id,
                     route_id=str(mapped_trip.get("route_id") or "") or None,
+                    operation_day_date=self._parse_operation_day(record.get("start_date")),
                     scheduled_start_time=scheduled_start_time,
                     scheduled_end_time=scheduled_end_time,
                     scheduled_start_stop_id=(
@@ -1458,6 +1470,7 @@ class DatasourceBase(DatasourceInterface):
                 matched_trip_id = await self._matching_service.match(
                     trip_id=derived_trip_id,
                     route_id=trip_payload["route_id"] or None,
+                    operation_day_date=self._parse_operation_day(trip_payload.get("start_date")),
                     scheduled_start_time=scheduled_start_time,
                     scheduled_end_time=scheduled_end_time,
                     scheduled_start_stop_id=(

@@ -1,8 +1,8 @@
-﻿from datetime import datetime
+﻿from datetime import date, datetime
 from typing import ClassVar
 import uuid
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Enum, Float, ForeignKey, Index, Integer, String, Text, Uuid, func
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, Enum, Float, ForeignKey, Index, Integer, String, Text, Uuid, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from echogtfs.enum.gtfsrt import (
@@ -314,6 +314,7 @@ class GtfsTrip(Base):
     start_stop_id: Mapped[str] = mapped_column(Text, ForeignKey("gtfs_stops.gtfs_id"))
     end_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     end_stop_id: Mapped[str] = mapped_column(Text, ForeignKey("gtfs_stops.gtfs_id"))
+    operation_day_date: Mapped[date] = mapped_column(Date)
 
     route: Mapped["GtfsRoute"] = relationship(back_populates="trips")
     start_stop: Mapped["GtfsStop"] = relationship(

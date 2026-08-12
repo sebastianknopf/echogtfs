@@ -175,9 +175,7 @@ class GtfsRepository(RepositoryBase, GtfsRepositoryInterface):
             stmt = stmt.where(GtfsTrip.route_id == route_id)
 
         if operation_day_date is not None:
-            stmt = stmt.where(text("DATE(gtfs_trips.start_time) = :operation_day_date")).params(
-                operation_day_date=operation_day_date
-            )
+            stmt = stmt.where(GtfsTrip.operation_day_date == operation_day_date)
 
         if scheduled_start_time is not None:
             stmt = stmt.where(GtfsTrip.start_time >= (scheduled_start_time - timedelta(seconds=60)))
