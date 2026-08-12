@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import sys
 import unittest
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -85,6 +85,7 @@ class TestMatchingService(unittest.IsolatedAsyncioTestCase):
         caching_service.get_trip_id.assert_awaited_once_with("external-trip-1")
         repository.find_trip_ids_by_match_properties.assert_awaited_once_with(
             route_id="R1",
+            operation_day_date=datetime(2026, 1, 1, 8, 0, tzinfo=UTC).date(),
             scheduled_start_time=datetime(2026, 1, 1, 8, 0, tzinfo=UTC),
             scheduled_end_time=datetime(2026, 1, 1, 9, 0, tzinfo=UTC),
             scheduled_start_stop_id="de:123:stopA",
@@ -119,6 +120,76 @@ class TestMatchingService(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsNone(result)
         caching_service.put_trip_id.assert_not_awaited()
+
+    async def test_match_uses_explicit_operation_day_date_over_start_time_date(self):
+        repository = SimpleNamespace(find_trip_ids_by_match_properties=AsyncMock(return_value=["T42"]))
+        caching_service = SimpleNamespace(get_trip_id=AsyncMock(return_value=None), put_trip_id=AsyncMock())
+        service = MatchingService(repository, caching_service)
+
+        result = await service.match(
+            trip_id="external-trip-1",
+            route_id="R1",
+            operation_day_date=date(2026, 1, 2),
+            scheduled_start_time=datetime(2026, 1, 1, 23, 55, tzinfo=UTC),
+        )
+
+        self.assertEqual(result, "T42")
+        repository.find_trip_ids_by_match_properties.assert_awaited_once_with(
+            route_id="R1",
+            operation_day_date=date(2026, 1, 2),
+            scheduled_start_time=datetime(2026, 1, 1, 23, 55, tzinfo=UTC),
+            scheduled_end_time=None,
+            scheduled_start_stop_id=None,
+            scheduled_end_stop_id=None,
+        )
+
+    async def test_match_falls_back_to_start_time_date_when_operation_day_date_missing(self):
+        repository = SimpleNamespace(find_trip_ids_by_match_properties=AsyncMock(return_value=["T42"]))
+        caching_service = SimpleNamespace(get_trip_id=AsyncMock(return_value=None), put_trip_id=AsyncMock())
+        service = MatchingService(repository, caching_service)
+
+        await service.match(
+            trip_id="external-trip-1",
+            route_id="R1",
+            scheduled_start_time=datetime(2026, 1, 1, 8, 0, tzinfo=UTC),
+        )
+
+        self.assertEqual(
+            repository.find_trip_ids_by_match_properties.await_args.kwargs["operation_day_date"],
+            date(2026, 1, 1),
+        )
+
+    async def test_match_intermediate_fallback_uses_explicit_operation_day_date(self):
+        matching_trip = SimpleNamespace(
+            stop_times=[
+                SimpleNamespace(
+                    stop_id="de:123:stopA:platform1",
+                    departure_time=datetime(2026, 1, 1, 8, 5, 0, tzinfo=UTC),
+                )
+            ]
+        )
+        repository = SimpleNamespace(
+            find_trip_ids_by_match_properties=AsyncMock(return_value=["T1"]),
+            get_gtfs_trip_with_stop_times=AsyncMock(return_value=matching_trip),
+        )
+        caching_service = SimpleNamespace(get_trip_id=AsyncMock(return_value=None), put_trip_id=AsyncMock())
+        service = MatchingService(repository, caching_service)
+
+        result = await service.match(
+            trip_id="external-trip-1",
+            route_id="R1",
+            operation_day_date=date(2026, 1, 1),
+            scheduled_start_time=None,
+            scheduled_end_time=None,
+            scheduled_intermediate_stops=[
+                ("de:123:stopA:platformX", datetime(2026, 1, 1, 8, 5, 0, tzinfo=UTC)),
+            ],
+        )
+
+        self.assertEqual(result, "T1")
+        repository.find_trip_ids_by_match_properties.assert_awaited_once_with(
+            route_id="R1", operation_day_date=date(2026, 1, 1)
+        )
 
     async def test_match_uses_intermediate_stop_fallback_when_start_and_end_are_missing(self):
         candidate_trip_a = SimpleNamespace(
@@ -161,7 +232,7 @@ class TestMatchingService(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(result, "T1")
-        repository.find_trip_ids_by_match_properties.assert_awaited_once_with(route_id="R1")
+        repository.find_trip_ids_by_match_properties.assert_awaited_once_with(route_id="R1", operation_day_date=None)
         self.assertEqual(repository.get_gtfs_trip_with_stop_times.await_count, 2)
         caching_service.put_trip_id.assert_awaited_once_with("external-trip-1", "T1")
 
@@ -238,7 +309,7 @@ class TestMatchingService(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertIsNone(result)
-        repository.find_trip_ids_by_match_properties.assert_awaited_once_with(route_id="R1")
+        repository.find_trip_ids_by_match_properties.assert_awaited_once_with(route_id="R1", operation_day_date=None)
         self.assertEqual(repository.get_gtfs_trip_with_stop_times.await_count, 2)
         caching_service.put_trip_id.assert_not_awaited()
 
