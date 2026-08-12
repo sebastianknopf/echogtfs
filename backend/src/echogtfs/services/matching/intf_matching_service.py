@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import date, datetime
 
 
 class MatchingServiceInterface(ABC):
@@ -13,6 +13,7 @@ class MatchingServiceInterface(ABC):
         *,
         trip_id: str,
         route_id: str | None = None,
+        operation_day_date: date | None = None,
         scheduled_start_time: datetime | None = None,
         scheduled_end_time: datetime | None = None,
         scheduled_start_stop_id: str | None = None,

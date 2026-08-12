@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from datetime import date
 
 
 class GtfsImportInterface(ABC):
@@ -9,6 +10,11 @@ class GtfsImportInterface(ABC):
     @abstractmethod
     async def get_status(self) -> dict[str, str | None]:
         """Return feed url, cron, status, imported_at, and message."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_current_operation_day(self) -> date:
+        """Return today's date in the configured server timezone."""
         raise NotImplementedError
 
     @abstractmethod

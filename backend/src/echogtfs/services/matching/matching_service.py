@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from echogtfs.common.global_id import GlobalId
@@ -25,6 +25,7 @@ class MatchingService(MatchingServiceInterface):
         *,
         trip_id: str,
         route_id: str | None = None,
+        operation_day_date: date | None = None,
         scheduled_start_time: datetime | None = None,
         scheduled_end_time: datetime | None = None,
         scheduled_start_stop_id: str | None = None,
@@ -52,6 +53,7 @@ class MatchingService(MatchingServiceInterface):
 
         internal_trip_id = await self._match_by_start_end_anchors(
             route_id=route_id,
+            operation_day_date=operation_day_date,
             scheduled_start_time=scheduled_start_time,
             scheduled_end_time=scheduled_end_time,
             scheduled_start_stop_id=reduced_start_stop_id,
@@ -77,6 +79,7 @@ class MatchingService(MatchingServiceInterface):
 
         internal_trip_id = await self._match_by_intermediate_stops(
             route_id=route_id,
+            operation_day_date=operation_day_date,
             scheduled_intermediate_stops=reduced_intermediate_stops,
         )
 
@@ -90,6 +93,7 @@ class MatchingService(MatchingServiceInterface):
         self,
         *,
         route_id: str,
+        operation_day_date: date | None,
         scheduled_start_time: datetime | None,
         scheduled_end_time: datetime | None,
         scheduled_start_stop_id: str | None,
@@ -100,6 +104,7 @@ class MatchingService(MatchingServiceInterface):
 
         trip_ids = await self._repository.find_trip_ids_by_match_properties(
             route_id=route_id,
+            operation_day_date=operation_day_date or scheduled_start_time.date(),
             scheduled_start_time=scheduled_start_time,
             scheduled_end_time=scheduled_end_time,
             scheduled_start_stop_id=scheduled_start_stop_id,
@@ -115,10 +120,12 @@ class MatchingService(MatchingServiceInterface):
         self,
         *,
         route_id: str,
+        operation_day_date: date | None,
         scheduled_intermediate_stops: list[tuple[str, datetime]],
     ) -> str | None:
         candidate_trip_ids = await self._repository.find_trip_ids_by_match_properties(
             route_id=route_id,
+            operation_day_date=operation_day_date,
         )
         
         if not candidate_trip_ids:

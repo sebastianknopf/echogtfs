@@ -4,6 +4,7 @@
 
 const vehicles = (() => {
   const MAP_STATE_STORAGE_KEY = 'vehicles.map.state';
+  const FILTERS_STORAGE_KEY = 'echogtfs_vehicles_filters';
   const POLL_INTERVAL_MS = 5_000;
   const VEHICLE_ICON_PATH = 'M240-120q-17 0-28.5-11.5T200-160v-82q-18-20-29-44.5T160-340v-380q0-83 77-121.5T480-880q172 0 246 37t74 123v380q0 29-11 53.5T760-242v82q0 17-11.5 28.5T720-120h-40q-17 0-28.5-11.5T640-160v-40H320v40q0 17-11.5 28.5T280-120h-40Zm242-640h224-448 224Zm158 280H240h480-80Zm-400-80h480v-120H240v120Zm142.5 222.5Q400-355 400-380t-17.5-42.5Q365-440 340-440t-42.5 17.5Q280-405 280-380t17.5 42.5Q315-320 340-320t42.5-17.5Zm280 0Q680-355 680-380t-17.5-42.5Q645-440 620-440t-42.5 17.5Q560-405 560-380t17.5 42.5Q595-320 620-320t42.5-17.5ZM258-760h448q-15-17-64.5-28.5T482-800q-107 0-156.5 12.5T258-760Zm62 480h320q33 0 56.5-23.5T720-360v-120H240v120q0 33 23.5 56.5T320-280Z';
   const WARNING_ICON_PATH = 'M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z';
@@ -22,8 +23,9 @@ const vehicles = (() => {
   let _filterTimeout = null;
   let _filters = {
     active: true,
-    inactive: true,
+    inactive: false,
   };
+  let _loadRequestId = 0;
   let _vehicles = [];
   let _markers = [];
   let _selectedVehicleId = null;
@@ -52,6 +54,10 @@ const vehicles = (() => {
     }
 
     return _getVehicleSearchValue(vehicle).includes(_filterText);
+  }
+
+  function _matchesVehicleFilters(vehicle) {
+    return (vehicle.is_active && _filters.active) || (!vehicle.is_active && _filters.inactive);
   }
 
   function _formatRelativeTimestamp(timestamp) {
@@ -313,11 +319,50 @@ const vehicles = (() => {
   }
 
   async function _loadVehicles() {
+    const requestId = ++_loadRequestId;
+
     try {
       const response = await api.getVehicles(1, 500, '', _filters);
-      _vehicles = (response.items || []).filter(_matchesVehicleSearch);
+      if (requestId !== _loadRequestId) return;
+
+      _vehicles = (response.items || [])
+        .filter(_matchesVehicleFilters)
+        .filter(_matchesVehicleSearch);
       _updateVehiclesOnMap();
       _renderBottomSheet();
+    } catch {
+    }
+  }
+
+  function _updateFilterCheckboxes() {
+    const activeCheckbox = document.getElementById('filter-vehicles-active');
+    const inactiveCheckbox = document.getElementById('filter-vehicles-inactive');
+
+    if (activeCheckbox) activeCheckbox.checked = _filters.active;
+    if (inactiveCheckbox) inactiveCheckbox.checked = _filters.inactive;
+  }
+
+  function _loadFiltersFromStorage() {
+    try {
+      const saved = localStorage.getItem(FILTERS_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.active === 'boolean') {
+          _filters.active = parsed.active;
+        }
+        if (typeof parsed.inactive === 'boolean') {
+          _filters.inactive = parsed.inactive;
+        }
+      }
+    } catch {
+    }
+
+    _updateFilterCheckboxes();
+  }
+
+  function _saveFiltersToStorage() {
+    try {
+      localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(_filters));
     } catch {
     }
   }
@@ -328,6 +373,7 @@ const vehicles = (() => {
 
     _filters.active = activeCheckbox ? activeCheckbox.checked : true;
     _filters.inactive = inactiveCheckbox ? inactiveCheckbox.checked : true;
+    _saveFiltersToStorage();
     _loadVehicles();
   }
 
@@ -472,6 +518,7 @@ const vehicles = (() => {
 
   function load() {
     _bindEvents();
+    _loadFiltersFromStorage();
     _initializeMap();
     _loadVehicles();
 
