@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import unittest
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -644,6 +645,44 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(session.execute.await_count, 1)
         session.commit.assert_awaited_once()
         self.assertEqual(len(added_objects), 2)
+
+    async def test_update_trip_update_from_sync_persists_trip_metadata_fields(self):
+        added_objects = []
+        session = SimpleNamespace(
+            get=AsyncMock(return_value=None),
+            add=lambda obj: added_objects.append(obj),
+            flush=AsyncMock(),
+            execute=AsyncMock(),
+            commit=AsyncMock(),
+        )
+        repository = self._make_repository(session)
+
+        await repository.update_trip_update_from_sync(
+            trip_uuid=uuid.uuid4(),
+            source_id=11,
+            source_name="source-a",
+            trip_id="trip-1",
+            original_trip_id="original-trip-1",
+            scheduled_start_stop_id="start-stop",
+            scheduled_end_stop_id="end-stop",
+            start_time="08:00:00",
+            start_date="20260801",
+            route_id="route-1",
+            schedule_relationship="SCHEDULED",
+            assignment_type="ASSIGNED",
+            is_active_on_create=False,
+            is_valid=True,
+            stop_events=[],
+            scheduled_start_time=datetime(2026, 8, 10, 8, 0, 0, tzinfo=timezone.utc),
+            scheduled_end_time=datetime(2026, 8, 10, 9, 0, 0, tzinfo=timezone.utc),
+        )
+
+        trip = added_objects[0]
+        self.assertEqual(trip.original_trip_id, "original-trip-1")
+        self.assertEqual(trip.scheduled_start_stop_id, "start-stop")
+        self.assertEqual(trip.scheduled_end_stop_id, "end-stop")
+        self.assertEqual(trip.scheduled_start_time, datetime(2026, 8, 10, 8, 0, 0, tzinfo=timezone.utc))
+        self.assertEqual(trip.scheduled_end_time, datetime(2026, 8, 10, 9, 0, 0, tzinfo=timezone.utc))
 
     async def test_update_trip_update_from_sync_preserves_is_active_on_existing_trip(self):
         existing = SimpleNamespace(

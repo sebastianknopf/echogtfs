@@ -16,7 +16,7 @@ Im Bereich "Fahrten" werden alle aktuellen Fahrten angezeigt.
 - Für jede Fahrt werden in der Übersicht folgende Informationen angezeigt:
     - **Linie**: Linie, zu der die entsprechende Fahrt zugeordnet ist
     - **Fahrt-ID**: Fahrt-ID, zu der die entsprechende Fahrt zugeordnet ist
-    - **Start- und Ende**: Startzeit- und Haltestelle, Ankunftszeit- und Haltestelle
+    - **Betriebstag, Start- und Ende**: Betriebstag, Startzeit- und Haltestelle, Ankunftszeit- und Haltestelle, die von der Datenquelle gemeldet wurde
     - **Status**: Status (planmäßig, Zusatzfahrt, Fahrtausfall) der Fahrt
     - **Datenquelle**: Name der Datenquelle von der eine Fahrt synchronisiert wurde
     - **Aktivierungsstatus**: Information, wenn eine Fahrt deaktiviert wurde. Deaktivierte Fahrten werden in der GTFS-RT Ausgabe unterdrückt. Über den "On/Off" Button können Fahrten aktiviert oder deaktiviert werden.
@@ -28,6 +28,11 @@ Um die Details zu einer Fahrt anzuzeigen, klicken Sie auf den "View" Button in d
 :name: img-trips-detail-screen
 ```
 
-- Im oberen Bereich des Dialogs werden alle Basisdaten wie **Fahrt-ID**, **Linie**, **Fahrtstart und -Ende**, sowie **Status** der Fahrt angezeigt
-- Im unteren Bereich werden die einzelnen Haltestellen der Fahrt mit **Ankunftszeit**, **Abfahrtszeit** und **Status** angezeigt
+- Im oberen Bereich des Dialogs werden alle Basisdaten wie **Fahrt-ID**, **Linie**, **Originäre Fahrt-ID**, **Betriebstag, Fahrtstart und -Ende**, sowie **Status** der Fahrt angezeigt. Die Fahrt-ID ist die ID, mit der die Fahrt im GTFS-RT publiziert wird und die zum Soll-Fahrplan passt. Die originäre Fahrt-ID ist die ID, mit der die Fahrt aus der Datenquelle synchronisiert wurde.
+- Im unteren Bereich werden die einzelnen Haltestellen der Fahrt mit **Ankunftszeit**, **Abfahrtszeit**, **Status** und **Zuordnungstyp** angezeigt. Der Zuordnungstyp gibt an, auf welchem Weg eine Fahrt aus der Datenquelle einer konkreten Fahrt im Sollfahrplan zugeordnet wurde. Folgende Werte können hier auftauchen:
+    - `DIRECT_BY_ID`: die Fahrt wurde anhand ihrer ID im Soll-Fahrplan gefunden
+    - `MATCHED_BY_START_STOP`: die Fahrt wurde anhand ihrer Start- und Endhaltestelle, sowie der Abfahrts- und Ankunftszeit im Soll-Fahrplan gefunden
+    - `MATCHED_BY_CURRENT_STOP`: die Fahrt wurde anhand von mindestens einem Unterwegshalt im Soll-Fahrplan gefunden
+    - `NO_MATCH_GENERAL`: es wurde keine passende Fahrt im Soll-Fahrplan gefunden
+    - `NO_MATCH_AMBIGUOUS_TRIP`: es wurde keine _eindeutig passende Fahrt_ im Soll-Fahrplan gefunden
 - Wenn eine **Linie oder Trip-ID nicht über die GTFS-Daten** gefunden wurde, werden mit einem roten Ausrufezeichen gekennzeichnet. In diesem Fall wird jeweils die originale Linien- und Fahrt-ID angezeigt, welche aus der Datenquelle der Fahrt übermittelt wurde

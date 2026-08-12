@@ -8,6 +8,7 @@ import uuid
 from time import perf_counter
 from typing import Any
 
+from echogtfs.common.global_id import GlobalId
 from echogtfs.datasources.intf_datasource import DatasourceInterface
 from echogtfs.enum.gtfsrt import AssignmentType
 from echogtfs.enum.system import InvalidReferencePolicy
@@ -408,6 +409,21 @@ class DatasourceBase(DatasourceInterface):
 
         return datetime.max
 
+    @staticmethod
+    def _normalize_stop_id_for_matching(value: Any) -> str:
+        """Normalize a stop ID to its level-3 global-ID form for matching purposes."""
+        if value is None:
+            return ""
+
+        stop_id = str(value)
+        if not stop_id:
+            return ""
+
+        if GlobalId.is_global_id(stop_id):
+            return GlobalId.level(stop_id, 3)
+
+        return stop_id
+
     async def _run_cpu_bound(self, func: Any, *args: Any, **kwargs: Any) -> Any:
         """Run CPU-bound synchronous work in a worker thread."""
         return await asyncio.to_thread(func, *args, **kwargs)
@@ -422,64 +438,86 @@ class DatasourceBase(DatasourceInterface):
         is_complete_stop_sequence: bool,
     ) -> list[dict[str, Any]]:
         """Apply nominal-stop propagation and merge rules for one trip-update stop-event list."""
+        if not nominal_stop_times:
+            return [dict(event) for event in stop_events]
+
         propagated_events = [dict(event) for event in stop_events]
 
         nominal_by_stop_id: dict[str, Any] = {}
+        nominal_order: list[str] = []
         for stop_time in nominal_stop_times:
-            stop_id = str(stop_time.stop_id)
+            stop_id = self._normalize_stop_id_for_matching(stop_time.stop_id)
             if stop_id not in nominal_by_stop_id:
                 nominal_by_stop_id[stop_id] = stop_time
+                nominal_order.append(stop_id)
 
+        unexpected_stop_added = False
         if treat_unexpected_stop_as_added_stop:
             for event in propagated_events:
-                stop_id = str(event.get("stop_id") or "")
+                stop_id = self._normalize_stop_id_for_matching(event.get("stop_id"))
                 if stop_id and stop_id not in nominal_by_stop_id:
                     event["schedule_relationship"] = "ADDED"
+                    unexpected_stop_added = True
+        else:
+            propagated_events = [
+                event for event in propagated_events if self._normalize_stop_id_for_matching(event.get("stop_id")) in nominal_by_stop_id
+            ]
 
-        if treat_missing_stop_as_canceled_stop:
-            realtime_stop_ids = {
-                str(event.get("stop_id") or "")
-                for event in propagated_events
-                if event.get("stop_id")
-            }
+        realtime_stop_ids = {
+            self._normalize_stop_id_for_matching(event.get("stop_id"))
+            for event in propagated_events
+            if event.get("stop_id")
+        }
 
-            for stop_time in nominal_stop_times:
-                nominal_stop_id = str(stop_time.stop_id)
-                if nominal_stop_id in realtime_stop_ids:
-                    continue
+        missing_stop_added = False
+        for stop_time in nominal_stop_times:
+            nominal_stop_id = self._normalize_stop_id_for_matching(stop_time.stop_id)
+            if nominal_stop_id in realtime_stop_ids:
+                continue
 
-                propagated_events.append(
-                    {
-                        "stop_id": nominal_stop_id,
-                        "stop_sequence": str(stop_time.stop_sequence),
-                        "arrival_time": stop_time.arrival_time,
-                        "departure_time": stop_time.departure_time,
-                        "schedule_relationship": "CANCELED",
-                        "is_valid": True,
-                    }
-                )
+            missing_stop_added = True
+            propagated_events.append(
+                {
+                    "stop_id": str(stop_time.stop_id),
+                    "stop_sequence": str(stop_time.stop_sequence),
+                    "arrival_time": stop_time.arrival_time,
+                    "departure_time": stop_time.departure_time,
+                    "schedule_relationship": "SKIPPED" if treat_missing_stop_as_canceled_stop else "NO_DATA",
+                    "is_valid": True,
+                }
+            )
 
         if not is_complete_stop_sequence:
             return propagated_events
 
+        if not unexpected_stop_added and not missing_stop_added:
+            def sort_key(event: dict[str, Any]) -> tuple[int, int, datetime, str]:
+                stop_id = str(event.get("stop_id") or "")
+                nominal_rank = nominal_order.index(stop_id) if stop_id in nominal_by_stop_id else len(nominal_order)
+                departure_rank = self._coerce_stop_time_for_sort(
+                    event.get("departure_time") or event.get("arrival_time")
+                )
+                return (
+                    0 if stop_id in nominal_by_stop_id else 1,
+                    nominal_rank,
+                    departure_rank,
+                    stop_id,
+                )
+
+            return sorted(propagated_events, key=sort_key)
+
         def sort_key(event: dict[str, Any]) -> tuple[int, int, datetime, str]:
             stop_id = str(event.get("stop_id") or "")
-            nominal = nominal_by_stop_id.get(stop_id)
-            nominal_rank = int(nominal.stop_sequence) if nominal is not None else 10**9
             departure_rank = self._coerce_stop_time_for_sort(
                 event.get("departure_time") or event.get("arrival_time")
             )
             return (
-                0 if nominal is not None else 1,
-                nominal_rank,
+                0 if stop_id in nominal_by_stop_id else 1,
                 departure_rank,
                 stop_id,
             )
 
         merged_events = sorted(propagated_events, key=sort_key)
-        for idx, event in enumerate(merged_events, start=1):
-            event["stop_sequence"] = str(idx)
-
         return merged_events
 
     @staticmethod
@@ -1063,6 +1101,7 @@ class DatasourceBase(DatasourceInterface):
                 stop_events.append(mapped_event)
 
             derived_trip_id = str(record["trip_id"])
+            original_trip_id = derived_trip_id
             resolved_trip_id = derived_trip_id
             assignment_type = AssignmentType.DIRECT_BY_ID.value
             trip_reference_is_valid = True if is_new_trip else derived_trip_id in nominal_trip_ids
@@ -1146,6 +1185,10 @@ class DatasourceBase(DatasourceInterface):
                     is_complete_stop_sequence=is_complete_stop_sequence,
                 )
 
+                if is_complete_stop_sequence:
+                    for idx, event in enumerate(stop_events, start=1):
+                        event["stop_sequence"] = str(idx)
+
             has_invalid_stop_reference = any(not bool(event.get("is_valid", True)) for event in stop_events)
 
             has_invalid_reference = (not route_is_valid) or has_invalid_stop_reference or (not trip_reference_is_valid)
@@ -1215,6 +1258,19 @@ class DatasourceBase(DatasourceInterface):
                 is_active_on_create=is_active_on_create,
                 is_valid=trip_is_valid,
                 stop_events=stop_events_to_persist,
+                original_trip_id=original_trip_id,
+                scheduled_start_stop_id=(
+                    str(scheduled_start_stop_id)
+                    if scheduled_start_stop_id is not None
+                    else None
+                ),
+                scheduled_end_stop_id=(
+                    str(scheduled_end_stop_id)
+                    if scheduled_end_stop_id is not None
+                    else None
+                ),
+                scheduled_start_time=scheduled_start_time,
+                scheduled_end_time=scheduled_end_time,
             )
 
         if policy_based_deletes:

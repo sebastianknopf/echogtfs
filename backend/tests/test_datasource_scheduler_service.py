@@ -60,6 +60,7 @@ class _RepositoryStub:
     def __init__(self):
         self.list_active_data_sources_with_cron = AsyncMock(return_value=[])
         self.get_data_source_by_id = AsyncMock(return_value=None)
+        self.get_app_setting = AsyncMock(return_value=None)
         self.update_data_source_last_run_at = AsyncMock(return_value=True)
         self.session = SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock())
 
@@ -115,6 +116,21 @@ class TestDatasourceSchedulerService(unittest.IsolatedAsyncioTestCase):
             False,
         )
         repository.update_data_source_last_run_at.assert_awaited_once()
+
+    async def test_run_import_task_skips_when_gtfs_import_is_running(self):
+        repository = _RepositoryStub()
+        realtime_repository = SimpleNamespace()
+        gtfs_repository = SimpleNamespace()
+        repository.get_app_setting.return_value = "running"
+        service = DatasourceSchedulerService(repository, realtime_repository, gtfs_repository)
+        datasource = SimpleNamespace(sync_records=AsyncMock())
+
+        with patch.object(DatasourceSchedulerService, "_get_datasource", return_value=datasource):
+            await service.run_import_task(5)
+
+        repository.get_data_source_by_id.assert_not_awaited()
+        datasource.sync_records.assert_not_awaited()
+        repository.update_data_source_last_run_at.assert_not_awaited()
 
     async def test_run_import_task_rolls_back_and_updates_last_run_at_on_error(self):
         repository = _RepositoryStub()

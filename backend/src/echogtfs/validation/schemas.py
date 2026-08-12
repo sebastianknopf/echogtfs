@@ -423,10 +423,18 @@ class TripRead(BaseModel):
     data_source_id: int | None
     source: str
     trip_id: str
+    original_trip_id: str | None = None
+    scheduled_start_stop_id: str | None = None
+    scheduled_end_stop_id: str | None = None
+    scheduled_start_stop_name: str | None = None
+    scheduled_end_stop_name: str | None = None
+    scheduled_start_time: datetime | None = None
+    scheduled_end_time: datetime | None = None
     start_time: str
     start_date: str
     route_id: str
     route_name: str | None = None
+    vehicle_display_text: str | None = None
     schedule_relationship: str
     assignment_type: str
     is_active: bool

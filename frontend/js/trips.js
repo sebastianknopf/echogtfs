@@ -93,6 +93,34 @@ const trips = (() => {
     });
   }
 
+  function _formatLocalDate(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '-';
+
+    const currentLang = typeof window.i18n?.getCurrentLanguage === 'function'
+      ? window.i18n.getCurrentLanguage()
+      : 'de';
+    const locale = currentLang === 'de' ? 'de-DE' : 'en-GB';
+
+    return date.toLocaleDateString(locale, {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+  }
+
+  function _coerceDate(value) {
+    if (!value) return null;
+    const date = value instanceof Date ? value : new Date(value);
+    return (date instanceof Date && !Number.isNaN(date.getTime())) ? date : null;
+  }
+
+  function _resolveScheduledStopName(stopId, stopEvents, fallback) {
+    if (!stopId) return fallback;
+
+    const matchingStopEvent = stopEvents.find((stopEvent) => String(stopEvent?.stop_id || '') === String(stopId));
+    return matchingStopEvent?.stop_name || matchingStopEvent?.stop_id || stopId || fallback;
+  }
+
   function _getScheduleRelationshipText(value) {
     const normalized = String(value || '').trim().toUpperCase();
     const keyByRelationship = {
@@ -147,35 +175,72 @@ const trips = (() => {
     const firstStopEvent = stopEvents[0] || null;
     const lastStopEvent = stopEvents.length ? stopEvents[stopEvents.length - 1] : null;
 
-    const startDate = _parseServiceDateTime(item.start_date, item.start_time);
-    const endDate = lastStopEvent?.arrival_time ? new Date(lastStopEvent.arrival_time) : startDate;
+    const scheduledStartTime = _coerceDate(item.scheduled_start_time);
+    const scheduledEndTime = _coerceDate(item.scheduled_end_time);
+    const startDate = scheduledStartTime || _parseServiceDateTime(item.start_date, item.start_time);
+    const endDate = scheduledEndTime || startDate;
     const hasInvalidStopEvent = stopEvents.some((stopEvent) => stopEvent?.is_valid === false);
     const isValid = Boolean(item.is_valid) && !hasInvalidStopEvent;
+
+    const scheduledStartStopId = item.scheduled_start_stop_id != null && item.scheduled_start_stop_id !== ''
+      ? String(item.scheduled_start_stop_id)
+      : null;
+    const scheduledEndStopId = item.scheduled_end_stop_id != null && item.scheduled_end_stop_id !== ''
+      ? String(item.scheduled_end_stop_id)
+      : null;
+    const scheduledStartStopName = item.scheduled_start_stop_name != null && item.scheduled_start_stop_name !== ''
+      ? String(item.scheduled_start_stop_name)
+      : (scheduledStartStopId || null);
+    const scheduledEndStopName = item.scheduled_end_stop_name != null && item.scheduled_end_stop_name !== ''
+      ? String(item.scheduled_end_stop_name)
+      : (scheduledEndStopId || null);
 
     const normalizedStopEvents = stopEvents.map((stopEvent) => {
       const arrivalDate = stopEvent?.arrival_time ? new Date(stopEvent.arrival_time) : null;
       const departureDate = stopEvent?.departure_time ? new Date(stopEvent.departure_time) : null;
 
+      const statusCode = String(stopEvent?.schedule_relationship || '');
+      const statusLabel = statusCode === 'ADDED'
+        ? window.i18n('trips.stop_event.added')
+        : (statusCode === 'SKIPPED' ? window.i18n('trips.stop_event.skipped') : _getScheduleRelationshipText(stopEvent?.schedule_relationship));
+
       return {
         stopDisplayName: stopEvent?.stop_name || stopEvent?.stop_id || '-',
         arrivalTimeLabel: _formatLocalTime(arrivalDate),
         departureTimeLabel: _formatLocalTime(departureDate),
-        statusCode: String(stopEvent?.schedule_relationship || ''),
-        statusLabel: _getScheduleRelationshipText(stopEvent?.schedule_relationship),
+        statusCode,
+        statusLabel,
         isValid: stopEvent?.is_valid !== false,
       };
     });
 
+    const startStopName = scheduledStartStopName || scheduledStartStopId || firstStopEvent?.stop_name || firstStopEvent?.stop_id || '-';
+    const endStopName = scheduledEndStopName || scheduledEndStopId || lastStopEvent?.stop_name || lastStopEvent?.stop_id || '-';
+
+    const hasScheduledDisplayData = Boolean(
+      scheduledStartStopId && scheduledEndStopId && scheduledStartTime && scheduledEndTime
+    );
+
     return {
       id: item.id,
       line: item.route_name || item.route_id || '-',
+      vehicleDisplayText: item.vehicle_display_text || '-',
       tripId: item.trip_id || '-',
+      originalTripId: item.original_trip_id || '-',
+      assignmentType: item.assignment_type || '-',
       startDate,
       endDate,
-      startStopName: firstStopEvent?.stop_name || firstStopEvent?.stop_id || '-',
-      startStopId: firstStopEvent?.stop_id || '-',
-      endStopName: lastStopEvent?.stop_name || lastStopEvent?.stop_id || '-',
-      endStopId: lastStopEvent?.stop_id || '-',
+      startStopName,
+      startStopId: scheduledStartStopId || firstStopEvent?.stop_id || '-',
+      endStopName,
+      endStopId: scheduledEndStopId || lastStopEvent?.stop_id || '-',
+      scheduledStartTime,
+      scheduledEndTime,
+      scheduledStartStopId,
+      scheduledEndStopId,
+      scheduledStartStopName,
+      scheduledEndStopName,
+      hasScheduledDisplayData,
       sourceName: item.data_source_name || item.source || window.i18n('alerts.badge.external'),
       isInternal: !item.data_source_id,
       isActive: Boolean(item.is_active),
@@ -199,10 +264,20 @@ const trips = (() => {
       : ` <span class="view-item__warning" title="${ui.esc(window.i18n('trips.resolution.warning'))}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${WARNING_ICON_PATH}"/></svg></span>`;
     const modalTitle = window.i18n('trips.modal.view');
     const lineLabel = window.i18n('trips.field.line');
+    const vehicleLabel = window.i18n('trips.view.vehicle');
     titleElement.innerHTML = `${ui.esc(modalTitle)}: ${ui.esc(lineLabel)} ${ui.esc(trip.line)} / ${ui.esc(trip.tripId)}${headerWarning}`;
 
     const startTimeLabel = _formatLocalTime(trip.startDate);
     const endTimeLabel = _formatLocalTime(trip.endDate);
+    const scheduledDateLabel = trip.scheduledStartTime ? _formatLocalDate(trip.scheduledStartTime) : null;
+    const scheduledOverview = scheduledDateLabel
+      ? `
+        <div class="view-item">
+          <div class="view-item__label">${ui.esc(window.i18n('trips.view.operation_day'))}</div>
+          <div class="view-item__content">${ui.esc(scheduledDateLabel)}</div>
+        </div>
+      `
+      : '';
 
     const stopEventsHtml = trip.stopEvents.length
       ? trip.stopEvents.map((stopEvent) => {
@@ -232,9 +307,18 @@ const trips = (() => {
           <div class="view-item__content">${ui.esc(trip.tripId)}</div>
         </div>
         <div class="view-item">
+          <div class="view-item__label">${ui.esc(window.i18n('trips.view.original_trip_id'))}</div>
+          <div class="view-item__content">${ui.esc(trip.originalTripId)}</div>
+        </div>
+        <div class="view-item">
           <div class="view-item__label">${ui.esc(window.i18n('trips.view.route'))}</div>
           <div class="view-item__content">${ui.esc(trip.line)}</div>
         </div>
+        <div class="view-item">
+          <div class="view-item__label">${ui.esc(vehicleLabel)}</div>
+          <div class="view-item__content">${ui.esc(trip.vehicleDisplayText || '-')}</div>
+        </div>
+        ${scheduledOverview}
         <div class="view-item">
           <div class="view-item__label">${ui.esc(window.i18n('trips.field.start'))}</div>
           <div class="view-item__content">${ui.esc(startTimeLabel)} - ${ui.esc(trip.startStopName)}</div>
@@ -246,6 +330,10 @@ const trips = (() => {
         <div class="view-item">
           <div class="view-item__label">${ui.esc(window.i18n('trips.view.status'))}</div>
           <div class="view-item__content"><span class="${trip.scheduleRelationshipClass}">${ui.esc(trip.scheduleRelationshipLabel)}</span></div>
+        </div>
+        <div class="view-item">
+          <div class="view-item__label">${ui.esc(window.i18n('trips.view.assignment_type'))}</div>
+          <div class="view-item__content">${ui.esc(trip.assignmentType)}</div>
         </div>
       </div>
 
@@ -506,12 +594,42 @@ const trips = (() => {
 
     const sourceBadge = `<span class="badge badge--system">${ui.esc(_getSourceBadgeLabel(trip))}</span>`;
     const gtfsTripId = trip.tripId;
-    const startDateLabel = _formatLocalTime(trip.startDate);
-    const endDateLabel = _formatLocalTime(trip.endDate);
     const scheduleRelationship = trip.scheduleRelationship || 'SCHEDULED';
     const titleClassSuffix = scheduleRelationship === 'CANCELED'
       ? ' alert-list-item__title--canceled'
       : (scheduleRelationship === 'DELETED' ? ' alert-list-item__title--deleted' : '');
+
+    const operationDayLabel = trip.scheduledStartTime ? _formatLocalDate(trip.scheduledStartTime) : null;
+    const startTimeLabel = trip.startDate ? _formatLocalTime(trip.startDate) : null;
+    const endTimeLabel = trip.endDate ? _formatLocalTime(trip.endDate) : null;
+    const startStopLabel = trip.startStopName && trip.startStopName !== '-' ? trip.startStopName : null;
+    const endStopLabel = trip.endStopName && trip.endStopName !== '-' ? trip.endStopName : null;
+
+    const operationDaySegment = operationDayLabel
+      ? `${window.i18n('trips.view.operation_day')} ${ui.esc(operationDayLabel)}`
+      : null;
+    const startSegment = startTimeLabel && startStopLabel
+      ? `${window.i18n('trips.field.start')} ${ui.esc(startTimeLabel)} ${ui.esc(startStopLabel)}`
+      : null;
+    const endSegment = endTimeLabel && endStopLabel
+      ? `${window.i18n('trips.field.end')} ${ui.esc(endTimeLabel)} ${ui.esc(endStopLabel)}`
+      : null;
+
+    const summaryParts = [];
+    if (operationDaySegment) summaryParts.push(operationDaySegment);
+    if (startSegment || endSegment) {
+      const startEndSummary = [startSegment, endSegment].filter(Boolean).join(' - ');
+      if (startEndSummary) summaryParts.push(startEndSummary);
+    }
+
+    const summaryHtml = summaryParts.length
+      ? `<div class="alert-list-item__time">
+          <svg class="alert-list-item__icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.2 3.2.8-1.3-4.5-2.7V7z"/>
+          </svg>
+          <span>${summaryParts.join(' • ')}</span>
+        </div>`
+      : '';
 
     item.innerHTML = `
       <div class="alert-list-item__content">
@@ -523,12 +641,7 @@ const trips = (() => {
           </div>
         </div>
 
-        <div class="alert-list-item__time">
-          <svg class="alert-list-item__icon" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.2 3.2.8-1.3-4.5-2.7V7z"/>
-          </svg>
-          <span>${window.i18n('trips.field.start')} ${ui.esc(startDateLabel)} - ${ui.esc(trip.startStopName)} • ${window.i18n('trips.field.end')} ${ui.esc(endDateLabel)} - ${ui.esc(trip.endStopName)} • ${window.i18n('trips.view.status')} <span class="${trip.scheduleRelationshipClass}">${ui.esc(trip.scheduleRelationshipLabel)}</span></span>
-        </div>
+        ${summaryHtml}
       </div>
 
       <div class="alert-list-item__actions">

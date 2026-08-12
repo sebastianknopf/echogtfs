@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from echogtfs.services.database.models import AppSetting
 from echogtfs.services.scheduler.intf_datasource_scheduler import DatasourceSchedulerInterface
 
 if TYPE_CHECKING:
@@ -40,14 +41,14 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
 
     def __init__(
         self,
-        repository: SystemRepositoryInterface,
+        system_repository: SystemRepositoryInterface,
         realtime_repository: RealtimeRepositoryInterface,
         gtfs_repository: GtfsRepositoryInterface,
     ):
         if getattr(self, "_initialized", False):
             return
 
-        self._repository = repository
+        self._system_repository = system_repository
         self._realtime_repository = realtime_repository
         self._gtfs_repository = gtfs_repository
         self._scheduler_timezone = self._resolve_scheduler_timezone()
@@ -66,6 +67,10 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
     async def _mark_source_finished(self, source_id: int) -> None:
         async with self._run_state_lock:
             self._running_source_ids.discard(source_id)
+
+    async def _is_gtfs_import_running(self) -> bool:
+        status_value = await self._system_repository.get_app_setting(AppSetting.KEY_GTFS_IMPORT_STATUS)
+        return status_value == "running"
 
     @staticmethod
     def _resolve_scheduler_timezone() -> ZoneInfo:
@@ -122,7 +127,7 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
             if job.id.startswith("alert_import_"):
                 scheduler.remove_job(job.id)
 
-        sources = await self._repository.list_active_data_sources_with_cron()
+        sources = await self._system_repository.list_active_data_sources_with_cron()
         for source in sources:
             if source.cron:
                 await self.schedule_data_source_import(source.id, source.name, source.cron)
@@ -176,6 +181,14 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
 
     async def run_import_task(self, source_id: int) -> None:
         """Execute one datasource import run if the source exists and is active."""
+        if await self._is_gtfs_import_running():
+            logger.info(
+                "[DatasourceScheduler] Skipping import for data source ID %s: GTFS import is running",
+                source_id,
+            )
+
+            return
+
         is_marked = await self._try_mark_source_running(source_id)
         if not is_marked:
             logger.info(
@@ -188,7 +201,7 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
         logger.info("[DatasourceScheduler] Starting import for data source ID %s", source_id)
 
         try:
-            source = await self._repository.get_data_source_by_id(source_id)
+            source = await self._system_repository.get_data_source_by_id(source_id)
             if source is None:
                 logger.error("[DatasourceScheduler] Data source %s not found", source_id)
 
@@ -207,7 +220,7 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
                 datasource = self._get_datasource(source.type, config)
 
                 stats = await datasource.sync_records(
-                    self._repository,
+                    self._system_repository,
                     self._realtime_repository,
                     self._gtfs_repository,
                     source.id,
@@ -233,7 +246,7 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
             finally:
                 timestamp = datetime.now(UTC)
 
-                updated = await self._repository.update_data_source_last_run_at(source_id, timestamp)
+                updated = await self._system_repository.update_data_source_last_run_at(source_id, timestamp)
                 if not updated:
                     logger.error(
                         "[DatasourceScheduler] Failed to update last_run_at for data source %s",
