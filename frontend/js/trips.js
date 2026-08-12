@@ -114,6 +114,39 @@ const trips = (() => {
     return (date instanceof Date && !Number.isNaN(date.getTime())) ? date : null;
   }
 
+  function _parseOperationDay(startDate) {
+    if (!startDate) return null;
+
+    const normalizedDate = String(startDate).trim();
+    const dateMatch = normalizedDate.match(/^(\d{4})-?(\d{2})-?(\d{2})$/);
+    if (!dateMatch) return null;
+
+    const year = Number(dateMatch[1]);
+    const month = Number(dateMatch[2]);
+    const day = Number(dateMatch[3]);
+    const date = new Date(year, month - 1, day, 0, 0, 0, 0);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  function _startOfDay(date) {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  }
+
+  function _formatTimeExtended(date, operationDayDate) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '-';
+
+    if (operationDayDate instanceof Date && !Number.isNaN(operationDayDate.getTime())) {
+      const dayDiff = Math.round((_startOfDay(date) - _startOfDay(operationDayDate)) / 86_400_000);
+      if (dayDiff === 1) {
+        const hours = String(date.getHours() + 24).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        return `${hours}:${minutes}`;
+      }
+    }
+
+    return _formatLocalTime(date);
+  }
+
   function _resolveScheduledStopName(stopId, stopEvents, fallback) {
     if (!stopId) return fallback;
 
@@ -179,6 +212,7 @@ const trips = (() => {
     const scheduledEndTime = _coerceDate(item.scheduled_end_time);
     const startDate = scheduledStartTime || _parseServiceDateTime(item.start_date, item.start_time);
     const endDate = scheduledEndTime || startDate;
+    const operationDayDate = _parseOperationDay(item.start_date);
     const hasInvalidStopEvent = stopEvents.some((stopEvent) => stopEvent?.is_valid === false);
     const isValid = Boolean(item.is_valid) && !hasInvalidStopEvent;
 
@@ -206,8 +240,8 @@ const trips = (() => {
 
       return {
         stopDisplayName: stopEvent?.stop_name || stopEvent?.stop_id || '-',
-        arrivalTimeLabel: _formatLocalTime(arrivalDate),
-        departureTimeLabel: _formatLocalTime(departureDate),
+        arrivalTimeLabel: _formatTimeExtended(arrivalDate, operationDayDate),
+        departureTimeLabel: _formatTimeExtended(departureDate, operationDayDate),
         statusCode,
         statusLabel,
         isValid: stopEvent?.is_valid !== false,
@@ -230,6 +264,7 @@ const trips = (() => {
       assignmentType: item.assignment_type || '-',
       startDate,
       endDate,
+      operationDayDate,
       startStopName,
       startStopId: scheduledStartStopId || firstStopEvent?.stop_id || '-',
       endStopName,
@@ -267,9 +302,9 @@ const trips = (() => {
     const vehicleLabel = window.i18n('trips.view.vehicle');
     titleElement.innerHTML = `${ui.esc(modalTitle)}: ${ui.esc(lineLabel)} ${ui.esc(trip.line)} / ${ui.esc(trip.tripId)}${headerWarning}`;
 
-    const startTimeLabel = _formatLocalTime(trip.startDate);
-    const endTimeLabel = _formatLocalTime(trip.endDate);
-    const scheduledDateLabel = trip.scheduledStartTime ? _formatLocalDate(trip.scheduledStartTime) : null;
+    const startTimeLabel = _formatTimeExtended(trip.startDate, trip.operationDayDate);
+    const endTimeLabel = _formatTimeExtended(trip.endDate, trip.operationDayDate);
+    const scheduledDateLabel = trip.operationDayDate ? _formatLocalDate(trip.operationDayDate) : null;
     const scheduledOverview = scheduledDateLabel
       ? `
         <div class="view-item">
@@ -599,9 +634,9 @@ const trips = (() => {
       ? ' alert-list-item__title--canceled'
       : (scheduleRelationship === 'DELETED' ? ' alert-list-item__title--deleted' : '');
 
-    const operationDayLabel = trip.scheduledStartTime ? _formatLocalDate(trip.scheduledStartTime) : null;
-    const startTimeLabel = trip.startDate ? _formatLocalTime(trip.startDate) : null;
-    const endTimeLabel = trip.endDate ? _formatLocalTime(trip.endDate) : null;
+    const operationDayLabel = trip.operationDayDate ? _formatLocalDate(trip.operationDayDate) : null;
+    const startTimeLabel = trip.startDate ? _formatTimeExtended(trip.startDate, trip.operationDayDate) : null;
+    const endTimeLabel = trip.endDate ? _formatTimeExtended(trip.endDate, trip.operationDayDate) : null;
     const startStopLabel = trip.startStopName && trip.startStopName !== '-' ? trip.startStopName : null;
     const endStopLabel = trip.endStopName && trip.endStopName !== '-' ? trip.endStopName : null;
 
