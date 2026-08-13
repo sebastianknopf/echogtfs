@@ -18,6 +18,7 @@ const trips = (() => {
   let _totalPages = 1;
   let _total = 0;
   let _filterTimeout = null;
+  let _loadRequestId = 0;
   let _filters = {
     active: true,
     inactive: true,
@@ -396,20 +397,23 @@ const trips = (() => {
     const container = document.getElementById('trips-content');
     if (!container) return;
 
-    container.innerHTML = `<div class="panel__loading">${window.i18n('loading.default')}</div>`;
-    _currentPage = _getPageFromURL();
+    const requestId = ++_loadRequestId;
+    const requestedPage = _getPageFromURL();
+    _currentPage = requestedPage;
 
     try {
-      const response = await api.getTrips(_currentPage, PAGE_SIZE, _sortOrder, _filterText, _filters);
+      const response = await api.getTrips(requestedPage, PAGE_SIZE, _sortOrder, _filterText, _filters);
+      if (requestId !== _loadRequestId) return;
+
       _items = (response.items || []).map(_normalizeTrip);
-      _currentPage = response.page || 1;
+      _currentPage = response.page || requestedPage;
       _totalPages = response.total_pages || 1;
       _total = response.total || 0;
 
       if (_currentPage > _totalPages && _totalPages > 0) {
         _currentPage = 1;
         _setPageInURL(1);
-        await _loadTrips();
+        _loadTrips();
         return;
       }
 

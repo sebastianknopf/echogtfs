@@ -164,9 +164,6 @@ async def list_trips(
     response_dict["items"] = response_items
     _enrich_trips_with_entity_names(response_items, entity_names)
 
-    response_dict["total"] = len(response_items)
-    response_dict["total_pages"] = (len(response_items) + limit - 1) // limit if response_items else 1
-
     return response_dict
 
 
