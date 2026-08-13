@@ -64,11 +64,14 @@ Each router file under `routers/` maps to a URL prefix registered in `main.py`:
 | `auth.py` | `/api/auth` | OAuth2 password-flow login, returns JWT |
 | `dashboard.py` | `/api/dashboard` | Dashboard data endpoint |
 | `alerts.py` | `/api/alerts` | ServiceAlert CRUD |
+| `trips.py` | `/api/trips` | Authenticated realtime trip listing and activation control |
+| `vehicles.py` | `/api/vehicles` | Authenticated realtime vehicle listing and activation control |
 | `sources.py` | `/api/sources` | External data source CRUD and manual trigger |
 | `users.py` | `/api/users` | User management (superuser only) |
 | `settings.py` | `/api/settings` | Application settings key-value store |
 | `gtfs.py` | `/api/gtfs` | GTFS Static feed management and entity lookup |
-| `realtime.py` | `/api/realtime` | GTFS-RT protobuf and JSON feed output |
+| `systemcopy.py` | `/api/systemcopy` | Superuser system configuration export and import |
+| `realtime.py` | `/api` | Public GTFS-RT feed output in protobuf or JSON format |
 
 The API routers are meant to have as less logic as possible and only do the I/O networking stuff, mainly communication to the frontend, but also provision of GTFS-RT data.
 
@@ -111,6 +114,8 @@ There're several repositories for structured database access. The repositories a
 - `RealtimeRepository`: responsible for GTFS-RT data access of `realtime_` tables
 
 Each repository has an interface defined for testing purposes.
+
+Most repositories hold a reference to open a separate database connection on demand for each query. The `RealtimeRepository` uses a slightly different pattern for synchronisation: The data source implementation which calls the sync methods of the `RealtimeRepository` opens a transation outside the repository, does all the syncing stuff and finally commits the changes. This way, the realtime updates become atomic for the GTFS-RT endpoints.
 
 ## External Data Sources
 

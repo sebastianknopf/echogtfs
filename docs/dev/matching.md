@@ -2,9 +2,7 @@
 
 ## Purpose
 
-The matching service resolves an external realtime `trip_id` to one unique nominal GTFS trip ID.
-
-It is used when incoming realtime records reference a non-nominal trip ID and a deterministic mapping to one GTFS trip is required.
+The matching service resolves an external realtime `trip_id` to one unique nominal GTFS trip ID. It returns `None` when it cannot establish a unique match.
 
 ## Public Contract
 
@@ -15,6 +13,7 @@ match(
     *,
     trip_id: str,
     route_id: str | None = None,
+    operation_day_date: date | None = None,
     scheduled_start_time: datetime | None = None,
     scheduled_end_time: datetime | None = None,
     scheduled_start_stop_id: str | None = None,
@@ -23,154 +22,81 @@ match(
 ) -> str | None
 ```
 
-Return value:
-
-- One GTFS trip ID (`str`) when there is exactly one valid match.
-- `None` when no unique match can be established.
+The result is one GTFS trip ID when exactly one valid match is found. Cache hits are returned immediately. No exception is raised for missing, invalid, or ambiguous matches.
 
 ## Matching Pipeline
 
-Matching is executed in strict stages and stops as soon as one stage returns a unique result.
+After the cache lookup and route precondition, matching proceeds in this order:
 
-1. Cache stage.
-2. Start/end anchor stage.
-3. Intermediate stop fallback stage.
+1. Start/end anchor matching.
+2. Intermediate-stop fallback, only when both scheduled anchor times are absent.
 
-If no stage returns exactly one result, matching returns `None`.
+The service caches a result only after either matching stage returns exactly one trip ID.
 
-## Stage 1: Cache Lookup
+## Cache Lookup and Preconditions
 
-The cache is queried first with the external `trip_id`.
+The cache is queried first with the external `trip_id`. A cache hit returns the cached GTFS trip ID without a repository query.
 
-- If cache hit: return cached GTFS trip ID immediately.
-- If cache miss: continue to stage 2.
+After a cache miss, `route_id` is required. If it is `None`, matching returns `None` without querying the repository.
 
-No repository query is executed on cache hit.
+## ID Normalization
 
-## Global Preconditions
+Before start/end matching, present `scheduled_start_stop_id` and `scheduled_end_stop_id` values are reduced with `GlobalId.level(..., 3)`.
 
-After cache miss, `route_id` is mandatory.
+Before intermediate-stop matching, each anchor is validated and normalized:
 
-- If `route_id` is `None`, matching returns `None` directly.
-- No repository query is executed in this case.
+- Empty stop IDs are discarded.
+- Entries whose time is not a `datetime` are discarded.
+- Remaining stop IDs are reduced with `GlobalId.level(..., 3)`.
 
-## ID Normalization Rules
+If all supplied intermediate anchors are discarded, fallback matching is not attempted.
 
-Before repository calls:
+## Start/End Anchor Matching
 
-- `scheduled_start_stop_id` is reduced via `GlobalId.level(..., 3)` when present.
-- `scheduled_end_stop_id` is reduced via `GlobalId.level(..., 3)` when present.
-
-For fallback anchors:
-
-- Every intermediate stop ID is reduced via `GlobalId.level(..., 3)`.
-- Entries with empty stop ID or non-datetime time value are discarded.
-
-## Stage 2: Start/End Anchor Matching
-
-This stage delegates to repository method `find_trip_ids_by_match_properties(...)`.
-
-Input conditions:
-
-- Executed only when `scheduled_start_time` is not `None`.
-
-Repository parameters:
+This stage runs only when `scheduled_start_time` is not `None`. It calls `find_trip_ids_by_match_properties(...)` with:
 
 - `route_id`
+- `operation_day_date`
 - `scheduled_start_time`
 - `scheduled_end_time`
-- reduced `scheduled_start_stop_id`
-- reduced `scheduled_end_stop_id`
+- normalized start and end stop IDs
 
-Unique-match rule:
+When `operation_day_date` is `None`, the service uses `scheduled_start_time.date()` for this repository call. The repository determines which trips satisfy the supplied match properties, including any time matching rules.
 
-- If repository returns exactly one trip ID: success.
-- If repository returns `None`, empty list, or more than one trip ID: stage fails.
+The stage succeeds only when the repository returns exactly one trip ID. On success, the service caches the mapping from the external `trip_id` to that GTFS trip ID. Otherwise, it proceeds to the fallback checks.
 
-Cache write:
+## Intermediate-Stop Fallback
 
-- On success, cache is updated with `(external trip_id -> matched GTFS trip_id)`.
-
-Time bias behavior:
-
-- The stage itself delegates tolerance handling to repository queries.
-- Repository-side start/end time matching uses a +/- 60 second window around provided anchor times.
-
-## Stage 3: Intermediate Stop Fallback
-
-This stage is only considered after stage 2 failure.
-
-Execution guard:
+Fallback matching runs only when all of the following are true:
 
 - `scheduled_start_time is None`
 - `scheduled_end_time is None`
-- `scheduled_intermediate_stops` is present and not empty
+- `scheduled_intermediate_stops` is non-empty
+- At least one intermediate anchor remains after normalization
 
-If any of these conditions is false, matching returns `None` after stage 2.
+The service first requests route-scoped candidate IDs with `find_trip_ids_by_match_properties(...)`, passing `route_id` and the supplied `operation_day_date`. If no candidates are returned, fallback fails.
 
-### Candidate Selection
+For each candidate, the service loads the trip and its stop times with `get_gtfs_trip_with_stop_times(...)`. A candidate matches only when every normalized intermediate anchor matches at least one stop time:
 
-1. Query repository for route-scoped candidates:
-   - `find_trip_ids_by_match_properties(route_id=route_id)`
-2. If no candidates exist: return `None`.
-3. For each candidate ID, load trip with stop times:
-   - `get_gtfs_trip_with_stop_times(candidate_trip_id)`
+1. The trip must have a non-empty `stop_times` list.
+2. The stop time must have a string `stop_id` and a non-null `departure_time`.
+3. The candidate stop ID must start with the normalized anchor stop ID.
+4. Both departure and scheduled times must be datetimes whose UTC values differ by no more than 60 seconds.
 
-### Per-Candidate Validation
-
-A candidate trip matches only when all normalized intermediate anchors match at least one stop time in that trip.
-
-For each anchor `(reduced_stop_id, scheduled_time)`:
-
-1. Iterate all trip stop_times.
-2. Keep only stop_times with:
-   - string `stop_id`
-   - non-null `departure_time`
-3. Stop ID check:
-   - candidate stop ID must start with reduced stop ID (prefix match).
-4. Time check:
-   - both times are converted to UTC.
-   - absolute difference must be <= 60 seconds.
-
-If any anchor has no matching stop_time, candidate is rejected.
-
-### Fallback Success Rule
-
-- If exactly one candidate trip remains: success.
-- If zero or multiple candidates remain: fallback fails and returns `None`.
-
-Cache write:
-
-- On fallback success, cache is updated with `(external trip_id -> matched GTFS trip_id)`.
+If any anchor has no matching stop time, the candidate is rejected. Fallback succeeds only when exactly one candidate remains. That result is then cached.
 
 ## Datetime Handling
 
-Datetime normalization helper `_to_utc(value)` behaves as follows:
+The fallback comparison converts datetimes with `_to_utc(value)`:
 
-- Non-datetime input -> `None`.
-- Naive datetime -> interpreted as UTC by attaching `timezone.utc`.
-- Aware datetime -> converted to UTC with `astimezone(timezone.utc)`.
+- Non-datetime values produce `None`.
+- Naive datetimes are interpreted as UTC.
+- Aware datetimes are converted to UTC.
 
-This normalization is used in intermediate-stop fallback comparisons.
+An anchor cannot match when either time cannot be converted to UTC.
 
-## Determinism and Ambiguity Policy
+## Determinism and Caching
 
-The service enforces deterministic matching:
+Only one unique candidate is accepted. Zero candidates and ambiguous results return `None` silently.
 
-- Only one unique candidate is accepted.
-- Ambiguous matches are rejected.
-- Rejections are silent (`None`), not exceptions.
-
-## Caching Semantics
-
-Cache read key:
-
-- external realtime `trip_id`.
-
-Cache write occurs only when a unique match is found in stage 2 or stage 3.
-
-No cache write occurs when:
-
-- match fails,
-- match is ambiguous,
-- preconditions are not met.
+The cache key is the external realtime `trip_id`. No cache write occurs when matching fails, is ambiguous, or stops at a precondition or normalization check.
