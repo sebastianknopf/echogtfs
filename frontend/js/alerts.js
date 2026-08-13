@@ -13,6 +13,7 @@ const alerts = (() => {
   let _total = 0;
   let _filterTimeout = null; // For debouncing filter input
   let _pollTimer = null;
+  let _loadRequestId = 0;
   let _filters = {
     active: true,
     inactive: true,
@@ -61,14 +62,15 @@ const alerts = (() => {
 
   async function _loadAlerts() {
     const container = ui.el('alerts-content');
-    container.innerHTML = `<div class="panel__loading">${window.i18n('alerts.loading')}</div>`;
-    
-    // Get page from URL
-    _currentPage = _getPageFromURL();
+    if (!container) return;
+
+    const requestId = ++_loadRequestId;
+    const requestedPage = _getPageFromURL();
+    _currentPage = requestedPage;
     
     try {
       // Load alerts and sources (if user has poweruser rights)
-      const requests = [api.getAlerts(_currentPage, 20, _sortOrder, _filterText, _filters)];
+      const requests = [api.getAlerts(requestedPage, 20, _sortOrder, _filterText, _filters)];
       
       if (_isPoweruser()) {
         requests.push(api.getSources().catch(() => []));
@@ -77,11 +79,12 @@ const alerts = (() => {
       }
       
       const [alertsResponse, sources] = await Promise.all(requests);
+      if (requestId !== _loadRequestId) return;
       
-      _alerts = alertsResponse.items;
-      _currentPage = alertsResponse.page;
-      _totalPages = alertsResponse.total_pages;
-      _total = alertsResponse.total;
+      _alerts = alertsResponse.items || [];
+      _currentPage = alertsResponse.page || requestedPage;
+      _totalPages = alertsResponse.total_pages || 1;
+      _total = alertsResponse.total || 0;
       _sources = sources;
       
       // Reset pagination if current page exceeds total pages
@@ -89,7 +92,7 @@ const alerts = (() => {
         _currentPage = 1;
         _setPageInURL(1);
         // Reload with corrected page
-        await _loadAlerts();
+        _loadAlerts();
         return;
       }
       

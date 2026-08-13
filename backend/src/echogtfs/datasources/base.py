@@ -2,6 +2,7 @@
 
 import asyncio
 from abc import ABC, abstractmethod
+from contextlib import asynccontextmanager
 from datetime import date, datetime
 import logging
 import uuid
@@ -617,37 +618,38 @@ class DatasourceBase(DatasourceInterface):
 
         load_start = perf_counter()
         try:
-            if record_type == "service_alerts":
-                result = await self._sync_service_alert_records(
-                    repository=repository,
-                    realtime_repository=realtime_repository,
-                    gtfs_repository=gtfs_repository,
-                    source_id=source_id,
-                    source_name=source_name,
-                    records=records,
-                )
-            elif record_type == "trip_updates":
-                result = await self._sync_trip_update_records(
-                    repository=repository,
-                    realtime_repository=realtime_repository,
-                    gtfs_repository=gtfs_repository,
-                    source_id=source_id,
-                    source_name=source_name,
-                    records=records,
-                )
-            elif record_type == "vehicle_positions":
-                result = await self._sync_vehicle_position_records(
-                    repository=repository,
-                    realtime_repository=realtime_repository,
-                    gtfs_repository=gtfs_repository,
-                    source_id=source_id,
-                    source_name=source_name,
-                    records=records,
-                )
-            else:
-                raise NotImplementedError(
-                    f"Record type '{record_type}' is not supported by sync_records yet"
-                )
+            async with self._realtime_sync_transaction(realtime_repository):
+                if record_type == "service_alerts":
+                    result = await self._sync_service_alert_records(
+                        repository=repository,
+                        realtime_repository=realtime_repository,
+                        gtfs_repository=gtfs_repository,
+                        source_id=source_id,
+                        source_name=source_name,
+                        records=records,
+                    )
+                elif record_type == "trip_updates":
+                    result = await self._sync_trip_update_records(
+                        repository=repository,
+                        realtime_repository=realtime_repository,
+                        gtfs_repository=gtfs_repository,
+                        source_id=source_id,
+                        source_name=source_name,
+                        records=records,
+                    )
+                elif record_type == "vehicle_positions":
+                    result = await self._sync_vehicle_position_records(
+                        repository=repository,
+                        realtime_repository=realtime_repository,
+                        gtfs_repository=gtfs_repository,
+                        source_id=source_id,
+                        source_name=source_name,
+                        records=records,
+                    )
+                else:
+                    raise NotImplementedError(
+                        f"Record type '{record_type}' is not supported by sync_records yet"
+                    )
         finally:
             load_elapsed_ms = (perf_counter() - load_start) * 1000
             total_elapsed_ms = (perf_counter() - total_start) * 1000
@@ -663,6 +665,18 @@ class DatasourceBase(DatasourceInterface):
             )
 
         return result
+
+    @staticmethod
+    @asynccontextmanager
+    async def _realtime_sync_transaction(realtime_repository: RealtimeRepositoryInterface):
+        """Use one realtime transaction when supported by the repository."""
+        transaction = getattr(realtime_repository, "transaction", None)
+        if transaction is None:
+            yield
+            return
+
+        async with transaction():
+            yield
 
     async def _sync_service_alert_records(
         self,
