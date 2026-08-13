@@ -64,6 +64,15 @@ Wenn ein Objekt nach dem Mapping keinem Objekt aus dem GTFS-Feed zugeordnet werd
 	- Bei **Fahrten** und **Fahrzeugpositionen** entspricht das Verhalten derzeit der Option **ungültige Bezüge verwerfen**.
 - **gesamtes Objekt deaktivieren**: Das Objekt wird gespeichert, aber bei ungültigen Bezügen deaktiviert und dadurch in der GTFS-RT-Ausgabe unterdrückt. _Empfohlene Verfahrensweise für Fahrten und Fahrzeugpositionen._
 
+(h-datasources-general-performance)=
+
+## Performance
+
+Die Datenquellen sind darauf ausgerichtet, Massendaten zu verarbeiten. Entscheidend für die Durchlaufzeit einer Datenquelle sind insbesondere Netzwerkverbindung und Prozessorleistung des Systems, auf dem EchoGTFS läuft. Neben diesen Faktoren gibt es noch weitere Einflussfaktoren, die die Durchlaufzeit eines Datenupdates maßgeblich beeinflussen können:
+
+- **Anzahl der zu verarbeitetenden Objekte**: Insbesondere Datenquellen, die Prognosedaten verarbeiten, haben eine vergleichsweise hohe Last auf der Datenbank, da in kurzer Zeit eine Vielzahl von Objekten ersetzt werden müssen. Nutzen Sie insbesondere bei großen, konsoldierten Datenquellen Filter, um die zu verarbeitenden Objekte von vorneherein auf ein sinnvolles Maß einzuschränken.
+- **Verfahrensweise bei ungültigen Bezügen**: Wenn hier eingestellt ist, dass alle Objekte geladen, aber ggf. deaktiviert werden sollen, werden deutlich mehr Daten in die Datenbank geschrieben, als letztendlich über GTFS-RT veröffentlicht werden. Das ist gut für Monitoring-Zwecke, erhöht aber gleichzeitig die Durchlaufzeit eines Datenupdates erheblich, wenn die Anzahl der zu verarbeitenden Objekte dadurch ansteigt.
+
 (h-datasources-general-mapping)=
 
 ## Mapping

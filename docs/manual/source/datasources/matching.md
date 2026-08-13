@@ -13,7 +13,7 @@ Wenn eine direkte Zuordnung möglich ist, wird kein Matching benötigt.
 Die Zuordnung erfolgt schrittweise:
 
 1. Vorhandene Zuordnung aus einem früheren Lauf wiederverwenden.
-2. Abgleich über Linie sowie geplante Start-/Endzeit und Start-/Endhaltestelle.
+2. Abgleich über Linie, Betriebstag sowie geplante Start-/Endzeit und Start-/Endhaltestelle.
 3. Fallback-Abgleich über Zwischenhalte.
 
 Sobald eine Stufe genau eine eindeutige Fahrt liefert, wird diese verwendet.
