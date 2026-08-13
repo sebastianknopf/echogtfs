@@ -29,7 +29,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
 
         async with self.get_session() as db:
             result = await db.execute(stmt)
-            await db.commit()
+            await self.commit(db)
 
             return int(result.rowcount or 0)
 
@@ -39,7 +39,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
 
         async with self.get_session() as db:
             await db.execute(stmt)
-            await db.commit()
+            await self.commit(db)
 
     async def get_realtime_service_alerts(self) -> list[ServiceAlert]:
         """Return active realtime alerts with relationships needed for GTFS-RT export."""
@@ -54,7 +54,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
             .order_by(ServiceAlert.id)
         )
 
-        async with self.get_session() as db:
+        async with self.transaction(isolation_level="REPEATABLE READ") as db:
             result = await db.execute(stmt)
             return list(result.scalars().all())
 
@@ -110,7 +110,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
 
         async with self.get_session() as db:
             result = await db.execute(stmt)
-            await db.commit()
+            await self.commit(db)
 
             return int(result.rowcount or 0)
 
@@ -123,7 +123,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
 
         async with self.get_session() as db:
             result = await db.execute(stmt)
-            await db.commit()
+            await self.commit(db)
 
             return int(result.rowcount or 0)
 
@@ -257,7 +257,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
             for entity_data in informed_entities:
                 db.add(ServiceAlertInformedEntity(alert_id=alert.id, **entity_data))
 
-            await db.commit()
+            await self.commit(db)
 
             stmt = (
                 select(ServiceAlert)
@@ -332,7 +332,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                 for entity_data in informed_entities:
                     db.add(ServiceAlertInformedEntity(alert_id=alert_id, **entity_data))
 
-            await db.commit()
+            await self.commit(db)
 
             refreshed = await db.execute(stmt)
             return refreshed.scalar_one_or_none()
@@ -357,7 +357,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                 return None
 
             alert.is_active = not alert.is_active
-            await db.commit()
+            await self.commit(db)
 
             refreshed = await db.execute(stmt)
             return refreshed.scalar_one_or_none()
@@ -389,7 +389,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
 
         async with self.get_session() as db:
             result = await db.execute(stmt)
-            await db.commit()
+            await self.commit(db)
             return int(result.rowcount or 0)
 
     async def upsert_service_alert_from_sync(
@@ -450,7 +450,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
             for entity_data in informed_entities:
                 db.add(ServiceAlertInformedEntity(alert_id=alert_id, **entity_data))
 
-            await db.commit()
+            await self.commit(db)
             return action
 
     async def get_realtime_trips(self) -> list[Trip]:
@@ -466,7 +466,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
             .order_by(Trip.created_at, Trip.trip_id)
         )
 
-        async with self.get_session() as db:
+        async with self.transaction(isolation_level="REPEATABLE READ") as db:
             result = await db.execute(stmt)
             return list(result.scalars().all())
 
@@ -571,7 +571,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                 return None
 
             trip.is_active = not trip.is_active
-            await db.commit()
+            await self.commit(db)
 
             refreshed = await db.execute(stmt)
             return refreshed.scalar_one_or_none()
@@ -582,7 +582,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
 
         async with self.get_session() as db:
             result = await db.execute(stmt)
-            await db.commit()
+            await self.commit(db)
 
             return int(result.rowcount or 0)
 
@@ -645,7 +645,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
 
         async with self.get_session() as db:
             result = await db.execute(stmt)
-            await db.commit()
+            await self.commit(db)
             return int(result.rowcount or 0)
 
     async def update_trip_update_from_sync(
@@ -726,7 +726,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                 payload.pop("trip_id", None)
                 db.add(StopEvent(trip_id=trip_id, **payload))
 
-            await db.commit()
+            await self.commit(db)
             return action
 
     async def get_realtime_vehicles(self) -> list[Vehicle]:
@@ -740,7 +740,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
             .order_by(Vehicle.created_at, Vehicle.trip_id)
         )
 
-        async with self.get_session() as db:
+        async with self.transaction(isolation_level="REPEATABLE READ") as db:
             result = await db.execute(stmt)
             return list(result.scalars().all())
 
@@ -815,7 +815,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                 return None
 
             vehicle.is_active = not vehicle.is_active
-            await db.commit()
+            await self.commit(db)
 
             refreshed = await db.execute(stmt)
             return refreshed.scalar_one_or_none()
@@ -826,7 +826,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
 
         async with self.get_session() as db:
             result = await db.execute(stmt)
-            await db.commit()
+            await self.commit(db)
 
             return int(result.rowcount or 0)
 
@@ -865,7 +865,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
 
         async with self.get_session() as db:
             result = await db.execute(stmt)
-            await db.commit()
+            await self.commit(db)
             return int(result.rowcount or 0)
 
     async def update_vehicle_position_from_sync(
@@ -960,5 +960,5 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                 existing_vehicle.congestion_level = congestion_level
                 existing_vehicle.is_valid = is_valid
 
-            await db.commit()
+            await self.commit(db)
             return action
