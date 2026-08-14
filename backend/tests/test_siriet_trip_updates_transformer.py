@@ -74,6 +74,25 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
 
         self.assertEqual(trips, [])
 
+    def test_recorded_call_uses_expected_times(self) -> None:
+        expected_departure_time = datetime.now(timezone.utc) + timedelta(hours=1)
+        payload = self._build_payload(
+            extra_journey="false",
+            complete_sequence="false",
+            recorded_call_times=(
+                "",
+                expected_departure_time.strftime("%Y-%m-%dT%H:%M:%S+00:00"),
+            ),
+        )
+
+        trips = self.transformer.transform({"root": payload})
+
+        self.assertEqual(len(trips), 1)
+        stop_event = trips[0]["stop_events"][0]
+        self.assertEqual(stop_event["schedule_relationship"], "SCHEDULED")
+        self.assertEqual(stop_event["arrival_time"], expected_departure_time.replace(microsecond=0))
+        self.assertEqual(stop_event["departure_time"], expected_departure_time.replace(microsecond=0))
+
     def _build_payload(
         self,
         *,
@@ -81,10 +100,12 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
         complete_sequence: str,
         cancellation: str | None = None,
         operator_ref: str = "OP1",
+        recorded_call_times: tuple[str, str] | None = None,
     ) -> ET.Element:
         departure_time = (datetime.now(timezone.utc) + timedelta(hours=1)).strftime(
             "%Y-%m-%dT%H:%M:%S+00:00"
         )
+        expected_arrival_time, expected_departure_time = recorded_call_times or ("", "")
         xml = f"""<siri:Root xmlns:siri=\"http://www.siri.org.uk/siri\">
   <siri:EstimatedVehicleJourney>
     <siri:Monitored>true</siri:Monitored>
@@ -100,6 +121,8 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
       <siri:RecordedCall>
         <siri:StopPointRef>STOP1</siri:StopPointRef>
         <siri:AimedDepartureTime>{departure_time}</siri:AimedDepartureTime>
+                {f'<siri:ExpectedArrivalTime>{expected_arrival_time}</siri:ExpectedArrivalTime>' if expected_arrival_time else ''}
+                {f'<siri:ExpectedDepartureTime>{expected_departure_time}</siri:ExpectedDepartureTime>' if expected_departure_time else ''}
         <siri:Order>1</siri:Order>
       </siri:RecordedCall>
     </siri:RecordedCalls>

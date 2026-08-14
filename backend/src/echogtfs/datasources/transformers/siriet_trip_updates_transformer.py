@@ -239,11 +239,11 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
                 continue
 
             if call_name == "RecordedCall":
-                actual_arrival_text = self._get_text(
-                    call_element.find("siri:ActualArrivalTime", self._siri_ns)
+                expected_arrival_text = self._get_text(
+                    call_element.find("siri:ExpectedArrivalTime", self._siri_ns)
                 )
-                actual_departure_text = self._get_text(
-                    call_element.find("siri:ActualDepartureTime", self._siri_ns)
+                expected_departure_text = self._get_text(
+                    call_element.find("siri:ExpectedDepartureTime", self._siri_ns)
                 )
                 aimed_arrival_text = self._get_text(
                     call_element.find("siri:AimedArrivalTime", self._siri_ns)
@@ -252,9 +252,11 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
                     call_element.find("siri:AimedDepartureTime", self._siri_ns)
                 )
 
-                has_realtime_data = bool(actual_arrival_text or actual_departure_text)
-                arrival_time = self._parse_datetime(actual_arrival_text)
-                departure_time = self._parse_datetime(actual_departure_text)
+                has_realtime_data = bool(
+                    expected_arrival_text or expected_departure_text
+                )
+                arrival_time = self._parse_datetime(expected_arrival_text)
+                departure_time = self._parse_datetime(expected_departure_text)
 
                 if arrival_time is None:
                     arrival_time = self._parse_datetime(aimed_arrival_text)

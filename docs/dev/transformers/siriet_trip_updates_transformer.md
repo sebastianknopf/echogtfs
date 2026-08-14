@@ -56,12 +56,12 @@ If start/end stop IDs cannot be resolved, the journey is discarded.
 
 For each `RecordedCall` with `StopPointRef`:
 
-1. Parse actual arrival/departure times first.
-2. Fallback to aimed arrival/departure times when actual values are missing.
+1. Parse expected arrival/departure times first.
+2. Fallback to aimed arrival/departure times when expected values are missing.
 3. If one side is still missing, mirror the other side.
 4. Set `schedule_relationship`:
 	- `SKIPPED` when `Cancellation=true`
-	- `NO_DATA` when no actual arrival/departure was provided
+	- `NO_DATA` when no expected arrival/departure was provided
 	- otherwise `SCHEDULED`
 
 ### EstimatedCall
