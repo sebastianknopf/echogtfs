@@ -959,6 +959,12 @@ body {
   gap: 2px;
 }
 
+.dashboard-stat__subvalues {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
 .dashboard-stat__headline-number {
   font-size: 2.6rem;
   line-height: 1;

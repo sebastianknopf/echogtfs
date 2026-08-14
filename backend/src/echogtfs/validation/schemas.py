@@ -98,6 +98,7 @@ class PublicAppSettings(BaseModel):
 class DashboardCounter(BaseModel):
     active: int
     inactive: int
+    monitored: int = 0
 
 
 class DashboardCounters(BaseModel):
