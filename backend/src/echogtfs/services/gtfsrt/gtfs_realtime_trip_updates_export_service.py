@@ -10,15 +10,21 @@ from google.protobuf.json_format import MessageToDict
 from echogtfs import gtfs_realtime_pb2
 from echogtfs.enum.gtfsrt import WheelchairAccessible
 from echogtfs.services.database.intf_realtime_repository import RealtimeRepositoryInterface
-from echogtfs.services.database.models import StopEvent, Trip
+from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
+from echogtfs.services.database.models import AppSetting, StopEvent, Trip
 from echogtfs.services.gtfsrt.intf_gtfs_realtime_export import GtfsRealtimeExportInterface
 
 
 class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
     """GTFS-Realtime export service for TripUpdate objects."""
 
-    def __init__(self, repository: RealtimeRepositoryInterface):
+    def __init__(
+        self,
+        repository: RealtimeRepositoryInterface,
+        system_repository: SystemRepositoryInterface,
+    ):
         self._repository = repository
+        self._system_repository = system_repository
         self._target_timezone = self._resolve_timezone(self._configured_timezone_name())
 
     async def export_protobuf(self) -> bytes:
@@ -42,7 +48,14 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
 
     async def _load_trips(self) -> list[Trip]:
         """Load active Trip entities with their stop events and vehicle relations."""
-        return list(await self._repository.get_realtime_trips())
+        trips = list(await self._repository.get_realtime_trips())
+        exclude_value = await self._system_repository.get_app_setting(
+            AppSetting.KEY_GTFS_RT_TRIP_UPDATES_EXCLUDE_TRIPS_WITHOUT_REALTIME_DATA
+        )
+        if exclude_value is None or exclude_value.strip().lower() != "true":
+            return trips
+
+        return [trip for trip in trips if self._has_realtime_stop_event(trip)]
 
     @staticmethod
     def _wheelchair_accessible_to_enum(value: WheelchairAccessible | str | None) -> int | None:
@@ -93,6 +106,13 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
             return None
 
         return normalized
+
+    def _has_realtime_stop_event(self, trip_model: Trip) -> bool:
+        return any(
+            (relationship := self._trip_schedule_relationship_text(stop_event.schedule_relationship))
+            and relationship != "NO_DATA"
+            for stop_event in trip_model.stop_events
+        )
 
     @staticmethod
     def _stop_time_schedule_relationship_to_enum(value: object | None) -> int | None:

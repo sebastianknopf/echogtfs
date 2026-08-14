@@ -478,9 +478,6 @@ body {
   gap: 10px;
   min-height: 56px;
   padding: 0 16px;
-  border: 1px solid var(--md-outline);
-  border-radius: var(--md-shape-s);
-  background: var(--md-surface);
   color: var(--md-on-surface);
 }
 

@@ -48,6 +48,7 @@ DEFAULTS = AppSettings(
     app_language="de",
     gtfs_rt_service_alerts_path="realtime/service-alerts.pbf",
     gtfs_rt_trip_updates_path="realtime/trip-updates.pbf",
+    gtfs_rt_trip_updates_exclude_trips_without_realtime_data=False,
     gtfs_rt_vehicle_positions_path="realtime/vehicle-positions.pbf",
     gtfs_rt_username="",
     gtfs_rt_password="",
@@ -74,6 +75,12 @@ async def _load() -> AppSettings:
             DEFAULTS.gtfs_rt_trip_updates_path,
         )
         rows[AppSetting.KEY_GTFS_RT_TRIP_UPDATES_PATH] = DEFAULTS.gtfs_rt_trip_updates_path
+    if AppSetting.KEY_GTFS_RT_TRIP_UPDATES_EXCLUDE_TRIPS_WITHOUT_REALTIME_DATA not in rows:
+        await repository.set_app_setting(
+            AppSetting.KEY_GTFS_RT_TRIP_UPDATES_EXCLUDE_TRIPS_WITHOUT_REALTIME_DATA,
+            str(DEFAULTS.gtfs_rt_trip_updates_exclude_trips_without_realtime_data).lower(),
+        )
+        rows[AppSetting.KEY_GTFS_RT_TRIP_UPDATES_EXCLUDE_TRIPS_WITHOUT_REALTIME_DATA] = "false"
     if AppSetting.KEY_GTFS_RT_VEHICLE_POSITIONS_PATH not in rows:
         await repository.set_app_setting(
             AppSetting.KEY_GTFS_RT_VEHICLE_POSITIONS_PATH,
@@ -109,6 +116,10 @@ async def _load() -> AppSettings:
             AppSetting.KEY_GTFS_RT_TRIP_UPDATES_PATH,
             DEFAULTS.gtfs_rt_trip_updates_path,
         ),
+        gtfs_rt_trip_updates_exclude_trips_without_realtime_data = rows.get(
+            AppSetting.KEY_GTFS_RT_TRIP_UPDATES_EXCLUDE_TRIPS_WITHOUT_REALTIME_DATA,
+            str(DEFAULTS.gtfs_rt_trip_updates_exclude_trips_without_realtime_data).lower(),
+        ).lower() == "true",
         gtfs_rt_vehicle_positions_path = rows.get(
             AppSetting.KEY_GTFS_RT_VEHICLE_POSITIONS_PATH,
             DEFAULTS.gtfs_rt_vehicle_positions_path,
@@ -162,6 +173,10 @@ async def update_settings(
     await repository.set_app_setting(
         AppSetting.KEY_GTFS_RT_TRIP_UPDATES_PATH,
         payload.gtfs_rt_trip_updates_path,
+    )
+    await repository.set_app_setting(
+        AppSetting.KEY_GTFS_RT_TRIP_UPDATES_EXCLUDE_TRIPS_WITHOUT_REALTIME_DATA,
+        str(payload.gtfs_rt_trip_updates_exclude_trips_without_realtime_data).lower(),
     )
     await repository.set_app_setting(
         AppSetting.KEY_GTFS_RT_VEHICLE_POSITIONS_PATH,

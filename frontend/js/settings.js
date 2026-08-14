@@ -164,6 +164,13 @@ const settings = (() => {
     if (rtUsername) {
       rtUsername.value = settings.gtfs_rt_username || '';
     }
+
+    const excludeTripsWithoutRealtimeData = ui.el('settings-gtfs-rt-trip-updates-exclude-trips-without-realtime-data');
+    if (excludeTripsWithoutRealtimeData) {
+      excludeTripsWithoutRealtimeData.checked = Boolean(
+        settings.gtfs_rt_trip_updates_exclude_trips_without_realtime_data,
+      );
+    }
     
     // Cleanup settings
     const cleanupCron = ui.el('settings-cleanup-cron');
@@ -272,6 +279,7 @@ const settings = (() => {
         gtfs_rt_vehicle_positions_path: ui.el('settings-gtfs-rt-vehicle-positions-path')?.value || '',
         gtfs_rt_username: ui.el('settings-gtfs-rt-username')?.value || '',
         gtfs_rt_password: ui.el('settings-gtfs-rt-password')?.value || '',
+        gtfs_rt_trip_updates_exclude_trips_without_realtime_data: ui.el('settings-gtfs-rt-trip-updates-exclude-trips-without-realtime-data')?.checked || false,
         cleanup_cron: ui.el('settings-cleanup-cron')?.value || '*/10 * * * *',
         cleanup_expired_policy: ui.el('settings-cleanup-policy')?.value || 'deactivate',
         cleanup_delete_after_days: parseInt(ui.el('settings-cleanup-delete-days')?.value || '-1', 10),
@@ -327,6 +335,7 @@ const settings = (() => {
         gtfs_rt_vehicle_positions_path: 'realtime/vehicle-positions.pbf',
         gtfs_rt_username: '',
         gtfs_rt_password: '',
+        gtfs_rt_trip_updates_exclude_trips_without_realtime_data: false,
         cleanup_cron: '*/10 * * * *',
         cleanup_expired_policy: 'deactivate',
         cleanup_delete_after_days: -1,

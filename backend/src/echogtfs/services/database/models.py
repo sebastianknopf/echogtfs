@@ -39,6 +39,9 @@ class AppSetting(Base):
 
     KEY_GTFS_RT_SERVICE_ALERTS_PATH: ClassVar[str] = "gtfs_rt_service_alerts_path"
     KEY_GTFS_RT_TRIP_UPDATES_PATH: ClassVar[str] = "gtfs_rt_trip_updates_path"
+    KEY_GTFS_RT_TRIP_UPDATES_EXCLUDE_TRIPS_WITHOUT_REALTIME_DATA: ClassVar[str] = (
+        "gtfs_rt_trip_updates_exclude_trips_without_realtime_data"
+    )
     KEY_GTFS_RT_VEHICLE_POSITIONS_PATH: ClassVar[str] = "gtfs_rt_vehicle_positions_path"
     KEY_GTFS_RT_USERNAME: ClassVar[str] = "gtfs_rt_username"
     KEY_GTFS_RT_PASSWORD: ClassVar[str] = "gtfs_rt_password"
@@ -60,6 +63,7 @@ class AppSetting(Base):
         KEY_APP_LANGUAGE,
         KEY_GTFS_RT_SERVICE_ALERTS_PATH,
         KEY_GTFS_RT_TRIP_UPDATES_PATH,
+        KEY_GTFS_RT_TRIP_UPDATES_EXCLUDE_TRIPS_WITHOUT_REALTIME_DATA,
         KEY_GTFS_RT_VEHICLE_POSITIONS_PATH,
         KEY_GTFS_RT_USERNAME,
         KEY_GTFS_RT_PASSWORD,
