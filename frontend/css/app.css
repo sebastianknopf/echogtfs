@@ -643,6 +643,10 @@ body {
   height: 20px;
 }
 
+.resolution-warning--no-realtime-data {
+  color: #facd28;
+}
+
 .resolution-warning--inline {
   width: 20px;
   height: 20px;
@@ -1855,6 +1859,10 @@ body {
 .view-item__warning svg {
   width: 18px;
   height: 18px;
+}
+
+.view-item__warning--no-realtime-data {
+  color: #facd28;
 }
 
 @media (max-width: 599px) {
