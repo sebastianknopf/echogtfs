@@ -437,7 +437,12 @@ class DatasourceBase(DatasourceInterface):
         return stop_id
 
     async def _run_cpu_bound(self, func: Any, *args: Any, **kwargs: Any) -> Any:
-        """Run CPU-bound synchronous work in a worker thread."""
+        """Run CPU-bound synchronous work in a worker thread.
+
+        This helper remains available for datasource fetch/parse stages that still
+        execute on the async caller, while the bulk sync pipeline itself runs in a
+        dedicated process and uses direct synchronous calls.
+        """
         return await asyncio.to_thread(func, *args, **kwargs)
 
     def _propagate_trip_update_stop_events(
@@ -720,7 +725,7 @@ class DatasourceBase(DatasourceInterface):
             )
 
             for alert_data in alert_dicts:
-                await self._entity_enrichment_service.apply_enrichment_async(
+                self._entity_enrichment_service.apply_enrichment(
                     alert_data,
                     self.get_adapter_type(),
                 )
@@ -797,14 +802,13 @@ class DatasourceBase(DatasourceInterface):
             
             for entity_data in entities_data:
                 # Apply mappings to entity data
-                mapped_entity_data = await self._identifier_mapping_service.apply_mapping_async(
+                mapped_entity_data = self._identifier_mapping_service.apply_mapping(
                     entity_data,
                 )
                 
                 # For DISCARD_INVALID_ELEMENTS policy, validate and clean individual fields
                 if policy == InvalidReferencePolicy.DISCARD_INVALID_ELEMENTS:
-                    cleaned_entity, has_valid_ref = await self._run_cpu_bound(
-                        self._validate_and_clean_entity_elements,
+                    cleaned_entity, has_valid_ref = self._validate_and_clean_entity_elements(
                         mapped_entity_data,
                         gtfs_entities,
                     )
@@ -830,8 +834,7 @@ class DatasourceBase(DatasourceInterface):
                     if "is_valid" in mapped_entity_data:
                         is_valid = mapped_entity_data["is_valid"]
                     else:
-                        is_valid = await self._run_cpu_bound(
-                            self._validate_entity,
+                        is_valid = self._validate_entity(
                             mapped_entity_data,
                             gtfs_entities,
                         )
@@ -916,10 +919,7 @@ class DatasourceBase(DatasourceInterface):
             # through mapping or policy application
             if entities_to_create:
                 original_count = len(entities_to_create)
-                entities_to_create = await self._run_cpu_bound(
-                    self._deduplicate_entities,
-                    entities_to_create,
-                )
+                entities_to_create = self._deduplicate_entities(entities_to_create)
                 duplicates_removed = original_count - len(entities_to_create)
                 
                 if duplicates_removed > 0:
@@ -1106,7 +1106,7 @@ class DatasourceBase(DatasourceInterface):
             is_complete_stop_sequence = bool(record.get("is_complete_stop_sequence", False))
             schedule_relationship = str(record.get("schedule_relationship", "SCHEDULED") or "SCHEDULED").upper()
 
-            mapped_trip = await self._identifier_mapping_service.apply_mapping_async(
+            mapped_trip = self._identifier_mapping_service.apply_mapping(
                 {
                     "route_id": record.get("route_id"),
                 }
@@ -1119,7 +1119,7 @@ class DatasourceBase(DatasourceInterface):
             has_invalid_stop_reference = False
             for event in record.get("stop_events", []):
                 mapped_event = dict(event)
-                mapped_stop = await self._identifier_mapping_service.apply_mapping_async(
+                mapped_stop = self._identifier_mapping_service.apply_mapping(
                     {
                         "stop_id": mapped_event.get("stop_id"),
                     }
@@ -1140,12 +1140,12 @@ class DatasourceBase(DatasourceInterface):
             assignment_type = AssignmentType.DIRECT_BY_ID.value
             trip_reference_is_valid = True if is_new_trip else derived_trip_id in nominal_trip_ids
 
-            mapped_match_start_stop = await self._identifier_mapping_service.apply_mapping_async(
+            mapped_match_start_stop = self._identifier_mapping_service.apply_mapping(
                 {
                     "stop_id": record.get("scheduled_start_stop_id"),
                 }
             )
-            mapped_match_end_stop = await self._identifier_mapping_service.apply_mapping_async(
+            mapped_match_end_stop = self._identifier_mapping_service.apply_mapping(
                 {
                     "stop_id": record.get("scheduled_end_stop_id"),
                 }
@@ -1164,7 +1164,7 @@ class DatasourceBase(DatasourceInterface):
                         continue
 
                     candidate_stop_id, candidate_time = candidate
-                    mapped_intermediate_stop = await self._identifier_mapping_service.apply_mapping_async(
+                    mapped_intermediate_stop = self._identifier_mapping_service.apply_mapping(
                         {
                             "stop_id": candidate_stop_id,
                         }
@@ -1215,8 +1215,7 @@ class DatasourceBase(DatasourceInterface):
             if not is_new_trip:
                 nominal_trip = await gtfs_repository.get_gtfs_trip_with_stop_times(resolved_trip_id)
                 nominal_stop_times = list(nominal_trip.stop_times) if nominal_trip is not None else []
-                stop_events = await self._run_cpu_bound(
-                    self._propagate_trip_update_stop_events,
+                stop_events = self._propagate_trip_update_stop_events(
                     stop_events,
                     nominal_stop_times,
                     treat_unexpected_stop_as_added_stop=treat_unexpected_stop_as_added_stop,
@@ -1442,7 +1441,7 @@ class DatasourceBase(DatasourceInterface):
                 
                 continue
 
-            mapped_trip = await self._identifier_mapping_service.apply_mapping_async(
+            mapped_trip = self._identifier_mapping_service.apply_mapping(
                 {
                     "route_id": trip_payload.get("route_id"),
                 }
@@ -1462,12 +1461,12 @@ class DatasourceBase(DatasourceInterface):
             trip_reference_is_valid = derived_trip_id in nominal_trip_ids
 
             if not trip_reference_is_valid:
-                mapped_match_start_stop = await self._identifier_mapping_service.apply_mapping_async(
+                mapped_match_start_stop = self._identifier_mapping_service.apply_mapping(
                     {
                         "stop_id": record.get("scheduled_start_stop_id"),
                     }
                 )
-                mapped_match_end_stop = await self._identifier_mapping_service.apply_mapping_async(
+                mapped_match_end_stop = self._identifier_mapping_service.apply_mapping(
                     {
                         "stop_id": record.get("scheduled_end_stop_id"),
                     }
@@ -1486,7 +1485,7 @@ class DatasourceBase(DatasourceInterface):
                             continue
     
                         candidate_stop_id, candidate_time = candidate
-                        mapped_intermediate_stop = await self._identifier_mapping_service.apply_mapping_async(
+                        mapped_intermediate_stop = self._identifier_mapping_service.apply_mapping(
                             {
                                 "stop_id": candidate_stop_id,
                             }

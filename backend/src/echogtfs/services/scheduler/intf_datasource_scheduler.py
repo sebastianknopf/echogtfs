@@ -25,3 +25,8 @@ class DatasourceSchedulerInterface(ABC):
     async def run_import_task(self, source_id: int) -> None:
         """Execute one datasource import run."""
         raise NotImplementedError
+
+    @abstractmethod
+    async def close(self) -> None:
+        """Stop datasource scheduling and drain worker processes."""
+        raise NotImplementedError

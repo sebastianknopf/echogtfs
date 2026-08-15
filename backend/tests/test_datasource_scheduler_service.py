@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -102,19 +102,13 @@ class TestDatasourceSchedulerService(unittest.IsolatedAsyncioTestCase):
         gtfs_repository = SimpleNamespace()
         repository.get_data_source_by_id.return_value = _DataSourceStub(id=7, name="Alpha")
         service = DatasourceSchedulerService(repository, realtime_repository, gtfs_repository)
-        datasource = SimpleNamespace(sync_records=AsyncMock(return_value={"added": 1, "updated": 2, "deleted": 3}))
-
-        with patch.object(DatasourceSchedulerService, "_get_datasource", return_value=datasource):
-            await service.run_import_task(7)
-
-        datasource.sync_records.assert_awaited_once_with(
-            repository,
-            realtime_repository,
-            gtfs_repository,
-            7,
-            "Alpha",
-            False,
+        service._run_datasource_in_process = AsyncMock(
+            return_value={"added": 1, "updated": 2, "deleted": 3}
         )
+
+        await service.run_import_task(7)
+
+        service._run_datasource_in_process.assert_awaited_once_with(7)
         repository.update_data_source_last_run_at.assert_awaited_once()
 
     async def test_run_import_task_skips_when_gtfs_import_is_running(self):
@@ -123,13 +117,10 @@ class TestDatasourceSchedulerService(unittest.IsolatedAsyncioTestCase):
         gtfs_repository = SimpleNamespace()
         repository.get_app_setting.return_value = "running"
         service = DatasourceSchedulerService(repository, realtime_repository, gtfs_repository)
-        datasource = SimpleNamespace(sync_records=AsyncMock())
 
-        with patch.object(DatasourceSchedulerService, "_get_datasource", return_value=datasource):
-            await service.run_import_task(5)
+        await service.run_import_task(5)
 
         repository.get_data_source_by_id.assert_not_awaited()
-        datasource.sync_records.assert_not_awaited()
         repository.update_data_source_last_run_at.assert_not_awaited()
 
     async def test_run_import_task_rolls_back_and_updates_last_run_at_on_error(self):
@@ -138,22 +129,15 @@ class TestDatasourceSchedulerService(unittest.IsolatedAsyncioTestCase):
         gtfs_repository = SimpleNamespace()
         repository.get_data_source_by_id.return_value = _DataSourceStub(id=11, name="Broken")
         service = DatasourceSchedulerService(repository, realtime_repository, gtfs_repository)
-        datasource = SimpleNamespace(sync_records=AsyncMock(side_effect=RuntimeError("boom")))
+        service._run_datasource_in_process = AsyncMock(side_effect=RuntimeError("boom"))
 
-        with patch.object(DatasourceSchedulerService, "_get_datasource", return_value=datasource), patch.object(
+        with patch.object(
             scheduler_module.logger,
             "error",
         ):
             await service.run_import_task(11)
 
-        datasource.sync_records.assert_awaited_once_with(
-            repository,
-            realtime_repository,
-            gtfs_repository,
-            11,
-            "Broken",
-            False,
-        )
+        service._run_datasource_in_process.assert_awaited_once_with(11)
         repository.update_data_source_last_run_at.assert_awaited_once()
 
     async def test_schedule_data_source_import_uses_timezone_from_environment(self):
@@ -173,3 +157,17 @@ class TestDatasourceSchedulerService(unittest.IsolatedAsyncioTestCase):
 
         from_crontab_mock.assert_called_once()
         self.assertEqual(from_crontab_mock.call_args.kwargs["timezone"], ZoneInfo("Europe/Berlin"))
+
+    async def test_close_drains_process_pool_and_is_idempotent(self):
+        repository = _RepositoryStub()
+        service = DatasourceSchedulerService(repository, SimpleNamespace(), SimpleNamespace())
+        scheduler = _FakeScheduler([SimpleNamespace(id="alert_import_8"), SimpleNamespace(id="other_job")])
+        pool = SimpleNamespace(shutdown=Mock())
+        service._scheduler = scheduler
+        service._process_pool = pool
+
+        await service.close()
+        await service.close()
+
+        self.assertEqual(scheduler.removed_job_ids, ["alert_import_8"])
+        pool.shutdown.assert_called_once_with(wait=True, cancel_futures=False)

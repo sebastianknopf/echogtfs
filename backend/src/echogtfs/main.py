@@ -92,6 +92,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     
     yield
 
+    await datasource_scheduler_service.close()
+
     # close database repositories on shutdown
     await caching_service.close()
     await gtfs_repository.close()
