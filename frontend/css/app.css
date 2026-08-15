@@ -1932,6 +1932,7 @@ body {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
 }
 
 .alert-list-item__title {
@@ -1941,6 +1942,9 @@ body {
   color: var(--md-on-surface);
   margin: 0;
   flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .alert-list-item__title--canceled {
