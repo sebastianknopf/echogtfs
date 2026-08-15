@@ -25,10 +25,10 @@ __all__ = [
 
 DATASOURCE_REGISTRY: dict[str, type[DatasourceBase]] = {
     "gtfsrt": GtfsRealtimeDatasource,
-    "siriet": SiriEtDatasource,
     "sirilite": SiriLiteDatasource,
-    "sirivm": SiriVmDatasource,
     "sirisx": SiriSxDatasource,
+    "siriet": SiriEtDatasource,
+    "sirivm": SiriVmDatasource,
 }
 
 
