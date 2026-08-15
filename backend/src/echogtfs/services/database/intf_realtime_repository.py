@@ -210,6 +210,11 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def delete_trips_by_trip_ids(self, trip_ids: list[str]) -> int:
+        """Delete realtime trip rows by trip_id and return the deleted row count."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def delete_trips_for_data_source_by_ids(
         self,
         source_id: int,

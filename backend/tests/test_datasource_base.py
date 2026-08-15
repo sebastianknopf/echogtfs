@@ -48,6 +48,7 @@ class _RealtimeRepositoryStub:
         self.list_trips_for_data_source = AsyncMock(return_value=[])
         self.list_trips_by_ids = AsyncMock(return_value=[])
         self.list_trips_by_trip_ids = AsyncMock(return_value=[])
+        self.delete_trips_by_trip_ids = AsyncMock()
         self.list_trip_ids_with_stop_events = AsyncMock(return_value=set())
         self.delete_trips_for_data_source_by_ids = AsyncMock()
         self.update_trip_update_from_sync = AsyncMock()
@@ -498,6 +499,7 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result, {"added": 1, "updated": 0, "deleted": 0})
         datasource._matching_service.match.assert_awaited_once()
+        realtime_repository.delete_trips_by_trip_ids.assert_awaited_once_with(["external-trip-1"])
         kwargs = realtime_repository.update_trip_update_from_sync.await_args.kwargs
         self.assertEqual(kwargs["trip_id"], "matched-trip-1")
         self.assertEqual(kwargs["assignment_type"], "MATCHED_BY_START_STOP")
@@ -627,6 +629,7 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
         )
 
         datasource._matching_service.match.assert_awaited_once()
+        realtime_repository.delete_trips_by_trip_ids.assert_awaited_once_with(["external-trip-1"])
         match_kwargs = datasource._matching_service.match.await_args.kwargs
         self.assertIsNotNone(match_kwargs["scheduled_start_time"])
         self.assertIsNotNone(match_kwargs["scheduled_end_time"])

@@ -1192,6 +1192,8 @@ class DatasourceBase(DatasourceInterface):
                     resolved_trip_id = matched_trip_id
                     assignment_type = AssignmentType.MATCHED_BY_START_STOP.value
                     trip_reference_is_valid = True
+                    
+                    await realtime_repository.delete_trips_by_trip_ids([original_trip_id])
                 else:
                     assignment_type = AssignmentType.NO_MATCH_GENERAL.value
 
@@ -1513,6 +1515,7 @@ class DatasourceBase(DatasourceInterface):
                     trip_assignment_type = AssignmentType.MATCHED_BY_CURRENT_STOP.value
                     vehicle_assignment_type = AssignmentType.MATCHED_BY_CURRENT_STOP.value
                     trip_reference_is_valid = True
+                    await realtime_repository.delete_trips_by_trip_ids([derived_trip_id])
                 else:
                     trip_assignment_type = AssignmentType.NO_MATCH_GENERAL.value
                     vehicle_assignment_type = AssignmentType.NO_MATCH_GENERAL.value

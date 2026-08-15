@@ -629,6 +629,18 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
             
             return {str(value) for value in result.scalars().all()}
 
+    async def delete_trips_by_trip_ids(self, trip_ids: list[str]) -> int:
+            """Delete realtime trip rows by trip_id and return the deleted row count."""
+            if not trip_ids:
+                return 0
+    
+            stmt = delete(Trip).where(Trip.trip_id.in_(trip_ids))
+    
+            async with self.get_session() as db:
+                result = await db.execute(stmt)
+                await self.commit(db)
+                return int(result.rowcount or 0)
+
     async def delete_trips_for_data_source_by_ids(
         self,
         source_id: int,
