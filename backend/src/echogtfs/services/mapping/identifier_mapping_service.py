@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import Any
 
@@ -51,6 +52,13 @@ class IdentifierMappingService(IdentifierMappingInterface):
             )
 
         return mapped_entity
+
+    async def apply_mapping_async(
+        self,
+        entity_data: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Apply mappings in a worker thread without blocking the event loop."""
+        return await asyncio.to_thread(self.apply_mapping, entity_data)
 
     def _apply_mapping_with_wildcard(
         self,

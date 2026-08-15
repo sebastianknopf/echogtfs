@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -31,6 +32,13 @@ class DatalogService:
         log_dir = Path(log_dir_str)
         log_dir.mkdir(parents=True, exist_ok=True)
         return log_dir
+
+    @staticmethod
+    def _write_dump_file(log_file_path: Path, content_bytes: bytes) -> int:
+        log_file_path.parent.mkdir(parents=True, exist_ok=True)
+        log_file_path.write_bytes(content_bytes)
+
+        return log_file_path.stat().st_size
 
     async def create_log_entry(
         self,
@@ -67,13 +75,16 @@ class DatalogService:
             log_file_path = log_dir / str(log_uuid)
 
             try:
-                log_file_path.write_bytes(content_bytes)
+                actual_size = await asyncio.to_thread(
+                    self._write_dump_file,
+                    log_file_path,
+                    content_bytes,
+                )
+                
                 logger.info("[DataLog] Saved log file: %s", log_file_path)
             except Exception as exc:  # noqa: BLE001
                 logger.error("[DataLog] Failed to save log file %s: %s", log_file_path, exc)
                 raise
-
-            actual_size = log_file_path.stat().st_size
 
             logger.info(
                 "[DataLog] File written successfully. Size on disk: %s bytes (%.2f KB, %.2f MB)",

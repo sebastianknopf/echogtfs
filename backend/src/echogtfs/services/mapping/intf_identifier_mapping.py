@@ -30,3 +30,11 @@ class IdentifierMappingInterface(ABC):
     ) -> dict[str, Any]:
         """Apply loaded mappings to one informed-entity payload."""
         raise NotImplementedError
+
+    @abstractmethod
+    async def apply_mapping_async(
+        self,
+        entity_data: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Apply loaded mappings in a worker thread."""
+        raise NotImplementedError

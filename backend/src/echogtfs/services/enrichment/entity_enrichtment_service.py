@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from typing import Any
@@ -125,6 +126,14 @@ class EntityEnrichmentService(EntityEnrichmentInterface):
 
             if all(enriched_types.values()):
                 break
+
+    async def apply_enrichment_async(
+        self,
+        alert_data: dict[str, Any],
+        adapter_type: str,
+    ) -> None:
+        """Apply enrichment rules in a worker thread without blocking the event loop."""
+        await asyncio.to_thread(self.apply_enrichment, alert_data, adapter_type)
 
     def _match_enrichment_pattern(self, text: str, pattern: str) -> bool:
         """Match one enrichment pattern using wildcard and AND-comma semantics."""
