@@ -775,6 +775,116 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
         realtime_repository.update_trip_update_from_sync.assert_not_awaited()
         realtime_repository.delete_trips_for_data_source_by_ids.assert_awaited()
 
+    async def test_sync_trip_update_records_preserves_existing_trip_activation_for_invalid_stop(self):
+        repository = _SystemRepositoryStub()
+        repository.get_data_source_invalid_reference_policy = AsyncMock(
+            return_value=InvalidReferencePolicy.KEEP_OBJECT_DISABLED
+        )
+        realtime_repository = _RealtimeRepositoryStub()
+        gtfs_repository = _GtfsRepositoryStub()
+        datasource = _TestDatasource({})
+        datasource._matching_service = SimpleNamespace(match=AsyncMock(return_value=None))
+        datasource._identifier_mapping_service = SimpleNamespace(
+            initialize=AsyncMock(),
+            get_loaded_mapping_count=lambda: 0,
+            apply_mapping=lambda entity: entity,
+        )
+
+        trip_uuid = datasource._make_unique_id("trip-1", "Demo")
+        existing_trip = SimpleNamespace(
+            id=trip_uuid,
+            trip_id="trip-1",
+            data_source_id=2,
+            is_active=True,
+        )
+        realtime_repository.list_trips_for_data_source = AsyncMock(return_value=[existing_trip])
+        realtime_repository.list_trips_by_trip_ids = AsyncMock(return_value=[existing_trip])
+
+        await datasource._sync_trip_update_records(
+            repository=repository,
+            realtime_repository=realtime_repository,
+            gtfs_repository=gtfs_repository,
+            source_id=2,
+            source_name="Demo",
+            records=[
+                {
+                    "id": "trip-upd-1",
+                    "trip_id": "trip-1",
+                    "start_time": "08:00:00",
+                    "start_date": "20260801",
+                    "route_id": "r1",
+                    "stop_events": [
+                        {
+                            "stop_id": "invalid-stop",
+                            "stop_sequence": "1",
+                            "arrival_time": None,
+                            "departure_time": None,
+                            "schedule_relationship": "SCHEDULED",
+                        }
+                    ],
+                }
+            ],
+        )
+
+        kwargs = realtime_repository.update_trip_update_from_sync.await_args.kwargs
+        self.assertTrue(existing_trip.is_active)
+        self.assertTrue(kwargs["is_active_on_create"])
+
+    async def test_sync_trip_update_records_preserves_existing_inactive_trip_for_invalid_stop(self):
+        repository = _SystemRepositoryStub()
+        repository.get_data_source_invalid_reference_policy = AsyncMock(
+            return_value=InvalidReferencePolicy.KEEP_OBJECT_DISABLED
+        )
+        realtime_repository = _RealtimeRepositoryStub()
+        gtfs_repository = _GtfsRepositoryStub()
+        datasource = _TestDatasource({})
+        datasource._matching_service = SimpleNamespace(match=AsyncMock(return_value=None))
+        datasource._identifier_mapping_service = SimpleNamespace(
+            initialize=AsyncMock(),
+            get_loaded_mapping_count=lambda: 0,
+            apply_mapping=lambda entity: entity,
+        )
+
+        trip_uuid = datasource._make_unique_id("trip-1", "Demo")
+        existing_trip = SimpleNamespace(
+            id=trip_uuid,
+            trip_id="trip-1",
+            data_source_id=2,
+            is_active=False,
+        )
+        realtime_repository.list_trips_for_data_source = AsyncMock(return_value=[existing_trip])
+        realtime_repository.list_trips_by_trip_ids = AsyncMock(return_value=[existing_trip])
+
+        await datasource._sync_trip_update_records(
+            repository=repository,
+            realtime_repository=realtime_repository,
+            gtfs_repository=gtfs_repository,
+            source_id=2,
+            source_name="Demo",
+            records=[
+                {
+                    "id": "trip-upd-1",
+                    "trip_id": "trip-1",
+                    "start_time": "08:00:00",
+                    "start_date": "20260801",
+                    "route_id": "r1",
+                    "stop_events": [
+                        {
+                            "stop_id": "invalid-stop",
+                            "stop_sequence": "1",
+                            "arrival_time": None,
+                            "departure_time": None,
+                            "schedule_relationship": "SCHEDULED",
+                        }
+                    ],
+                }
+            ],
+        )
+
+        kwargs = realtime_repository.update_trip_update_from_sync.await_args.kwargs
+        self.assertFalse(existing_trip.is_active)
+        self.assertFalse(kwargs["is_active_on_create"])
+
     async def test_sync_vehicle_position_records_discards_entire_object_and_deletes_existing_when_policy_requires(self):
         repository = _SystemRepositoryStub()
         repository.get_data_source_invalid_reference_policy = AsyncMock(

@@ -1199,6 +1199,8 @@ class DatasourceBase(DatasourceInterface):
             if persisted_trip_uuid is None:
                 persisted_trip_uuid = self._make_unique_id(resolved_trip_id, source_name)
 
+            existing_trip = persisted_trip_uuid in existing_trip_ids
+
             if not is_new_trip:
                 nominal_trip = await gtfs_repository.get_gtfs_trip_with_stop_times(resolved_trip_id)
                 nominal_stop_times = list(nominal_trip.stop_times) if nominal_trip is not None else []
@@ -1243,18 +1245,24 @@ class DatasourceBase(DatasourceInterface):
                         or bool(route_id_to_persist)
                         or bool(stop_events_to_persist)
                     )
-                    if (not trip_reference_is_valid) or (not has_any_valid_reference):
+                    if (
+                        not existing_trip
+                        and ((not trip_reference_is_valid) or (not has_any_valid_reference))
+                    ):
                         should_deactivate_trip = True
 
                 elif policy == InvalidReferencePolicy.KEEP_OBJECT_DISABLED:
-                    should_deactivate_trip = True
+                    should_deactivate_trip = not existing_trip
 
             if should_skip_trip:
                 continue
 
-            is_active_on_create = bool(record.get("is_active", True))
-            if should_deactivate_trip:
-                is_active_on_create = False
+            if existing_trip:
+                is_active_on_create = bool(existing_trips[persisted_trip_uuid].is_active)
+            else:
+                is_active_on_create = bool(record.get("is_active", True))
+                if should_deactivate_trip:
+                    is_active_on_create = False
 
             trip_is_valid = (
                 bool(record.get("is_valid", True))
@@ -1263,7 +1271,7 @@ class DatasourceBase(DatasourceInterface):
                 and not has_invalid_stop_reference
             )
 
-            if persisted_trip_uuid in existing_trip_ids:
+            if existing_trip:
                 stats_updated += 1
             else:
                 stats_created += 1
