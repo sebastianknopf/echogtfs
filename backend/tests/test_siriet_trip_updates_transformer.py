@@ -93,6 +93,39 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
         self.assertEqual(stop_event["arrival_time"], expected_departure_time.replace(microsecond=0))
         self.assertEqual(stop_event["departure_time"], expected_departure_time.replace(microsecond=0))
 
+    def test_stop_event_relationship_prioritizes_skipped_and_added_over_no_data(self) -> None:
+        resolve = self.transformer._resolve_stop_event_schedule_relationship
+
+        self.assertEqual(
+            resolve(is_canceled=True, is_added=True, has_realtime_data=False),
+            "SKIPPED",
+        )
+        self.assertEqual(
+            resolve(is_canceled=False, is_added=True, has_realtime_data=False),
+            "ADDED",
+        )
+        self.assertEqual(
+            resolve(is_canceled=False, is_added=False, has_realtime_data=False),
+            "NO_DATA",
+        )
+        self.assertEqual(
+            resolve(is_canceled=False, is_added=False, has_realtime_data=True),
+            "SCHEDULED",
+        )
+
+    def test_recorded_call_extra_call_is_marked_as_added(self) -> None:
+        payload = self._build_payload(
+            extra_journey="false",
+            complete_sequence="false",
+            extra_call="true",
+            recorded_call_times=("", ""),
+        )
+
+        trips = self.transformer.transform({"root": payload})
+
+        self.assertEqual(len(trips), 1)
+        self.assertEqual(trips[0]["stop_events"][0]["schedule_relationship"], "ADDED")
+
     def _build_payload(
         self,
         *,
@@ -101,6 +134,7 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
         cancellation: str | None = None,
         operator_ref: str = "OP1",
         recorded_call_times: tuple[str, str] | None = None,
+        extra_call: str = "false",
     ) -> ET.Element:
         departure_time = (datetime.now(timezone.utc) + timedelta(hours=1)).strftime(
             "%Y-%m-%dT%H:%M:%S+00:00"
@@ -121,6 +155,7 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
       <siri:RecordedCall>
         <siri:StopPointRef>STOP1</siri:StopPointRef>
         <siri:AimedDepartureTime>{departure_time}</siri:AimedDepartureTime>
+    <siri:ExtraCall>{extra_call}</siri:ExtraCall>
                 {f'<siri:ExpectedArrivalTime>{expected_arrival_time}</siri:ExpectedArrivalTime>' if expected_arrival_time else ''}
                 {f'<siri:ExpectedDepartureTime>{expected_departure_time}</siri:ExpectedDepartureTime>' if expected_departure_time else ''}
         <siri:Order>1</siri:Order>

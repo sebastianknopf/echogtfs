@@ -274,12 +274,16 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
                     self._get_text(call_element.find("siri:Cancellation", self._siri_ns)),
                     default=False,
                 )
+                is_extra_call = self._parse_bool(
+                    self._get_text(call_element.find("siri:ExtraCall", self._siri_ns)),
+                    default=False,
+                )
 
-                schedule_relationship = "SCHEDULED"
-                if is_canceled:
-                    schedule_relationship = "SKIPPED"
-                elif not has_realtime_data:
-                    schedule_relationship = "NO_DATA"
+                schedule_relationship = self._resolve_stop_event_schedule_relationship(
+                    is_canceled=is_canceled,
+                    is_added=is_extra_call,
+                    has_realtime_data=has_realtime_data,
+                )
             else:
                 expected_arrival_text = self._get_text(
                     call_element.find("siri:ExpectedArrivalTime", self._siri_ns)
@@ -319,13 +323,11 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
                     default=False,
                 )
 
-                schedule_relationship = "SCHEDULED"
-                if is_canceled:
-                    schedule_relationship = "SKIPPED"
-                elif is_extra_call:
-                    schedule_relationship = "ADDED"
-                elif not has_expected_data:
-                    schedule_relationship = "NO_DATA"
+                schedule_relationship = self._resolve_stop_event_schedule_relationship(
+                    is_canceled=is_canceled,
+                    is_added=is_extra_call,
+                    has_realtime_data=has_expected_data,
+                )
 
             stop_events.append(
                 {
@@ -338,6 +340,21 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
             )
 
         return stop_events
+
+    @staticmethod
+    def _resolve_stop_event_schedule_relationship(
+        *,
+        is_canceled: bool,
+        is_added: bool,
+        has_realtime_data: bool,
+    ) -> str:
+        if is_canceled:
+            return "SKIPPED"
+        if is_added:
+            return "ADDED"
+        if not has_realtime_data:
+            return "NO_DATA"
+        return "SCHEDULED"
 
     def _iter_calls_in_order(self, journey: ET.Element) -> list[tuple[ET.Element, str, int]]:
         calls: list[tuple[ET.Element, str, int]] = []
