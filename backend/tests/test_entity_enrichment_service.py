@@ -9,8 +9,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from echogtfs.services.enrichment.entity_enrichtment_service import EntityEnrichmentService
 
 
-class TestEntityEnrichmentService(unittest.TestCase):
-    def test_apply_enrichment_matches_patterns(self):
+class TestEntityEnrichmentService(unittest.IsolatedAsyncioTestCase):
+    async def test_apply_enrichment_async_matches_patterns(self):
         service = EntityEnrichmentService()
         service._enrichments = [
             {
@@ -34,7 +34,7 @@ class TestEntityEnrichmentService(unittest.TestCase):
             "severity_level": "UNKNOWN_SEVERITY",
             "translations": [{"header_text": "Signal issue", "description_text": "major delay"}],
         }
-        service.apply_enrichment(alert, "adapter")
+        await service.apply_enrichment_async(alert, "adapter")
 
         self.assertEqual(alert["cause"], "TECHNICAL_PROBLEM")
         self.assertEqual(alert["severity_level"], "SEVERE")

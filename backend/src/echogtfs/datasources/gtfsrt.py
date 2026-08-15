@@ -17,6 +17,20 @@ from echogtfs.datasources.transformers import GtfsRtServiceAlertsTransformer
 logger = logging.getLogger("uvicorn")
 
 
+def _parse_feed_message(protobuf_data: bytes) -> gtfs_realtime_pb2.FeedMessage:
+    feed = gtfs_realtime_pb2.FeedMessage()
+    feed.ParseFromString(protobuf_data)
+    return feed
+
+
+def _serialize_feed_json(feed: gtfs_realtime_pb2.FeedMessage) -> str:
+    return json.dumps(
+        MessageToDict(feed, preserving_proto_field_name=True),
+        indent=2,
+        ensure_ascii=False,
+    )
+
+
 class GtfsRtDialect(str, Enum):
     GTFSRT_SERVICEALERTS = "gtfsrt-servicealerts"
 
@@ -120,9 +134,8 @@ class GtfsRealtimeDatasource(DatasourceBase):
             )
             raise ValueError(f"Failed to fetch GTFS-RT feed: {exc}") from exc
 
-        feed = gtfs_realtime_pb2.FeedMessage()
         try:
-            feed.ParseFromString(protobuf_data)
+            feed = await self._run_cpu_bound(_parse_feed_message, protobuf_data)
         except Exception as exc:
             logger.error(f"[GtfsRealtimeDatasource] Failed to parse protobuf: {exc}")
             await self._log_request(
@@ -142,11 +155,7 @@ class GtfsRealtimeDatasource(DatasourceBase):
             request_headers=headers,
             response_headers=dict(response.headers) if response and response.headers else None,
             response_status_code=response.status_code if response is not None else 404,
-            response_content=json.dumps(
-                MessageToDict(feed, preserving_proto_field_name=True),
-                indent=2,
-                ensure_ascii=False,
-            ),
+            response_content=await self._run_cpu_bound(_serialize_feed_json, feed),
             response_content_type="application/json",
         )
 

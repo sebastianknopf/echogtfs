@@ -48,7 +48,7 @@ class SiriSxSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         current_timestamp = int(time.time())
 
         try:
-            for situation in situations:
+            for situation_index, situation in enumerate(situations, start=1):
                 try:
                     if not self._matches_participant_filter(situation):
                         filtered_by_participant += 1

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
@@ -137,7 +138,12 @@ class MatchingService(MatchingServiceInterface):
             if gtfs_trip is None:
                 continue
 
-            if self._trip_matches_intermediate_stops(gtfs_trip, scheduled_intermediate_stops):
+            matches = await asyncio.to_thread(
+                self._trip_matches_intermediate_stops,
+                gtfs_trip,
+                scheduled_intermediate_stops,
+            )
+            if matches:
                 matched_trip_ids.append(candidate_trip_id)
 
         if len(matched_trip_ids) != 1:

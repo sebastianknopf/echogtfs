@@ -720,7 +720,7 @@ class DatasourceBase(DatasourceInterface):
             )
 
             for alert_data in alert_dicts:
-                self._entity_enrichment_service.apply_enrichment(
+                await self._entity_enrichment_service.apply_enrichment_async(
                     alert_data,
                     self.get_adapter_type(),
                 )
@@ -797,14 +797,16 @@ class DatasourceBase(DatasourceInterface):
             
             for entity_data in entities_data:
                 # Apply mappings to entity data
-                mapped_entity_data = self._identifier_mapping_service.apply_mapping(
+                mapped_entity_data = await self._identifier_mapping_service.apply_mapping_async(
                     entity_data,
                 )
                 
                 # For DISCARD_INVALID_ELEMENTS policy, validate and clean individual fields
                 if policy == InvalidReferencePolicy.DISCARD_INVALID_ELEMENTS:
-                    cleaned_entity, has_valid_ref = self._validate_and_clean_entity_elements(
-                        mapped_entity_data, gtfs_entities
+                    cleaned_entity, has_valid_ref = await self._run_cpu_bound(
+                        self._validate_and_clean_entity_elements,
+                        mapped_entity_data,
+                        gtfs_entities,
                     )
                     
                     # Mark as valid if at least one reference is valid
@@ -828,7 +830,11 @@ class DatasourceBase(DatasourceInterface):
                     if "is_valid" in mapped_entity_data:
                         is_valid = mapped_entity_data["is_valid"]
                     else:
-                        is_valid = self._validate_entity(mapped_entity_data, gtfs_entities)
+                        is_valid = await self._run_cpu_bound(
+                            self._validate_entity,
+                            mapped_entity_data,
+                            gtfs_entities,
+                        )
                         # Mark entity as valid/invalid
                         mapped_entity_data["is_valid"] = is_valid
                     
@@ -910,7 +916,10 @@ class DatasourceBase(DatasourceInterface):
             # through mapping or policy application
             if entities_to_create:
                 original_count = len(entities_to_create)
-                entities_to_create = self._deduplicate_entities(entities_to_create)
+                entities_to_create = await self._run_cpu_bound(
+                    self._deduplicate_entities,
+                    entities_to_create,
+                )
                 duplicates_removed = original_count - len(entities_to_create)
                 
                 if duplicates_removed > 0:
@@ -1097,7 +1106,7 @@ class DatasourceBase(DatasourceInterface):
             is_complete_stop_sequence = bool(record.get("is_complete_stop_sequence", False))
             schedule_relationship = str(record.get("schedule_relationship", "SCHEDULED") or "SCHEDULED").upper()
 
-            mapped_trip = self._identifier_mapping_service.apply_mapping(
+            mapped_trip = await self._identifier_mapping_service.apply_mapping_async(
                 {
                     "route_id": record.get("route_id"),
                 }
@@ -1110,7 +1119,7 @@ class DatasourceBase(DatasourceInterface):
             has_invalid_stop_reference = False
             for event in record.get("stop_events", []):
                 mapped_event = dict(event)
-                mapped_stop = self._identifier_mapping_service.apply_mapping(
+                mapped_stop = await self._identifier_mapping_service.apply_mapping_async(
                     {
                         "stop_id": mapped_event.get("stop_id"),
                     }
@@ -1131,12 +1140,12 @@ class DatasourceBase(DatasourceInterface):
             assignment_type = AssignmentType.DIRECT_BY_ID.value
             trip_reference_is_valid = True if is_new_trip else derived_trip_id in nominal_trip_ids
 
-            mapped_match_start_stop = self._identifier_mapping_service.apply_mapping(
+            mapped_match_start_stop = await self._identifier_mapping_service.apply_mapping_async(
                 {
                     "stop_id": record.get("scheduled_start_stop_id"),
                 }
             )
-            mapped_match_end_stop = self._identifier_mapping_service.apply_mapping(
+            mapped_match_end_stop = await self._identifier_mapping_service.apply_mapping_async(
                 {
                     "stop_id": record.get("scheduled_end_stop_id"),
                 }
@@ -1155,7 +1164,7 @@ class DatasourceBase(DatasourceInterface):
                         continue
 
                     candidate_stop_id, candidate_time = candidate
-                    mapped_intermediate_stop = self._identifier_mapping_service.apply_mapping(
+                    mapped_intermediate_stop = await self._identifier_mapping_service.apply_mapping_async(
                         {
                             "stop_id": candidate_stop_id,
                         }
@@ -1433,7 +1442,7 @@ class DatasourceBase(DatasourceInterface):
                 
                 continue
 
-            mapped_trip = self._identifier_mapping_service.apply_mapping(
+            mapped_trip = await self._identifier_mapping_service.apply_mapping_async(
                 {
                     "route_id": trip_payload.get("route_id"),
                 }
@@ -1452,45 +1461,45 @@ class DatasourceBase(DatasourceInterface):
             vehicle_assignment_type = AssignmentType.DIRECT_BY_ID.value
             trip_reference_is_valid = derived_trip_id in nominal_trip_ids
 
-            mapped_match_start_stop = self._identifier_mapping_service.apply_mapping(
-                {
-                    "stop_id": record.get("scheduled_start_stop_id"),
-                }
-            )
-            mapped_match_end_stop = self._identifier_mapping_service.apply_mapping(
-                {
-                    "stop_id": record.get("scheduled_end_stop_id"),
-                }
-            )
-
-            scheduled_start_time = self._coerce_datetime(record.get("scheduled_start_time"))
-            scheduled_end_time = self._coerce_datetime(record.get("scheduled_end_time"))
-            scheduled_start_stop_id = mapped_match_start_stop.get("stop_id")
-            scheduled_end_stop_id = mapped_match_end_stop.get("stop_id")
-            scheduled_intermediate_stops: list[tuple[str, datetime]] = []
-
-            intermediate_candidates = trip_payload.get("scheduled_intermediate_stops")
-            if isinstance(intermediate_candidates, list):
-                for candidate in intermediate_candidates:
-                    if not isinstance(candidate, tuple) or len(candidate) != 2:
-                        continue
-
-                    candidate_stop_id, candidate_time = candidate
-                    mapped_intermediate_stop = self._identifier_mapping_service.apply_mapping(
-                        {
-                            "stop_id": candidate_stop_id,
-                        }
-                    )
-                    
-                    mapped_stop_id = mapped_intermediate_stop.get("stop_id")
-                    coerced_time = self._coerce_datetime(candidate_time)
-
-                    if mapped_stop_id is None or coerced_time is None:
-                        continue
-
-                    scheduled_intermediate_stops.append((str(mapped_stop_id), coerced_time))
-
             if not trip_reference_is_valid:
+                mapped_match_start_stop = await self._identifier_mapping_service.apply_mapping_async(
+                    {
+                        "stop_id": record.get("scheduled_start_stop_id"),
+                    }
+                )
+                mapped_match_end_stop = await self._identifier_mapping_service.apply_mapping_async(
+                    {
+                        "stop_id": record.get("scheduled_end_stop_id"),
+                    }
+                )
+    
+                scheduled_start_time = self._coerce_datetime(record.get("scheduled_start_time"))
+                scheduled_end_time = self._coerce_datetime(record.get("scheduled_end_time"))
+                scheduled_start_stop_id = mapped_match_start_stop.get("stop_id")
+                scheduled_end_stop_id = mapped_match_end_stop.get("stop_id")
+                scheduled_intermediate_stops: list[tuple[str, datetime]] = []
+    
+                intermediate_candidates = trip_payload.get("scheduled_intermediate_stops")
+                if isinstance(intermediate_candidates, list):
+                    for candidate in intermediate_candidates:
+                        if not isinstance(candidate, tuple) or len(candidate) != 2:
+                            continue
+    
+                        candidate_stop_id, candidate_time = candidate
+                        mapped_intermediate_stop = await self._identifier_mapping_service.apply_mapping_async(
+                            {
+                                "stop_id": candidate_stop_id,
+                            }
+                        )
+                        
+                        mapped_stop_id = mapped_intermediate_stop.get("stop_id")
+                        coerced_time = self._coerce_datetime(candidate_time)
+    
+                        if mapped_stop_id is None or coerced_time is None:
+                            continue
+    
+                        scheduled_intermediate_stops.append((str(mapped_stop_id), coerced_time))
+
                 matched_trip_id = await self._matching_service.match(
                     trip_id=derived_trip_id,
                     route_id=trip_payload["route_id"] or None,

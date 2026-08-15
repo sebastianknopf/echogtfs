@@ -46,7 +46,7 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
         filtered_invalid = 0
 
         try:
-            for journey in journeys:
+            for journey_index, journey in enumerate(journeys, start=1):
                 try:
                     monitored = self._parse_bool(
                         self._get_text(journey.find("siri:Monitored", self._siri_ns)),

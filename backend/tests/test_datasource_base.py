@@ -1,16 +1,29 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 import os
 import sys
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
+from types import SimpleNamespace as _SimpleNamespace
 from unittest.mock import AsyncMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key-that-is-at-least-32-bytes-long")
+
+
+class SimpleNamespace(_SimpleNamespace):
+    """Test double that adapts legacy synchronous mapping fixtures."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        if "apply_mapping" in kwargs:
+            async def apply_mapping_async(entity):
+                return await asyncio.to_thread(self.apply_mapping, entity)
+
+            self.apply_mapping_async = apply_mapping_async
 
 from echogtfs.datasources.base import DatasourceBase
 from echogtfs.enum.system import InvalidReferencePolicy
