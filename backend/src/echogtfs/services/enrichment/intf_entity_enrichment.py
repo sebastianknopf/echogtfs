@@ -31,12 +31,3 @@ class EntityEnrichmentInterface(ABC):
     ) -> None:
         """Apply loaded enrichment rules in-place to one normalized alert payload."""
         raise NotImplementedError
-
-    @abstractmethod
-    async def apply_enrichment_async(
-        self,
-        alert_data: dict[str, Any],
-        adapter_type: str,
-    ) -> None:
-        """Apply loaded enrichment rules in a worker thread."""
-        raise NotImplementedError
