@@ -114,20 +114,41 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
             for stop_event in trip_model.stop_events
         )
 
-    # GTFS-RT StopTimeUpdate has no ADDED value; an added stop is served, so it maps to the default SCHEDULED.
-    _STOP_TIME_SCHEDULE_RELATIONSHIP_ALIASES = {"ADDED": "SCHEDULED"}
+    # GTFS-RT StopTimeUpdate only defines these relationships; anything else is not exposed.
+    _EXPORTABLE_STOP_TIME_SCHEDULE_RELATIONSHIPS = {"SCHEDULED", "SKIPPED", "NO_DATA"}
 
     @classmethod
-    def _stop_time_schedule_relationship_to_enum(cls, value: object | None) -> int | None:
+    def _stop_time_schedule_relationship_to_enum(
+        cls,
+        value: object | None,
+        *,
+        allow_added_stops: bool = False,
+    ) -> int | None:
         text = cls._trip_schedule_relationship_text(value)
-        if text is None:
+        if allow_added_stops and text == "ADDED":
+            text = "SCHEDULED"
+
+        if text not in cls._EXPORTABLE_STOP_TIME_SCHEDULE_RELATIONSHIPS:
             return None
 
-        text = cls._STOP_TIME_SCHEDULE_RELATIONSHIP_ALIASES.get(text, text)
-        try:
-            return gtfs_realtime_pb2.TripUpdate.StopTimeUpdate.ScheduleRelationship.Value(text)
-        except ValueError:
-            return None
+        return gtfs_realtime_pb2.TripUpdate.StopTimeUpdate.ScheduleRelationship.Value(text)
+
+    @classmethod
+    def _exportable_stop_events(
+        cls,
+        trip_model: Trip,
+        *,
+        allow_added_stops: bool,
+    ) -> list[StopEvent]:
+        """Return stop events eligible for export, ordered by their source stop sequence."""
+        stop_events = [
+            stop_event
+            for stop_event in trip_model.stop_events
+            if allow_added_stops
+            or cls._trip_schedule_relationship_text(stop_event.schedule_relationship) != "ADDED"
+        ]
+
+        return sorted(stop_events, key=lambda item: cls._stop_sequence_value(item) or 0)
 
     @staticmethod
     def _configured_timezone_name() -> str:
@@ -221,9 +242,13 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
         feed.header.timestamp = int(time.time())
 
         for trip_model in trips:
-            has_stop_events = bool(trip_model.stop_events)
             trip_schedule_relationship_text = self._trip_schedule_relationship_text(trip_model.schedule_relationship)
-            if not has_stop_events and trip_schedule_relationship_text not in {"DELETED", "CANCELED"}:
+            defines_full_stop_sequence = trip_schedule_relationship_text in {"NEW", "REPLACEMENT"}
+            stop_events = self._exportable_stop_events(
+                trip_model,
+                allow_added_stops=defines_full_stop_sequence,
+            )
+            if not stop_events and trip_schedule_relationship_text not in {"DELETED", "CANCELED"}:
                 continue
 
             entity = feed.entity.add()
@@ -263,27 +288,22 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
                 if wheelchair_accessible is not None:
                     vehicle_descriptor.wheelchair_accessible = wheelchair_accessible
 
-            allow_times_without_realtime_data = trip_schedule_relationship_text in {"NEW", "REPLACEMENT"}
-
-            for stop_event in sorted(
-                trip_model.stop_events,
-                key=lambda item: self._stop_sequence_value(item) if self._stop_sequence_value(item) is not None else 0,
-            ):
+            for stop_sequence, stop_event in enumerate(stop_events, start=1):
                 stop_time_update = trip_update.stop_time_update.add()
                 stop_time_update.stop_id = stop_event.stop_id
+                stop_time_update.stop_sequence = stop_sequence
 
-                stop_sequence = self._stop_sequence_value(stop_event)
-                if stop_sequence is not None:
-                    stop_time_update.stop_sequence = stop_sequence
-
-                stop_time_relationship = self._stop_time_schedule_relationship_to_enum(stop_event.schedule_relationship)
+                stop_time_relationship = self._stop_time_schedule_relationship_to_enum(
+                    stop_event.schedule_relationship,
+                    allow_added_stops=defines_full_stop_sequence,
+                )
                 if stop_time_relationship is not None:
                     stop_time_update.schedule_relationship = stop_time_relationship
 
                 is_no_data = (
                     self._trip_schedule_relationship_text(stop_event.schedule_relationship) == "NO_DATA"
                 )
-                if is_no_data and not allow_times_without_realtime_data:
+                if is_no_data and not defines_full_stop_sequence:
                     continue
 
                 if stop_event.arrival_time is not None:
