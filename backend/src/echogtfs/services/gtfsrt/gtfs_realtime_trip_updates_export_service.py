@@ -109,8 +109,8 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
 
     def _has_realtime_stop_event(self, trip_model: Trip) -> bool:
         return any(
-            (relationship := self._trip_schedule_relationship_text(stop_event.schedule_relationship))
-            and relationship != "NO_DATA"
+            self._trip_schedule_relationship_text(stop_event.schedule_relationship)
+            in {"SCHEDULED", "SKIPPED"}
             for stop_event in trip_model.stop_events
         )
 

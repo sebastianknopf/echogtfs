@@ -73,7 +73,7 @@ class TestGtfsRealtimeTripUpdatesExportService(unittest.IsolatedAsyncioTestCase)
 
         self.assertEqual(len(feed.entity), 0)
 
-    async def test_load_trips_excludes_trips_with_only_no_data_stop_events_when_enabled(self):
+    async def test_load_trips_excludes_trips_without_scheduled_or_skipped_stop_events_when_enabled(self):
         no_data_trip = self._make_trip(
             stop_events=[
                 SimpleNamespace(
@@ -85,19 +85,42 @@ class TestGtfsRealtimeTripUpdatesExportService(unittest.IsolatedAsyncioTestCase)
                 )
             ]
         )
-        scheduled_trip = self._make_trip()
-        scheduled_trip.id = "scheduled-trip-row-id"
-        scheduled_trip.trip_id = "TRIP-2"
+        added_trip = self._make_trip(
+            stop_events=[
+                SimpleNamespace(
+                    stop_id="STOP-2",
+                    stop_sequence="1",
+                    schedule_relationship="ADDED",
+                    arrival_time=1700000100,
+                    departure_time=1700000200,
+                )
+            ]
+        )
+        added_trip.id = "added-trip-row-id"
+        added_trip.trip_id = "TRIP-2"
+        skipped_trip = self._make_trip(
+            stop_events=[
+                SimpleNamespace(
+                    stop_id="STOP-3",
+                    stop_sequence="1",
+                    schedule_relationship="SKIPPED",
+                    arrival_time=None,
+                    departure_time=None,
+                )
+            ]
+        )
+        skipped_trip.id = "skipped-trip-row-id"
+        skipped_trip.trip_id = "TRIP-3"
 
         realtime_repository = SimpleNamespace(
-            get_realtime_trips=AsyncMock(return_value=[no_data_trip, scheduled_trip])
+            get_realtime_trips=AsyncMock(return_value=[no_data_trip, added_trip, skipped_trip])
         )
         system_repository = SimpleNamespace(get_app_setting=AsyncMock(return_value="true"))
         service = self._make_service(realtime_repository, system_repository)
 
         trips = await service._load_trips()
 
-        self.assertEqual(trips, [scheduled_trip])
+        self.assertEqual(trips, [skipped_trip])
         system_repository.get_app_setting.assert_awaited_once()
 
     def test_build_feed_message_exports_deleted_and_canceled_trips_without_stop_events(self):
