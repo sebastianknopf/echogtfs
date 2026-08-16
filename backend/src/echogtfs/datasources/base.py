@@ -1,10 +1,11 @@
 """Base datasource implementation for external data feeds."""
 
 import asyncio
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 import logging
+import sys
 import uuid
 from time import perf_counter
 from typing import Any
@@ -370,17 +371,6 @@ class DatasourceBase(DatasourceInterface):
         )
 
     @staticmethod
-    def _parse_service_datetime(start_date: str | None, time_value: str | None) -> datetime | None:
-        """Parse GTFS service date/time pair to datetime, or None if incomplete/invalid."""
-        if not start_date or not time_value:
-            return None
-
-        try:
-            return datetime.strptime(f"{start_date} {time_value}", "%Y%m%d %H:%M:%S")
-        except ValueError:
-            return None
-
-    @staticmethod
     def _coerce_datetime(value: Any) -> datetime | None:
         """Accept datetime input and return None for unsupported types."""
         if isinstance(value, datetime):
@@ -436,6 +426,14 @@ class DatasourceBase(DatasourceInterface):
 
         return stop_id
 
+    @staticmethod
+    def _nominal_stop_sequence(stop_time: Any) -> int:
+        """Return a sortable stop_sequence, placing unparsable values last."""
+        try:
+            return int(stop_time.stop_sequence)
+        except (AttributeError, TypeError, ValueError):
+            return sys.maxsize
+
     async def _run_cpu_bound(self, func: Any, *args: Any, **kwargs: Any) -> Any:
         """Run CPU-bound synchronous work in a worker thread.
 
@@ -458,26 +456,25 @@ class DatasourceBase(DatasourceInterface):
         if not nominal_stop_times:
             return [dict(event) for event in stop_events]
 
+        nominal_stop_times = sorted(nominal_stop_times, key=self._nominal_stop_sequence)
         propagated_events = [dict(event) for event in stop_events]
 
-        nominal_by_stop_id: dict[str, Any] = {}
+        nominal_stop_ids: set[str] = set()
         nominal_order: list[str] = []
         for stop_time in nominal_stop_times:
             stop_id = self._normalize_stop_id_for_matching(stop_time.stop_id)
-            if stop_id not in nominal_by_stop_id:
-                nominal_by_stop_id[stop_id] = stop_time
+            if stop_id not in nominal_stop_ids:
+                nominal_stop_ids.add(stop_id)
                 nominal_order.append(stop_id)
 
-        unexpected_stop_added = False
         if treat_unexpected_stop_as_added_stop:
             for event in propagated_events:
                 stop_id = self._normalize_stop_id_for_matching(event.get("stop_id"))
-                if stop_id and stop_id not in nominal_by_stop_id:
+                if stop_id and stop_id not in nominal_stop_ids:
                     event["schedule_relationship"] = "ADDED"
-                    unexpected_stop_added = True
         else:
             propagated_events = [
-                event for event in propagated_events if self._normalize_stop_id_for_matching(event.get("stop_id")) in nominal_by_stop_id
+                event for event in propagated_events if self._normalize_stop_id_for_matching(event.get("stop_id")) in nominal_stop_ids
             ]
 
         realtime_stop_ids = {
@@ -486,13 +483,11 @@ class DatasourceBase(DatasourceInterface):
             if event.get("stop_id")
         }
 
-        missing_stop_added = False
         for stop_time in nominal_stop_times:
             nominal_stop_id = self._normalize_stop_id_for_matching(stop_time.stop_id)
             if nominal_stop_id in realtime_stop_ids:
                 continue
 
-            missing_stop_added = True
             propagated_events.append(
                 {
                     "stop_id": str(stop_time.stop_id),
@@ -507,35 +502,50 @@ class DatasourceBase(DatasourceInterface):
         if not is_complete_stop_sequence:
             return propagated_events
 
-        if not unexpected_stop_added and not missing_stop_added:
-            def sort_key(event: dict[str, Any]) -> tuple[int, int, datetime, str]:
-                stop_id = str(event.get("stop_id") or "")
-                nominal_rank = nominal_order.index(stop_id) if stop_id in nominal_by_stop_id else len(nominal_order)
-                departure_rank = self._coerce_stop_time_for_sort(
-                    event.get("departure_time") or event.get("arrival_time")
-                )
-                return (
-                    0 if stop_id in nominal_by_stop_id else 1,
-                    nominal_rank,
-                    departure_rank,
-                    stop_id,
-                )
+        return self._order_trip_update_stop_events(propagated_events, nominal_order)
 
-            return sorted(propagated_events, key=sort_key)
+    def _order_trip_update_stop_events(
+        self,
+        stop_events: list[dict[str, Any]],
+        nominal_order: list[str],
+    ) -> list[dict[str, Any]]:
+        """Order stop events along the nominal sequence and merge ADDED stops by time."""
+        nominal_rank = {stop_id: index for index, stop_id in enumerate(nominal_order)}
 
-        def sort_key(event: dict[str, Any]) -> tuple[int, int, datetime, str]:
-            stop_id = str(event.get("stop_id") or "")
-            departure_rank = self._coerce_stop_time_for_sort(
+        added_events: list[dict[str, Any]] = []
+        scheduled_events: list[dict[str, Any]] = []
+        for event in stop_events:
+            if str(event.get("schedule_relationship") or "").upper() == "ADDED":
+                added_events.append(event)
+            else:
+                scheduled_events.append(event)
+
+        def event_time(event: dict[str, Any]) -> datetime:
+            return self._coerce_stop_time_for_sort(
                 event.get("departure_time") or event.get("arrival_time")
             )
+
+        def scheduled_sort_key(event: dict[str, Any]) -> tuple[int, datetime, str]:
+            stop_id = self._normalize_stop_id_for_matching(event.get("stop_id"))
             return (
-                0 if stop_id in nominal_by_stop_id else 1,
-                departure_rank,
+                nominal_rank.get(stop_id, len(nominal_order)),
+                event_time(event),
                 stop_id,
             )
 
-        merged_events = sorted(propagated_events, key=sort_key)
-        return merged_events
+        ordered_events = sorted(scheduled_events, key=scheduled_sort_key)
+
+        for added_event in sorted(added_events, key=event_time):
+            added_time = event_time(added_event)
+            insert_index = len(ordered_events)
+            for index, existing_event in enumerate(ordered_events):
+                if event_time(existing_event) > added_time:
+                    insert_index = index
+                    break
+
+            ordered_events.insert(insert_index, added_event)
+
+        return ordered_events
 
     @staticmethod
     def _extract_vehicle_trip_payload(record: dict[str, Any]) -> dict[str, Any]:
@@ -1411,7 +1421,6 @@ class DatasourceBase(DatasourceInterface):
                     existing_vehicles[vehicle_id] = vehicle
                     existing_vehicle_ids.add(vehicle_id)
 
-        vehicles_to_update = incoming_vehicle_ids & existing_vehicle_ids
         vehicles_to_delete = {
             vehicle_id for vehicle_id, vehicle in existing_vehicles.items()
             if vehicle.data_source_id == source_id and vehicle_id not in incoming_vehicle_ids

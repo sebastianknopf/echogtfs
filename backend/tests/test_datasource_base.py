@@ -1,29 +1,16 @@
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, timezone
 import os
 import sys
 import unittest
 from pathlib import Path
-from types import SimpleNamespace as _SimpleNamespace
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key-that-is-at-least-32-bytes-long")
-
-
-class SimpleNamespace(_SimpleNamespace):
-    """Test double that adapts legacy synchronous mapping fixtures."""
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        if "apply_mapping" in kwargs:
-            async def apply_mapping_async(entity):
-                return await asyncio.to_thread(self.apply_mapping, entity)
-
-            self.apply_mapping_async = apply_mapping_async
 
 from echogtfs.datasources.base import DatasourceBase
 from echogtfs.enum.system import InvalidReferencePolicy
@@ -218,6 +205,141 @@ class TestDatasourceBaseHelpers(unittest.TestCase):
 
         self.assertEqual(len(propagated), 1)
         self.assertEqual(propagated[0]["schedule_relationship"], "SCHEDULED")
+
+    def test_propagate_trip_update_stop_events_orders_by_nominal_sequence(self):
+        base_time = datetime(2026, 8, 1, 8, 0, 0, tzinfo=timezone.utc)
+        stop_events = [
+            {
+                "stop_id": "s3",
+                "departure_time": base_time.replace(minute=10),
+                "schedule_relationship": "SCHEDULED",
+            },
+            {
+                "stop_id": "s1",
+                "departure_time": base_time.replace(minute=30),
+                "schedule_relationship": "SCHEDULED",
+            },
+            {
+                "stop_id": "s2",
+                "departure_time": base_time.replace(minute=20),
+                "schedule_relationship": "SKIPPED",
+            },
+        ]
+        nominal_stop_times = [
+            SimpleNamespace(stop_id="s1", stop_sequence=1, arrival_time=None, departure_time=base_time),
+            SimpleNamespace(stop_id="s2", stop_sequence=2, arrival_time=None, departure_time=base_time),
+            SimpleNamespace(stop_id="s3", stop_sequence=3, arrival_time=None, departure_time=base_time),
+        ]
+
+        propagated = self.datasource._propagate_trip_update_stop_events(
+            stop_events,
+            nominal_stop_times,
+            treat_unexpected_stop_as_added_stop=False,
+            treat_missing_stop_as_canceled_stop=False,
+            is_complete_stop_sequence=True,
+        )
+
+        self.assertEqual([event["stop_id"] for event in propagated], ["s1", "s2", "s3"])
+
+    def test_propagate_trip_update_stop_events_sorts_nominal_stop_times_by_sequence(self):
+        base_time = datetime(2026, 8, 1, 8, 0, 0, tzinfo=timezone.utc)
+        stop_events = [
+            {
+                "stop_id": "s1",
+                "departure_time": base_time.replace(minute=30),
+                "schedule_relationship": "SCHEDULED",
+            },
+            {
+                "stop_id": "s3",
+                "departure_time": base_time.replace(minute=10),
+                "schedule_relationship": "SCHEDULED",
+            },
+            {
+                "stop_id": "s2",
+                "departure_time": base_time.replace(minute=20),
+                "schedule_relationship": "SCHEDULED",
+            },
+        ]
+        nominal_stop_times = [
+            SimpleNamespace(stop_id="s3", stop_sequence=30, arrival_time=None, departure_time=base_time),
+            SimpleNamespace(stop_id="s1", stop_sequence=10, arrival_time=None, departure_time=base_time),
+            SimpleNamespace(stop_id="s2", stop_sequence=20, arrival_time=None, departure_time=base_time),
+        ]
+
+        propagated = self.datasource._propagate_trip_update_stop_events(
+            stop_events,
+            nominal_stop_times,
+            treat_unexpected_stop_as_added_stop=False,
+            treat_missing_stop_as_canceled_stop=False,
+            is_complete_stop_sequence=True,
+        )
+
+        self.assertEqual([event["stop_id"] for event in propagated], ["s1", "s2", "s3"])
+
+    def test_propagate_trip_update_stop_events_inserts_added_stops_by_departure_time(self):
+        base_time = datetime(2026, 8, 1, 8, 0, 0, tzinfo=timezone.utc)
+        stop_events = [
+            {
+                "stop_id": "s1",
+                "departure_time": base_time,
+                "schedule_relationship": "SCHEDULED",
+            },
+            {
+                "stop_id": "s2",
+                "departure_time": base_time.replace(minute=20),
+                "schedule_relationship": "SCHEDULED",
+            },
+            {
+                "stop_id": "sx",
+                "departure_time": base_time.replace(minute=10),
+                "schedule_relationship": "ADDED",
+            },
+        ]
+        nominal_stop_times = [
+            SimpleNamespace(stop_id="s1", stop_sequence=1, arrival_time=None, departure_time=base_time),
+            SimpleNamespace(stop_id="s2", stop_sequence=2, arrival_time=None, departure_time=base_time),
+        ]
+
+        propagated = self.datasource._propagate_trip_update_stop_events(
+            stop_events,
+            nominal_stop_times,
+            treat_unexpected_stop_as_added_stop=True,
+            treat_missing_stop_as_canceled_stop=False,
+            is_complete_stop_sequence=True,
+        )
+
+        self.assertEqual([event["stop_id"] for event in propagated], ["s1", "sx", "s2"])
+
+    def test_propagate_trip_update_stop_events_orders_duplicate_stop_ids_by_time(self):
+        base_time = datetime(2026, 8, 1, 8, 0, 0, tzinfo=timezone.utc)
+        stop_events = [
+            {
+                "stop_id": "s1",
+                "departure_time": base_time.replace(minute=40),
+                "schedule_relationship": "SCHEDULED",
+            },
+            {
+                "stop_id": "s1",
+                "departure_time": base_time.replace(minute=5),
+                "schedule_relationship": "SCHEDULED",
+            },
+        ]
+        nominal_stop_times = [
+            SimpleNamespace(stop_id="s1", stop_sequence=1, arrival_time=None, departure_time=base_time),
+        ]
+
+        propagated = self.datasource._propagate_trip_update_stop_events(
+            stop_events,
+            nominal_stop_times,
+            treat_unexpected_stop_as_added_stop=False,
+            treat_missing_stop_as_canceled_stop=False,
+            is_complete_stop_sequence=True,
+        )
+
+        self.assertEqual(
+            [event["departure_time"].minute for event in propagated],
+            [5, 40],
+        )
 
 
 class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
