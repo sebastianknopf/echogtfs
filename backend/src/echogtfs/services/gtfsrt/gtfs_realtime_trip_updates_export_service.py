@@ -259,6 +259,8 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
                 if wheelchair_accessible is not None:
                     vehicle_descriptor.wheelchair_accessible = wheelchair_accessible
 
+            allow_times_without_realtime_data = trip_schedule_relationship_text in {"NEW", "REPLACEMENT"}
+
             for stop_event in sorted(
                 trip_model.stop_events,
                 key=lambda item: self._stop_sequence_value(item) if self._stop_sequence_value(item) is not None else 0,
@@ -274,10 +276,21 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
                 if stop_time_relationship is not None:
                     stop_time_update.schedule_relationship = stop_time_relationship
 
+                is_no_data = (
+                    self._trip_schedule_relationship_text(stop_event.schedule_relationship) == "NO_DATA"
+                )
+                omit_times = is_no_data and not allow_times_without_realtime_data
+
                 if stop_event.arrival_time is not None:
-                    stop_time_update.arrival.time = self._timestamp_value(stop_event.arrival_time)
+                    if omit_times:
+                        stop_time_update.arrival.SetInParent()
+                    else:
+                        stop_time_update.arrival.time = self._timestamp_value(stop_event.arrival_time)
 
                 if stop_event.departure_time is not None:
-                    stop_time_update.departure.time = self._timestamp_value(stop_event.departure_time)
+                    if omit_times:
+                        stop_time_update.departure.SetInParent()
+                    else:
+                        stop_time_update.departure.time = self._timestamp_value(stop_event.departure_time)
 
         return feed
