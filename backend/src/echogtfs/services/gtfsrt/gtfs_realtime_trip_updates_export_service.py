@@ -114,12 +114,16 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
             for stop_event in trip_model.stop_events
         )
 
-    @staticmethod
-    def _stop_time_schedule_relationship_to_enum(value: object | None) -> int | None:
-        if value is None:
+    # GTFS-RT StopTimeUpdate has no ADDED value; an added stop is served, so it maps to the default SCHEDULED.
+    _STOP_TIME_SCHEDULE_RELATIONSHIP_ALIASES = {"ADDED": "SCHEDULED"}
+
+    @classmethod
+    def _stop_time_schedule_relationship_to_enum(cls, value: object | None) -> int | None:
+        text = cls._trip_schedule_relationship_text(value)
+        if text is None:
             return None
 
-        text = value.value if hasattr(value, "value") else str(value)
+        text = cls._STOP_TIME_SCHEDULE_RELATIONSHIP_ALIASES.get(text, text)
         try:
             return gtfs_realtime_pb2.TripUpdate.StopTimeUpdate.ScheduleRelationship.Value(text)
         except ValueError:
@@ -279,18 +283,13 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
                 is_no_data = (
                     self._trip_schedule_relationship_text(stop_event.schedule_relationship) == "NO_DATA"
                 )
-                omit_times = is_no_data and not allow_times_without_realtime_data
+                if is_no_data and not allow_times_without_realtime_data:
+                    continue
 
                 if stop_event.arrival_time is not None:
-                    if omit_times:
-                        stop_time_update.arrival.SetInParent()
-                    else:
-                        stop_time_update.arrival.time = self._timestamp_value(stop_event.arrival_time)
+                    stop_time_update.arrival.time = self._timestamp_value(stop_event.arrival_time)
 
                 if stop_event.departure_time is not None:
-                    if omit_times:
-                        stop_time_update.departure.SetInParent()
-                    else:
-                        stop_time_update.departure.time = self._timestamp_value(stop_event.departure_time)
+                    stop_time_update.departure.time = self._timestamp_value(stop_event.departure_time)
 
         return feed

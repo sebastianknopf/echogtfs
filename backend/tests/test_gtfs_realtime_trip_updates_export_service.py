@@ -202,18 +202,69 @@ class TestGtfsRealtimeTripUpdatesExportService(unittest.IsolatedAsyncioTestCase)
             feed = service._build_feed_message([trip])
 
         stop_time_updates = feed.entity[0].trip_update.stop_time_update
-        self.assertTrue(stop_time_updates[0].HasField("arrival"))
-        self.assertTrue(stop_time_updates[0].HasField("departure"))
-        self.assertFalse(stop_time_updates[0].arrival.HasField("time"))
-        self.assertFalse(stop_time_updates[0].departure.HasField("time"))
-        self.assertFalse(stop_time_updates[0].arrival.HasField("delay"))
-        self.assertFalse(stop_time_updates[0].departure.HasField("delay"))
+        self.assertFalse(stop_time_updates[0].HasField("arrival"))
+        self.assertFalse(stop_time_updates[0].HasField("departure"))
         self.assertEqual(
             stop_time_updates[0].schedule_relationship,
             gtfs_realtime_pb2.TripUpdate.StopTimeUpdate.ScheduleRelationship.NO_DATA,
         )
         self.assertEqual(stop_time_updates[1].arrival.time, 1700000300)
         self.assertEqual(stop_time_updates[1].departure.time, 1700000400)
+
+    def test_build_feed_message_exports_added_stop_events_as_scheduled(self):
+        added_event = SimpleNamespace(
+            stop_id="STOP-1",
+            stop_sequence="1",
+            schedule_relationship="ADDED",
+            arrival_time=1700000100,
+            departure_time=1700000200,
+        )
+        trip = self._make_trip(stop_events=[added_event])
+
+        with patch.object(
+            GtfsRealtimeTripUpdatesExportService,
+            "_configured_timezone_name",
+            return_value="UTC",
+        ):
+            service = self._make_service()
+
+        with patch("echogtfs.services.gtfsrt.gtfs_realtime_trip_updates_export_service.time.time", return_value=1700000000):
+            feed = service._build_feed_message([trip])
+
+        stop_time_update = feed.entity[0].trip_update.stop_time_update[0]
+        self.assertTrue(stop_time_update.HasField("schedule_relationship"))
+        self.assertEqual(
+            stop_time_update.schedule_relationship,
+            gtfs_realtime_pb2.TripUpdate.StopTimeUpdate.ScheduleRelationship.SCHEDULED,
+        )
+        self.assertEqual(stop_time_update.arrival.time, 1700000100)
+        self.assertEqual(stop_time_update.departure.time, 1700000200)
+
+    def test_stop_time_schedule_relationship_maps_all_supported_values(self):
+        enum_type = gtfs_realtime_pb2.TripUpdate.StopTimeUpdate.ScheduleRelationship
+        expected = {
+            "SCHEDULED": enum_type.SCHEDULED,
+            "SKIPPED": enum_type.SKIPPED,
+            "NO_DATA": enum_type.NO_DATA,
+            "UNSCHEDULED": enum_type.UNSCHEDULED,
+            "ADDED": enum_type.SCHEDULED,
+            "scheduled": enum_type.SCHEDULED,
+            " SKIPPED ": enum_type.SKIPPED,
+        }
+
+        for value, expected_enum in expected.items():
+            with self.subTest(schedule_relationship=value):
+                self.assertEqual(
+                    GtfsRealtimeTripUpdatesExportService._stop_time_schedule_relationship_to_enum(value),
+                    expected_enum,
+                )
+
+        self.assertIsNone(
+            GtfsRealtimeTripUpdatesExportService._stop_time_schedule_relationship_to_enum("NOT_VALID")
+        )
+        self.assertIsNone(
+            GtfsRealtimeTripUpdatesExportService._stop_time_schedule_relationship_to_enum(None)
+        )
 
     def test_build_feed_message_keeps_no_data_times_for_new_and_replacement_trips(self):
         for trip_relationship in ("NEW", "REPLACEMENT"):
