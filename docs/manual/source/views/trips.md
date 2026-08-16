@@ -1,3 +1,5 @@
+(h-trips-trips)=
+
 # Fahrten
 
 Im Bereich "Fahrten" werden alle aktuellen Fahrten angezeigt.
@@ -21,6 +23,7 @@ Im Bereich "Fahrten" werden alle aktuellen Fahrten angezeigt.
     - **Datenquelle**: Name der Datenquelle von der eine Fahrt synchronisiert wurde
     - **Aktivierungsstatus**: Information, wenn eine Fahrt deaktiviert wurde. Deaktivierte Fahrten werden in der GTFS-RT Ausgabe unterdrückt. Über den "On/Off" Button können Fahrten aktiviert oder deaktiviert werden.
     - **Fehlerstatus**: Rotes Warndreieck, wenn eine Fahrt ungültige Bezüge (insb. Linie und Haltestelle) aufweist. Solange die Fahrt nicht deaktiviert ist, wird sie weiterhin über GTFS-RT ausgegeben und kann dadurch zu Fehlern bei Abnehmersystemen führen
+    - **Überwachungsstatus**: Gelbes Warndreieck, wenn eine Fahrt aktuell überwacht wird (d.h. von EchoGTFS erkannt und gematched wurde), aber noch keine Prognosedaten enthält
 
 Um die Details zu einer Fahrt anzuzeigen, klicken Sie auf den "View" Button in der entsprechenden Zeile. Daraufhin wird folgender Dialog gezeigt, in dem alle wichtigen Informationen rund um die Fahrt zu sehen sind:
 
@@ -28,7 +31,9 @@ Um die Details zu einer Fahrt anzuzeigen, klicken Sie auf den "View" Button in d
 :name: img-trips-detail-screen
 ```
 
-- Im oberen Bereich des Dialogs werden alle Basisdaten wie **Fahrt-ID**, **Linie**, **Originäre Fahrt-ID**, **Betriebstag, Fahrtstart und -Ende**, sowie **Status** der Fahrt angezeigt. Die Fahrt-ID ist die ID, mit der die Fahrt im GTFS-RT publiziert wird und die zum Soll-Fahrplan passt. Die originäre Fahrt-ID ist die ID, mit der die Fahrt aus der Datenquelle synchronisiert wurde.
+- Im oberen Bereich des Dialogs werden alle Basisdaten wie **Fahrt-ID**, **Linie**, **Fahrzeug**, **Originäre Fahrt-ID**, **Betriebstag, Fahrtstart und -Ende**, sowie **Status** der Fahrt angezeigt. Die Fahrt-ID ist die ID, mit der die Fahrt im GTFS-RT publiziert wird und die zum Soll-Fahrplan passt. Die originäre Fahrt-ID ist die ID, mit der die Fahrt aus der Datenquelle synchronisiert wurde.
+- Ein Fahrzeug wird zu einer Fahrt dann angezeigt, wenn über eine entsprechende Datenquelle (z.B. SIRI-VM) ein Fahrzeug für diese Fahrt erkannt wurde
+- Die Daten für Start und Ende beziehen sich jeweils auf die _Soll-Ankunfts- und Abfahrtszeit_ und berücksichtigen _keine Prognosedaten_! Auf diesem Weg wird eine einfache Identifikation der Fahrt im Soll-Fahrplan möglich.
 - Im unteren Bereich werden die einzelnen Haltestellen der Fahrt mit **Ankunftszeit**, **Abfahrtszeit**, **Status** und **Zuordnungstyp** angezeigt. Der Zuordnungstyp gibt an, auf welchem Weg eine Fahrt aus der Datenquelle einer konkreten Fahrt im Sollfahrplan zugeordnet wurde. Folgende Werte können hier auftauchen:
     - `DIRECT_BY_ID`: die Fahrt wurde anhand ihrer ID im Soll-Fahrplan gefunden
     - `MATCHED_BY_START_STOP`: die Fahrt wurde anhand ihrer Start- und Endhaltestelle, sowie der Abfahrts- und Ankunftszeit im Soll-Fahrplan gefunden
