@@ -987,26 +987,26 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
             await self.commit(db)
             return action
 
-        @staticmethod
-        def _configured_timezone_name() -> str:
-            try:
-                from echogtfs.common.config import settings
-    
-                timezone_name = getattr(settings, "timezone", "UTC")
-            except Exception:  # noqa: BLE001
-                timezone_name = "UTC"
-    
-            if not isinstance(timezone_name, str) or not timezone_name.strip():
-                return "UTC"
-    
-            return timezone_name
+    @staticmethod
+    def _configured_timezone_name() -> str:
+        try:
+            from echogtfs.common.config import settings
 
-        @staticmethod
-        def _resolve_timezone(timezone_name: object) -> ZoneInfo:
-            if not isinstance(timezone_name, str) or not timezone_name.strip():
-                return ZoneInfo("UTC")
-    
-            try:
-                return ZoneInfo(timezone_name)
-            except ZoneInfoNotFoundError:
-                return ZoneInfo("UTC")
+            timezone_name = getattr(settings, "timezone", "UTC")
+        except Exception:  # noqa: BLE001
+            timezone_name = "UTC"
+
+        if not isinstance(timezone_name, str) or not timezone_name.strip():
+            return "UTC"
+
+        return timezone_name
+
+    @staticmethod
+    def _resolve_timezone(timezone_name: object) -> ZoneInfo:
+        if not isinstance(timezone_name, str) or not timezone_name.strip():
+            return ZoneInfo("UTC")
+
+        try:
+            return ZoneInfo(timezone_name)
+        except ZoneInfoNotFoundError:
+            return ZoneInfo("UTC")
