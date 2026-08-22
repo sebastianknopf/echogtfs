@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 import uuid
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from echogtfs.enum.gtfsrt import AssignmentType
 from sqlalchemy import case, delete, exists, func, select, update
@@ -730,6 +731,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                     existing.assignment_type = assignment_type
 
                 existing.is_valid = is_valid
+                existing.updated_at = datetime.now(self._resolve_timezone(self._configured_timezone_name()))
 
             trip_ids_to_clear = [trip_id]
             if previous_trip_id != trip_id:
@@ -958,6 +960,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                     is_active=is_active_on_create,
                     is_valid=is_valid,
                 )
+                
                 db.add(existing_vehicle)
                 await db.flush()
             else:
@@ -979,6 +982,31 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
 
                 existing_vehicle.congestion_level = congestion_level
                 existing_vehicle.is_valid = is_valid
+                existing_vehicle.updated_at = datetime.now(self._resolve_timezone(self._configured_timezone_name()))
 
             await self.commit(db)
             return action
+
+        @staticmethod
+        def _configured_timezone_name() -> str:
+            try:
+                from echogtfs.common.config import settings
+    
+                timezone_name = getattr(settings, "timezone", "UTC")
+            except Exception:  # noqa: BLE001
+                timezone_name = "UTC"
+    
+            if not isinstance(timezone_name, str) or not timezone_name.strip():
+                return "UTC"
+    
+            return timezone_name
+
+        @staticmethod
+        def _resolve_timezone(timezone_name: object) -> ZoneInfo:
+            if not isinstance(timezone_name, str) or not timezone_name.strip():
+                return ZoneInfo("UTC")
+    
+            try:
+                return ZoneInfo(timezone_name)
+            except ZoneInfoNotFoundError:
+                return ZoneInfo("UTC")
