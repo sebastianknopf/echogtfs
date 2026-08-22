@@ -384,10 +384,13 @@ class DatasourceBase(DatasourceInterface):
         if not isinstance(start_date, str) or not start_date:
             return None
 
-        try:
-            return datetime.strptime(start_date, "%Y%m%d").date()
-        except ValueError:
-            return None
+        for fmt in ("%Y-%m-%d", "%Y%m%d"):
+            try:
+                return datetime.strptime(start_date, fmt).date()
+            except ValueError:
+                continue
+
+        return None
 
     def _record_uuid(self, record: dict[str, Any], source_name: str, *, fallback_key: str, kind: str) -> uuid.UUID:
         """Build deterministic UUID for one record using id or fallback key."""
@@ -1096,21 +1099,11 @@ class DatasourceBase(DatasourceInterface):
                     existing_trips[trip_id] = trip
                     existing_trip_ids.add(trip_id)
 
-        trips_to_delete = {
-            trip_id for trip_id, trip in existing_trips.items()
-            if trip.data_source_id == source_id and trip_id not in incoming_trip_ids
-        }
-
         stats_created = 0
         stats_updated = 0
-        stats_deleted = len(trips_to_delete)
+        stats_deleted = 0
         policy_based_deletes: set[uuid.UUID] = set()
-
-        if trips_to_delete:
-            await realtime_repository.delete_trips_for_data_source_by_ids(
-                source_id,
-                list(trips_to_delete),
-            )
+        processed_trip_uuids: set[uuid.UUID] = set()
 
         for record in records:
             is_complete_stop_sequence = bool(record.get("is_complete_stop_sequence", False))
@@ -1188,7 +1181,7 @@ class DatasourceBase(DatasourceInterface):
                     scheduled_intermediate_stops.append((str(mapped_stop_id), coerced_time))
 
             if not is_new_trip and not trip_reference_is_valid:
-                matched_trip_id = await self._matching_service.match(
+                matched_trip_id, matched_assignment_type = await self._matching_service.match(
                     trip_id=derived_trip_id,
                     route_id=str(mapped_trip.get("route_id") or "") or None,
                     operation_day_date=self._parse_operation_day(record.get("start_date")),
@@ -1209,12 +1202,13 @@ class DatasourceBase(DatasourceInterface):
 
                 if matched_trip_id is not None:
                     resolved_trip_id = matched_trip_id
-                    assignment_type = AssignmentType.MATCHED_BY_START_STOP.value
+                    assignment_type = matched_assignment_type.value
+
                     trip_reference_is_valid = True
-                    
+
                     await realtime_repository.delete_trips_by_trip_ids([original_trip_id])
                 else:
-                    assignment_type = AssignmentType.NO_MATCH_GENERAL.value
+                    assignment_type = matched_assignment_type.value
 
             persisted_trip_uuid = existing_trip_uuid_by_trip_id.get(str(resolved_trip_id))
             if persisted_trip_uuid is None:
@@ -1298,6 +1292,7 @@ class DatasourceBase(DatasourceInterface):
                 existing_trip_ids.add(persisted_trip_uuid)
 
             existing_trip_uuid_by_trip_id[str(resolved_trip_id)] = persisted_trip_uuid
+            processed_trip_uuids.add(persisted_trip_uuid)
 
             await realtime_repository.update_trip_update_from_sync(
                 trip_uuid=persisted_trip_uuid,
@@ -1326,6 +1321,20 @@ class DatasourceBase(DatasourceInterface):
                 scheduled_start_time=scheduled_start_time,
                 scheduled_end_time=scheduled_end_time,
             )
+
+        trips_to_delete = {
+            trip_id for trip_id, trip in existing_trips.items()
+            if trip.data_source_id == source_id
+            and trip_id not in processed_trip_uuids
+            and trip_id not in policy_based_deletes
+        }
+
+        if trips_to_delete:
+            await realtime_repository.delete_trips_for_data_source_by_ids(
+                source_id,
+                list(trips_to_delete),
+            )
+            stats_deleted += len(trips_to_delete)
 
         if policy_based_deletes:
             await realtime_repository.delete_trips_for_data_source_by_ids(
@@ -1421,23 +1430,11 @@ class DatasourceBase(DatasourceInterface):
                     existing_vehicles[vehicle_id] = vehicle
                     existing_vehicle_ids.add(vehicle_id)
 
-        vehicles_to_delete = {
-            vehicle_id for vehicle_id, vehicle in existing_vehicles.items()
-            if vehicle.data_source_id == source_id and vehicle_id not in incoming_vehicle_ids
-        }
-
         stats_created = 0
         stats_updated = 0
-        stats_deleted = len(vehicles_to_delete)
+        stats_deleted = 0
         policy_based_deletes: set[uuid.UUID] = set()
-
-        if vehicles_to_delete:
-            await realtime_repository.delete_vehicles_for_data_source_by_ids(
-                source_id,
-                list(vehicles_to_delete),
-            )
-
-        deleted_vehicle_ids: set[uuid.UUID] = set(vehicles_to_delete)
+        persisted_vehicle_uuids: set[uuid.UUID] = set()
 
         for record in records:
             vehicle_uuid = self._record_uuid(record, source_name, fallback_key="vehicle_id", kind="Vehicle-position")
@@ -1508,7 +1505,7 @@ class DatasourceBase(DatasourceInterface):
     
                         scheduled_intermediate_stops.append((str(mapped_stop_id), coerced_time))
 
-                matched_trip_id = await self._matching_service.match(
+                matched_trip_id, matched_assignment_type = await self._matching_service.match(
                     trip_id=derived_trip_id,
                     route_id=trip_payload["route_id"] or None,
                     operation_day_date=self._parse_operation_day(trip_payload.get("start_date")),
@@ -1529,13 +1526,14 @@ class DatasourceBase(DatasourceInterface):
 
                 if matched_trip_id is not None:
                     resolved_trip_id = matched_trip_id
-                    trip_assignment_type = AssignmentType.MATCHED_BY_CURRENT_STOP.value
-                    vehicle_assignment_type = AssignmentType.MATCHED_BY_CURRENT_STOP.value
+                    trip_assignment_type = matched_assignment_type.value
+                    vehicle_assignment_type = matched_assignment_type.value
+
                     trip_reference_is_valid = True
                     await realtime_repository.delete_trips_by_trip_ids([derived_trip_id])
                 else:
-                    trip_assignment_type = AssignmentType.NO_MATCH_GENERAL.value
-                    vehicle_assignment_type = AssignmentType.NO_MATCH_GENERAL.value
+                    trip_assignment_type = matched_assignment_type.value
+                    vehicle_assignment_type = matched_assignment_type.value
                     trip_payload["is_active_on_create"] = False
 
             has_invalid_reference = (not route_is_valid) or (not stop_reference_is_valid) or (not trip_reference_is_valid)
@@ -1608,6 +1606,8 @@ class DatasourceBase(DatasourceInterface):
                 stats_created += 1
                 processed_vehicle_ids.add(vehicle_uuid)
 
+            persisted_vehicle_uuids.add(vehicle_uuid)
+
             current_stop_sequence_raw = record.get("current_stop_sequence")
             try:
                 current_stop_sequence = (
@@ -1645,6 +1645,22 @@ class DatasourceBase(DatasourceInterface):
                 is_active_on_create=vehicle_is_active_on_create,
                 is_valid=vehicle_is_valid,
             )
+
+        vehicles_to_delete = {
+            vehicle_id for vehicle_id, vehicle in existing_vehicles.items()
+            if vehicle.data_source_id == source_id
+            and vehicle_id not in persisted_vehicle_uuids
+            and vehicle_id not in policy_based_deletes
+        }
+
+        if vehicles_to_delete:
+            await realtime_repository.delete_vehicles_for_data_source_by_ids(
+                source_id,
+                list(vehicles_to_delete),
+            )
+            stats_deleted += len(vehicles_to_delete)
+
+        deleted_vehicle_ids: set[uuid.UUID] = set(vehicles_to_delete)
 
         if policy_based_deletes:
             await realtime_repository.delete_vehicles_for_data_source_by_ids(

@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 import uuid
 
+from echogtfs.enum.gtfsrt import AssignmentType
 from sqlalchemy import case, delete, exists, func, select, update
 from sqlalchemy.orm import selectinload
 
@@ -724,7 +725,10 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                 existing.start_date = start_date
                 existing.route_id = route_id
                 existing.schedule_relationship = schedule_relationship
-                existing.assignment_type = assignment_type
+
+                if assignment_type != AssignmentType.MATCH_BY_CACHED_ID:
+                    existing.assignment_type = assignment_type
+
                 existing.is_valid = is_valid
 
             trip_ids_to_clear = [trip_id]
@@ -926,6 +930,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                     is_active=trip_is_active_on_create,
                     is_valid=trip_is_valid,
                 )
+                
                 db.add(existing_trip)
                 await db.flush()
 
@@ -968,7 +973,10 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                 existing_vehicle.longitude = longitude
                 existing_vehicle.current_stop_sequence = current_stop_sequence
                 existing_vehicle.current_status = current_status
-                existing_vehicle.assignment_type = assignment_type
+
+                if assignment_type != AssignmentType.MATCH_BY_CACHED_ID:
+                    existing_vehicle.assignment_type = assignment_type
+
                 existing_vehicle.congestion_level = congestion_level
                 existing_vehicle.is_valid = is_valid
 
