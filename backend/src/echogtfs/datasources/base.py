@@ -14,6 +14,8 @@ from echogtfs.common.global_id import GlobalId
 from echogtfs.datasources.intf_datasource import DatasourceInterface
 from echogtfs.enum.gtfsrt import AssignmentType
 from echogtfs.enum.system import InvalidReferencePolicy
+from echogtfs.services.mapping.intf_identifier_mapping import IdentifierMappingInterface
+from echogtfs.services.caching.intf_caching_service import CachingServiceInterface
 from echogtfs.services.matching.intf_matching_service import MatchingServiceInterface
 from echogtfs.services.matching.matching_service import MatchingService
 from echogtfs.services.caching import get_caching_service
@@ -55,6 +57,7 @@ class DatasourceBase(DatasourceInterface):
         self._entity_enrichment_service: EntityEnrichmentInterface = EntityEnrichmentService()
         self._identifier_mapping_service: IdentifierMappingInterface = IdentifierMappingService()
         self._matching_service: MatchingServiceInterface | None = None
+        self._caching_service: CachingServiceInterface = get_caching_service()
         self._validate_config()
     
     @abstractmethod
@@ -1056,7 +1059,7 @@ class DatasourceBase(DatasourceInterface):
         gtfs_entities = await self._load_gtfs_entities(gtfs_repository)
         nominal_trip_ids = gtfs_entities.get("trip", set())
         if self._matching_service is None:
-            self._matching_service = MatchingService(gtfs_repository, get_caching_service())
+            self._matching_service = MatchingService(gtfs_repository, self._caching_service)
 
         existing_trips = {
             trip.id: trip
@@ -1334,6 +1337,10 @@ class DatasourceBase(DatasourceInterface):
                 source_id,
                 list(trips_to_delete),
             )
+
+            for trip_id in trips_to_delete:
+                await self._caching_service.pop_trip_id(trip_id)
+
             stats_deleted += len(trips_to_delete)
 
         if policy_based_deletes:
@@ -1341,6 +1348,10 @@ class DatasourceBase(DatasourceInterface):
                 source_id,
                 list(policy_based_deletes),
             )
+
+            for trip_id in policy_based_deletes:
+                await self._caching_service.pop_trip_id(trip_id)
+
             stats_deleted += len(policy_based_deletes)
 
         logger.info(
@@ -1384,7 +1395,7 @@ class DatasourceBase(DatasourceInterface):
         gtfs_entities = await self._load_gtfs_entities(gtfs_repository)
         nominal_trip_ids = gtfs_entities.get("trip", set())
         if self._matching_service is None:
-            self._matching_service = MatchingService(gtfs_repository, get_caching_service())
+            self._matching_service = MatchingService(gtfs_repository, self._caching_service)
 
         incoming_vehicle_ids = {
             self._record_uuid(record, source_name, fallback_key="vehicle_id", kind="Vehicle-position")
@@ -1699,6 +1710,9 @@ class DatasourceBase(DatasourceInterface):
                         source_id,
                         deletable_trip_uuids,
                     )
+
+                for trip_id in deletable_trip_ids:
+                    await self._caching_service.pop_trip_id(trip_id)
 
         logger.info(
             f"[{self.get_adapter_type()}] Vehicle-position import completed for '{source_name}': "
