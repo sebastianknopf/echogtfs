@@ -93,6 +93,60 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
         self.assertEqual(stop_event["arrival_time"], expected_departure_time.replace(microsecond=0))
         self.assertEqual(stop_event["departure_time"], expected_departure_time.replace(microsecond=0))
 
+    def test_scheduled_intermediate_stops_are_extracted_in_order_from_aimed_departure_times(self) -> None:
+        now = datetime.now(timezone.utc)
+        stop_1_time = now + timedelta(minutes=5)
+        stop_2_time = now + timedelta(minutes=10)
+        stop_3_time = now + timedelta(minutes=15)
+        stop_4_time = now + timedelta(minutes=20)
+
+        xml = f"""<siri:Root xmlns:siri=\"http://www.siri.org.uk/siri\">
+  <siri:EstimatedVehicleJourney>
+    <siri:Monitored>true</siri:Monitored>
+    <siri:OperatorRef>OP1</siri:OperatorRef>
+    <siri:ExtraJourney>false</siri:ExtraJourney>
+    <siri:IsCompleteStopSequence>false</siri:IsCompleteStopSequence>
+    <siri:LineRef>LINE1</siri:LineRef>
+    <siri:FramedVehicleJourneyRef>
+      <siri:DatedVehicleJourneyRef>TRIP1</siri:DatedVehicleJourneyRef>
+      <siri:DataFrameRef>{now.date().isoformat()}</siri:DataFrameRef>
+    </siri:FramedVehicleJourneyRef>
+    <siri:RecordedCalls>
+      <siri:RecordedCall>
+        <siri:StopPointRef>STOP1</siri:StopPointRef>
+        <siri:AimedDepartureTime>{stop_1_time.isoformat()}</siri:AimedDepartureTime>
+        <siri:Order>1</siri:Order>
+      </siri:RecordedCall>
+      <siri:RecordedCall>
+        <siri:StopPointRef>STOP2</siri:StopPointRef>
+        <siri:AimedDepartureTime>{stop_2_time.isoformat()}</siri:AimedDepartureTime>
+        <siri:Order>2</siri:Order>
+      </siri:RecordedCall>
+      <siri:RecordedCall>
+        <siri:StopPointRef>STOP3</siri:StopPointRef>
+        <siri:AimedArrivalTime>{stop_3_time.isoformat()}</siri:AimedArrivalTime>
+        <siri:Order>3</siri:Order>
+      </siri:RecordedCall>
+      <siri:RecordedCall>
+        <siri:StopPointRef>STOP4</siri:StopPointRef>
+        <siri:AimedDepartureTime>{stop_4_time.isoformat()}</siri:AimedDepartureTime>
+        <siri:Order>4</siri:Order>
+      </siri:RecordedCall>
+    </siri:RecordedCalls>
+  </siri:EstimatedVehicleJourney>
+</siri:Root>"""
+
+        trips = self.transformer.transform({"root": ET.fromstring(xml)})
+
+        self.assertEqual(len(trips), 1)
+        self.assertEqual(
+            trips[0]["scheduled_intermediate_stops"],
+            [
+                ("STOP2", stop_2_time),
+                ("STOP3", stop_3_time),
+            ],
+        )
+
     def test_stop_event_relationship_prioritizes_skipped_and_added_over_no_data(self) -> None:
         resolve = self.transformer._resolve_stop_event_schedule_relationship
 

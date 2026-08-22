@@ -215,6 +215,8 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
         elif trip_canceled:
             schedule_relationship = "CANCELED"
 
+        scheduled_intermediate_stops = self._extract_scheduled_intermediate_stops_from_calls(journey)
+
         return {
             "trip_id": trip_id,
             "route_id": route_id,
@@ -226,8 +228,39 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
             "scheduled_end_stop_id": scheduled_end_stop_id,
             "scheduled_start_time": scheduled_start_time,
             "scheduled_end_time": scheduled_end_time,
+            "scheduled_intermediate_stops": scheduled_intermediate_stops,
             "stop_events": stop_events,
         }
+
+    def _extract_scheduled_intermediate_stops_from_calls(
+        self,
+        journey: ET.Element,
+    ) -> list[tuple[str, datetime]]:
+        ordered_calls = self._iter_calls_in_order(journey)
+        if len(ordered_calls) <= 2:
+            return []
+
+        extracted: list[tuple[str, datetime]] = []
+        for call_element, _, _ in ordered_calls[1:-1]:
+            stop_id = self._get_text(call_element.find("siri:StopPointRef", self._siri_ns))
+            if not stop_id:
+                continue
+
+            aimed_departure_time = self._parse_datetime(
+                self._get_text(call_element.find("siri:AimedDepartureTime", self._siri_ns))
+            )
+            
+            if aimed_departure_time is None:
+                aimed_departure_time = self._parse_datetime(
+                    self._get_text(call_element.find("siri:AimedArrivalTime", self._siri_ns))
+                )
+
+            if aimed_departure_time is None:
+                continue
+
+            extracted.append((stop_id, aimed_departure_time))
+
+        return extracted
 
     def _extract_stop_events_from_calls(self, journey: ET.Element) -> list[dict[str, Any]]:
         stop_events: list[dict[str, Any]] = []
