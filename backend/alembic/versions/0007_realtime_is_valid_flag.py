@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "0007_realtime_is_valid_flag"
-down_revision: Union[str, None] = "006_gtfs_rt_path_settings_split"
+down_revision: Union[str, None] = "0006_gtfs_rt_path_settings_split"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

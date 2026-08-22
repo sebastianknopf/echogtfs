@@ -1,7 +1,7 @@
 """Rename GTFS-RT service alerts path setting and add feed-specific path settings.
 
-Revision ID: 006_gtfs_rt_path_settings_split
-Revises: 005_realtime_tables
+Revision ID: 0006_gtfs_rt_path_settings_split
+Revises: 0005_realtime_tables
 Create Date: 2026-07-21 00:00:01.000000
 
 """
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "006_gtfs_rt_path_settings_split"
-down_revision: Union[str, None] = "005_realtime_tables"
+revision: str = "0006_gtfs_rt_path_settings_split"
+down_revision: Union[str, None] = "0005_realtime_tables"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
