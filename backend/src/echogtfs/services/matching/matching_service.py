@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import random
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from echogtfs.common.global_id import GlobalId
+from echogtfs.enum.gtfsrt import AssignmentType
 from echogtfs.services.matching.intf_matching_service import MatchingServiceInterface
 from echogtfs.services.caching import CachingServiceInterface
 from echogtfs.services.database import GtfsRepositoryInterface
@@ -32,14 +34,15 @@ class MatchingService(MatchingServiceInterface):
         scheduled_start_stop_id: str | None = None,
         scheduled_end_stop_id: str | None = None,
         scheduled_intermediate_stops: list[tuple[str, datetime]] | None = None,
-    ) -> str | None:
-        """Return one matched GTFS trip ID, or None when no unique match exists."""
+    ) -> tuple[str | None, AssignmentType]:
+        """Return one matched GTFS trip ID with the assignment type describing the match."""
+
         cached_trip_id = await self._caching_service.get_trip_id(trip_id)
         if cached_trip_id is not None:
-            return cached_trip_id
+            return cached_trip_id, AssignmentType.MATCH_BY_CACHED_ID
 
         if route_id is None:
-            return None
+            return None, AssignmentType.NO_MATCH_GENERAL
 
         reduced_start_stop_id = (
             GlobalId.level(scheduled_start_stop_id, 3)
@@ -52,7 +55,7 @@ class MatchingService(MatchingServiceInterface):
             else None
         )
 
-        internal_trip_id = await self._match_by_start_end_anchors(
+        internal_trip_id, anchors_are_ambiguous = await self._match_by_start_end_anchors(
             route_id=route_id,
             operation_day_date=operation_day_date,
             scheduled_start_time=scheduled_start_time,
@@ -63,32 +66,38 @@ class MatchingService(MatchingServiceInterface):
 
         if internal_trip_id is not None:
             await self._caching_service.put_trip_id(trip_id, internal_trip_id)
-            return internal_trip_id
+            return internal_trip_id, AssignmentType.MATCHED_BY_START_STOP
 
-        use_intermediate_fallback = (
-            scheduled_start_time is None
-            and scheduled_end_time is None
-            and bool(scheduled_intermediate_stops)
+        fallback_assignment_type = (
+            AssignmentType.NO_MATCH_AMBIGUOUS_TRIP
+            if anchors_are_ambiguous
+            else AssignmentType.NO_MATCH_GENERAL
         )
 
-        if not use_intermediate_fallback:
-            return None
+        reduced_intermediate_stops = self._reduce_intermediate_stops(
+            scheduled_intermediate_stops or []
+        )
 
-        reduced_intermediate_stops = self._reduce_intermediate_stops(scheduled_intermediate_stops)
+        if len(reduced_intermediate_stops) > 3:
+            reduced_intermediate_stops = random.sample(reduced_intermediate_stops, 3)
+
         if not reduced_intermediate_stops:
-            return None
+            return None, fallback_assignment_type
 
-        internal_trip_id = await self._match_by_intermediate_stops(
+        internal_trip_id, stops_are_ambiguous = await self._match_by_intermediate_stops(
             route_id=route_id,
             operation_day_date=operation_day_date,
             scheduled_intermediate_stops=reduced_intermediate_stops,
         )
 
         if internal_trip_id is None:
-            return None
+            if stops_are_ambiguous:
+                return None, AssignmentType.NO_MATCH_AMBIGUOUS_TRIP
+
+            return None, fallback_assignment_type
 
         await self._caching_service.put_trip_id(trip_id, internal_trip_id)
-        return internal_trip_id
+        return internal_trip_id, AssignmentType.MATCHED_BY_INTERMEDIATE_STOPS
 
     async def _match_by_start_end_anchors(
         self,
@@ -99,9 +108,10 @@ class MatchingService(MatchingServiceInterface):
         scheduled_end_time: datetime | None,
         scheduled_start_stop_id: str | None,
         scheduled_end_stop_id: str | None,
-    ) -> str | None:
+    ) -> tuple[str | None, bool]:
+        """Return the matched trip ID and whether multiple candidates were ambiguous."""
         if scheduled_start_time is None:
-            return None
+            return None, False
 
         trip_ids = await self._repository.find_trip_ids_by_match_properties(
             route_id=route_id,
@@ -112,10 +122,13 @@ class MatchingService(MatchingServiceInterface):
             scheduled_end_stop_id=scheduled_end_stop_id,
         )
 
-        if not trip_ids or len(trip_ids) != 1:
-            return None
+        if not trip_ids:
+            return None, False
 
-        return trip_ids[0]
+        if len(trip_ids) != 1:
+            return None, True
+
+        return trip_ids[0], False
 
     async def _match_by_intermediate_stops(
         self,
@@ -123,14 +136,15 @@ class MatchingService(MatchingServiceInterface):
         route_id: str,
         operation_day_date: date | None,
         scheduled_intermediate_stops: list[tuple[str, datetime]],
-    ) -> str | None:
+    ) -> tuple[str | None, bool]:
+        """Return the matched trip ID and whether multiple candidates were ambiguous."""
         candidate_trip_ids = await self._repository.find_trip_ids_by_match_properties(
             route_id=route_id,
             operation_day_date=operation_day_date,
         )
-        
+
         if not candidate_trip_ids:
-            return None
+            return None, False
 
         matched_trip_ids: list[str] = []
         for candidate_trip_id in candidate_trip_ids:
@@ -143,13 +157,17 @@ class MatchingService(MatchingServiceInterface):
                 gtfs_trip,
                 scheduled_intermediate_stops,
             )
+
             if matches:
                 matched_trip_ids.append(candidate_trip_id)
 
-        if len(matched_trip_ids) != 1:
-            return None
+        if not matched_trip_ids:
+            return None, False
 
-        return matched_trip_ids[0]
+        if len(matched_trip_ids) != 1:
+            return None, True
+
+        return matched_trip_ids[0], False
 
     @staticmethod
     def _reduce_intermediate_stops(
@@ -199,7 +217,7 @@ class MatchingService(MatchingServiceInterface):
             if departure_time_utc is None or scheduled_time_utc is None:
                 continue
 
-            if abs(departure_time_utc - scheduled_time_utc) <= timedelta(seconds=60):
+            if abs(departure_time_utc - scheduled_time_utc) <= timedelta(seconds=120):
                 return True
 
         return False
