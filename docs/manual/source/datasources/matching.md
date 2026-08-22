@@ -8,13 +8,13 @@ Matching wird nur dann angewendet, wenn eine eingehende Fahrt nicht direkt über
 
 Wenn eine direkte Zuordnung möglich ist, wird kein Matching benötigt.
 
-## Ablauf in der Praxis
+## Ablauf des Matchings
 
 Die Zuordnung erfolgt schrittweise:
 
 1. Vorhandene Zuordnung aus einem früheren Lauf wiederverwenden.
 2. Abgleich über Linie, Betriebstag sowie geplante Start-/Endzeit und Start-/Endhaltestelle.
-3. Fallback-Abgleich über Zwischenhalte.
+3. Fallback-Abgleich über drei zufällig gewählte Zwischenhalte.
 
 Sobald eine Stufe genau eine eindeutige Fahrt liefert, wird diese verwendet.
 
@@ -27,7 +27,7 @@ Eine Zuordnung wird nur übernommen, wenn genau eine passende GTFS-Fahrt gefunde
 
 ## Zeitfenster bei Zeitabgleichen
 
-Bei Zeitvergleichen gilt eine Toleranz von 60 Sekunden um die geplante Zeit.
+Bei Zeitvergleichen um die Start- und Endzeit einer Fahrt gilt eine Toleranz von 60 Sekunden um die geplante Zeit. Beim Matching anhand von zufälligen Zwischenhalten gilt eine Toleranz von 120 Sekunden um die geplante Zeit.
 
 Dadurch bleiben kleine Abweichungen zwischen Quelle und GTFS-Feed unkritisch.
 
@@ -39,12 +39,12 @@ Dadurch führen beispielsweise falsch versorgte Steige in den Quelldaten nicht z
 
 ## Fallback über Zwischenhalte
 
-Der Zwischenhalt-Fallback wird nur verwendet, wenn sowohl geplante Startzeit als auch geplante Endzeit fehlen.
+Der Zwischenhalt-Fallback wird automatisch verwendet, wenn aus Start- und Endzeit einer Fahrt kein erfolgreiches Match gefunden wurde.
 
-In diesem Fall werden geplante Zwischenhalte (Haltestelle + Zeit) mit den GTFS-Haltezeiten verglichen:
+In diesem Fall werden maximal 3 zufällig gewählte Zwischenhalte (Haltestelle + Zeit) mit den GTFS-Haltezeiten verglichen:
 
 - Die Haltestelle muss zur Fahrt passen.
-- Die Zeit muss innerhalb der 60-Sekunden-Toleranz liegen.
+- Die Zeit muss innerhalb einer 120-Sekunden-Toleranz um die geplante Abfahrtszeit liegen.
 - Alle angegebenen Zwischenhalte müssen zur gleichen Fahrt passen.
 
 ## Auswirkungen auf den Betrieb
@@ -53,7 +53,7 @@ Wenn kein eindeutiges Matching möglich ist, bleibt der Fahrtbezug unaufgelöst.
 
 Informationen dazu finden Sie unter {ref}`h-datasources-invalid-reference-policies`.
 
-## Typische Empfehlungen
+## Empfehlungen
 
 1. Pflegen Sie Mapping-Einträge für Haltestellen und Linien sorgfältig.
 2. Stellen Sie sicher, dass geplante Zeiten aus der Quelle konsistent sind.
