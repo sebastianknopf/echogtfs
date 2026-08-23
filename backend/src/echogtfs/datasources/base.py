@@ -1337,7 +1337,8 @@ class DatasourceBase(DatasourceInterface):
                 await self._caching_service.put_trip_id(derived_trip_id, matched_trip_id)
 
         trips_to_delete = {
-            trip_id for trip_id, trip in existing_trips.items()
+            trip_id: trip
+            for trip_id, trip in existing_trips.items()
             if trip.data_source_id == source_id
             and trip_id not in processed_trip_uuids
             and trip_id not in policy_based_deletes
@@ -1346,11 +1347,11 @@ class DatasourceBase(DatasourceInterface):
         if trips_to_delete:
             await realtime_repository.delete_trips_for_data_source_by_ids(
                 source_id,
-                list(trips_to_delete),
+                list(trips_to_delete.keys()),
             )
 
-            for trip_id in trips_to_delete:
-                await self._caching_service.pop_trip_id(trip_id)
+            for id, trip in trips_to_delete.items():
+                await self._caching_service.pop_trip_id(trip.original_trip_id)
 
             stats_deleted += len(trips_to_delete)
 
@@ -1717,24 +1718,24 @@ class DatasourceBase(DatasourceInterface):
             deletable_trip_ids = deleted_vehicle_trip_ids - trip_ids_with_stop_events
 
             if deletable_trip_ids:
-                deletable_trips = await realtime_repository.list_trips_by_trip_ids(
+                resolved_trips = await realtime_repository.list_trips_by_trip_ids(
                     list(deletable_trip_ids)
                 )
                 
-                deletable_trip_uuids = [
-                    trip.id
-                    for trip in deletable_trips
+                deletable_trips = {
+                    trip.id: trip
+                    for trip in resolved_trips
                     if trip.data_source_id == source_id
-                ]
+                }
 
-                if deletable_trip_uuids:
+                if deletable_trips:
                     await realtime_repository.delete_trips_for_data_source_by_ids(
                         source_id,
-                        deletable_trip_uuids,
+                        list(deletable_trips.keys()),
                     )
 
-                for trip_id in deletable_trip_ids:
-                    await self._caching_service.pop_trip_id(trip_id)
+                for id, trip in deletable_trips.items():
+                    await self._caching_service.pop_trip_id(trip.original_trip_id)
 
         logger.info(
             f"[{self.get_adapter_type()}] Vehicle-position import completed for '{source_name}': "
