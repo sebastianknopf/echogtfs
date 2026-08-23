@@ -1145,6 +1145,8 @@ class DatasourceBase(DatasourceInterface):
             resolved_trip_id = derived_trip_id
             assignment_type = AssignmentType.DIRECT_BY_ID.value
             trip_reference_is_valid = True if is_new_trip else derived_trip_id in nominal_trip_ids
+            matched_trip_id: str | None = None
+            matched_assignment_type: AssignmentType | None = None
 
             mapped_match_start_stop = self._identifier_mapping_service.apply_mapping(
                 {
@@ -1325,6 +1327,15 @@ class DatasourceBase(DatasourceInterface):
                 scheduled_end_time=scheduled_end_time,
             )
 
+            if (
+                matched_trip_id is not None
+                and matched_assignment_type in (
+                    AssignmentType.MATCHED_BY_START_STOP,
+                    AssignmentType.MATCHED_BY_INTERMEDIATE_STOPS,
+                )
+            ):
+                await self._caching_service.put_trip_id(derived_trip_id, matched_trip_id)
+
         trips_to_delete = {
             trip_id for trip_id, trip in existing_trips.items()
             if trip.data_source_id == source_id
@@ -1476,6 +1487,8 @@ class DatasourceBase(DatasourceInterface):
             trip_assignment_type = AssignmentType.DIRECT_BY_ID.value
             vehicle_assignment_type = AssignmentType.DIRECT_BY_ID.value
             trip_reference_is_valid = derived_trip_id in nominal_trip_ids
+            matched_trip_id: str | None = None
+            matched_assignment_type: AssignmentType | None = None
 
             if not trip_reference_is_valid:
                 mapped_match_start_stop = self._identifier_mapping_service.apply_mapping(
@@ -1656,6 +1669,15 @@ class DatasourceBase(DatasourceInterface):
                 is_active_on_create=vehicle_is_active_on_create,
                 is_valid=vehicle_is_valid,
             )
+
+            if (
+                matched_trip_id is not None
+                and matched_assignment_type in (
+                    AssignmentType.MATCHED_BY_START_STOP,
+                    AssignmentType.MATCHED_BY_INTERMEDIATE_STOPS,
+                )
+            ):
+                await self._caching_service.put_trip_id(derived_trip_id, matched_trip_id)
 
         vehicles_to_delete = {
             vehicle_id for vehicle_id, vehicle in existing_vehicles.items()

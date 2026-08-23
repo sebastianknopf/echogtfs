@@ -610,6 +610,10 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
             return_value={"agency": {"a1"}, "route": {"r1"}, "stop": {"s1"}, "trip": {"nominal-trip"}}
         )
         datasource = _TestDatasource({})
+        datasource._caching_service = SimpleNamespace(
+            put_trip_id=AsyncMock(),
+            pop_trip_id=AsyncMock(),
+        )
         datasource._matching_service = SimpleNamespace(
             match=AsyncMock(return_value=("matched-trip-1", AssignmentType.MATCHED_BY_START_STOP))
         )
@@ -645,6 +649,10 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
         kwargs = realtime_repository.update_trip_update_from_sync.await_args.kwargs
         self.assertEqual(kwargs["trip_id"], "matched-trip-1")
         self.assertEqual(kwargs["assignment_type"], "MATCHED_BY_START_STOP")
+        datasource._caching_service.put_trip_id.assert_awaited_once_with(
+            "external-trip-1",
+            "matched-trip-1",
+        )
 
     async def test_sync_vehicle_position_records_sets_no_match_assignment_when_matching_fails(self):
         repository = _SystemRepositoryStub()
@@ -738,6 +746,10 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
             return_value={"agency": {"a1"}, "route": {"r1"}, "stop": {"s1"}, "trip": {"nominal-trip"}}
         )
         datasource = _TestDatasource({})
+        datasource._caching_service = SimpleNamespace(
+            put_trip_id=AsyncMock(),
+            pop_trip_id=AsyncMock(),
+        )
         datasource._matching_service = SimpleNamespace(
             match=AsyncMock(return_value=("matched-trip-1", AssignmentType.MATCHED_BY_INTERMEDIATE_STOPS))
         )
@@ -783,6 +795,10 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(match_kwargs["scheduled_end_time"])
         self.assertEqual(match_kwargs["scheduled_start_stop_id"], "s1")
         self.assertEqual(match_kwargs["scheduled_end_stop_id"], "s1")
+        datasource._caching_service.put_trip_id.assert_awaited_once_with(
+            "external-trip-1",
+            "matched-trip-1",
+        )
 
     async def test_sync_vehicle_position_records_keeps_matched_vehicle_from_previous_run(self):
         repository = _SystemRepositoryStub()
@@ -792,6 +808,10 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
             return_value={"agency": {"a1"}, "route": {"r1"}, "stop": {"s1"}, "trip": {"nominal-trip"}}
         )
         datasource = _TestDatasource({})
+        datasource._caching_service = SimpleNamespace(
+            put_trip_id=AsyncMock(),
+            pop_trip_id=AsyncMock(),
+        )
         datasource._matching_service = SimpleNamespace(
             match=AsyncMock(return_value=("matched-trip-1", AssignmentType.MATCHED_BY_START_STOP))
         )
@@ -843,6 +863,10 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
         kwargs = realtime_repository.update_vehicle_position_from_sync.await_args.kwargs
         self.assertEqual(kwargs["vehicle_uuid"], existing_vehicle_uuid)
         self.assertEqual(kwargs["trip_id"], "matched-trip-1")
+        datasource._caching_service.put_trip_id.assert_awaited_once_with(
+            "external-trip-1",
+            "matched-trip-1",
+        )
 
     async def test_sync_trip_update_records_sets_invalid_and_deactivates_when_trip_unmatched(self):
         repository = _SystemRepositoryStub()
@@ -997,6 +1021,10 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
         realtime_repository = _RealtimeRepositoryStub()
         gtfs_repository = _GtfsRepositoryStub()
         datasource = _TestDatasource({})
+        datasource._caching_service = SimpleNamespace(
+            put_trip_id=AsyncMock(),
+            pop_trip_id=AsyncMock(),
+        )
         datasource._matching_service = SimpleNamespace(
             match=AsyncMock(return_value=("trip-1", AssignmentType.MATCHED_BY_START_STOP))
         )
@@ -1040,6 +1068,10 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(kwargs["trip_uuid"], matched_trip_uuid)
         self.assertEqual(kwargs["trip_id"], "trip-1")
         self.assertEqual(kwargs["assignment_type"], AssignmentType.MATCHED_BY_START_STOP.value)
+        datasource._caching_service.put_trip_id.assert_awaited_once_with(
+            "external-trip-1",
+            "trip-1",
+        )
 
     async def test_sync_trip_update_records_preserves_existing_trip_activation_for_invalid_stop(self):
         repository = _SystemRepositoryStub()

@@ -65,7 +65,6 @@ class MatchingService(MatchingServiceInterface):
         )
 
         if internal_trip_id is not None:
-            await self._caching_service.put_trip_id(trip_id, internal_trip_id)
             return internal_trip_id, AssignmentType.MATCHED_BY_START_STOP
 
         fallback_assignment_type = (
@@ -96,7 +95,6 @@ class MatchingService(MatchingServiceInterface):
 
             return None, fallback_assignment_type
 
-        await self._caching_service.put_trip_id(trip_id, internal_trip_id)
         return internal_trip_id, AssignmentType.MATCHED_BY_INTERMEDIATE_STOPS
 
     async def _match_by_start_end_anchors(
