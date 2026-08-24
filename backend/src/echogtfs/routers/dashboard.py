@@ -102,7 +102,7 @@ async def _count_vehicles(repository: RealtimeRepositoryInterface) -> tuple[int,
         return int(active_result.scalar_one()), int(inactive_result.scalar_one())
 
 
-@router.get("/", response_model=DashboardRead)
+@router.get("/", response_model=DashboardRead, include_in_schema=False)
 async def get_dashboard(
     request: Request,
     _: CurrentUser,

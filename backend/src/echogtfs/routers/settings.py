@@ -135,7 +135,7 @@ async def _load() -> AppSettings:
         ),
     )
 
-@router.get("/app", response_model=PublicAppSettings)
+@router.get("/app", response_model=PublicAppSettings, include_in_schema=False)
 async def get_public_app_settings() -> PublicAppSettings:
     """Public: returns theme and language settings (no authentication required)."""
     settings = await _load()
@@ -148,13 +148,13 @@ async def get_public_app_settings() -> PublicAppSettings:
     )
 
 
-@router.get("/", response_model=AppSettings)
+@router.get("/", response_model=AppSettings, include_in_schema=False)
 async def get_settings(_: CurrentSuperuser) -> AppSettings:
     """Admin only: returns all app settings including GTFS-RT configuration."""
     return await _load()
 
 
-@router.put("/", response_model=AppSettings)
+@router.put("/", response_model=AppSettings, include_in_schema=False)
 async def update_settings(
     payload: AppSettings, _: CurrentSuperuser
 ) -> AppSettings:

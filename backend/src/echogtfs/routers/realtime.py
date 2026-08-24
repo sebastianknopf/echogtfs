@@ -98,7 +98,7 @@ async def check_gtfs_rt_auth(request: Request) -> None:
         )
 
 
-@router.get("/{path:path}")
+@router.get("/{path:path}", include_in_schema=False)
 async def get_realtime_feed(
     path: str,
     request: Request,
