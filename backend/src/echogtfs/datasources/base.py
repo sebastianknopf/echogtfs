@@ -465,32 +465,41 @@ class DatasourceBase(DatasourceInterface):
         nominal_stop_times = sorted(nominal_stop_times, key=self._nominal_stop_sequence)
         propagated_events = [dict(event) for event in stop_events]
 
-        nominal_stop_ids: set[str] = set()
+        nominal_stop_ids_for_matching: set[str] = set()
+        nominal_full_ids: set[str] = set()
         nominal_order: list[str] = []
         for stop_time in nominal_stop_times:
-            stop_id = self._normalize_stop_id_for_matching(stop_time.stop_id)
-            if stop_id not in nominal_stop_ids:
-                nominal_stop_ids.add(stop_id)
-                nominal_order.append(stop_id)
+            full_stop_id = str(stop_time.stop_id)
+            reduced_stop_id = self._normalize_stop_id_for_matching(stop_time.stop_id)
+
+            if reduced_stop_id not in nominal_stop_ids_for_matching:
+                nominal_stop_ids_for_matching.add(reduced_stop_id)
+
+            if full_stop_id not in nominal_full_ids:
+                nominal_full_ids.add(full_stop_id)
+                nominal_order.append(full_stop_id)
 
         if treat_unexpected_stop_as_added_stop:
             for event in propagated_events:
                 stop_id = self._normalize_stop_id_for_matching(event.get("stop_id"))
-                if stop_id and stop_id not in nominal_stop_ids:
+                if stop_id and stop_id not in nominal_stop_ids_for_matching:
                     event["schedule_relationship"] = "ADDED"
         else:
             propagated_events = [
-                event for event in propagated_events if self._normalize_stop_id_for_matching(event.get("stop_id")) in nominal_stop_ids
+                event
+                for event in propagated_events
+                if self._normalize_stop_id_for_matching(event.get("stop_id"))
+                in nominal_stop_ids_for_matching
             ]
 
         realtime_stop_ids = {
-            self._normalize_stop_id_for_matching(event.get("stop_id"))
+            str(event.get("stop_id"))
             for event in propagated_events
             if event.get("stop_id")
         }
 
         for stop_time in nominal_stop_times:
-            nominal_stop_id = self._normalize_stop_id_for_matching(stop_time.stop_id)
+            nominal_stop_id = str(stop_time.stop_id)
             if nominal_stop_id in realtime_stop_ids:
                 continue
 
@@ -504,6 +513,7 @@ class DatasourceBase(DatasourceInterface):
                     "is_valid": True,
                 }
             )
+            realtime_stop_ids.add(nominal_stop_id)
 
         if not is_complete_stop_sequence:
             return propagated_events
@@ -517,11 +527,16 @@ class DatasourceBase(DatasourceInterface):
     ) -> list[dict[str, Any]]:
         """Order stop events along the nominal sequence and merge ADDED stops by time."""
         nominal_rank = {stop_id: index for index, stop_id in enumerate(nominal_order)}
+        nominal_stop_ids = set(nominal_order)
 
         added_events: list[dict[str, Any]] = []
         scheduled_events: list[dict[str, Any]] = []
         for event in stop_events:
-            if str(event.get("schedule_relationship") or "").upper() == "ADDED":
+            stop_id = str(event.get("stop_id") or "")
+            if (
+                str(event.get("schedule_relationship") or "").upper() == "ADDED"
+                or (stop_id and stop_id not in nominal_stop_ids)
+            ):
                 added_events.append(event)
             else:
                 scheduled_events.append(event)
@@ -532,7 +547,7 @@ class DatasourceBase(DatasourceInterface):
             )
 
         def scheduled_sort_key(event: dict[str, Any]) -> tuple[int, datetime, str]:
-            stop_id = self._normalize_stop_id_for_matching(event.get("stop_id"))
+            stop_id = str(event.get("stop_id") or "")
             return (
                 nominal_rank.get(stop_id, len(nominal_order)),
                 event_time(event),

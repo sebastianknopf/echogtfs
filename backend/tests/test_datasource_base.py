@@ -9,11 +9,9 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-try:
-    import _service_test_bootstrap  # noqa: F401
-except ModuleNotFoundError:  # pragma: no cover - depends on unittest discovery mode
-    from tests import _service_test_bootstrap  # noqa: F401
+import _service_test_bootstrap  # noqa: F401
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key-that-is-at-least-32-bytes-long")
 
@@ -156,8 +154,46 @@ class TestDatasourceBaseHelpers(unittest.TestCase):
             is_complete_stop_sequence=True,
         )
 
-        self.assertEqual(len(propagated), 1)
-        self.assertEqual(propagated[0]["stop_id"], "de:1:2:3")
+        self.assertEqual(len(propagated), 2)
+        self.assertIn("de:1:2:3", [event["stop_id"] for event in propagated])
+        self.assertIn("de:1:2:4", [event["stop_id"] for event in propagated])
+
+    def test_propagate_trip_update_stop_events_sorts_station_level_leftovers_like_added(self):
+        base_time = datetime(2026, 8, 1, 8, 0, 0, tzinfo=timezone.utc)
+        stop_events = [
+            {
+                "stop_id": "de:1:2:3",
+                "departure_time": base_time.replace(minute=5),
+                "schedule_relationship": "SCHEDULED",
+            }
+        ]
+        nominal_stop_times = [
+            SimpleNamespace(
+                stop_id="de:1:2:4",
+                stop_sequence=1,
+                arrival_time=None,
+                departure_time=base_time.replace(minute=10),
+            ),
+            SimpleNamespace(
+                stop_id="de:1:2:5",
+                stop_sequence=2,
+                arrival_time=None,
+                departure_time=base_time.replace(minute=20),
+            ),
+        ]
+
+        propagated = self.datasource._propagate_trip_update_stop_events(
+            stop_events,
+            nominal_stop_times,
+            treat_unexpected_stop_as_added_stop=False,
+            treat_missing_stop_as_canceled_stop=False,
+            is_complete_stop_sequence=True,
+        )
+
+        self.assertEqual(
+            [event["stop_id"] for event in propagated],
+            ["de:1:2:3", "de:1:2:4", "de:1:2:5"],
+        )
 
     def test_propagate_trip_update_stop_events_preserves_existing_stop_sequences(self):
         same_time = datetime(2026, 8, 1, 8, 0, 0, tzinfo=timezone.utc)

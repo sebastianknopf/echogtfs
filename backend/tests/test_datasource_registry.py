@@ -5,11 +5,9 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-try:
-    import _service_test_bootstrap  # noqa: F401
-except ModuleNotFoundError:  # pragma: no cover - depends on unittest discovery mode
-    from tests import _service_test_bootstrap  # noqa: F401
+import _service_test_bootstrap  # noqa: F401
 
 from echogtfs.datasources import get_datasource
 
