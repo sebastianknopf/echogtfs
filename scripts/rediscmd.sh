@@ -87,6 +87,8 @@ clear_trips() {
     local deleted=0
 
     while true; do
+        local scan_output
+
         scan_output="$(
             docker exec -i "$CONTAINER_NAME" redis-cli \
                 "${REDIS_ARGS[@]}" \
@@ -122,6 +124,58 @@ clear_trips() {
     echo "$deleted deleted"
 }
 
+# List all trip cache entries including their values.
+#
+# Output format:
+# echogtfs:data:trips:some-key > some-value
+#
+# SCAN is used instead of KEYS so Redis is not blocked while traversing
+# the key space.
+
+list_trips() {
+    local pattern="echogtfs:data:trips:*"
+    local cursor="0"
+
+    while true; do
+        local scan_output
+
+        scan_output="$(
+            docker exec -i "$CONTAINER_NAME" redis-cli \
+                "${REDIS_ARGS[@]}" \
+                SCAN "$cursor" MATCH "$pattern" COUNT 500
+        )"
+
+        # The first line is the cursor.
+        cursor="$(printf '%s\n' "$scan_output" | head -n 1)"
+
+        if [[ -z "$cursor" ]]; then
+            echo "Redis SCAN failed." >&2
+            return 1
+        fi
+
+        # Everything after the first line is a key.
+        mapfile -t keys < <(
+            printf '%s\n' "$scan_output" |
+                tail -n +2 |
+                sed '/^[[:space:]]*$/d'
+        )
+
+        for key in "${keys[@]}"; do
+            local value
+
+            value="$(
+                docker exec -i "$CONTAINER_NAME" redis-cli \
+                    "${REDIS_ARGS[@]}" \
+                    GET "$key"
+            )"
+
+            printf '%s > %s\n' "$key" "$value"
+        done
+
+        [[ "$cursor" == "0" ]] && break
+    done
+}
+
 # Execute a single command.
 
 invoke_command() {
@@ -142,6 +196,10 @@ invoke_command() {
     case "$normalized_command" in
         "CLEAR TRIPS")
             clear_trips
+            ;;
+
+        "LIST TRIPS")
+            list_trips
             ;;
 
         "EXIT"|"QUIT")
@@ -170,6 +228,7 @@ fi
 # Interactive rediscmd shell.
 
 echo "CLEAR TRIPS - Remove all trip cache entries"
+echo "LIST TRIPS - List all trip cache entries and their values"
 echo "EXIT - Exit the shell"
 echo "QUIT - Exit the shell"
 echo
