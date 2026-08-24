@@ -105,8 +105,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 # -- FastAPI app ---------------------------------------------------------------
 # Docs are disabled by default; set DOCS_ENABLED=true to re-enable.
-_docs_url    = "/api/docs"    if settings.docs_enabled else None
-_openapi_url = "/api/openapi.json" if settings.docs_enabled else None
+_docs_url    = "/api/swagger"       if settings.docs_enabled else None
+_openapi_url = "/api/openapi.json"  if settings.docs_enabled else None
 
 app = FastAPI(
     title="echogtfs",

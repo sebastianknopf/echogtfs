@@ -42,6 +42,8 @@ Kopieren Sie die Datei `.env.example` und benennen Sie diese um zu `.env`. Öffn
 `SECRET_KEY`: 32-stelliger zufälliger Schlüssel zur Authentifizierung und Authentisierung im Frontend
 `FIRST_SUPERUSER`, `FIRST_SUPERUSER_EMAIL`, `FIRST_SUPERUSER_PASSWORD`: Initiale Zugangsdaten, mit denen Sie sich erstmalig bei EchoGTFS anmelden
 
+`DOCS_ENABLED`: Option, um den für den externen Zugriff vorgesehenen Anteil der API zu veröffentlichen. Wenn dieser Wert auf `true` gesetzt wird, ist die Swagger Dokumentation unter `https://{domain}/api/swagger` erreichbar.
+
 (h-installation-startup)=
 
 ## Start der Anwendung
