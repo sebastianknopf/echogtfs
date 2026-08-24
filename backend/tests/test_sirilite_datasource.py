@@ -8,6 +8,11 @@ from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+try:
+    import _service_test_bootstrap  # noqa: F401
+except ModuleNotFoundError:  # pragma: no cover - depends on unittest discovery mode
+    from tests import _service_test_bootstrap  # noqa: F401
+
 from echogtfs.datasources.sirilite import SiriLiteDatasource
 from echogtfs.datasources import sirilite as sirilite_module
 
