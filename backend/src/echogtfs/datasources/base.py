@@ -493,12 +493,6 @@ class DatasourceBase(DatasourceInterface):
             ]
 
         realtime_stop_ids = {
-            str(event.get("stop_id"))
-            for event in propagated_events
-            if event.get("stop_id")
-        }
-
-        realtime_stop_ids_for_matching: set[str] = {
             self._normalize_stop_id_for_matching(event.get("stop_id"))
             for event in propagated_events
             if event.get("stop_id")
@@ -506,7 +500,7 @@ class DatasourceBase(DatasourceInterface):
 
         for stop_time in nominal_stop_times:
             nominal_stop_id = self._normalize_stop_id_for_matching(stop_time.stop_id)
-            if nominal_stop_id in realtime_stop_ids_for_matching:
+            if nominal_stop_id in realtime_stop_ids:
                 continue
 
             propagated_events.append(
@@ -519,7 +513,7 @@ class DatasourceBase(DatasourceInterface):
                     "is_valid": True,
                 }
             )
-            realtime_stop_ids_for_matching.add(nominal_stop_id)
+            realtime_stop_ids.add(nominal_stop_id)
 
         if not is_complete_stop_sequence:
             return propagated_events

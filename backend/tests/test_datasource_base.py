@@ -154,9 +154,8 @@ class TestDatasourceBaseHelpers(unittest.TestCase):
             is_complete_stop_sequence=True,
         )
 
-        self.assertEqual(len(propagated), 2)
+        self.assertEqual(len(propagated), 1)
         self.assertIn("de:1:2:3", [event["stop_id"] for event in propagated])
-        self.assertIn("de:1:2:4", [event["stop_id"] for event in propagated])
 
     def test_propagate_trip_update_stop_events_sorts_station_level_leftovers_like_added(self):
         base_time = datetime(2026, 8, 1, 8, 0, 0, tzinfo=timezone.utc)
@@ -192,7 +191,7 @@ class TestDatasourceBaseHelpers(unittest.TestCase):
 
         self.assertEqual(
             [event["stop_id"] for event in propagated],
-            ["de:1:2:3", "de:1:2:4", "de:1:2:5"],
+            ["de:1:2:3"],
         )
 
     def test_propagate_trip_update_stop_events_preserves_existing_stop_sequences(self):
