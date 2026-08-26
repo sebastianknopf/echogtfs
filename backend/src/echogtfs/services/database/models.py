@@ -582,10 +582,12 @@ class StopEvent(Base):
         primary_key=True,
     )
     stop_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    original_stop_id: Mapped[str] = mapped_column(Text)
     stop_sequence: Mapped[str] = mapped_column(Text, primary_key=True)
     arrival_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     departure_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     schedule_relationship: Mapped[str] = mapped_column(Text, default="SCHEDULED")
+    is_implied_schedule_relationship: Mapped[bool] = mapped_column(Boolean, default=False)
     is_valid: Mapped[bool] = mapped_column(Boolean, default=True)
 
     trip: Mapped["Trip"] = relationship(back_populates="stop_events")

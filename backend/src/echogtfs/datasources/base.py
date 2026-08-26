@@ -484,6 +484,7 @@ class DatasourceBase(DatasourceInterface):
                 stop_id = self._normalize_stop_id_for_matching(event.get("stop_id"))
                 if stop_id and stop_id not in nominal_stop_ids_for_matching:
                     event["schedule_relationship"] = "ADDED"
+                    event["is_implied_schedule_relationship"] = True
         else:
             propagated_events = [
                 event
@@ -506,10 +507,12 @@ class DatasourceBase(DatasourceInterface):
             propagated_events.append(
                 {
                     "stop_id": str(stop_time.stop_id),
+                    "original_stop_id": str(stop_time.stop_id),
                     "stop_sequence": str(stop_time.stop_sequence),
                     "arrival_time": stop_time.arrival_time,
                     "departure_time": stop_time.departure_time,
                     "schedule_relationship": "SKIPPED" if treat_missing_stop_as_canceled_stop else "NO_DATA",
+                    "is_implied_schedule_relationship": bool(treat_missing_stop_as_canceled_stop),
                     "is_valid": True,
                 }
             )
@@ -1152,6 +1155,9 @@ class DatasourceBase(DatasourceInterface):
                     has_invalid_stop_reference = True
 
                 mapped_event["is_valid"] = bool(mapped_event.get("is_valid", True)) and stop_is_valid
+                mapped_event["original_stop_id"] = mapped_event.get("stop_id")
+                mapped_event["is_implied_schedule_relationship"] = False
+
                 stop_events.append(mapped_event)
 
             derived_trip_id = str(record["trip_id"])

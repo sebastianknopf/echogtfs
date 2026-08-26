@@ -215,6 +215,9 @@ const trips = (() => {
     const endDate = scheduledEndTime || startDate;
     const operationDayDate = _parseOperationDay(item.start_date);
     const hasInvalidStopEvent = stopEvents.some((stopEvent) => stopEvent?.is_valid === false);
+    const hasImpliedStopWarnings = stopEvents.some(
+      (stopEvent) => stopEvent?.is_implied_schedule_relationship === true,
+    );
     const isTripValid = item.is_trip_valid !== false;
     const isRouteValid = item.is_route_valid !== false;
     const isValid = Boolean(item.is_valid) && !hasInvalidStopEvent;
@@ -246,10 +249,13 @@ const trips = (() => {
 
       return {
         stopDisplayName: stopEvent?.stop_name || stopEvent?.stop_id || '-',
+        stopId: stopEvent?.stop_id ? String(stopEvent.stop_id) : null,
+        originalStopId: stopEvent?.original_stop_id ? String(stopEvent.original_stop_id) : null,
         arrivalTimeLabel: _formatTimeExtended(arrivalDate, operationDayDate),
         departureTimeLabel: _formatTimeExtended(departureDate, operationDayDate),
         statusCode,
         statusLabel,
+        isImpliedScheduleRelationship: stopEvent?.is_implied_schedule_relationship === true,
         isValid: stopEvent?.is_valid !== false,
       };
     });
@@ -289,6 +295,7 @@ const trips = (() => {
       isTripValid,
       isRouteValid,
       hasOnlyNoDataStopEvents,
+      hasImpliedStopWarnings,
       isMatched: stopEvents.length > 0,
       scheduleRelationship: item.schedule_relationship || 'SCHEDULED',
       scheduleRelationshipLabel: _getScheduleRelationshipText(item.schedule_relationship || 'SCHEDULED'),
@@ -325,19 +332,30 @@ const trips = (() => {
 
     const stopEventsHtml = trip.stopEvents.length
       ? trip.stopEvents.map((stopEvent) => {
-        const warning = stopEvent.isValid
+        const invalidWarning = stopEvent.isValid
           ? ''
           : `<span class="view-item__warning" title="${ui.esc(window.i18n('trips.stop_reference.warning'))}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${WARNING_ICON_PATH}"/></svg></span>`;
+        const impliedWarning = stopEvent.isImpliedScheduleRelationship
+          ? `<span class="view-item__warning view-item__warning--no-realtime-data" title="${ui.esc(window.i18n('trips.stop_event.implied.warning'))}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${WARNING_ICON_PATH}"/></svg></span>`
+          : '';
+        const warnings = `${impliedWarning}${invalidWarning}`;
+        const stopIdSuffix = (
+          stopEvent.originalStopId
+          && stopEvent.stopId
+          && stopEvent.originalStopId !== stopEvent.stopId
+        )
+          ? ` (${ui.esc(stopEvent.originalStopId)} -> ${ui.esc(stopEvent.stopId)})`
+          : '';
 
         return `
           <div class="view-item view-item--entity">
             <div class="view-item__content">
-              <strong>${ui.esc(stopEvent.stopDisplayName)}</strong><br>
+              <strong>${ui.esc(stopEvent.stopDisplayName)}${stopIdSuffix}</strong><br>
               ${ui.esc(window.i18n('trips.view.arrival'))}: ${ui.esc(stopEvent.arrivalTimeLabel)} •
               ${ui.esc(window.i18n('trips.view.departure'))}: ${ui.esc(stopEvent.departureTimeLabel)} •
               ${ui.esc(window.i18n('trips.view.status'))}: <span class="${_getStopEventStatusClass(stopEvent.statusCode)}">${ui.esc(stopEvent.statusLabel)}</span>
             </div>
-            ${warning}
+            ${warnings ? `<div class="view-item__warnings">${warnings}</div>` : ''}
           </div>
         `;
       }).join('')
@@ -701,7 +719,7 @@ const trips = (() => {
       </div>
 
       <div class="alert-list-item__actions">
-        ${!trip.isValid ? `<span class="resolution-warning" title="${window.i18n('trips.resolution.warning')}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg></span>` : (trip.hasOnlyNoDataStopEvents ? `<span class="resolution-warning resolution-warning--no-realtime-data" title="${window.i18n('trips.realtime_data.warning')}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg></span>` : '')}
+        ${!trip.isValid ? `<span class="resolution-warning" title="${window.i18n('trips.resolution.warning')}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg></span>` : (trip.hasOnlyNoDataStopEvents ? `<span class="resolution-warning resolution-warning--no-realtime-data" title="${window.i18n('trips.realtime_data.warning')}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg></span>` : (trip.hasImpliedStopWarnings ? `<span class="resolution-warning resolution-warning--no-realtime-data" title="${window.i18n('trips.warnings.trip')}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg></span>` : ''))}
         <button class="icon-btn" data-action="view" data-id="${trip.id}" title="${window.i18n('common.view')}" data-ripple>
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
         </button>

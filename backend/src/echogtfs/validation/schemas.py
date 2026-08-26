@@ -409,11 +409,13 @@ class StopEventRead(BaseModel):
     """Read model for realtime stop events."""
     trip_id: str
     stop_id: str
+    original_stop_id: str | None = None
     stop_name: str | None = None
     stop_sequence: str
     arrival_time: datetime
     departure_time: datetime
     schedule_relationship: str
+    is_implied_schedule_relationship: bool = False
     is_valid: bool
 
     model_config = {"from_attributes": True}

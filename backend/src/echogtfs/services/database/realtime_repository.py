@@ -745,6 +745,13 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
             for event_data in stop_events:
                 payload = dict(event_data)
                 payload.pop("trip_id", None)
+                if payload.get("original_stop_id") in (None, ""):
+                    payload["original_stop_id"] = payload.get("stop_id")
+
+                payload["is_implied_schedule_relationship"] = bool(
+                    payload.get("is_implied_schedule_relationship", False)
+                )
+                
                 db.add(StopEvent(trip_id=trip_id, **payload))
 
             await self.commit(db)

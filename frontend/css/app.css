@@ -1871,6 +1871,14 @@ body {
   color: #facd28;
 }
 
+.view-item__warnings {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 44px;
+}
+
 @media (max-width: 599px) {
   .view-item {
     grid-template-columns: 1fr auto;

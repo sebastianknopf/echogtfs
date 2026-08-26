@@ -143,6 +143,7 @@ Allowed data model:
 {
     "id": str,
     "trip_id": str,
+    "original_trip_id": str | None,
     "start_time": str,
     "start_date": str,
     "route_id": str,
@@ -161,10 +162,12 @@ Allowed data model:
         {
             "trip_id": str,
             "stop_id": str,
+            "original_stop_id": str,
             "stop_sequence": str,
             "arrival_time": str | datetime,
             "departure_time": str | datetime,
             "schedule_relationship": str,
+            "is_implied_schedule_relationship": bool,
             "is_valid": bool,
         }
     ],
@@ -175,6 +178,7 @@ Processed top-level fields:
 
 - id: optional. If missing, deterministic UUID is built from trip_id.
 - trip_id: required.
+- original_trip_id: optional; persisted as the external/non-nominal trip reference when provided.
 - start_time: required.
 - start_date: required.
 - route_id: required, mapped before persistence and matching.
@@ -193,16 +197,20 @@ Processed top-level fields:
 Processed stop_events[*] fields:
 
 - stop_id: consumed and mapped before persistence.
+- original_stop_id: optional; defaults to stop_id and is persisted as the original stop reference.
 - stop_sequence: passed to persistence model.
 - arrival_time: passed to persistence model.
 - departure_time: passed to persistence model.
 - schedule_relationship: optional, default SCHEDULED in persistence layer.
+- is_implied_schedule_relationship: Indicates whether the schedule relationship was implied based on settings, optional, default False.
 - is_valid: optional, default True in persistence layer.
 - trip_id: optional input but explicitly removed and replaced with resolved trip_id before persistence.
 
 DatasourceBase mutates each stop event during processing:
 
 - `stop_id` is replaced with the mapped stop ID.
+- `original_stop_id` is set to the same value as `stop_id` during sync payload preparation.
+- `is_implied_schedule_relationship` is set to true only for stop events implied by datasource flags (`ADDED` via `treat_unexpected_stop_as_added_stop`, `SKIPPED` via `treat_missing_stop_as_canceled_stop`).
 - `is_valid` is forced to `input_is_valid and stop_id_in_nominal_gtfs`.
 
 Derived matching inputs for trip_updates:
