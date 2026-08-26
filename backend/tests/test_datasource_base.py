@@ -953,7 +953,8 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
         )
 
         kwargs = realtime_repository.update_trip_update_from_sync.await_args.kwargs
-        self.assertFalse(kwargs["is_valid"])
+        self.assertFalse(kwargs["is_trip_valid"])
+        self.assertTrue(kwargs["is_route_valid"])
         self.assertFalse(kwargs["is_active_on_create"])
         self.assertEqual(kwargs["assignment_type"], "NO_MATCH_GENERAL")
 
@@ -1007,7 +1008,8 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
 
         kwargs = realtime_repository.update_vehicle_position_from_sync.await_args.kwargs
         self.assertFalse(kwargs["is_valid"])
-        self.assertFalse(kwargs["trip_is_valid"])
+        self.assertTrue(kwargs["trip_is_trip_valid"])
+        self.assertFalse(kwargs["trip_is_route_valid"])
         self.assertEqual(kwargs["trip_route_id"], "")
 
     async def test_sync_trip_update_records_discards_entire_object_and_deletes_existing_when_policy_requires(self):

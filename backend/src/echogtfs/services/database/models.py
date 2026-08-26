@@ -549,7 +549,8 @@ class Trip(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    is_valid: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_trip_valid: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_route_valid: Mapped[bool] = mapped_column(Boolean, default=True)
 
     data_source: Mapped["DataSource | None"] = relationship(back_populates="trips")
     stop_events: Mapped[list["StopEvent"]] = relationship(
@@ -563,6 +564,11 @@ class Trip(Base):
     def data_source_name(self) -> str | None:
         """Return the name of the data source if this is an external realtime trip."""
         return self.data_source.name if self.data_source else None
+
+    @property
+    def is_valid(self) -> bool:
+        """Backward-compatible aggregate validity for API consumers."""
+        return bool(self.is_trip_valid and self.is_route_valid)
 
 
 class StopEvent(Base):

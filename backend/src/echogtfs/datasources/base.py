@@ -597,7 +597,6 @@ class DatasourceBase(DatasourceInterface):
             "is_active_on_create": bool(
                 record.get("trip_is_active_on_create", payload.get("is_active", True))
             ),
-            "is_valid": bool(record.get("trip_is_valid", payload.get("is_valid", True))),
         }
     
     async def sync_records(
@@ -1298,12 +1297,8 @@ class DatasourceBase(DatasourceInterface):
                 if should_deactivate_trip:
                     is_active_on_create = False
 
-            trip_is_valid = (
-                bool(record.get("is_valid", True))
-                and route_is_valid
-                and trip_reference_is_valid
-                and not has_invalid_stop_reference
-            )
+            trip_is_trip_valid = trip_reference_is_valid
+            trip_is_route_valid = route_is_valid
 
             if existing_trip:
                 stats_updated += 1
@@ -1325,7 +1320,8 @@ class DatasourceBase(DatasourceInterface):
                 schedule_relationship=str(record.get("schedule_relationship", "SCHEDULED")),
                 assignment_type=assignment_type,
                 is_active_on_create=is_active_on_create,
-                is_valid=trip_is_valid,
+                is_trip_valid=trip_is_trip_valid,
+                is_route_valid=trip_is_route_valid,
                 stop_events=stop_events_to_persist,
                 original_trip_id=original_trip_id,
                 scheduled_start_stop_id=(
@@ -1612,7 +1608,8 @@ class DatasourceBase(DatasourceInterface):
             if should_deactivate_vehicle:
                 vehicle_is_active_on_create = False
 
-            trip_is_valid = bool(trip_payload.get("is_valid", True)) and route_is_valid and trip_reference_is_valid
+            trip_is_trip_valid = trip_reference_is_valid
+            trip_is_route_valid = route_is_valid
             vehicle_is_valid = (
                 bool(record.get("is_valid", True))
                 and route_is_valid
@@ -1670,7 +1667,8 @@ class DatasourceBase(DatasourceInterface):
                 trip_schedule_relationship=trip_payload["schedule_relationship"],
                 trip_assignment_type=trip_assignment_type,
                 trip_is_active_on_create=trip_payload["is_active_on_create"],
-                trip_is_valid=trip_is_valid,
+                trip_is_trip_valid=trip_is_trip_valid,
+                trip_is_route_valid=trip_is_route_valid,
                 vehicle_id=str(record["vehicle_id"]),
                 vehicle_label=record.get("vehicle_label"),
                 vehicle_license_plate=record.get("vehicle_license_plate"),

@@ -675,7 +675,8 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
         schedule_relationship: str,
         assignment_type: str,
         is_active_on_create: bool,
-        is_valid: bool,
+        is_trip_valid: bool,
+        is_route_valid: bool,
         stop_events: list[dict[str, Any]],
         original_trip_id: str | None = None,
         scheduled_start_stop_id: str | None = None,
@@ -707,7 +708,8 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                     schedule_relationship=schedule_relationship,
                     assignment_type=assignment_type,
                     is_active=is_active_on_create,
-                    is_valid=is_valid,
+                    is_trip_valid=is_trip_valid,
+                    is_route_valid=is_route_valid,
                 )
 
                 db.add(existing)
@@ -730,7 +732,8 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                 if assignment_type != AssignmentType.MATCH_BY_CACHED_ID:
                     existing.assignment_type = assignment_type
 
-                existing.is_valid = is_valid
+                existing.is_trip_valid = is_trip_valid
+                existing.is_route_valid = is_route_valid
                 existing.updated_at = datetime.now(self._resolve_timezone(self._configured_timezone_name()))
 
             trip_ids_to_clear = [trip_id]
@@ -900,7 +903,8 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
         trip_schedule_relationship: str,
         trip_assignment_type: str,
         trip_is_active_on_create: bool,
-        trip_is_valid: bool,
+        trip_is_trip_valid: bool,
+        trip_is_route_valid: bool,
         vehicle_id: str,
         vehicle_label: str | None,
         vehicle_license_plate: str | None,
@@ -930,7 +934,8 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                     schedule_relationship=trip_schedule_relationship,
                     assignment_type=trip_assignment_type,
                     is_active=trip_is_active_on_create,
-                    is_valid=trip_is_valid,
+                    is_trip_valid=trip_is_trip_valid,
+                    is_route_valid=trip_is_route_valid,
                 )
                 
                 db.add(existing_trip)

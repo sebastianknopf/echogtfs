@@ -626,7 +626,8 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
             schedule_relationship="SCHEDULED",
             assignment_type="ASSIGNED",
             is_active_on_create=False,
-            is_valid=True,
+            is_trip_valid=True,
+            is_route_valid=True,
             stop_events=[
                 {
                     "stop_id": "stop-1",
@@ -671,7 +672,8 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
             schedule_relationship="SCHEDULED",
             assignment_type="ASSIGNED",
             is_active_on_create=False,
-            is_valid=True,
+            is_trip_valid=True,
+            is_route_valid=True,
             stop_events=[],
             scheduled_start_time=datetime(2026, 8, 10, 8, 0, 0, tzinfo=timezone.utc),
             scheduled_end_time=datetime(2026, 8, 10, 9, 0, 0, tzinfo=timezone.utc),
@@ -695,7 +697,8 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
             route_id="old-route",
             schedule_relationship="SCHEDULED",
             assignment_type="ASSIGNED",
-            is_valid=False,
+            is_trip_valid=False,
+            is_route_valid=False,
         )
         session = SimpleNamespace(
             get=AsyncMock(return_value=existing),
@@ -717,7 +720,8 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
             schedule_relationship="ADDED",
             assignment_type="DUPLICATED",
             is_active_on_create=False,
-            is_valid=True,
+            is_trip_valid=True,
+            is_route_valid=True,
             stop_events=[],
         )
 
@@ -726,7 +730,8 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(existing.trip_id, "trip-2")
         self.assertEqual(existing.data_source_id, 22)
         self.assertEqual(existing.source, "source-b")
-        self.assertEqual(existing.is_valid, True)
+        self.assertEqual(existing.is_trip_valid, True)
+        self.assertEqual(existing.is_route_valid, True)
         session.flush.assert_not_awaited()
         session.commit.assert_awaited_once()
 
@@ -753,7 +758,8 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
             trip_schedule_relationship="SCHEDULED",
             trip_assignment_type="ASSIGNED",
             trip_is_active_on_create=True,
-            trip_is_valid=True,
+            trip_is_trip_valid=True,
+            trip_is_route_valid=True,
             vehicle_id="veh-1",
             vehicle_label="Label 1",
             vehicle_license_plate="ABC123",
@@ -786,7 +792,8 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
             route_id="old-route",
             schedule_relationship="SCHEDULED",
             assignment_type="ASSIGNED",
-            is_valid=False,
+            is_trip_valid=False,
+            is_route_valid=False,
         )
         existing_vehicle = SimpleNamespace(
             is_active=True,
@@ -827,7 +834,8 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
             trip_schedule_relationship="ADDED",
             trip_assignment_type="DUPLICATED",
             trip_is_active_on_create=False,
-            trip_is_valid=True,
+            trip_is_trip_valid=True,
+            trip_is_route_valid=True,
             vehicle_id="veh-2",
             vehicle_label="Label 2",
             vehicle_license_plate="XYZ987",
