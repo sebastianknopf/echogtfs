@@ -72,6 +72,7 @@ async def _count_trips_by_realtime_status(repository: RealtimeRepositoryInterfac
         monitored_result = await db.execute(
             select(func.count(Trip.id)).where(
                 Trip.is_active == True,
+                has_stop_event,
                 ~has_realtime_stop_event,
             )
         )
