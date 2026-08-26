@@ -61,7 +61,7 @@ const dashboard = (() => {
     if (_pollTimer) return;
     _pollTimer = window.setInterval(() => {
       if (_isPanelActive()) {
-        _loadDashboardData(false);
+        _loadDashboardData(true);
       }
     }, POLL_INTERVAL_MS);
   }
