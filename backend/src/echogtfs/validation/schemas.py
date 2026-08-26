@@ -442,6 +442,8 @@ class TripRead(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    is_trip_valid: bool = True
+    is_route_valid: bool = True
     is_valid: bool
     stop_events: list[StopEventRead]
     data_source_name: str | None = None

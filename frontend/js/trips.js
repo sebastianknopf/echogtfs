@@ -215,6 +215,8 @@ const trips = (() => {
     const endDate = scheduledEndTime || startDate;
     const operationDayDate = _parseOperationDay(item.start_date);
     const hasInvalidStopEvent = stopEvents.some((stopEvent) => stopEvent?.is_valid === false);
+    const isTripValid = item.is_trip_valid !== false;
+    const isRouteValid = item.is_route_valid !== false;
     const isValid = Boolean(item.is_valid) && !hasInvalidStopEvent;
     const hasOnlyNoDataStopEvents = stopEvents.length > 0 && stopEvents.every(
       (stopEvent) => String(stopEvent?.schedule_relationship || '').trim().toUpperCase() === 'NO_DATA',
@@ -284,6 +286,8 @@ const trips = (() => {
       isInternal: !item.data_source_id,
       isActive: Boolean(item.is_active),
       isValid,
+      isTripValid,
+      isRouteValid,
       hasOnlyNoDataStopEvents,
       isMatched: stopEvents.length > 0,
       scheduleRelationship: item.schedule_relationship || 'SCHEDULED',
@@ -299,11 +303,9 @@ const trips = (() => {
     const modalElement = document.getElementById('view-trip-modal');
     if (!titleElement || !contentElement || !modalElement) return;
 
-    const headerWarning = !trip.isValid
-      ? ` <span class="view-item__warning" title="${ui.esc(window.i18n('trips.resolution.warning'))}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${WARNING_ICON_PATH}"/></svg></span>`
-      : (trip.hasOnlyNoDataStopEvents
-        ? ` <span class="view-item__warning view-item__warning--no-realtime-data" title="${ui.esc(window.i18n('trips.realtime_data.warning'))}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${WARNING_ICON_PATH}"/></svg></span>`
-        : '');
+    const headerWarning = trip.hasOnlyNoDataStopEvents
+      ? ` <span class="view-item__warning view-item__warning--no-realtime-data" title="${ui.esc(window.i18n('trips.realtime_data.warning'))}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${WARNING_ICON_PATH}"/></svg></span>`
+      : '';
     const modalTitle = window.i18n('trips.modal.view');
     const lineLabel = window.i18n('trips.field.line');
     const vehicleLabel = window.i18n('trips.view.vehicle');
@@ -325,7 +327,7 @@ const trips = (() => {
       ? trip.stopEvents.map((stopEvent) => {
         const warning = stopEvent.isValid
           ? ''
-          : `<span class="view-item__warning" title="${ui.esc(window.i18n('trips.resolution.warning'))}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${WARNING_ICON_PATH}"/></svg></span>`;
+          : `<span class="view-item__warning" title="${ui.esc(window.i18n('trips.stop_reference.warning'))}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${WARNING_ICON_PATH}"/></svg></span>`;
 
         return `
           <div class="view-item view-item--entity">
@@ -341,12 +343,20 @@ const trips = (() => {
       }).join('')
       : `<div class="view-item view-item--entity"><div class="view-item__content"><em>${ui.esc(window.i18n('trips.view.empty_stop_events'))}</em></div></div>`;
 
+    const tripIdWarning = trip.isTripValid
+      ? ''
+      : `<span class="view-item__warning" title="${ui.esc(window.i18n('trips.resolution.warning'))}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${WARNING_ICON_PATH}"/></svg></span>`;
+    const routeWarning = trip.isRouteValid
+      ? ''
+      : `<span class="view-item__warning" title="${ui.esc(window.i18n('trips.resolution.warning'))}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${WARNING_ICON_PATH}"/></svg></span>`;
+
     contentElement.innerHTML = `
       <div class="view-section">
         <h3 class="view-section__title">${ui.esc(window.i18n('trips.view.section.trip'))}</h3>
         <div class="view-item">
           <div class="view-item__label">${ui.esc(window.i18n('trips.view.trip_id'))}</div>
           <div class="view-item__content">${ui.esc(trip.tripId)}</div>
+          ${tripIdWarning}
         </div>
         <div class="view-item">
           <div class="view-item__label">${ui.esc(window.i18n('trips.view.original_trip_id'))}</div>
@@ -355,6 +365,7 @@ const trips = (() => {
         <div class="view-item">
           <div class="view-item__label">${ui.esc(window.i18n('trips.view.route'))}</div>
           <div class="view-item__content">${ui.esc(trip.line)}</div>
+          ${routeWarning}
         </div>
         <div class="view-item">
           <div class="view-item__label">${ui.esc(vehicleLabel)}</div>
