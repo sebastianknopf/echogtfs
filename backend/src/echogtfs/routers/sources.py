@@ -79,7 +79,7 @@ async def _enrich_source_with_error_flag(source: DataSource, repository: SystemR
     return DataSourceRead.model_validate(source_dict)
 
 
-@router.get("/adapter-types")
+@router.get("/adapter-types", include_in_schema=False)
 async def list_adapter_types(_: CurrentPoweruser):
     """
     List all available adapter types with their configuration schemas.
@@ -98,7 +98,7 @@ async def list_adapter_types(_: CurrentPoweruser):
     return {"adapter_types": adapter_types}
 
 
-@router.get("/", response_model=List[DataSourceRead])
+@router.get("/", response_model=List[DataSourceRead], include_in_schema=False)
 async def list_sources(
     _: CurrentPoweruser,
     repository: _Repo,
@@ -118,7 +118,7 @@ async def list_sources(
     return enriched_sources
 
 
-@router.get("/{source_id}", response_model=DataSourceRead)
+@router.get("/{source_id}", response_model=DataSourceRead, include_in_schema=False)
 async def get_source(
     source_id: int,
     _: CurrentPoweruser,
@@ -135,7 +135,7 @@ async def get_source(
     return await _enrich_source_with_error_flag(source, repository)
 
 
-@router.get("/{source_id}/mappings/{entity_type}/export")
+@router.get("/{source_id}/mappings/{entity_type}/export", include_in_schema=False)
 async def export_mappings_csv(
     source_id: int,
     entity_type: str,
@@ -168,7 +168,7 @@ async def export_mappings_csv(
     )
 
 
-@router.get("/{source_id}/logs", response_model=List[DataSourceLogRead])
+@router.get("/{source_id}/logs", response_model=List[DataSourceLogRead], include_in_schema=False)
 async def list_source_logs(
     source_id: int,
     _: CurrentPoweruser,
@@ -199,7 +199,7 @@ async def list_source_logs(
     return logs
 
 
-@router.get("/logs/{log_id}/download")
+@router.get("/logs/{log_id}/download", include_in_schema=False)
 async def download_log_file(
     log_id: int,
     background_tasks: BackgroundTasks,
@@ -277,7 +277,7 @@ async def download_log_file(
     )
 
 
-@router.post("/", response_model=DataSourceRead, status_code=201)
+@router.post("/", response_model=DataSourceRead, status_code=201, include_in_schema=False)
 async def create_source(
     source_data: DataSourceCreate,
     _: CurrentPoweruser,
@@ -326,7 +326,7 @@ async def create_source(
     return await _enrich_source_with_error_flag(source, repository)
 
 
-@router.post("/{source_id}/run")
+@router.post("/{source_id}/run", include_in_schema=False)
 async def run_source_import(
     source_id: int,
     _: CurrentPoweruser,
@@ -380,7 +380,7 @@ async def run_source_import(
     )
 
 
-@router.post("/{source_id}/toggle-active", response_model=DataSourceRead)
+@router.post("/{source_id}/toggle-active", response_model=DataSourceRead, include_in_schema=False)
 async def toggle_source_active(
     source_id: int,
     _: CurrentPoweruser,
@@ -434,7 +434,7 @@ async def toggle_source_active(
     return await _enrich_source_with_error_flag(source, repository)
 
 
-@router.post("/{source_id}/mappings/{entity_type}/import")
+@router.post("/{source_id}/mappings/{entity_type}/import", include_in_schema=False)
 async def import_mappings_csv(
     source_id: int,
     entity_type: str,
@@ -478,7 +478,7 @@ async def import_mappings_csv(
     }
 
 
-@router.patch("/{source_id}", response_model=DataSourceRead)
+@router.patch("/{source_id}", response_model=DataSourceRead, include_in_schema=False)
 async def update_source(
     source_id: int,
     source_data: DataSourceUpdate,
@@ -568,7 +568,7 @@ async def update_source(
     return await _enrich_source_with_error_flag(source, repository)
 
 
-@router.delete("/{source_id}", status_code=204)
+@router.delete("/{source_id}", status_code=204, include_in_schema=False)
 async def delete_source(
     source_id: int,
     _: CurrentPoweruser,

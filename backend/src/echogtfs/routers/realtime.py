@@ -36,7 +36,10 @@ async def _get_gtfs_rt_settings() -> tuple[dict[str, Callable[[], GtfsRealtimeEx
     return (
         {
             rows.get(AppSetting.KEY_GTFS_RT_SERVICE_ALERTS_PATH, "realtime/service-alerts.pbf"): lambda: GtfsRealtimeServiceAlertsExportService(realtime_repository),
-            rows.get(AppSetting.KEY_GTFS_RT_TRIP_UPDATES_PATH, "realtime/trip-updates.pbf"): lambda: GtfsRealtimeTripUpdatesExportService(realtime_repository),
+            rows.get(AppSetting.KEY_GTFS_RT_TRIP_UPDATES_PATH, "realtime/trip-updates.pbf"): lambda: GtfsRealtimeTripUpdatesExportService(
+                realtime_repository,
+                repository,
+            ),
             rows.get(AppSetting.KEY_GTFS_RT_VEHICLE_POSITIONS_PATH, "realtime/vehicle-positions.pbf"): lambda: GtfsRealtimeVehiclePositionsExportService(realtime_repository),
         },
         rows.get(AppSetting.KEY_GTFS_RT_USERNAME, ""),
@@ -95,7 +98,7 @@ async def check_gtfs_rt_auth(request: Request) -> None:
         )
 
 
-@router.get("/{path:path}")
+@router.get("/{path:path}", include_in_schema=False)
 async def get_realtime_feed(
     path: str,
     request: Request,

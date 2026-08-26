@@ -55,6 +55,7 @@ class SystemCopyService(SystemCopyInterface):
         AppSetting.KEY_APP_LANGUAGE,
         AppSetting.KEY_GTFS_RT_SERVICE_ALERTS_PATH,
         AppSetting.KEY_GTFS_RT_TRIP_UPDATES_PATH,
+        AppSetting.KEY_GTFS_RT_TRIP_UPDATES_EXCLUDE_TRIPS_WITHOUT_REALTIME_DATA,
         AppSetting.KEY_GTFS_RT_VEHICLE_POSITIONS_PATH,
         AppSetting.KEY_GTFS_RT_USERNAME,
         AppSetting.KEY_GTFS_RT_PASSWORD,

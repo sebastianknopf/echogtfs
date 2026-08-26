@@ -210,6 +210,11 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def delete_trips_by_trip_ids(self, trip_ids: list[str]) -> int:
+        """Delete realtime trip rows by trip_id and return the deleted row count."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def delete_trips_for_data_source_by_ids(
         self,
         source_id: int,
@@ -232,7 +237,8 @@ class RealtimeRepositoryInterface(ABC):
         schedule_relationship: str,
         assignment_type: str,
         is_active_on_create: bool,
-        is_valid: bool,
+        is_trip_valid: bool,
+        is_route_valid: bool,
         stop_events: list[dict[str, Any]],
         original_trip_id: str | None = None,
         scheduled_start_stop_id: str | None = None,
@@ -304,7 +310,8 @@ class RealtimeRepositoryInterface(ABC):
         trip_schedule_relationship: str,
         trip_assignment_type: str,
         trip_is_active_on_create: bool,
-        trip_is_valid: bool,
+        trip_is_trip_valid: bool,
+        trip_is_route_valid: bool,
         vehicle_id: str,
         vehicle_label: str | None,
         vehicle_license_plate: str | None,

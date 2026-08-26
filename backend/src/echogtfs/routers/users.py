@@ -17,17 +17,17 @@ _ERR_USER_EXISTS = "error.user_exists"
 _Repo = Annotated[SystemRepositoryInterface, Depends(get_system_repository)]
 
 
-@router.get("/me", response_model=UserRead)
+@router.get("/me", response_model=UserRead, include_in_schema=False)
 async def read_me(current_user: CurrentUser) -> User:
     return current_user
 
 
-@router.get("/", response_model=list[UserRead])
+@router.get("/", response_model=list[UserRead], include_in_schema=False)
 async def list_users(_: CurrentSuperuser, repository: _Repo) -> list[User]:
     return await repository.list_users()
 
 
-@router.get("/{user_id}", response_model=UserRead)
+@router.get("/{user_id}", response_model=UserRead, include_in_schema=False)
 async def get_user(user_id: int, _: CurrentSuperuser, repository: _Repo) -> User:
     user = await repository.get_user_by_id(user_id)
 
@@ -37,7 +37,7 @@ async def get_user(user_id: int, _: CurrentSuperuser, repository: _Repo) -> User
     return user
 
 
-@router.post("/me/password", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/me/password", status_code=status.HTTP_204_NO_CONTENT, include_in_schema=False)
 async def change_own_password(
     payload: PasswordChange, current_user: CurrentUser, repository: _Repo
 ) -> None:
@@ -57,7 +57,7 @@ async def change_own_password(
     )
 
 
-@router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 async def register(
     payload: UserCreate, _: CurrentSuperuser, repository: _Repo
 ) -> User:
@@ -75,7 +75,7 @@ async def register(
     )
 
 
-@router.put("/me", response_model=UserRead)
+@router.put("/me", response_model=UserRead, include_in_schema=False)
 async def update_me(
     payload: UserUpdate, current_user: CurrentUser, repository: _Repo
 ) -> User:
@@ -95,12 +95,12 @@ async def update_me(
     return user
 
 
-@router.patch("/{user_id}", response_model=UserRead)
+@router.patch("/{user_id}", response_model=UserRead, include_in_schema=False)
 async def update_user(
     user_id: int,
     payload: UserUpdate,
     current_superuser: CurrentSuperuser,
-    repository: _Repo,
+    repository: _Repo
 ) -> User:
     existing_user = await repository.get_user_by_id(user_id)
 
@@ -147,7 +147,7 @@ async def update_user(
     return user
 
 
-@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT, include_in_schema=False)
 async def delete_user(
     user_id: int, current_superuser: CurrentSuperuser, repository: _Repo
 ) -> None:

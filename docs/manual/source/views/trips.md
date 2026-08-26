@@ -1,3 +1,5 @@
+(h-trips-trips)=
+
 # Fahrten
 
 Im Bereich "Fahrten" werden alle aktuellen Fahrten angezeigt.
@@ -20,7 +22,7 @@ Im Bereich "Fahrten" werden alle aktuellen Fahrten angezeigt.
     - **Status**: Status (planmäßig, Zusatzfahrt, Fahrtausfall) der Fahrt
     - **Datenquelle**: Name der Datenquelle von der eine Fahrt synchronisiert wurde
     - **Aktivierungsstatus**: Information, wenn eine Fahrt deaktiviert wurde. Deaktivierte Fahrten werden in der GTFS-RT Ausgabe unterdrückt. Über den "On/Off" Button können Fahrten aktiviert oder deaktiviert werden.
-    - **Fehlerstatus**: Rotes Warndreieck, wenn eine Fahrt ungültige Bezüge (insb. Linie und Haltestelle) aufweist. Solange die Fahrt nicht deaktiviert ist, wird sie weiterhin über GTFS-RT ausgegeben und kann dadurch zu Fehlern bei Abnehmersystemen führen
+    - **Fehler / Warnungen**: Rotes Warndreieck (Fehler), wenn eine Fahrt ungültige Bezüge (insb. Linie und Haltestelle) aufweist. Solange die Fahrt nicht deaktiviert ist, wird sie weiterhin über GTFS-RT ausgegeben und kann dadurch zu Fehlern bei Abnehmersystemen führen. Gelbes Warndreieck (Warnung), wenn eine Fahrt andere, mögliche Inkonsistenzen (z.B.: keine Echtzeitdaten, implizite Zusatzhalte / Haltausfälle) enthält, welche zu Fehlinterpretationen in Abnehmersystemen führen können.
 
 Um die Details zu einer Fahrt anzuzeigen, klicken Sie auf den "View" Button in der entsprechenden Zeile. Daraufhin wird folgender Dialog gezeigt, in dem alle wichtigen Informationen rund um die Fahrt zu sehen sind:
 
@@ -28,7 +30,9 @@ Um die Details zu einer Fahrt anzuzeigen, klicken Sie auf den "View" Button in d
 :name: img-trips-detail-screen
 ```
 
-- Im oberen Bereich des Dialogs werden alle Basisdaten wie **Fahrt-ID**, **Linie**, **Originäre Fahrt-ID**, **Betriebstag, Fahrtstart und -Ende**, sowie **Status** der Fahrt angezeigt. Die Fahrt-ID ist die ID, mit der die Fahrt im GTFS-RT publiziert wird und die zum Soll-Fahrplan passt. Die originäre Fahrt-ID ist die ID, mit der die Fahrt aus der Datenquelle synchronisiert wurde.
+- Im oberen Bereich des Dialogs werden alle Basisdaten wie **Fahrt-ID**, **Linie**, **Fahrzeug**, **Originäre Fahrt-ID**, **Betriebstag, Fahrtstart und -Ende**, sowie **Status** der Fahrt angezeigt. Die Fahrt-ID ist die ID, mit der die Fahrt im GTFS-RT publiziert wird und die zum Soll-Fahrplan passt. Die originäre Fahrt-ID ist die ID, mit der die Fahrt aus der Datenquelle synchronisiert wurde.
+- Ein Fahrzeug wird zu einer Fahrt dann angezeigt, wenn über eine entsprechende Datenquelle (z.B. SIRI-VM) ein Fahrzeug für diese Fahrt erkannt wurde
+- Die Daten für Start und Ende beziehen sich jeweils auf die _Soll-Ankunfts- und Abfahrtszeit_ und berücksichtigen _keine Prognosedaten_! Auf diesem Weg wird eine einfache Identifikation der Fahrt im Soll-Fahrplan möglich.
 - Im unteren Bereich werden die einzelnen Haltestellen der Fahrt mit **Ankunftszeit**, **Abfahrtszeit**, **Status** und **Zuordnungstyp** angezeigt. Der Zuordnungstyp gibt an, auf welchem Weg eine Fahrt aus der Datenquelle einer konkreten Fahrt im Sollfahrplan zugeordnet wurde. Folgende Werte können hier auftauchen:
     - `DIRECT_BY_ID`: die Fahrt wurde anhand ihrer ID im Soll-Fahrplan gefunden
     - `MATCHED_BY_START_STOP`: die Fahrt wurde anhand ihrer Start- und Endhaltestelle, sowie der Abfahrts- und Ankunftszeit im Soll-Fahrplan gefunden
@@ -36,3 +40,9 @@ Um die Details zu einer Fahrt anzuzeigen, klicken Sie auf den "View" Button in d
     - `NO_MATCH_GENERAL`: es wurde keine passende Fahrt im Soll-Fahrplan gefunden
     - `NO_MATCH_AMBIGUOUS_TRIP`: es wurde keine _eindeutig passende Fahrt_ im Soll-Fahrplan gefunden
 - Wenn eine **Linie oder Trip-ID nicht über die GTFS-Daten** gefunden wurde, werden mit einem roten Ausrufezeichen gekennzeichnet. In diesem Fall wird jeweils die originale Linien- und Fahrt-ID angezeigt, welche aus der Datenquelle der Fahrt übermittelt wurde
+
+**Fehler / Warnungen**  
+- Wird am Kopf des Dialogs ein gelbes Warndreieck angezeigt, so liegen für die Fahrt keine Echtzeitinformationen vor. Sie ist dennoch in den Quelldaten enthalten und wird von EchoGTFS überwacht.
+- Wird an der Fahrt-ID oder an der Linie ein rotes Warndreieck angezeigt, konnte keine passende Soll-Fahrt und / oder keine passende Linie im Fahrplan gefunden werden.
+- Wird an einer Haltestelle ein gelbes Warndreieck angezeigt, so liegen für diese Haltestelle Warnungen vor (z.B. impliziter Zusatzhalt oder Haltausfall).
+- Wird an eienr Haltestelle ein rotes Warndreieck angezeigt, so ist der Haltestellenbezug ungültig und die Haltestelle wurde nicht im Fahrplan gefunden.

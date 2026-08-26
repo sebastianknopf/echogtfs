@@ -3,6 +3,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import date, datetime
 
+from echogtfs.enum.gtfsrt import AssignmentType
+
 
 class MatchingServiceInterface(ABC):
     """Interface for matching realtime trip metadata to one GTFS trip ID."""
@@ -19,6 +21,10 @@ class MatchingServiceInterface(ABC):
         scheduled_start_stop_id: str | None = None,
         scheduled_end_stop_id: str | None = None,
         scheduled_intermediate_stops: list[tuple[str, datetime]] | None = None,
-    ) -> str | None:
-        """Return one matched GTFS trip ID, or None when no unique match exists."""
+    ) -> tuple[str | None, AssignmentType]:
+        """Return one matched GTFS trip ID with the assignment type describing the match.
+
+        The trip ID is None when no unique match exists; the assignment type then
+        describes why no trip was assigned.
+        """
         raise NotImplementedError

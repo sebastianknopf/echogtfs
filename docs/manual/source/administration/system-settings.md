@@ -29,6 +29,7 @@ Im Abschnitt "GTFS-Realtime" können Sie folgende Einstellungen vornehmen:
 - **GTFS-RT VehiclePositions Pfad**: Pfad zum öffentlichen GTFS-RT Endpunkt für VehiclePositions
 - **BasicAuth Benutzername:** _(optional)_ Benutzername um die GTFS-RT Endpunkte mit BasicAuth abzusichern
 - **BasicAuth Passwort:** _(optional)_ Password um die GTFS-RT Endpunkte mit BasicAuth abzusichern
+- **Fahrten ohne Echtzeitdaten aus TripUpdates ausschließen**: Schließt überwachte Fahrten (siehe dazu {ref}`h-trips-trips`) aus dem GTFS-RT feed aus
 
 (h-system-settings-cleanup)=
 

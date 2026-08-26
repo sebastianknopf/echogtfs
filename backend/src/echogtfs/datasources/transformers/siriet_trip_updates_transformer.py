@@ -46,7 +46,7 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
         filtered_invalid = 0
 
         try:
-            for journey in journeys:
+            for journey_index, journey in enumerate(journeys, start=1):
                 try:
                     monitored = self._parse_bool(
                         self._get_text(journey.find("siri:Monitored", self._siri_ns)),
@@ -215,6 +215,8 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
         elif trip_canceled:
             schedule_relationship = "CANCELED"
 
+        scheduled_intermediate_stops = self._extract_scheduled_intermediate_stops_from_calls(journey)
+
         return {
             "trip_id": trip_id,
             "route_id": route_id,
@@ -226,8 +228,39 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
             "scheduled_end_stop_id": scheduled_end_stop_id,
             "scheduled_start_time": scheduled_start_time,
             "scheduled_end_time": scheduled_end_time,
+            "scheduled_intermediate_stops": scheduled_intermediate_stops,
             "stop_events": stop_events,
         }
+
+    def _extract_scheduled_intermediate_stops_from_calls(
+        self,
+        journey: ET.Element,
+    ) -> list[tuple[str, datetime]]:
+        ordered_calls = self._iter_calls_in_order(journey)
+        if len(ordered_calls) <= 2:
+            return []
+
+        extracted: list[tuple[str, datetime]] = []
+        for call_element, _, _ in ordered_calls[1:-1]:
+            stop_id = self._get_text(call_element.find("siri:StopPointRef", self._siri_ns))
+            if not stop_id:
+                continue
+
+            aimed_departure_time = self._parse_datetime(
+                self._get_text(call_element.find("siri:AimedDepartureTime", self._siri_ns))
+            )
+            
+            if aimed_departure_time is None:
+                aimed_departure_time = self._parse_datetime(
+                    self._get_text(call_element.find("siri:AimedArrivalTime", self._siri_ns))
+                )
+
+            if aimed_departure_time is None:
+                continue
+
+            extracted.append((stop_id, aimed_departure_time))
+
+        return extracted
 
     def _extract_stop_events_from_calls(self, journey: ET.Element) -> list[dict[str, Any]]:
         stop_events: list[dict[str, Any]] = []
@@ -239,11 +272,11 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
                 continue
 
             if call_name == "RecordedCall":
-                actual_arrival_text = self._get_text(
-                    call_element.find("siri:ActualArrivalTime", self._siri_ns)
+                expected_arrival_text = self._get_text(
+                    call_element.find("siri:ExpectedArrivalTime", self._siri_ns)
                 )
-                actual_departure_text = self._get_text(
-                    call_element.find("siri:ActualDepartureTime", self._siri_ns)
+                expected_departure_text = self._get_text(
+                    call_element.find("siri:ExpectedDepartureTime", self._siri_ns)
                 )
                 aimed_arrival_text = self._get_text(
                     call_element.find("siri:AimedArrivalTime", self._siri_ns)
@@ -252,9 +285,11 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
                     call_element.find("siri:AimedDepartureTime", self._siri_ns)
                 )
 
-                has_realtime_data = bool(actual_arrival_text or actual_departure_text)
-                arrival_time = self._parse_datetime(actual_arrival_text)
-                departure_time = self._parse_datetime(actual_departure_text)
+                has_realtime_data = bool(
+                    expected_arrival_text or expected_departure_text
+                )
+                arrival_time = self._parse_datetime(expected_arrival_text)
+                departure_time = self._parse_datetime(expected_departure_text)
 
                 if arrival_time is None:
                     arrival_time = self._parse_datetime(aimed_arrival_text)
@@ -272,12 +307,16 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
                     self._get_text(call_element.find("siri:Cancellation", self._siri_ns)),
                     default=False,
                 )
+                is_extra_call = self._parse_bool(
+                    self._get_text(call_element.find("siri:ExtraCall", self._siri_ns)),
+                    default=False,
+                )
 
-                schedule_relationship = "SCHEDULED"
-                if is_canceled:
-                    schedule_relationship = "SKIPPED"
-                elif not has_realtime_data:
-                    schedule_relationship = "NO_DATA"
+                schedule_relationship = self._resolve_stop_event_schedule_relationship(
+                    is_canceled=is_canceled,
+                    is_added=is_extra_call,
+                    has_realtime_data=has_realtime_data,
+                )
             else:
                 expected_arrival_text = self._get_text(
                     call_element.find("siri:ExpectedArrivalTime", self._siri_ns)
@@ -317,13 +356,11 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
                     default=False,
                 )
 
-                schedule_relationship = "SCHEDULED"
-                if is_canceled:
-                    schedule_relationship = "SKIPPED"
-                elif is_extra_call:
-                    schedule_relationship = "ADDED"
-                elif not has_expected_data:
-                    schedule_relationship = "NO_DATA"
+                schedule_relationship = self._resolve_stop_event_schedule_relationship(
+                    is_canceled=is_canceled,
+                    is_added=is_extra_call,
+                    has_realtime_data=has_expected_data,
+                )
 
             stop_events.append(
                 {
@@ -336,6 +373,21 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
             )
 
         return stop_events
+
+    @staticmethod
+    def _resolve_stop_event_schedule_relationship(
+        *,
+        is_canceled: bool,
+        is_added: bool,
+        has_realtime_data: bool,
+    ) -> str:
+        if is_canceled:
+            return "SKIPPED"
+        if is_added:
+            return "ADDED"
+        if not has_realtime_data:
+            return "NO_DATA"
+        return "SCHEDULED"
 
     def _iter_calls_in_order(self, journey: ET.Element) -> list[tuple[ET.Element, str, int]]:
         calls: list[tuple[ET.Element, str, int]] = []

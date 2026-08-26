@@ -39,6 +39,9 @@ class AppSetting(Base):
 
     KEY_GTFS_RT_SERVICE_ALERTS_PATH: ClassVar[str] = "gtfs_rt_service_alerts_path"
     KEY_GTFS_RT_TRIP_UPDATES_PATH: ClassVar[str] = "gtfs_rt_trip_updates_path"
+    KEY_GTFS_RT_TRIP_UPDATES_EXCLUDE_TRIPS_WITHOUT_REALTIME_DATA: ClassVar[str] = (
+        "gtfs_rt_trip_updates_exclude_trips_without_realtime_data"
+    )
     KEY_GTFS_RT_VEHICLE_POSITIONS_PATH: ClassVar[str] = "gtfs_rt_vehicle_positions_path"
     KEY_GTFS_RT_USERNAME: ClassVar[str] = "gtfs_rt_username"
     KEY_GTFS_RT_PASSWORD: ClassVar[str] = "gtfs_rt_password"
@@ -60,6 +63,7 @@ class AppSetting(Base):
         KEY_APP_LANGUAGE,
         KEY_GTFS_RT_SERVICE_ALERTS_PATH,
         KEY_GTFS_RT_TRIP_UPDATES_PATH,
+        KEY_GTFS_RT_TRIP_UPDATES_EXCLUDE_TRIPS_WITHOUT_REALTIME_DATA,
         KEY_GTFS_RT_VEHICLE_POSITIONS_PATH,
         KEY_GTFS_RT_USERNAME,
         KEY_GTFS_RT_PASSWORD,
@@ -545,7 +549,8 @@ class Trip(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    is_valid: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_trip_valid: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_route_valid: Mapped[bool] = mapped_column(Boolean, default=True)
 
     data_source: Mapped["DataSource | None"] = relationship(back_populates="trips")
     stop_events: Mapped[list["StopEvent"]] = relationship(
@@ -560,6 +565,11 @@ class Trip(Base):
         """Return the name of the data source if this is an external realtime trip."""
         return self.data_source.name if self.data_source else None
 
+    @property
+    def is_valid(self) -> bool:
+        """Backward-compatible aggregate validity for API consumers."""
+        return bool(self.is_trip_valid and self.is_route_valid)
+
 
 class StopEvent(Base):
     """GTFS-RT stop event tied to a realtime trip."""
@@ -572,10 +582,12 @@ class StopEvent(Base):
         primary_key=True,
     )
     stop_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    original_stop_id: Mapped[str] = mapped_column(Text)
     stop_sequence: Mapped[str] = mapped_column(Text, primary_key=True)
     arrival_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     departure_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     schedule_relationship: Mapped[str] = mapped_column(Text, default="SCHEDULED")
+    is_implied_schedule_relationship: Mapped[bool] = mapped_column(Boolean, default=False)
     is_valid: Mapped[bool] = mapped_column(Boolean, default=True)
 
     trip: Mapped["Trip"] = relationship(back_populates="stop_events")

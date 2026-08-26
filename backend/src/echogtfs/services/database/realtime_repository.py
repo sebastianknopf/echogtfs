@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 import uuid
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from echogtfs.enum.gtfsrt import AssignmentType
 from sqlalchemy import case, delete, exists, func, select, update
 from sqlalchemy.orm import selectinload
 
@@ -629,6 +631,18 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
             
             return {str(value) for value in result.scalars().all()}
 
+    async def delete_trips_by_trip_ids(self, trip_ids: list[str]) -> int:
+            """Delete realtime trip rows by trip_id and return the deleted row count."""
+            if not trip_ids:
+                return 0
+    
+            stmt = delete(Trip).where(Trip.trip_id.in_(trip_ids))
+    
+            async with self.get_session() as db:
+                result = await db.execute(stmt)
+                await self.commit(db)
+                return int(result.rowcount or 0)
+
     async def delete_trips_for_data_source_by_ids(
         self,
         source_id: int,
@@ -661,7 +675,8 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
         schedule_relationship: str,
         assignment_type: str,
         is_active_on_create: bool,
-        is_valid: bool,
+        is_trip_valid: bool,
+        is_route_valid: bool,
         stop_events: list[dict[str, Any]],
         original_trip_id: str | None = None,
         scheduled_start_stop_id: str | None = None,
@@ -693,7 +708,8 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                     schedule_relationship=schedule_relationship,
                     assignment_type=assignment_type,
                     is_active=is_active_on_create,
-                    is_valid=is_valid,
+                    is_trip_valid=is_trip_valid,
+                    is_route_valid=is_route_valid,
                 )
 
                 db.add(existing)
@@ -712,8 +728,13 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                 existing.start_date = start_date
                 existing.route_id = route_id
                 existing.schedule_relationship = schedule_relationship
-                existing.assignment_type = assignment_type
-                existing.is_valid = is_valid
+
+                if assignment_type != AssignmentType.MATCH_BY_CACHED_ID:
+                    existing.assignment_type = assignment_type
+
+                existing.is_trip_valid = is_trip_valid
+                existing.is_route_valid = is_route_valid
+                existing.updated_at = datetime.now(self._resolve_timezone(self._configured_timezone_name()))
 
             trip_ids_to_clear = [trip_id]
             if previous_trip_id != trip_id:
@@ -724,6 +745,13 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
             for event_data in stop_events:
                 payload = dict(event_data)
                 payload.pop("trip_id", None)
+                if payload.get("original_stop_id") in (None, ""):
+                    payload["original_stop_id"] = payload.get("stop_id")
+
+                payload["is_implied_schedule_relationship"] = bool(
+                    payload.get("is_implied_schedule_relationship", False)
+                )
+                
                 db.add(StopEvent(trip_id=trip_id, **payload))
 
             await self.commit(db)
@@ -882,7 +910,8 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
         trip_schedule_relationship: str,
         trip_assignment_type: str,
         trip_is_active_on_create: bool,
-        trip_is_valid: bool,
+        trip_is_trip_valid: bool,
+        trip_is_route_valid: bool,
         vehicle_id: str,
         vehicle_label: str | None,
         vehicle_license_plate: str | None,
@@ -912,8 +941,10 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                     schedule_relationship=trip_schedule_relationship,
                     assignment_type=trip_assignment_type,
                     is_active=trip_is_active_on_create,
-                    is_valid=trip_is_valid,
+                    is_trip_valid=trip_is_trip_valid,
+                    is_route_valid=trip_is_route_valid,
                 )
+                
                 db.add(existing_trip)
                 await db.flush()
 
@@ -941,6 +972,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                     is_active=is_active_on_create,
                     is_valid=is_valid,
                 )
+                
                 db.add(existing_vehicle)
                 await db.flush()
             else:
@@ -956,9 +988,37 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                 existing_vehicle.longitude = longitude
                 existing_vehicle.current_stop_sequence = current_stop_sequence
                 existing_vehicle.current_status = current_status
-                existing_vehicle.assignment_type = assignment_type
+
+                if assignment_type != AssignmentType.MATCH_BY_CACHED_ID:
+                    existing_vehicle.assignment_type = assignment_type
+
                 existing_vehicle.congestion_level = congestion_level
                 existing_vehicle.is_valid = is_valid
+                existing_vehicle.updated_at = datetime.now(self._resolve_timezone(self._configured_timezone_name()))
 
             await self.commit(db)
             return action
+
+    @staticmethod
+    def _configured_timezone_name() -> str:
+        try:
+            from echogtfs.common.config import settings
+
+            timezone_name = getattr(settings, "timezone", "UTC")
+        except Exception:  # noqa: BLE001
+            timezone_name = "UTC"
+
+        if not isinstance(timezone_name, str) or not timezone_name.strip():
+            return "UTC"
+
+        return timezone_name
+
+    @staticmethod
+    def _resolve_timezone(timezone_name: object) -> ZoneInfo:
+        if not isinstance(timezone_name, str) or not timezone_name.strip():
+            return ZoneInfo("UTC")
+
+        try:
+            return ZoneInfo(timezone_name)
+        except ZoneInfoNotFoundError:
+            return ZoneInfo("UTC")

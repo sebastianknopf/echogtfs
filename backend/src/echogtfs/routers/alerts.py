@@ -161,7 +161,7 @@ def _enrich_alerts_with_entity_names(
                 entity["stop_name"] = entity_names["stop"].get(entity["stop_id"])
 
 
-@router.get("/", response_model=ServiceAlertListResponse)
+@router.get("/", response_model=ServiceAlertListResponse, include_in_schema=False)
 async def list_alerts(
     repository: _Repo,
     gtfs_repository: _GtfsRepo,
@@ -217,7 +217,7 @@ async def list_alerts(
     return response_dict
 
 
-@router.get("/{alert_id}", response_model=ServiceAlertRead)
+@router.get("/{alert_id}", response_model=ServiceAlertRead, include_in_schema=False)
 async def get_alert(alert_id: UUID, repository: _Repo, gtfs_repository: _GtfsRepo) -> ServiceAlertRead:
     """
     Get a single service alert by ID (public endpoint).
@@ -240,7 +240,7 @@ async def get_alert(alert_id: UUID, repository: _Repo, gtfs_repository: _GtfsRep
     return alert_dict
 
 
-@router.post("/", response_model=ServiceAlertRead, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=ServiceAlertRead, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 async def create_alert(
     payload: ServiceAlertCreate,
     _: CurrentUser,
@@ -301,7 +301,7 @@ async def create_alert(
     return alert_dict
 
 
-@router.post("/{alert_id}/toggle-active", response_model=ServiceAlertRead)
+@router.post("/{alert_id}/toggle-active", response_model=ServiceAlertRead, include_in_schema=False)
 async def toggle_alert_active(
     alert_id: UUID,
     _: CurrentUser,
@@ -322,7 +322,7 @@ async def toggle_alert_active(
     return alert
 
 
-@router.patch("/{alert_id}", response_model=ServiceAlertRead)
+@router.patch("/{alert_id}", response_model=ServiceAlertRead, include_in_schema=False)
 async def update_alert(
     alert_id: UUID,
     payload: ServiceAlertUpdate,
@@ -416,7 +416,7 @@ async def update_alert(
     return alert_dict
 
 
-@router.delete("/{alert_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{alert_id}", status_code=status.HTTP_204_NO_CONTENT, include_in_schema=False)
 async def delete_alert(
     alert_id: UUID,
     _: CurrentUser,

@@ -46,6 +46,7 @@ class AppSettings(BaseModel):
     # GTFS-RT endpoint configuration
     gtfs_rt_service_alerts_path:   str = 'realtime/service-alerts.pbf'
     gtfs_rt_trip_updates_path:     str = 'realtime/trip-updates.pbf'
+    gtfs_rt_trip_updates_exclude_trips_without_realtime_data: bool = False
     gtfs_rt_vehicle_positions_path: str = 'realtime/vehicle-positions.pbf'
     gtfs_rt_username: str = ''
     gtfs_rt_password: str | None = ''
@@ -97,6 +98,7 @@ class PublicAppSettings(BaseModel):
 class DashboardCounter(BaseModel):
     active: int
     inactive: int
+    monitored: int = 0
 
 
 class DashboardCounters(BaseModel):
@@ -407,11 +409,13 @@ class StopEventRead(BaseModel):
     """Read model for realtime stop events."""
     trip_id: str
     stop_id: str
+    original_stop_id: str | None = None
     stop_name: str | None = None
     stop_sequence: str
     arrival_time: datetime
     departure_time: datetime
     schedule_relationship: str
+    is_implied_schedule_relationship: bool = False
     is_valid: bool
 
     model_config = {"from_attributes": True}
@@ -440,6 +444,8 @@ class TripRead(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    is_trip_valid: bool = True
+    is_route_valid: bool = True
     is_valid: bool
     stop_events: list[StopEventRead]
     data_source_name: str | None = None

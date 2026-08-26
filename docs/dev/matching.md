@@ -19,10 +19,12 @@ match(
     scheduled_start_stop_id: str | None = None,
     scheduled_end_stop_id: str | None = None,
     scheduled_intermediate_stops: list[tuple[str, datetime]] | None = None,
-) -> str | None
+) -> tuple[str | None, AssignmentType]:
 ```
 
 The result is one GTFS trip ID when exactly one valid match is found. Cache hits are returned immediately. No exception is raised for missing, invalid, or ambiguous matches.
+
+The `AssignentType` is returned for a technical description of the matching result.
 
 ## Matching Pipeline
 
@@ -67,12 +69,8 @@ The stage succeeds only when the repository returns exactly one trip ID. On succ
 
 ## Intermediate-Stop Fallback
 
-Fallback matching runs only when all of the following are true:
-
-- `scheduled_start_time is None`
-- `scheduled_end_time is None`
-- `scheduled_intermediate_stops` is non-empty
-- At least one intermediate anchor remains after normalization
+Fallback matching runs only when the start/stop matching fails and `scheduled_intermediate_stops` is non-empty
+- At least one intermediate anchor remains after normalization.
 
 The service first requests route-scoped candidate IDs with `find_trip_ids_by_match_properties(...)`, passing `route_id` and the supplied `operation_day_date`. If no candidates are returned, fallback fails.
 
@@ -80,8 +78,8 @@ For each candidate, the service loads the trip and its stop times with `get_gtfs
 
 1. The trip must have a non-empty `stop_times` list.
 2. The stop time must have a string `stop_id` and a non-null `departure_time`.
-3. The candidate stop ID must start with the normalized anchor stop ID.
-4. Both departure and scheduled times must be datetimes whose UTC values differ by no more than 60 seconds.
+3. The candidate stop ID must start with the normalized anchor stop ID (matching based on station level).
+4. Both departure and scheduled times must be datetimes whose UTC values differ by no more than **120 seconds**.
 
 If any anchor has no matching stop time, the candidate is rejected. Fallback succeeds only when exactly one candidate remains. That result is then cached.
 
@@ -97,6 +95,6 @@ An anchor cannot match when either time cannot be converted to UTC.
 
 ## Determinism and Caching
 
-Only one unique candidate is accepted. Zero candidates and ambiguous results return `None` silently.
+Only one unique candidate is accepted. Zero candidates and ambiguous results return `None`. In any case, the `AssignmentType` is returned in order to store it on each trip object.
 
 The cache key is the external realtime `trip_id`. No cache write occurs when matching fails, is ambiguous, or stops at a precondition or normalization check.

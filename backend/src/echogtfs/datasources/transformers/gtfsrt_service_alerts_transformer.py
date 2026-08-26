@@ -33,7 +33,7 @@ class GtfsRtServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         filtered_expired = 0
 
         try:
-            for entity in feed.entity:
+            for entity_index, entity in enumerate(feed.entity, start=1):
                 if not entity.HasField("alert"):
                     continue
 

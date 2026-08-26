@@ -12,6 +12,9 @@ When no argument is given the script starts an interactive rediscmd shell.
 The custom command "CLEAR TRIPS" removes all Redis keys below the
 "echogtfs:data:trips" cache area.
 
+The custom command "LIST TRIPS" lists all Redis keys below the
+"echogtfs:data:trips" cache area together with their values.
+
 Other Redis commands are passed directly to redis-cli.
 
 .EXAMPLE
@@ -25,6 +28,10 @@ Other Redis commands are passed directly to redis-cli.
 .EXAMPLE
 # Clear all trip cache entries
 .\scripts\rediscmd.ps1 "CLEAR TRIPS"
+
+.EXAMPLE
+# List all trip cache entries and their values
+.\scripts\rediscmd.ps1 "LIST TRIPS"
 #>
 [CmdletBinding()]
 param(
@@ -174,6 +181,62 @@ function Clear-Trips {
     Write-Host "$Deleted deleted"
 }
 
+# List all trip cache entries including their values.
+#
+# Output format:
+# echogtfs:data:trips:some-key > some-value
+#
+# SCAN is used instead of KEYS so Redis is not blocked while traversing
+# the key space.
+
+function List-Trips {
+    $Pattern = "echogtfs:data:trips:*"
+    $Cursor  = "0"
+
+    do {
+        $ScanOutput = @(
+            docker exec -i $ContainerName redis-cli @RedisArgs `
+                SCAN $Cursor MATCH $Pattern COUNT 500
+        )
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "Redis SCAN failed."
+        }
+
+        if ($ScanOutput.Count -lt 1) {
+            throw "Redis SCAN failed."
+        }
+
+        $Cursor = $ScanOutput[0].Trim()
+
+        $Keys = @(
+            $ScanOutput |
+                Select-Object -Skip 1 |
+                Where-Object {
+                    $_ -and $_.Trim() -ne ""
+                } |
+                ForEach-Object {
+                    $_.Trim()
+                }
+        )
+
+        foreach ($Key in $Keys) {
+            $Value = @(
+                docker exec -i $ContainerName redis-cli @RedisArgs GET $Key
+            )
+
+            if ($LASTEXITCODE -ne 0) {
+                throw "Redis GET failed for key '$Key'."
+            }
+
+            $ValueText = ($Value -join "`n").TrimEnd()
+
+            Write-Host "$Key > $ValueText"
+        }
+
+    } while ($Cursor -ne "0")
+}
+
 # Execute a single command.
 
 function Invoke-Command {
@@ -193,6 +256,11 @@ function Invoke-Command {
     switch ($NormalizedCommand) {
         "CLEAR TRIPS" {
             Clear-Trips
+            break
+        }
+
+        "LIST TRIPS" {
+            List-Trips
             break
         }
 
@@ -225,6 +293,7 @@ else {
     Write-Host "Redis command shell (type 'EXIT' or 'QUIT' to exit)"
     Write-Host ""
     Write-Host "CLEAR TRIPS - Remove all trip cache entries"
+    Write-Host "LIST TRIPS - List all trip cache entries and their values"
     Write-Host "EXIT - Exit the shell"
     Write-Host "QUIT - Exit the shell"
     Write-Host ""

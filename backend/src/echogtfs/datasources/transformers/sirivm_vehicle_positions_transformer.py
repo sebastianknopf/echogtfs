@@ -41,7 +41,7 @@ class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
         filtered_invalid = 0
 
         try:
-            for activity in activities:
+            for activity_index, activity in enumerate(activities, start=1):
                 try:
                     vehicle_position = self._parse_vehicle_activity(activity)
                     if vehicle_position is None:

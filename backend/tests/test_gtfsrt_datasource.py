@@ -6,6 +6,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import _service_test_bootstrap  # noqa: F401
 
 from echogtfs.datasources.gtfsrt import GtfsRealtimeDatasource
 from echogtfs.datasources import gtfsrt as gtfsrt_module

@@ -7,6 +7,9 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import _service_test_bootstrap  # noqa: F401
 
 from echogtfs.datasources import siriet as siriet_module
 from echogtfs.datasources.siriet import SiriEtDatasource

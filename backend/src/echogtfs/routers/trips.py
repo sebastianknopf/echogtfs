@@ -123,7 +123,7 @@ def _enrich_trips_with_entity_names(
             trip["is_valid"] = False
 
 
-@router.get("/", response_model=TripListResponse)
+@router.get("/", response_model=TripListResponse, include_in_schema=False)
 async def list_trips(
     _: CurrentUser,
     repository: _Repo,
@@ -167,7 +167,7 @@ async def list_trips(
     return response_dict
 
 
-@router.post("/{trip_id}/toggle-active", response_model=TripRead)
+@router.post("/{trip_id}/toggle-active", response_model=TripRead, include_in_schema=False)
 async def toggle_trip_active(
     trip_id: UUID,
     _: CurrentUser,

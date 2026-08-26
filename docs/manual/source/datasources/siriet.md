@@ -26,6 +26,10 @@ Die folgenden Parameter können in der Konfiguration der Datenquelle gesetzt wer
 - **Filter**: Optionaler Filter für Betreiberkennungen.
   - Ergebnis: Wenn ein Filter gesetzt ist, werden nur Fahrten aus passenden Betreiberreferenzen berücksichtigt. `*` wird als Wildcard behandelt und steht für beliebig viele beliebige Zeichen.
 
+```{warning}
+In der aktuellen Umsetzungsvariante wird die Ausgabe von Zusatzhalten über GTFS-RT nicht unterstützt! Die hierzu notwendige [Erweiterung mit `TripModifications`](https://gtfs.org/documentation/realtime/reference/#message-tripmodifications) ist aktuell noch experimentell und [wird von GoogleTransit noch nicht unterstützt](https://developers.google.com/transit/gtfs-realtime/reference?hl=de).
+```
+
 ## Verfügbare Dialekte
 
 Die SIRI-ET-Datenquelle verwendet den folgenden Dialekte:

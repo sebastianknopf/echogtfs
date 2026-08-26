@@ -29,12 +29,14 @@ from echogtfs.routers.realtime import router as realtime_router
 from echogtfs.routers.dashboard import router as dashboard_router
 from echogtfs.routers.trips import router as trips_router
 from echogtfs.routers.vehicles import router as vehicles_router
+from echogtfs.routers.monitoring import router as monitoring_router
 from echogtfs.services.gtfs import GtfsImportService
 from echogtfs.services.cleanup import CleanupService
 from echogtfs.routers.settings import router as settings_router
 from echogtfs.routers.systemcopy import router as systemcopy_router
 from echogtfs.routers.sources import router as sources_router
 from echogtfs.routers.users import router as users_router
+from echogtfs._version import __version__
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -92,6 +94,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     
     yield
 
+    await datasource_scheduler_service.close()
+
     # close database repositories on shutdown
     await caching_service.close()
     await gtfs_repository.close()
@@ -101,16 +105,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 # -- FastAPI app ---------------------------------------------------------------
 # Docs are disabled by default; set DOCS_ENABLED=true to re-enable.
-_docs_url    = "/api/docs"    if settings.docs_enabled else None
-_redoc_url   = "/api/redoc"   if settings.docs_enabled else None
-_openapi_url = "/api/openapi.json" if settings.docs_enabled else None
+_docs_url    = "/api/swagger"       if settings.docs_enabled else None
+_openapi_url = "/api/openapi.json"  if settings.docs_enabled else None
 
 app = FastAPI(
     title="echogtfs",
-    version="0.1.0",
+    version=__version__,
     lifespan=lifespan,
     docs_url=_docs_url,
-    redoc_url=_redoc_url,
     openapi_url=_openapi_url,
 )
 
@@ -136,19 +138,15 @@ app.add_middleware(
     expose_headers=["X-New-Token"],  # Allow frontend to read new token from response
 )
 
-app.include_router(auth_router,     prefix="/api/auth",     tags=["auth"])
-app.include_router(users_router,    prefix="/api/users",    tags=["users"])
-app.include_router(settings_router, prefix="/api/settings", tags=["settings"])
-app.include_router(systemcopy_router, prefix="/api/systemcopy", tags=["systemcopy"])
-app.include_router(gtfs_router,     prefix="/api/gtfs",     tags=["gtfs"])
-app.include_router(sources_router,  prefix="/api/sources",  tags=["sources"])
-app.include_router(alerts_router,   prefix="/api/alerts",   tags=["alerts"])
-app.include_router(dashboard_router, prefix="/api/dashboard", tags=["dashboard"])
-app.include_router(trips_router,    prefix="/api/trips",    tags=["trips"])
-app.include_router(vehicles_router, prefix="/api/vehicles", tags=["vehicles"])
-app.include_router(realtime_router, prefix="/api",          tags=["realtime"])
-
-
-@app.get("/api/health", tags=["health"])
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
+app.include_router(auth_router,         prefix="/api/auth",         tags=["auth"])
+app.include_router(dashboard_router,    prefix="/api/dashboard",    tags=["dashboard"])
+app.include_router(alerts_router,       prefix="/api/alerts",       tags=["alerts"])
+app.include_router(trips_router,        prefix="/api/trips",        tags=["trips"])
+app.include_router(vehicles_router,     prefix="/api/vehicles",     tags=["vehicles"])
+app.include_router(monitoring_router,   prefix="/api/monitoring",   tags=["monitoring"])
+app.include_router(sources_router,      prefix="/api/sources",      tags=["sources"])
+app.include_router(users_router,        prefix="/api/users",        tags=["users"])
+app.include_router(settings_router,     prefix="/api/settings",     tags=["settings"])
+app.include_router(gtfs_router,         prefix="/api/gtfs",         tags=["gtfs"])
+app.include_router(systemcopy_router,   prefix="/api/systemcopy",   tags=["systemcopy"])
+app.include_router(realtime_router,     prefix="/api",              tags=["realtime"])

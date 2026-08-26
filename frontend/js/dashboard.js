@@ -41,7 +41,7 @@ const dashboard = (() => {
   let _dashboardData = {
     counts: {
       service_alerts: { active: 0, inactive: 0 },
-      trip_updates: { active: 0, inactive: 0 },
+      trip_updates: { active: 0, monitored: 0, inactive: 0 },
       vehicle_positions: { active: 0, inactive: 0 },
     },
     endpoints: {
@@ -61,7 +61,7 @@ const dashboard = (() => {
     if (_pollTimer) return;
     _pollTimer = window.setInterval(() => {
       if (_isPanelActive()) {
-        _loadDashboardData(false);
+        _loadDashboardData(true);
       }
     }, POLL_INTERVAL_MS);
   }
@@ -114,7 +114,12 @@ const dashboard = (() => {
           </h3>
         </div>
         <div class="dashboard-stat__value-wrap">
-          <div class="dashboard-stat__subvalue">${window.i18n('dashboard.metric.inactive', { count: _dashboardData.counts[item.key]?.inactive ?? 0 })}</div>
+          ${item.key === 'trip_updates'
+            ? `<div class="dashboard-stat__subvalues">
+                <div class="dashboard-stat__subvalue">${window.i18n('dashboard.metric.monitored', { count: _dashboardData.counts[item.key]?.monitored ?? 0 })}</div>
+                <div class="dashboard-stat__subvalue">${window.i18n('dashboard.metric.inactive', { count: _dashboardData.counts[item.key]?.inactive ?? 0 })}</div>
+              </div>`
+            : `<div class="dashboard-stat__subvalue">${window.i18n('dashboard.metric.inactive', { count: _dashboardData.counts[item.key]?.inactive ?? 0 })}</div>`}
         </div>
       </article>
     `).join('');

@@ -131,7 +131,13 @@ Compared to other cron-based tasks (e.g. GTFS import, cleanup), the datasources 
 
 This cron expression would run the datasource every 30 seconds (on ':00 and on ':30).
 
-The scheduler service ensures that each data source can **only be running once** at the same time concurrently. This means, that if a data source run takes longer than the cron expression would run the data source, the run is skipped.
+The scheduler service ensures that each data source can **only have no concurrent runs** to avoid inconsistences. This means, that if a data source run takes longer than the cron expression would run the data source, the run is skipped.
+
+### Data Source Workers
+
+The `DatasourceSchedulerService` checks for the configured cron expressions and runs the data sources independently form the main event loop. This is to avoid blocking behaviour of the frontend and other parts of the application. Each data source run is executed in a separate process in the process pool.
+
+To configure the maximum number of workers for data sources, set the desired value in the environment variable `DATASOURCE_PROCESS_POOL_SIZE`. Default value is `2`.
 
 ## GTFS-Realtime Feed
 

@@ -80,7 +80,7 @@ def _apply_effective_vehicle_validity(
             vehicle["is_valid"] = False
 
 
-@router.get("/", response_model=VehicleListResponse)
+@router.get("/", response_model=VehicleListResponse, include_in_schema=False)
 async def list_vehicles(
     _: CurrentUser,
     repository: _Repo,
@@ -126,7 +126,7 @@ async def list_vehicles(
     return response_dict
 
 
-@router.post("/{vehicle_id}/toggle-active", response_model=VehicleRead)
+@router.post("/{vehicle_id}/toggle-active", response_model=VehicleRead, include_in_schema=False)
 async def toggle_vehicle_active(
     vehicle_id: UUID,
     _: CurrentUser,

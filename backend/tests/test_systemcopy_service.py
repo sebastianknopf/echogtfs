@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from echogtfs.services.database.models import DataSource, DataSourceEnrichment, DataSourceMapping, User
+from echogtfs.services.database.models import AppSetting, DataSource, DataSourceEnrichment, DataSourceMapping, User
 from echogtfs.services.systemcopy.systemcopy_service import SystemCopyService
 
 
@@ -77,6 +77,25 @@ class _FakeRepository:
 
 
 class TestSystemCopyService(unittest.IsolatedAsyncioTestCase):
+    def test_serialize_system_settings_includes_trip_update_realtime_data_setting(self):
+        service = SystemCopyService()
+        setting = AppSetting(
+            key=AppSetting.KEY_GTFS_RT_TRIP_UPDATES_EXCLUDE_TRIPS_WITHOUT_REALTIME_DATA,
+            value="true",
+        )
+
+        rows = service._serialize_app_settings([setting], keys=set(service._SYSTEM_KEYS))
+
+        self.assertEqual(
+            rows,
+            [
+                {
+                    "key": AppSetting.KEY_GTFS_RT_TRIP_UPDATES_EXCLUDE_TRIPS_WITHOUT_REALTIME_DATA,
+                    "value": "true",
+                }
+            ],
+        )
+
     def test_serialize_data_sources_resets_last_run_at(self):
         service = SystemCopyService()
         source = DataSource(

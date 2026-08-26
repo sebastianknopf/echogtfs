@@ -9,10 +9,14 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import _service_test_bootstrap  # noqa: F401
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key-that-is-at-least-32-bytes-long")
 
 from echogtfs.datasources.base import DatasourceBase
+from echogtfs.enum.gtfsrt import AssignmentType
 from echogtfs.enum.system import InvalidReferencePolicy
 
 
@@ -48,6 +52,7 @@ class _RealtimeRepositoryStub:
         self.list_trips_for_data_source = AsyncMock(return_value=[])
         self.list_trips_by_ids = AsyncMock(return_value=[])
         self.list_trips_by_trip_ids = AsyncMock(return_value=[])
+        self.delete_trips_by_trip_ids = AsyncMock()
         self.list_trip_ids_with_stop_events = AsyncMock(return_value=set())
         self.delete_trips_for_data_source_by_ids = AsyncMock()
         self.update_trip_update_from_sync = AsyncMock()
@@ -150,7 +155,44 @@ class TestDatasourceBaseHelpers(unittest.TestCase):
         )
 
         self.assertEqual(len(propagated), 1)
-        self.assertEqual(propagated[0]["stop_id"], "de:1:2:3")
+        self.assertIn("de:1:2:3", [event["stop_id"] for event in propagated])
+
+    def test_propagate_trip_update_stop_events_sorts_station_level_leftovers_like_added(self):
+        base_time = datetime(2026, 8, 1, 8, 0, 0, tzinfo=timezone.utc)
+        stop_events = [
+            {
+                "stop_id": "de:1:2:3",
+                "departure_time": base_time.replace(minute=5),
+                "schedule_relationship": "SCHEDULED",
+            }
+        ]
+        nominal_stop_times = [
+            SimpleNamespace(
+                stop_id="de:1:2:4",
+                stop_sequence=1,
+                arrival_time=None,
+                departure_time=base_time.replace(minute=10),
+            ),
+            SimpleNamespace(
+                stop_id="de:1:2:5",
+                stop_sequence=2,
+                arrival_time=None,
+                departure_time=base_time.replace(minute=20),
+            ),
+        ]
+
+        propagated = self.datasource._propagate_trip_update_stop_events(
+            stop_events,
+            nominal_stop_times,
+            treat_unexpected_stop_as_added_stop=False,
+            treat_missing_stop_as_canceled_stop=False,
+            is_complete_stop_sequence=True,
+        )
+
+        self.assertEqual(
+            [event["stop_id"] for event in propagated],
+            ["de:1:2:3"],
+        )
 
     def test_propagate_trip_update_stop_events_preserves_existing_stop_sequences(self):
         same_time = datetime(2026, 8, 1, 8, 0, 0, tzinfo=timezone.utc)
@@ -204,6 +246,141 @@ class TestDatasourceBaseHelpers(unittest.TestCase):
 
         self.assertEqual(len(propagated), 1)
         self.assertEqual(propagated[0]["schedule_relationship"], "SCHEDULED")
+
+    def test_propagate_trip_update_stop_events_orders_by_nominal_sequence(self):
+        base_time = datetime(2026, 8, 1, 8, 0, 0, tzinfo=timezone.utc)
+        stop_events = [
+            {
+                "stop_id": "s3",
+                "departure_time": base_time.replace(minute=10),
+                "schedule_relationship": "SCHEDULED",
+            },
+            {
+                "stop_id": "s1",
+                "departure_time": base_time.replace(minute=30),
+                "schedule_relationship": "SCHEDULED",
+            },
+            {
+                "stop_id": "s2",
+                "departure_time": base_time.replace(minute=20),
+                "schedule_relationship": "SKIPPED",
+            },
+        ]
+        nominal_stop_times = [
+            SimpleNamespace(stop_id="s1", stop_sequence=1, arrival_time=None, departure_time=base_time),
+            SimpleNamespace(stop_id="s2", stop_sequence=2, arrival_time=None, departure_time=base_time),
+            SimpleNamespace(stop_id="s3", stop_sequence=3, arrival_time=None, departure_time=base_time),
+        ]
+
+        propagated = self.datasource._propagate_trip_update_stop_events(
+            stop_events,
+            nominal_stop_times,
+            treat_unexpected_stop_as_added_stop=False,
+            treat_missing_stop_as_canceled_stop=False,
+            is_complete_stop_sequence=True,
+        )
+
+        self.assertEqual([event["stop_id"] for event in propagated], ["s1", "s2", "s3"])
+
+    def test_propagate_trip_update_stop_events_sorts_nominal_stop_times_by_sequence(self):
+        base_time = datetime(2026, 8, 1, 8, 0, 0, tzinfo=timezone.utc)
+        stop_events = [
+            {
+                "stop_id": "s1",
+                "departure_time": base_time.replace(minute=30),
+                "schedule_relationship": "SCHEDULED",
+            },
+            {
+                "stop_id": "s3",
+                "departure_time": base_time.replace(minute=10),
+                "schedule_relationship": "SCHEDULED",
+            },
+            {
+                "stop_id": "s2",
+                "departure_time": base_time.replace(minute=20),
+                "schedule_relationship": "SCHEDULED",
+            },
+        ]
+        nominal_stop_times = [
+            SimpleNamespace(stop_id="s3", stop_sequence=30, arrival_time=None, departure_time=base_time),
+            SimpleNamespace(stop_id="s1", stop_sequence=10, arrival_time=None, departure_time=base_time),
+            SimpleNamespace(stop_id="s2", stop_sequence=20, arrival_time=None, departure_time=base_time),
+        ]
+
+        propagated = self.datasource._propagate_trip_update_stop_events(
+            stop_events,
+            nominal_stop_times,
+            treat_unexpected_stop_as_added_stop=False,
+            treat_missing_stop_as_canceled_stop=False,
+            is_complete_stop_sequence=True,
+        )
+
+        self.assertEqual([event["stop_id"] for event in propagated], ["s1", "s2", "s3"])
+
+    def test_propagate_trip_update_stop_events_inserts_added_stops_by_departure_time(self):
+        base_time = datetime(2026, 8, 1, 8, 0, 0, tzinfo=timezone.utc)
+        stop_events = [
+            {
+                "stop_id": "s1",
+                "departure_time": base_time,
+                "schedule_relationship": "SCHEDULED",
+            },
+            {
+                "stop_id": "s2",
+                "departure_time": base_time.replace(minute=20),
+                "schedule_relationship": "SCHEDULED",
+            },
+            {
+                "stop_id": "sx",
+                "departure_time": base_time.replace(minute=10),
+                "schedule_relationship": "ADDED",
+            },
+        ]
+        nominal_stop_times = [
+            SimpleNamespace(stop_id="s1", stop_sequence=1, arrival_time=None, departure_time=base_time),
+            SimpleNamespace(stop_id="s2", stop_sequence=2, arrival_time=None, departure_time=base_time),
+        ]
+
+        propagated = self.datasource._propagate_trip_update_stop_events(
+            stop_events,
+            nominal_stop_times,
+            treat_unexpected_stop_as_added_stop=True,
+            treat_missing_stop_as_canceled_stop=False,
+            is_complete_stop_sequence=True,
+        )
+
+        self.assertEqual([event["stop_id"] for event in propagated], ["s1", "sx", "s2"])
+
+    def test_propagate_trip_update_stop_events_orders_duplicate_stop_ids_by_time(self):
+        base_time = datetime(2026, 8, 1, 8, 0, 0, tzinfo=timezone.utc)
+        stop_events = [
+            {
+                "stop_id": "s1",
+                "departure_time": base_time.replace(minute=40),
+                "schedule_relationship": "SCHEDULED",
+            },
+            {
+                "stop_id": "s1",
+                "departure_time": base_time.replace(minute=5),
+                "schedule_relationship": "SCHEDULED",
+            },
+        ]
+        nominal_stop_times = [
+            SimpleNamespace(stop_id="s1", stop_sequence=1, arrival_time=None, departure_time=base_time),
+        ]
+
+        propagated = self.datasource._propagate_trip_update_stop_events(
+            stop_events,
+            nominal_stop_times,
+            treat_unexpected_stop_as_added_stop=False,
+            treat_missing_stop_as_canceled_stop=False,
+            is_complete_stop_sequence=True,
+        )
+
+        self.assertEqual(
+            [event["departure_time"].minute for event in propagated],
+            [5, 40],
+        )
 
 
 class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
@@ -329,7 +506,9 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
             }
         )
         datasource = _TestDatasource({})
-        datasource._matching_service = SimpleNamespace(match=AsyncMock(return_value=None))
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=(None, AssignmentType.NO_MATCH_GENERAL))
+        )
         datasource._identifier_mapping_service = SimpleNamespace(
             initialize=AsyncMock(),
             get_loaded_mapping_count=lambda: 2,
@@ -405,7 +584,9 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
             }
         )
         datasource = _TestDatasource({})
-        datasource._matching_service = SimpleNamespace(match=AsyncMock(return_value=None))
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=(None, AssignmentType.NO_MATCH_GENERAL))
+        )
         datasource._identifier_mapping_service = SimpleNamespace(
             initialize=AsyncMock(),
             get_loaded_mapping_count=lambda: 1,
@@ -469,7 +650,13 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
             return_value={"agency": {"a1"}, "route": {"r1"}, "stop": {"s1"}, "trip": {"nominal-trip"}}
         )
         datasource = _TestDatasource({})
-        datasource._matching_service = SimpleNamespace(match=AsyncMock(return_value="matched-trip-1"))
+        datasource._caching_service = SimpleNamespace(
+            put_trip_id=AsyncMock(),
+            pop_trip_id=AsyncMock(),
+        )
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=("matched-trip-1", AssignmentType.MATCHED_BY_START_STOP))
+        )
         datasource._identifier_mapping_service = SimpleNamespace(
             initialize=AsyncMock(),
             get_loaded_mapping_count=lambda: 0,
@@ -498,9 +685,14 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result, {"added": 1, "updated": 0, "deleted": 0})
         datasource._matching_service.match.assert_awaited_once()
+        realtime_repository.delete_trips_by_trip_ids.assert_awaited_once_with(["external-trip-1"])
         kwargs = realtime_repository.update_trip_update_from_sync.await_args.kwargs
         self.assertEqual(kwargs["trip_id"], "matched-trip-1")
         self.assertEqual(kwargs["assignment_type"], "MATCHED_BY_START_STOP")
+        datasource._caching_service.put_trip_id.assert_awaited_once_with(
+            "external-trip-1",
+            "matched-trip-1",
+        )
 
     async def test_sync_vehicle_position_records_sets_no_match_assignment_when_matching_fails(self):
         repository = _SystemRepositoryStub()
@@ -510,7 +702,9 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
             return_value={"agency": {"a1"}, "route": {"r1"}, "stop": {"s1"}, "trip": {"nominal-trip"}}
         )
         datasource = _TestDatasource({})
-        datasource._matching_service = SimpleNamespace(match=AsyncMock(return_value=None))
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=(None, AssignmentType.NO_MATCH_GENERAL))
+        )
         datasource._identifier_mapping_service = SimpleNamespace(
             initialize=AsyncMock(),
             get_loaded_mapping_count=lambda: 0,
@@ -553,7 +747,9 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
         realtime_repository = _RealtimeRepositoryStub()
         gtfs_repository = _GtfsRepositoryStub()
         datasource = _TestDatasource({})
-        datasource._matching_service = SimpleNamespace(match=AsyncMock(return_value=None))
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=(None, AssignmentType.NO_MATCH_GENERAL))
+        )
         datasource._identifier_mapping_service = SimpleNamespace(
             initialize=AsyncMock(),
             get_loaded_mapping_count=lambda: 0,
@@ -590,7 +786,13 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
             return_value={"agency": {"a1"}, "route": {"r1"}, "stop": {"s1"}, "trip": {"nominal-trip"}}
         )
         datasource = _TestDatasource({})
-        datasource._matching_service = SimpleNamespace(match=AsyncMock(return_value="matched-trip-1"))
+        datasource._caching_service = SimpleNamespace(
+            put_trip_id=AsyncMock(),
+            pop_trip_id=AsyncMock(),
+        )
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=("matched-trip-1", AssignmentType.MATCHED_BY_INTERMEDIATE_STOPS))
+        )
         datasource._identifier_mapping_service = SimpleNamespace(
             initialize=AsyncMock(),
             get_loaded_mapping_count=lambda: 0,
@@ -627,11 +829,84 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
         )
 
         datasource._matching_service.match.assert_awaited_once()
+        realtime_repository.delete_trips_by_trip_ids.assert_awaited_once_with(["external-trip-1"])
         match_kwargs = datasource._matching_service.match.await_args.kwargs
         self.assertIsNotNone(match_kwargs["scheduled_start_time"])
         self.assertIsNotNone(match_kwargs["scheduled_end_time"])
         self.assertEqual(match_kwargs["scheduled_start_stop_id"], "s1")
         self.assertEqual(match_kwargs["scheduled_end_stop_id"], "s1")
+        datasource._caching_service.put_trip_id.assert_awaited_once_with(
+            "external-trip-1",
+            "matched-trip-1",
+        )
+
+    async def test_sync_vehicle_position_records_keeps_matched_vehicle_from_previous_run(self):
+        repository = _SystemRepositoryStub()
+        realtime_repository = _RealtimeRepositoryStub()
+        gtfs_repository = _GtfsRepositoryStub()
+        gtfs_repository.list_gtfs_entity_ids = AsyncMock(
+            return_value={"agency": {"a1"}, "route": {"r1"}, "stop": {"s1"}, "trip": {"nominal-trip"}}
+        )
+        datasource = _TestDatasource({})
+        datasource._caching_service = SimpleNamespace(
+            put_trip_id=AsyncMock(),
+            pop_trip_id=AsyncMock(),
+        )
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=("matched-trip-1", AssignmentType.MATCHED_BY_START_STOP))
+        )
+        datasource._identifier_mapping_service = SimpleNamespace(
+            initialize=AsyncMock(),
+            get_loaded_mapping_count=lambda: 0,
+            apply_mapping=lambda entity: entity,
+        )
+
+        existing_vehicle_uuid = datasource._make_unique_id("persisted-vehicle", "Demo")
+        realtime_repository.list_vehicles_for_data_source = AsyncMock(
+            return_value=[
+                SimpleNamespace(
+                    id=existing_vehicle_uuid,
+                    data_source_id=2,
+                    trip_id="matched-trip-1",
+                )
+            ]
+        )
+
+        records = [
+            {
+                "id": "veh-upd-1",
+                "trip": {
+                    "trip_id": "external-trip-1",
+                    "start_time": "08:00:00",
+                    "start_date": "20260801",
+                    "route_id": "r1",
+                },
+                "vehicle_id": "vehicle-1",
+                "timestamp": "2026-08-01T08:05:00Z",
+                "latitude": 47.1,
+                "longitude": 8.5,
+            }
+        ]
+
+        result = await datasource._sync_vehicle_position_records(
+            repository=repository,
+            realtime_repository=realtime_repository,
+            gtfs_repository=gtfs_repository,
+            source_id=2,
+            source_name="Demo",
+            records=records,
+        )
+
+        self.assertEqual(result["deleted"], 0)
+        realtime_repository.delete_vehicles_for_data_source_by_ids.assert_not_awaited()
+
+        kwargs = realtime_repository.update_vehicle_position_from_sync.await_args.kwargs
+        self.assertEqual(kwargs["vehicle_uuid"], existing_vehicle_uuid)
+        self.assertEqual(kwargs["trip_id"], "matched-trip-1")
+        datasource._caching_service.put_trip_id.assert_awaited_once_with(
+            "external-trip-1",
+            "matched-trip-1",
+        )
 
     async def test_sync_trip_update_records_sets_invalid_and_deactivates_when_trip_unmatched(self):
         repository = _SystemRepositoryStub()
@@ -646,7 +921,9 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
             }
         )
         datasource = _TestDatasource({})
-        datasource._matching_service = SimpleNamespace(match=AsyncMock(return_value=None))
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=(None, AssignmentType.NO_MATCH_GENERAL))
+        )
         datasource._identifier_mapping_service = SimpleNamespace(
             initialize=AsyncMock(),
             get_loaded_mapping_count=lambda: 0,
@@ -676,7 +953,8 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
         )
 
         kwargs = realtime_repository.update_trip_update_from_sync.await_args.kwargs
-        self.assertFalse(kwargs["is_valid"])
+        self.assertFalse(kwargs["is_trip_valid"])
+        self.assertTrue(kwargs["is_route_valid"])
         self.assertFalse(kwargs["is_active_on_create"])
         self.assertEqual(kwargs["assignment_type"], "NO_MATCH_GENERAL")
 
@@ -693,7 +971,9 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
             }
         )
         datasource = _TestDatasource({})
-        datasource._matching_service = SimpleNamespace(match=AsyncMock(return_value=None))
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=(None, AssignmentType.NO_MATCH_GENERAL))
+        )
         datasource._identifier_mapping_service = SimpleNamespace(
             initialize=AsyncMock(),
             get_loaded_mapping_count=lambda: 0,
@@ -728,7 +1008,8 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
 
         kwargs = realtime_repository.update_vehicle_position_from_sync.await_args.kwargs
         self.assertFalse(kwargs["is_valid"])
-        self.assertFalse(kwargs["trip_is_valid"])
+        self.assertTrue(kwargs["trip_is_trip_valid"])
+        self.assertFalse(kwargs["trip_is_route_valid"])
         self.assertEqual(kwargs["trip_route_id"], "")
 
     async def test_sync_trip_update_records_discards_entire_object_and_deletes_existing_when_policy_requires(self):
@@ -739,7 +1020,9 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
         realtime_repository = _RealtimeRepositoryStub()
         gtfs_repository = _GtfsRepositoryStub()
         datasource = _TestDatasource({})
-        datasource._matching_service = SimpleNamespace(match=AsyncMock(return_value=None))
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=(None, AssignmentType.NO_MATCH_GENERAL))
+        )
         datasource._identifier_mapping_service = SimpleNamespace(
             initialize=AsyncMock(),
             get_loaded_mapping_count=lambda: 0,
@@ -771,9 +1054,180 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
             records=records,
         )
 
-        self.assertEqual(result, {"added": 0, "updated": 0, "deleted": 2})
+        self.assertEqual(result, {"added": 0, "updated": 0, "deleted": 1})
         realtime_repository.update_trip_update_from_sync.assert_not_awaited()
         realtime_repository.delete_trips_for_data_source_by_ids.assert_awaited()
+
+    async def test_sync_trip_update_records_keeps_matched_trip_from_previous_run(self):
+        repository = _SystemRepositoryStub()
+        realtime_repository = _RealtimeRepositoryStub()
+        gtfs_repository = _GtfsRepositoryStub()
+        datasource = _TestDatasource({})
+        datasource._caching_service = SimpleNamespace(
+            put_trip_id=AsyncMock(),
+            pop_trip_id=AsyncMock(),
+        )
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=("trip-1", AssignmentType.MATCHED_BY_START_STOP))
+        )
+        datasource._identifier_mapping_service = SimpleNamespace(
+            initialize=AsyncMock(),
+            get_loaded_mapping_count=lambda: 0,
+            apply_mapping=lambda entity: entity,
+        )
+
+        matched_trip_uuid = datasource._make_unique_id("trip-1", "Demo")
+        realtime_repository.list_trips_for_data_source = AsyncMock(
+            return_value=[
+                SimpleNamespace(id=matched_trip_uuid, data_source_id=2, is_active=True)
+            ]
+        )
+
+        records = [
+            {
+                "id": "external-trip-1",
+                "trip_id": "external-trip-1",
+                "start_time": "08:00:00",
+                "start_date": "20260801",
+                "route_id": "r1",
+                "stop_events": [],
+            }
+        ]
+
+        result = await datasource._sync_trip_update_records(
+            repository=repository,
+            realtime_repository=realtime_repository,
+            gtfs_repository=gtfs_repository,
+            source_id=2,
+            source_name="Demo",
+            records=records,
+        )
+
+        self.assertEqual(result["deleted"], 0)
+        realtime_repository.delete_trips_for_data_source_by_ids.assert_not_awaited()
+
+        kwargs = realtime_repository.update_trip_update_from_sync.await_args.kwargs
+        self.assertEqual(kwargs["trip_uuid"], matched_trip_uuid)
+        self.assertEqual(kwargs["trip_id"], "trip-1")
+        self.assertEqual(kwargs["assignment_type"], AssignmentType.MATCHED_BY_START_STOP.value)
+        datasource._caching_service.put_trip_id.assert_awaited_once_with(
+            "external-trip-1",
+            "trip-1",
+        )
+
+    async def test_sync_trip_update_records_preserves_existing_trip_activation_for_invalid_stop(self):
+        repository = _SystemRepositoryStub()
+        repository.get_data_source_invalid_reference_policy = AsyncMock(
+            return_value=InvalidReferencePolicy.KEEP_OBJECT_DISABLED
+        )
+        realtime_repository = _RealtimeRepositoryStub()
+        gtfs_repository = _GtfsRepositoryStub()
+        datasource = _TestDatasource({})
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=(None, AssignmentType.NO_MATCH_GENERAL))
+        )
+        datasource._identifier_mapping_service = SimpleNamespace(
+            initialize=AsyncMock(),
+            get_loaded_mapping_count=lambda: 0,
+            apply_mapping=lambda entity: entity,
+        )
+
+        trip_uuid = datasource._make_unique_id("trip-1", "Demo")
+        existing_trip = SimpleNamespace(
+            id=trip_uuid,
+            trip_id="trip-1",
+            data_source_id=2,
+            is_active=True,
+        )
+        realtime_repository.list_trips_for_data_source = AsyncMock(return_value=[existing_trip])
+        realtime_repository.list_trips_by_trip_ids = AsyncMock(return_value=[existing_trip])
+
+        await datasource._sync_trip_update_records(
+            repository=repository,
+            realtime_repository=realtime_repository,
+            gtfs_repository=gtfs_repository,
+            source_id=2,
+            source_name="Demo",
+            records=[
+                {
+                    "id": "trip-upd-1",
+                    "trip_id": "trip-1",
+                    "start_time": "08:00:00",
+                    "start_date": "20260801",
+                    "route_id": "r1",
+                    "stop_events": [
+                        {
+                            "stop_id": "invalid-stop",
+                            "stop_sequence": "1",
+                            "arrival_time": None,
+                            "departure_time": None,
+                            "schedule_relationship": "SCHEDULED",
+                        }
+                    ],
+                }
+            ],
+        )
+
+        kwargs = realtime_repository.update_trip_update_from_sync.await_args.kwargs
+        self.assertTrue(existing_trip.is_active)
+        self.assertTrue(kwargs["is_active_on_create"])
+
+    async def test_sync_trip_update_records_preserves_existing_inactive_trip_for_invalid_stop(self):
+        repository = _SystemRepositoryStub()
+        repository.get_data_source_invalid_reference_policy = AsyncMock(
+            return_value=InvalidReferencePolicy.KEEP_OBJECT_DISABLED
+        )
+        realtime_repository = _RealtimeRepositoryStub()
+        gtfs_repository = _GtfsRepositoryStub()
+        datasource = _TestDatasource({})
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=(None, AssignmentType.NO_MATCH_GENERAL))
+        )
+        datasource._identifier_mapping_service = SimpleNamespace(
+            initialize=AsyncMock(),
+            get_loaded_mapping_count=lambda: 0,
+            apply_mapping=lambda entity: entity,
+        )
+
+        trip_uuid = datasource._make_unique_id("trip-1", "Demo")
+        existing_trip = SimpleNamespace(
+            id=trip_uuid,
+            trip_id="trip-1",
+            data_source_id=2,
+            is_active=False,
+        )
+        realtime_repository.list_trips_for_data_source = AsyncMock(return_value=[existing_trip])
+        realtime_repository.list_trips_by_trip_ids = AsyncMock(return_value=[existing_trip])
+
+        await datasource._sync_trip_update_records(
+            repository=repository,
+            realtime_repository=realtime_repository,
+            gtfs_repository=gtfs_repository,
+            source_id=2,
+            source_name="Demo",
+            records=[
+                {
+                    "id": "trip-upd-1",
+                    "trip_id": "trip-1",
+                    "start_time": "08:00:00",
+                    "start_date": "20260801",
+                    "route_id": "r1",
+                    "stop_events": [
+                        {
+                            "stop_id": "invalid-stop",
+                            "stop_sequence": "1",
+                            "arrival_time": None,
+                            "departure_time": None,
+                            "schedule_relationship": "SCHEDULED",
+                        }
+                    ],
+                }
+            ],
+        )
+
+        kwargs = realtime_repository.update_trip_update_from_sync.await_args.kwargs
+        self.assertFalse(existing_trip.is_active)
+        self.assertFalse(kwargs["is_active_on_create"])
 
     async def test_sync_vehicle_position_records_discards_entire_object_and_deletes_existing_when_policy_requires(self):
         repository = _SystemRepositoryStub()
@@ -783,7 +1237,9 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
         realtime_repository = _RealtimeRepositoryStub()
         gtfs_repository = _GtfsRepositoryStub()
         datasource = _TestDatasource({})
-        datasource._matching_service = SimpleNamespace(match=AsyncMock(return_value=None))
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=(None, AssignmentType.NO_MATCH_GENERAL))
+        )
         datasource._identifier_mapping_service = SimpleNamespace(
             initialize=AsyncMock(),
             get_loaded_mapping_count=lambda: 0,
@@ -845,7 +1301,9 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
                 }
             }
         )
-        datasource._matching_service = SimpleNamespace(match=AsyncMock(return_value=None))
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=(None, AssignmentType.NO_MATCH_GENERAL))
+        )
 
         result = await datasource.sync_records(
             repository=repository,
@@ -885,7 +1343,9 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
                 }
             }
         )
-        datasource._matching_service = SimpleNamespace(match=AsyncMock(return_value=None))
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=(None, AssignmentType.NO_MATCH_GENERAL))
+        )
 
         result = await datasource.sync_records(
             repository=repository,
@@ -912,7 +1372,9 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
             }
         )
         datasource = _TestDatasource({"treat_unexpected_stop_as_added_stop": True})
-        datasource._matching_service = SimpleNamespace(match=AsyncMock(return_value=None))
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=(None, AssignmentType.NO_MATCH_GENERAL))
+        )
         datasource._identifier_mapping_service = SimpleNamespace(
             initialize=AsyncMock(),
             get_loaded_mapping_count=lambda: 0,
@@ -967,7 +1429,9 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
         realtime_repository = _RealtimeRepositoryStub()
         gtfs_repository = _GtfsRepositoryStub()
         datasource = _TestDatasource({"treat_missing_stop_as_canceled_stop": True})
-        datasource._matching_service = SimpleNamespace(match=AsyncMock(return_value=None))
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=(None, AssignmentType.NO_MATCH_GENERAL))
+        )
         datasource._identifier_mapping_service = SimpleNamespace(
             initialize=AsyncMock(),
             get_loaded_mapping_count=lambda: 0,
@@ -1028,7 +1492,9 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
         realtime_repository = _RealtimeRepositoryStub()
         gtfs_repository = _GtfsRepositoryStub()
         datasource = _TestDatasource({})
-        datasource._matching_service = SimpleNamespace(match=AsyncMock(return_value=None))
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=(None, AssignmentType.NO_MATCH_GENERAL))
+        )
         datasource._identifier_mapping_service = SimpleNamespace(
             initialize=AsyncMock(),
             get_loaded_mapping_count=lambda: 0,
@@ -1084,7 +1550,9 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
         realtime_repository = _RealtimeRepositoryStub()
         gtfs_repository = _GtfsRepositoryStub()
         datasource = _TestDatasource({"treat_missing_stop_as_canceled_stop": True})
-        datasource._matching_service = SimpleNamespace(match=AsyncMock(return_value=None))
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=(None, AssignmentType.NO_MATCH_GENERAL))
+        )
         datasource._identifier_mapping_service = SimpleNamespace(
             initialize=AsyncMock(),
             get_loaded_mapping_count=lambda: 0,

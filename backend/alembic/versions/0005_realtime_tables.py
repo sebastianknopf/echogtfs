@@ -1,6 +1,6 @@
 """Add realtime trip, stop event, and vehicle position tables.
 
-Revision ID: 005_realtime_tables
+Revision ID: 0005_realtime_tables
 Revises: 0004_gtfs_static_pk
 Create Date: 2026-07-21 00:00:00.000000
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "005_realtime_tables"
+revision: str = "0005_realtime_tables"
 down_revision: Union[str, None] = "0004_gtfs_static_pk"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

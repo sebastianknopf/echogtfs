@@ -69,19 +69,19 @@ def _validate_minute_cron_expression(cron_expr: str) -> str:
     return normalized
 
 
-@router.get("/status", response_model=GtfsStatusRead)
+@router.get("/status", response_model=GtfsStatusRead, include_in_schema=False)
 async def get_status(_: CurrentPoweruser, service: _GtfsImport) -> GtfsStatusRead:
     """Return current feed URL, cron, and last import state."""
     payload = await service.get_status()
     return GtfsStatusRead(**payload)
 
 
-@router.get("/agencies", response_model=list[AgencyRead])
+@router.get("/agencies", response_model=list[AgencyRead], include_in_schema=False)
 async def list_agencies(_: CurrentUser, repository: _GtfsRepo) -> list[GtfsAgency]:
     return await repository.list_gtfs_agencies()
 
 
-@router.get("/stops", response_model=list[StopRead])
+@router.get("/stops", response_model=list[StopRead], include_in_schema=False)
 async def list_stops(
     _: CurrentUser,
     repository: _GtfsRepo,
@@ -91,7 +91,7 @@ async def list_stops(
     return await repository.list_gtfs_stops(query=q, limit=limit)
 
 
-@router.get("/routes", response_model=list[RouteRead])
+@router.get("/routes", response_model=list[RouteRead], include_in_schema=False)
 async def list_routes(
     _: CurrentUser,
     repository: _GtfsRepo,
@@ -101,7 +101,7 @@ async def list_routes(
     return await repository.list_gtfs_routes(query=q, limit=limit)
 
 
-@router.post("/import")
+@router.post("/import", include_in_schema=False)
 async def trigger_import(
     _: CurrentPoweruser,
     service: _GtfsImport,
@@ -146,7 +146,7 @@ async def trigger_import(
     )
 
 
-@router.put("/feed-url", status_code=200)
+@router.put("/feed-url", status_code=200, include_in_schema=False)
 async def update_feed_url(
     _: CurrentPoweruser,
     data: GtfsConfigUpdate,

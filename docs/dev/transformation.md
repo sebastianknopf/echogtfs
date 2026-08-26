@@ -25,6 +25,7 @@ Implementation notes for the concrete transformers are collected in [transformer
 - [transformers/sirisx_service_alerts_transformer.md](transformers/sirisx_service_alerts_transformer.md)
 - [transformers/sirisx_swiss_service_alerts_transformer.md](transformers/sirisx_swiss_service_alerts_transformer.md)
 - [transformers/siriet_trip_updates_transformer.md](transformers/siriet_trip_updates_transformer.md)
+- [transformers/sirivm_vehicle_positions_transformer.md](transformers/sirivm_vehicle_positions_transformer.md)
 
 1. Fetch records from transformer.
 2. Normalize payload into (record_type, records).
@@ -34,6 +35,8 @@ Implementation notes for the concrete transformers are collected in [transformer
 6. Upsert into realtime tables.
 
 Only fields listed below are consumed by DatasourceBase and/or RealtimeRepository for each record type.
+
+The following structures describe the internal data model, which can be returned by a transformer to the data source implementation for further processing (mapping, matching, persistence).
 
 ## record_type service_alerts
 
@@ -140,13 +143,15 @@ Allowed data model:
 {
     "id": str,
     "trip_id": str,
+    "original_trip_id": str | None,
     "start_time": str,
     "start_date": str,
     "route_id": str,
     "schedule_relationship": str,
     "assignment_type": str,
     "is_active": bool,
-    "is_valid": bool,
+    "is_trip_valid": bool,
+    "is_route_valid": bool,
     "is_complete_stop_sequence": bool,
     "scheduled_start_stop_id": str | None,
     "scheduled_start_time": datetime | None,
@@ -157,10 +162,12 @@ Allowed data model:
         {
             "trip_id": str,
             "stop_id": str,
+            "original_stop_id": str,
             "stop_sequence": str,
             "arrival_time": str | datetime,
             "departure_time": str | datetime,
             "schedule_relationship": str,
+            "is_implied_schedule_relationship": bool,
             "is_valid": bool,
         }
     ],
@@ -171,12 +178,14 @@ Processed top-level fields:
 
 - id: optional. If missing, deterministic UUID is built from trip_id.
 - trip_id: required.
+- original_trip_id: optional; persisted as the external/non-nominal trip reference when provided.
 - start_time: required.
 - start_date: required.
 - route_id: required, mapped before persistence and matching.
 - schedule_relationship: optional, default SCHEDULED.
 - is_active: optional create-only value, default True.
-- is_valid: optional, default True.
+- is_trip_valid: optional, default True.
+- is_route_valid: optional, default True.
 - is_complete_stop_sequence: optional boolean, default False.
 - scheduled_start_stop_id: nullable, mapped and passed to matching when trip_id is non-nominal.
 - scheduled_start_time: nullable, coerced to datetime and passed to matching when trip_id is non-nominal.
@@ -188,16 +197,20 @@ Processed top-level fields:
 Processed stop_events[*] fields:
 
 - stop_id: consumed and mapped before persistence.
+- original_stop_id: optional; defaults to stop_id and is persisted as the original stop reference.
 - stop_sequence: passed to persistence model.
 - arrival_time: passed to persistence model.
 - departure_time: passed to persistence model.
 - schedule_relationship: optional, default SCHEDULED in persistence layer.
+- is_implied_schedule_relationship: Indicates whether the schedule relationship was implied based on settings, optional, default False.
 - is_valid: optional, default True in persistence layer.
 - trip_id: optional input but explicitly removed and replaced with resolved trip_id before persistence.
 
 DatasourceBase mutates each stop event during processing:
 
 - `stop_id` is replaced with the mapped stop ID.
+- `original_stop_id` is set to the same value as `stop_id` during sync payload preparation.
+- `is_implied_schedule_relationship` is set to true only for stop events implied by datasource flags (`ADDED` via `treat_unexpected_stop_as_added_stop`, `SKIPPED` via `treat_missing_stop_as_canceled_stop`).
 - `is_valid` is forced to `input_is_valid and stop_id_in_nominal_gtfs`.
 
 Derived matching inputs for trip_updates:
@@ -226,7 +239,8 @@ Invalid-reference policy effects for trip_updates:
     - `route_id` is not contained in nominal GTFS route IDs after mapping.
     - any `stop_events[*].stop_id` is not contained in nominal GTFS stop IDs after mapping.
     - `trip_id` is neither a nominal GTFS trip ID nor successfully matched.
-- `trip.is_valid` persisted via `update_trip_update_from_sync(..., is_valid=...)` becomes false when any invalid reference exists.
+- `trip.is_trip_valid` persisted via `update_trip_update_from_sync(..., is_trip_valid=...)` becomes false when the trip reference is invalid.
+- `trip.is_route_valid` persisted via `update_trip_update_from_sync(..., is_route_valid=...)` becomes false when the route reference is invalid.
 - `discard_entire_object`: skip the full trip update and delete an existing synced trip with the same ID.
 - `discard_invalid` and `discard_invalid_elements`:
     - remove invalid stop events from `stop_events`.
@@ -249,7 +263,8 @@ Allowed data model:
         "schedule_relationship": str,
         "assignment_type": str,
         "is_active": bool,
-        "is_valid": bool,
+        "is_trip_valid": bool,
+        "is_route_valid": bool,
         "scheduled_start_stop_id": str | None,
         "scheduled_start_time": datetime | None,
         "scheduled_end_stop_id": str | None,
@@ -292,7 +307,7 @@ Processed top-level fields:
 
 Trip payload sources for vehicle_positions:
 
-- Required nested trip object only: trip.trip_id, trip.start_time, trip.start_date, trip.route_id, trip.schedule_relationship, trip.is_active, trip.is_valid, trip.scheduled_start_stop_id, trip.scheduled_start_time, trip.scheduled_end_stop_id, trip.scheduled_end_time.
+- Required nested trip object only: trip.trip_id, trip.start_time, trip.start_date, trip.route_id, trip.schedule_relationship, trip.is_active, trip.is_trip_valid, trip.is_route_valid, trip.scheduled_start_stop_id, trip.scheduled_start_time, trip.scheduled_end_stop_id, trip.scheduled_end_time.
 
 Trip payload processing rules:
 
@@ -304,7 +319,8 @@ Trip payload processing rules:
 - schedule_relationship defaults to SCHEDULED when missing.
 - nested `trip.assignment_type` is read into the normalized trip payload but not persisted unchanged.
 - trip is_active_on_create defaults to True.
-- trip is_valid defaults to True.
+- trip is_trip_valid defaults to True.
+- trip is_route_valid defaults to True.
 - mapped `route_id` replaces the original route ID in the normalized trip payload.
 - trip.scheduled_start_stop_id, trip.scheduled_start_time, trip.scheduled_end_stop_id, and trip.scheduled_end_time are nullable and passed to matching.
 - trip.scheduled_intermediate_stops is an optional list of `(stop_id, datetime)` tuples for additional scheduled anchors.
@@ -335,7 +351,8 @@ Invalid-reference policy effects for vehicle_positions:
     - `trip.route_id` is not contained in nominal GTFS route IDs after mapping.
     - optional `stop_id` is present but not contained in nominal GTFS stop IDs.
     - `trip_id` is neither a nominal GTFS trip ID nor successfully matched.
-- Persisted `trip_is_valid` becomes false when the route or trip reference is invalid.
+- Persisted `trip_is_trip_valid` becomes false when the trip reference is invalid.
+- Persisted `trip_is_route_valid` becomes false when the route reference is invalid.
 - Persisted vehicle `is_valid` becomes false when the route, stop, or trip reference is invalid.
 - `discard_entire_object`: skip the full vehicle position and delete an existing synced vehicle with the same ID.
 - `discard_invalid` and `discard_invalid_elements`:
