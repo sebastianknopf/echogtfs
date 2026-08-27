@@ -30,7 +30,7 @@ class SecurityService(SecurityServiceInterface):
     def _credentials_exception() -> HTTPException:
         return HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
+            detail="error.401_unauthorized",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -75,7 +75,7 @@ class SecurityService(SecurityServiceInterface):
         current_user = await self.get_current_user(request, token)
         
         if not current_user.is_active:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="error.400_inactive_user")
 
         return current_user
 
@@ -85,7 +85,7 @@ class SecurityService(SecurityServiceInterface):
         if not current_user.is_superuser:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not enough permissions",
+                detail="error.403_permission",
             )
 
         return current_user
@@ -95,7 +95,7 @@ class SecurityService(SecurityServiceInterface):
         if not (current_user.is_technical_contact or current_user.is_superuser):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not enough permissions",
+                detail="error.403_permission",
             )
 
         return current_user
