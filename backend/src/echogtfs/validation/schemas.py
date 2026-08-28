@@ -8,6 +8,7 @@ from echogtfs.enum.conflicts import ConflictType
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from echogtfs.enum.gtfsrt import AlertCause, AlertEffect, AlertSeverityLevel, PeriodType
+from echogtfs.enum.gtfs import GtfsImportStatus
 from echogtfs.enum.system import EnrichmentType, ExpiredRealtimeObjectPolicy, InvalidReferencePolicy, SourceField
 
 _HEX_COLOR = re.compile(r'^#[0-9a-fA-F]{6}$')
@@ -325,18 +326,22 @@ class DataSourceLogRead(BaseModel):
 # Monitoring
 # ---------------------------------------------------------------------------
 
-class MonitoredStatisticsRouteGroupObject(BaseModel):
+class MonitoredRouteGroupObject(BaseModel):
     id: str = Field(
         examples=["de:vpe:04743_:", "de:vpe:04744_:"],
         description="Identifier of the nominal GTFS route."
     )
-    name: str = Field(
-        examples=["743", "744 Pforzheim - Büchenbronn - Samlbach - Kapfenhardt"],
-        description="Name of the nominal GTFS route."
+    short_name: str | None = Field(
+        examples=["743", "744"],
+        description="Short name of the nominal GTFS route."
+    )
+    long_name: str | None = Field(
+        examples=["Pforzheim - Büchenbronn - Samlbach - Kapfenhardt", "Another Long Name"],
+        description="Long name of the nominal GTFS route."
     )
 
 
-class MonitoredConflictsDatasourceGroupObject(BaseModel):
+class MonitoredDatasourceGroupObject(BaseModel):
     id: int = Field(
         examples=[10, 11, 12],
         description="Internal ID of the data source."
@@ -366,7 +371,7 @@ class MonitoredStatisticsObject(BaseModel):
 
 
 class MonitoredStatisticsSystemObject(BaseModel):
-    datasources: list[MonitoredConflictsDatasourceGroupObject] = Field(
+    datasources: list[MonitoredDatasourceGroupObject] = Field(
         description="List of data sources in the system."
     )
 
@@ -376,8 +381,8 @@ class MonitoredStatisticsStaticObject(BaseModel):
         examples=["2024-06-01T12:00:00Z"],
         description="Timestamp of the last import for the GTFS import data run."
     )
-    last_import_status: bool | None = Field(
-        examples=[True, False],
+    last_import_status: GtfsImportStatus | None = Field(
+        examples=[GtfsImportStatus.IDLE, GtfsImportStatus.RUNNING, GtfsImportStatus.SUCCESS, GtfsImportStatus.ERROR],
         description="Status of the last import for the GTFS import data run."
     )
     num_agencies: int = Field(
@@ -396,7 +401,7 @@ class MonitoredStatisticsStaticObject(BaseModel):
         examples=[2000, 2003, 2338],
         description="Number of trips in the nominal GTFS data."
     )
-    routes: list[MonitoredStatisticsRouteGroupObject] = Field(
+    routes: list[MonitoredRouteGroupObject] = Field(
         description="List of routes in the nominal GTFS data."
     )
     operation_day_dates: list[date] = Field(
@@ -425,7 +430,7 @@ class MonitoredStatisticsRealtimeAlertsObject(BaseModel):
 
 
 class MonitoredStatisticsRealtimeTripsObject(BaseModel):
-    route: MonitoredStatisticsRouteGroupObject = Field(
+    route: MonitoredRouteGroupObject = Field(
         description="The nominal GTFS route for which the statistics are reported."
     )
     num_running_trips: int = Field(
@@ -443,7 +448,7 @@ class MonitoredStatisticsRealtimeTripsObject(BaseModel):
 
 
 class MonitoredStatisticsRealtimeVehiclesObject(BaseModel):
-    route: MonitoredStatisticsRouteGroupObject = Field(
+    route: MonitoredRouteGroupObject = Field(
         description="The nominal GTFS route for which the statistics are reported."
     )
     num_vehicles: int = Field(
@@ -471,7 +476,7 @@ class MonitoringConflictObject(BaseModel):
         examples=["ERROR_NO_TRIP_FOUND", "WARNING_IMPLIED_ADDITIONAL_STOP"],
         description="Human-readable name describing the conflict."
     )
-    datasource: MonitoredConflictsDatasourceGroupObject = Field(
+    datasource: MonitoredDatasourceGroupObject = Field(
         description="The data source which has raised the data resulting in the conflict."
     )
     properties: dict[str, str] = Field(

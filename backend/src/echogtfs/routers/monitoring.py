@@ -1,21 +1,34 @@
 from typing import Annotated
 
-from echogtfs.validation.schemas import MonitoredStatisticsObject, MonitoredStatisticsRealtimeObject, MonitoredStatisticsRealtimeAlertsObject, MonitoredStatisticsSystemObject, MonitoredStatisticsStaticObject, MonitoringConflictsResponse, MonitoringStatisticsResponse
+from datetime import date
 from fastapi import APIRouter, Depends, Query
 
 from echogtfs.services.database import (
     RealtimeRepositoryInterface,
     GtfsRepositoryInterface,
+    SystemRepositoryInterface,
     get_realtime_repository,
     get_gtfs_repository,
+    get_system_repository,
 )
 
+from echogtfs.services.database.models import AppSetting
+from echogtfs.enum.gtfs import GtfsImportStatus
+from echogtfs.validation.schemas import MonitoredDatasourceGroupObject, MonitoredRouteGroupObject, MonitoredStatisticsObject, MonitoredStatisticsRealtimeObject, MonitoredStatisticsRealtimeAlertsObject, MonitoredStatisticsSystemObject, MonitoredStatisticsStaticObject, MonitoringConflictsResponse, MonitoringStatisticsResponse
 from echogtfs.common.security import CurrentPoweruser
 
 router = APIRouter()
 
+_SystemRepo = Annotated[SystemRepositoryInterface, Depends(get_system_repository)]
 _GtfsRepo = Annotated[GtfsRepositoryInterface, Depends(get_gtfs_repository)]
 _RealtimeRepo = Annotated[RealtimeRepositoryInterface, Depends(get_realtime_repository)]
+
+
+def _gtfs_import_status_enum(value: str | None) -> GtfsImportStatus | None:
+    if value is None:
+        return None
+
+    return GtfsImportStatus(value)
 
 
 @router.get(
@@ -42,6 +55,7 @@ _RealtimeRepo = Annotated[RealtimeRepositoryInterface, Depends(get_realtime_repo
 )
 async def statistics(
     _: CurrentPoweruser,
+    system_repository: _SystemRepo,
     gtfs_repository: _GtfsRepo,
     realtime_repository: _RealtimeRepo,
     route_id: str | None = Query(
@@ -51,20 +65,31 @@ async def statistics(
     )
 ) -> MonitoringStatisticsResponse:
     """Returns an object with statistical information about the system."""
+    datasources: list[MonitoredDatasourceGroupObject] = [
+        MonitoredDatasourceGroupObject(id=ds.id, name=ds.name) for ds in await system_repository.list_data_sources() if ds.is_active
+    ]
+    
+    routes: list[MonitoredRouteGroupObject] = [
+        MonitoredRouteGroupObject(id=route.gtfs_id, short_name=route.short_name, long_name=route.long_name) for route in await gtfs_repository.list_gtfs_routes(query="", limit=10000)
+    ]
+
+    static_statistics: dict[str, int] = await gtfs_repository.list_gtfs_object_statistics()
+    static_operation_day_dates: list[date] = await gtfs_repository.list_gtfs_operation_day_dates()
+    
     response: MonitoringStatisticsResponse = MonitoringStatisticsResponse(
         statistics=MonitoredStatisticsObject(
             system=MonitoredStatisticsSystemObject(
-                datasources=[]
+                datasources=datasources
             ),
             static=MonitoredStatisticsStaticObject(
-                last_import_timestamp=None,
-                last_import_status=None,
-                num_agencies=0,
-                num_routes=0,
-                num_stops=0,
-                num_trips=0,
-                routes=[],
-                operation_day_dates=[]
+                last_import_timestamp=await system_repository.get_app_setting(AppSetting.KEY_GTFS_IMPORT_TIME),
+                last_import_status=_gtfs_import_status_enum(await system_repository.get_app_setting(AppSetting.KEY_GTFS_IMPORT_STATUS)),
+                num_agencies=static_statistics.get("num_agencies", 0),
+                num_routes=static_statistics.get("num_routes", 0),
+                num_stops=static_statistics.get("num_stops", 0),
+                num_trips=static_statistics.get("num_trips", 0),
+                routes=routes,
+                operation_day_dates=static_operation_day_dates
             ),
             realtime=MonitoredStatisticsRealtimeObject(
                 alerts=MonitoredStatisticsRealtimeAlertsObject(
@@ -103,6 +128,7 @@ async def statistics(
 )
 async def conflicts(
     _: CurrentPoweruser,
+    system_repository: _SystemRepo,
     gtfs_repository: _GtfsRepo,
     realtime_repository: _RealtimeRepo,
     data_source_id: int | None = Query(
