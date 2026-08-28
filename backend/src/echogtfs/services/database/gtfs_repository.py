@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from datetime import datetime
 
-from sqlalchemy import delete, insert, select, text
+from sqlalchemy import delete, func, insert, select, text
 from sqlalchemy.orm import selectinload
 
 from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
@@ -74,6 +74,34 @@ class GtfsRepository(RepositoryBase, GtfsRepositoryInterface):
                 | GtfsRoute.long_name.ilike(f"%{query}%")
             )
         stmt = stmt.limit(limit)
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
+    async def list_gtfs_object_statistics(self) -> dict[str, int]:
+        """Return total counts of GTFS agencies, routes, stops, and trips."""
+        async with self.get_session() as db:
+            num_agencies = (await db.execute(select(func.count()).select_from(GtfsAgency))).scalar_one()
+            num_routes = (await db.execute(select(func.count()).select_from(GtfsRoute))).scalar_one()
+            num_stops = (await db.execute(select(func.count()).select_from(GtfsStop))).scalar_one()
+            num_trips = (await db.execute(select(func.count()).select_from(GtfsTrip))).scalar_one()
+
+            return {
+                "num_agencies": num_agencies,
+                "num_routes": num_routes,
+                "num_stops": num_stops,
+                "num_trips": num_trips,
+            }
+
+    async def list_gtfs_operation_day_dates(self) -> list[date]:
+        """Return distinct GTFS trip operation_day_date values."""
+        stmt = (
+            select(GtfsTrip.operation_day_date)
+            .where(GtfsTrip.operation_day_date.is_not(None))
+            .distinct()
+            .order_by(GtfsTrip.operation_day_date)
+        )
 
         async with self.get_session() as db:
             result = await db.execute(stmt)

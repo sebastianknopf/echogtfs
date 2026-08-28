@@ -48,6 +48,16 @@ class GtfsRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def list_gtfs_object_statistics(self) -> list[date]:
+        """Return total counts of GTFS agencies, routes, stops, and trips."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_gtfs_operation_day_dates(self) -> list[date]:
+        """Return distinct GTFS trip operation_day_date values."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def replace_gtfs_static_data(
         self,
         *,
