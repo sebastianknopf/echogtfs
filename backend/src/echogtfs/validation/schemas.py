@@ -479,6 +479,10 @@ class MonitoringConflictObject(BaseModel):
         examples=["fa9498ef-cd63-467e-b614-1f2549e24ec3"],
         description="Unique identifier for the conflict"
     )
+    timestamp: datetime = Field(
+        examples=["2024-06-01T12:00:00Z"],
+        description="Timestamp indicating when the conflict was detected."
+    )
     code: ConflictType = Field(
         examples=[ConflictType.ERROR_NO_TRIP_FOUND, ConflictType.WARNING_IMPLIED_ADDITIONAL_STOP],
         description="Numeric code representing the type of conflict."
