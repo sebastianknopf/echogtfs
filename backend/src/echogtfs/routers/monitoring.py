@@ -14,8 +14,9 @@ from echogtfs.services.database import (
 
 from echogtfs.services.database.models import AppSetting
 from echogtfs.enum.gtfs import GtfsImportStatus
-from echogtfs.validation.schemas import MonitoredDatasourceGroupObject, MonitoredRouteGroupObject, MonitoredStatisticsObject, MonitoredStatisticsRealtimeObject, MonitoredStatisticsRealtimeAlertsObject, MonitoredStatisticsRealtimeTripsObject, MonitoredStatisticsRealtimeVehiclesObject, MonitoredStatisticsSystemObject, MonitoredStatisticsStaticObject, MonitoringConflictsResponse, MonitoringStatisticsResponse
+from echogtfs.validation.schemas import MonitoringDatasourceGroupObject, MonitoringRouteGroupObject, MonitoringStatisticsObject, MonitoringStatisticsRealtimeObject, MonitoringStatisticsRealtimeAlertsObject, MonitoringStatisticsRealtimeTripsObject, MonitoringStatisticsRealtimeVehiclesObject, MonitoringStatisticsStaticObject, MonitoringConflictsResponse, MonitoringStatisticsResponse, MonitoringSystemFiltersObject, MonitoringSystemResponse
 from echogtfs.common.security import CurrentPoweruser
+from echogtfs._version import __version__
 
 router = APIRouter()
 
@@ -29,6 +30,54 @@ def _gtfs_import_status_enum(value: str | None) -> GtfsImportStatus | None:
         return None
 
     return GtfsImportStatus(value)
+
+
+@router.get(
+    "/system",
+    response_model=MonitoringSystemResponse,
+    responses={
+        401: {
+            "description": "Unauthorized Access",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "error.401_unauthorized"}
+                }
+            }
+        },
+        403: {
+            "description": "Forbidden Access",
+            "content": {
+                "application/json": {
+                    "example": {"detail": "error.403_permission"}
+                }
+            }
+        }
+    }
+)
+async def system(
+    _: CurrentPoweruser,
+    system_repository: _SystemRepo,
+    gtfs_repository: _GtfsRepo
+) -> MonitoringSystemResponse:
+    """Returns basic system information and available filter values for the monitoring interface."""
+    datasources: list[MonitoringDatasourceGroupObject] = [
+        MonitoringDatasourceGroupObject(id=ds.id, name=ds.name) for ds in await system_repository.list_data_sources() if ds.is_active
+    ]
+    
+    routes: list[MonitoringRouteGroupObject] = [
+        MonitoringRouteGroupObject(id=route.gtfs_id, short_name=route.short_name, long_name=route.long_name) for route in await gtfs_repository.list_gtfs_routes(query="", limit=10000)
+    ]
+
+    response: MonitoringSystemResponse = MonitoringSystemResponse(
+        version=__version__,
+        status=True,
+        filters=MonitoringSystemFiltersObject(
+            datasources=datasources,
+            routes=routes
+        )
+    )
+
+    return response
 
 
 @router.get(
@@ -64,13 +113,9 @@ async def statistics(
         description="ID of the route the results shall be filtered for. If not provided, conflicts from all routes will be returned."
     )
 ) -> MonitoringStatisticsResponse:
-    """Returns an object with statistical information about the system."""
-    datasources: list[MonitoredDatasourceGroupObject] = [
-        MonitoredDatasourceGroupObject(id=ds.id, name=ds.name) for ds in await system_repository.list_data_sources() if ds.is_active
-    ]
-    
-    routes: list[MonitoredRouteGroupObject] = [
-        MonitoredRouteGroupObject(id=route.gtfs_id, short_name=route.short_name, long_name=route.long_name) for route in await gtfs_repository.list_gtfs_routes(query="", limit=10000)
+    """Returns an object with statistical information about the static GTFS data and the realtime objects for GTFS-RT."""
+    routes: list[MonitoringRouteGroupObject] = [
+        MonitoringRouteGroupObject(id=route.gtfs_id, short_name=route.short_name, long_name=route.long_name) for route in await gtfs_repository.list_gtfs_routes(query="", limit=10000)
     ]
 
     static_statistics: dict[str, int] = await gtfs_repository.list_gtfs_object_statistics()
@@ -79,26 +124,22 @@ async def statistics(
     realtime_statistics: dict[str, any] = await realtime_repository.list_realtime_object_statistics([route_id] if route_id else [r.id for r in routes])
     
     response: MonitoringStatisticsResponse = MonitoringStatisticsResponse(
-        statistics=MonitoredStatisticsObject(
-            system=MonitoredStatisticsSystemObject(
-                datasources=datasources
-            ),
-            static=MonitoredStatisticsStaticObject(
+        statistics=MonitoringStatisticsObject(
+            static=MonitoringStatisticsStaticObject(
                 last_import_timestamp=await system_repository.get_app_setting(AppSetting.KEY_GTFS_IMPORT_TIME),
                 last_import_status=_gtfs_import_status_enum(await system_repository.get_app_setting(AppSetting.KEY_GTFS_IMPORT_STATUS)),
                 num_agencies=static_statistics.get("num_agencies", 0),
                 num_routes=static_statistics.get("num_routes", 0),
                 num_stops=static_statistics.get("num_stops", 0),
                 num_trips=static_statistics.get("num_trips", 0),
-                routes=routes,
                 operation_day_dates=static_operation_day_dates
             ),
-            realtime=MonitoredStatisticsRealtimeObject(
-                alerts=MonitoredStatisticsRealtimeAlertsObject(
+            realtime=MonitoringStatisticsRealtimeObject(
+                alerts=MonitoringStatisticsRealtimeAlertsObject(
                     num_alerts=realtime_statistics.get("num_alerts", 0)
                 ),
                 trips=[
-                    MonitoredStatisticsRealtimeTripsObject(
+                    MonitoringStatisticsRealtimeTripsObject(
                         route=next((obj for obj in routes if obj.id == id), None),
                         num_running_trips=r.get("num_running_trips", 0),
                         num_realtime_trips=r.get("num_realtime_trips", 0),
@@ -107,7 +148,7 @@ async def statistics(
                     for id, r in realtime_statistics.get("trips", {}).items()
                 ],
                 vehicles=[
-                    MonitoredStatisticsRealtimeVehiclesObject(
+                    MonitoringStatisticsRealtimeVehiclesObject(
                         route=next((obj for obj in routes if obj.id == id), None),
                         num_vehicles=r.get("num_vehicles", 0),
                     )

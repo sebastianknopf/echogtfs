@@ -326,7 +326,7 @@ class DataSourceLogRead(BaseModel):
 # Monitoring
 # ---------------------------------------------------------------------------
 
-class MonitoredRouteGroupObject(BaseModel):
+class MonitoringRouteGroupObject(BaseModel):
     id: str = Field(
         examples=["de:vpe:04743_:", "de:vpe:04744_:"],
         description="Identifier of the nominal GTFS route."
@@ -341,7 +341,7 @@ class MonitoredRouteGroupObject(BaseModel):
     )
 
 
-class MonitoredDatasourceGroupObject(BaseModel):
+class MonitoringDatasourceGroupObject(BaseModel):
     id: int = Field(
         examples=[10, 11, 12],
         description="Internal ID of the data source."
@@ -352,31 +352,45 @@ class MonitoredDatasourceGroupObject(BaseModel):
     )
 
 
+class MonitoringSystemResponse(BaseModel):
+    version: str = Field(
+        examples=["1.0.0", "v1.2.1.dev6+geddca0dfb.d20260829"],
+        description="Current system version"
+    )
+    status: bool = Field(
+        examples=[True, False],
+        description="Current status indicator of the system. True if the system is operational, False otherwise."
+    )
+    filters: MonitoringSystemFiltersObject = Field(
+        description="Filters available for statistics and conflicts endpoint."
+    )
+
+
+class MonitoringSystemFiltersObject(BaseModel):
+    datasources: list[MonitoringDatasourceGroupObject] = Field(
+        description="List of data sources in the system."
+    )
+    routes: list[MonitoringRouteGroupObject] = Field(
+        description="List of routes in the nominal GTFS data."
+    )
+
+
 class MonitoringStatisticsResponse(BaseModel):
-    statistics: MonitoredStatisticsObject = Field(
+    statistics: MonitoringStatisticsObject = Field(
         description="Monitored statistics for the data source."
     )
 
 
-class MonitoredStatisticsObject(BaseModel):
-    system: MonitoredStatisticsSystemObject = Field(
-        description="Statistics related to the overall system."
-    )
-    static: MonitoredStatisticsStaticObject = Field(
+class MonitoringStatisticsObject(BaseModel):
+    static: MonitoringStatisticsStaticObject = Field(
         description="Statistics related to the nominal timetable data."
     )
-    realtime: MonitoredStatisticsRealtimeObject = Field(
+    realtime: MonitoringStatisticsRealtimeObject = Field(
         description="Statistics related to the real-time data."
     )
 
 
-class MonitoredStatisticsSystemObject(BaseModel):
-    datasources: list[MonitoredDatasourceGroupObject] = Field(
-        description="List of data sources in the system."
-    )
-
-
-class MonitoredStatisticsStaticObject(BaseModel):
+class MonitoringStatisticsStaticObject(BaseModel):
     last_import_timestamp: datetime | None = Field(
         examples=["2024-06-01T12:00:00Z"],
         description="Timestamp of the last import for the GTFS import data run."
@@ -401,36 +415,33 @@ class MonitoredStatisticsStaticObject(BaseModel):
         examples=[2000, 2003, 2338],
         description="Number of trips in the nominal GTFS data."
     )
-    routes: list[MonitoredRouteGroupObject] = Field(
-        description="List of routes in the nominal GTFS data."
-    )
     operation_day_dates: list[date] = Field(
         examples=[["2024-06-01"], ["2024-06-02", "2024-06-03"]],
         description="List of loaded operation day dates in the nominal GTFS data."
     )
 
 
-class MonitoredStatisticsRealtimeObject(BaseModel):
-    alerts: MonitoredStatisticsRealtimeAlertsObject = Field(
+class MonitoringStatisticsRealtimeObject(BaseModel):
+    alerts: MonitoringStatisticsRealtimeAlertsObject = Field(
         description="Statistics related to real-time alerts."
     )
-    trips: list[MonitoredStatisticsRealtimeTripsObject] = Field(
+    trips: list[MonitoringStatisticsRealtimeTripsObject] = Field(
         description="Statistics related to real-time trips."
     )
-    vehicles: list[MonitoredStatisticsRealtimeVehiclesObject] = Field(
+    vehicles: list[MonitoringStatisticsRealtimeVehiclesObject] = Field(
         description="Statistics related to real-time vehicles."
     )
 
 
-class MonitoredStatisticsRealtimeAlertsObject(BaseModel):
+class MonitoringStatisticsRealtimeAlertsObject(BaseModel):
     num_alerts: int = Field(
         examples=[10, 11, 12],
         description="Number of active real-time alerts."
     )
 
 
-class MonitoredStatisticsRealtimeTripsObject(BaseModel):
-    route: MonitoredRouteGroupObject = Field(
+class MonitoringStatisticsRealtimeTripsObject(BaseModel):
+    route: MonitoringRouteGroupObject = Field(
         description="The nominal GTFS route for which the statistics are reported."
     )
     num_running_trips: int = Field(
@@ -447,8 +458,8 @@ class MonitoredStatisticsRealtimeTripsObject(BaseModel):
     )
 
 
-class MonitoredStatisticsRealtimeVehiclesObject(BaseModel):
-    route: MonitoredRouteGroupObject = Field(
+class MonitoringStatisticsRealtimeVehiclesObject(BaseModel):
+    route: MonitoringRouteGroupObject = Field(
         description="The nominal GTFS route for which the statistics are reported."
     )
     num_vehicles: int = Field(
@@ -476,7 +487,7 @@ class MonitoringConflictObject(BaseModel):
         examples=["ERROR_NO_TRIP_FOUND", "WARNING_IMPLIED_ADDITIONAL_STOP"],
         description="Human-readable name describing the conflict."
     )
-    datasource: MonitoredDatasourceGroupObject = Field(
+    datasource: MonitoringDatasourceGroupObject = Field(
         description="The data source which has raised the data resulting in the conflict."
     )
     properties: dict[str, str] = Field(
