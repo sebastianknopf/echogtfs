@@ -255,6 +255,11 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def list_realtime_object_statistics(self, route_ids: list[str]) -> dict[str, Any]:
+        """Return active alert count plus route-based trip and vehicle statistics."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def list_vehicles_paginated(
         self,
         *,

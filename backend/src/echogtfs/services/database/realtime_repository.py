@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 from echogtfs.services.database.base import RepositoryBase
 from echogtfs.services.database.intf_realtime_repository import RealtimeRepositoryInterface
 from echogtfs.services.database.models import (
+    GtfsTrip,
     ServiceAlert,
     ServiceAlertActivePeriod,
     ServiceAlertInformedEntity,
@@ -998,6 +999,123 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
 
             await self.commit(db)
             return action
+
+    async def list_realtime_object_statistics(self, route_ids: list[str]) -> dict[str, Any]:
+        """Return active alert count plus route-based trip and vehicle statistics."""
+        unique_route_ids = list(dict.fromkeys(route_ids))
+
+        trips_stats = {
+            route_id: {
+                "num_running_trips": 0,
+                "num_realtime_trips": 0,
+                "num_monitored_trips": 0,
+            }
+            for route_id in unique_route_ids
+        }
+        vehicles_stats = {
+            route_id: {
+                "num_vehicles": 0,
+            }
+            for route_id in unique_route_ids
+        }
+
+        async with self.get_session() as db:
+            alerts_count_result = await db.execute(
+                select(func.count(ServiceAlert.id)).where(ServiceAlert.is_active.is_(True))
+            )
+            num_alerts = int(alerts_count_result.scalar_one())
+
+            if unique_route_ids:
+                now_value = datetime.now(self._resolve_timezone(self._configured_timezone_name()))
+
+                running_trips_stmt = (
+                    select(
+                        GtfsTrip.route_id,
+                        func.count(GtfsTrip.gtfs_id),
+                    )
+                    .where(
+                        GtfsTrip.route_id.in_(unique_route_ids),
+                        GtfsTrip.start_time <= now_value,
+                        GtfsTrip.end_time >= now_value,
+                    )
+                    .group_by(GtfsTrip.route_id)
+                )
+                running_trips_result = await db.execute(running_trips_stmt)
+                for route_id, count_value in running_trips_result.all():
+                    trips_stats[str(route_id)]["num_running_trips"] = int(count_value or 0)
+
+                per_trip_stop_stats = (
+                    select(
+                        Trip.id.label("trip_uuid"),
+                        Trip.route_id.label("route_id"),
+                        func.sum(
+                            case(
+                                (StopEvent.schedule_relationship != "NO_DATA", 1),
+                                else_=0,
+                            )
+                        ).label("num_non_no_data_events"),
+                        func.sum(
+                            case(
+                                (StopEvent.schedule_relationship.notin_(["NO_DATA", "ADDED"]), 1),
+                                else_=0,
+                            )
+                        ).label("num_realtime_events"),
+                    )
+                    .join(StopEvent, StopEvent.trip_id == Trip.trip_id)
+                    .where(
+                        Trip.route_id.in_(unique_route_ids),
+                        Trip.is_active.is_(True),
+                    )
+                    .group_by(Trip.id, Trip.route_id)
+                    .subquery()
+                )
+
+                realtime_trips_stmt = (
+                    select(
+                        per_trip_stop_stats.c.route_id,
+                        func.sum(
+                            case(
+                                (per_trip_stop_stats.c.num_non_no_data_events == 0, 1),
+                                else_=0,
+                            )
+                        ).label("num_monitored_trips"),
+                        func.sum(
+                            case(
+                                (per_trip_stop_stats.c.num_realtime_events > 0, 1),
+                                else_=0,
+                            )
+                        ).label("num_realtime_trips"),
+                    )
+                    .group_by(per_trip_stop_stats.c.route_id)
+                )
+                realtime_trips_result = await db.execute(realtime_trips_stmt)
+                for route_id, monitored_count, realtime_count in realtime_trips_result.all():
+                    route_key = str(route_id)
+                    trips_stats[route_key]["num_monitored_trips"] = int(monitored_count or 0)
+                    trips_stats[route_key]["num_realtime_trips"] = int(realtime_count or 0)
+
+                vehicles_stmt = (
+                    select(
+                        Trip.route_id,
+                        func.count(Vehicle.id).label("num_vehicles"),
+                    )
+                    .join(Trip, Trip.trip_id == Vehicle.trip_id)
+                    .where(
+                        Trip.route_id.in_(unique_route_ids),
+                        Trip.is_active.is_(True),
+                        Vehicle.is_active.is_(True),
+                    )
+                    .group_by(Trip.route_id)
+                )
+                vehicles_result = await db.execute(vehicles_stmt)
+                for route_id, count_value in vehicles_result.all():
+                    vehicles_stats[str(route_id)]["num_vehicles"] = int(count_value or 0)
+
+            return {
+                "num_alerts": num_alerts,
+                "trips": trips_stats,
+                "vehicles": vehicles_stats,
+            }
 
     @staticmethod
     def _configured_timezone_name() -> str:

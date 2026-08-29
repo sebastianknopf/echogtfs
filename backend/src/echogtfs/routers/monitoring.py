@@ -14,7 +14,7 @@ from echogtfs.services.database import (
 
 from echogtfs.services.database.models import AppSetting
 from echogtfs.enum.gtfs import GtfsImportStatus
-from echogtfs.validation.schemas import MonitoredDatasourceGroupObject, MonitoredRouteGroupObject, MonitoredStatisticsObject, MonitoredStatisticsRealtimeObject, MonitoredStatisticsRealtimeAlertsObject, MonitoredStatisticsSystemObject, MonitoredStatisticsStaticObject, MonitoringConflictsResponse, MonitoringStatisticsResponse
+from echogtfs.validation.schemas import MonitoredDatasourceGroupObject, MonitoredRouteGroupObject, MonitoredStatisticsObject, MonitoredStatisticsRealtimeObject, MonitoredStatisticsRealtimeAlertsObject, MonitoredStatisticsRealtimeTripsObject, MonitoredStatisticsRealtimeVehiclesObject, MonitoredStatisticsSystemObject, MonitoredStatisticsStaticObject, MonitoringConflictsResponse, MonitoringStatisticsResponse
 from echogtfs.common.security import CurrentPoweruser
 
 router = APIRouter()
@@ -75,6 +75,8 @@ async def statistics(
 
     static_statistics: dict[str, int] = await gtfs_repository.list_gtfs_object_statistics()
     static_operation_day_dates: list[date] = await gtfs_repository.list_gtfs_operation_day_dates()
+
+    realtime_statistics: dict[str, any] = await realtime_repository.list_realtime_object_statistics([route_id] if route_id else [r.id for r in routes])
     
     response: MonitoringStatisticsResponse = MonitoringStatisticsResponse(
         statistics=MonitoredStatisticsObject(
@@ -93,10 +95,24 @@ async def statistics(
             ),
             realtime=MonitoredStatisticsRealtimeObject(
                 alerts=MonitoredStatisticsRealtimeAlertsObject(
-                    num_alerts=0
+                    num_alerts=realtime_statistics.get("num_alerts", 0)
                 ),
-                trips=[],
-                vehicles=[]
+                trips=[
+                    MonitoredStatisticsRealtimeTripsObject(
+                        route=next((obj for obj in routes if obj.id == id), None),
+                        num_running_trips=r.get("num_running_trips", 0),
+                        num_realtime_trips=r.get("num_realtime_trips", 0),
+                        num_monitored_trips=r.get("num_monitored_trips", 0)
+                    )
+                    for id, r in realtime_statistics.get("trips", {}).items()
+                ],
+                vehicles=[
+                    MonitoredStatisticsRealtimeVehiclesObject(
+                        route=next((obj for obj in routes if obj.id == id), None),
+                        num_vehicles=r.get("num_vehicles", 0),
+                    )
+                    for id, r in realtime_statistics.get("vehicles", {}).items()
+                ]
             )
         )
     )

@@ -859,3 +859,60 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(existing_vehicle.trip_id, "trip-4")
         session.flush.assert_not_awaited()
         session.commit.assert_awaited_once()
+
+    async def test_list_realtime_object_statistics_returns_counts_per_route(self):
+        session = SimpleNamespace(
+            execute=AsyncMock(
+                side_effect=[
+                    _FakeResult(scalar_one_value=7),
+                    _FakeResult(rows=[("R1", 3), ("R2", 1)]),
+                    _FakeResult(rows=[("R1", 5, 2), ("R2", 2, 0)]),
+                    _FakeResult(rows=[("R1", 4)]),
+                ]
+            )
+        )
+        repository = self._make_repository(session)
+
+        result = await repository.list_realtime_object_statistics(["R1", "R2", "R3"])
+
+        self.assertEqual(
+            result,
+            {
+                "num_alerts": 7,
+                "trips": {
+                    "R1": {
+                        "num_running_trips": 3,
+                        "num_realtime_trips": 2,
+                        "num_monitored_trips": 5,
+                    },
+                    "R2": {
+                        "num_running_trips": 1,
+                        "num_realtime_trips": 0,
+                        "num_monitored_trips": 2,
+                    },
+                    "R3": {
+                        "num_running_trips": 0,
+                        "num_realtime_trips": 0,
+                        "num_monitored_trips": 0,
+                    },
+                },
+                "vehicles": {
+                    "R1": {"num_vehicles": 4},
+                    "R2": {"num_vehicles": 0},
+                    "R3": {"num_vehicles": 0},
+                },
+            },
+        )
+        self.assertEqual(session.execute.await_count, 4)
+
+        trips_stmt = session.execute.await_args_list[2].args[0]
+        compiled = trips_stmt.compile()
+        flat_values = []
+        for value in compiled.params.values():
+            if isinstance(value, (list, tuple, set)):
+                flat_values.extend(value)
+            else:
+                flat_values.append(value)
+
+        self.assertIn("NO_DATA", flat_values)
+        self.assertIn("ADDED", flat_values)
