@@ -13,8 +13,9 @@ from echogtfs.services.database import (
 )
 
 from echogtfs.services.database.models import AppSetting
+from echogtfs.services.conflict.conflict_export_service import ConflictExportService
 from echogtfs.enum.gtfs import GtfsImportStatus
-from echogtfs.validation.schemas import MonitoringDatasourceGroupObject, MonitoringRouteGroupObject, MonitoringStatisticsObject, MonitoringStatisticsRealtimeObject, MonitoringStatisticsRealtimeAlertsObject, MonitoringStatisticsRealtimeTripsObject, MonitoringStatisticsRealtimeVehiclesObject, MonitoringStatisticsStaticObject, MonitoringConflictsResponse, MonitoringStatisticsResponse, MonitoringSystemFiltersObject, MonitoringSystemResponse
+from echogtfs.validation.schemas import MonitoringConflictObject, MonitoringDatasourceGroupObject, MonitoringRouteGroupObject, MonitoringStatisticsObject, MonitoringStatisticsRealtimeObject, MonitoringStatisticsRealtimeAlertsObject, MonitoringStatisticsRealtimeTripsObject, MonitoringStatisticsRealtimeVehiclesObject, MonitoringStatisticsStaticObject, MonitoringConflictsResponse, MonitoringStatisticsResponse, MonitoringSystemFiltersObject, MonitoringSystemResponse
 from echogtfs.common.security import CurrentPoweruser
 from echogtfs._version import __version__
 
@@ -186,7 +187,6 @@ async def statistics(
 async def conflicts(
     _: CurrentPoweruser,
     system_repository: _SystemRepo,
-    gtfs_repository: _GtfsRepo,
     realtime_repository: _RealtimeRepo,
     data_source_id: int | None = Query(
         None,
@@ -195,8 +195,15 @@ async def conflicts(
     )
 ) -> MonitoringConflictsResponse:
     """Returns an object with the current conflicts in the system."""
+    conflict_export_service = ConflictExportService(
+        system_repository=system_repository,
+        realtime_repository=realtime_repository
+    )
+
+    conflicts: list[MonitoringConflictObject] = conflict_export_service.export(datasource_id=data_source_id)
+
     response: MonitoringConflictsResponse = MonitoringConflictsResponse(
-        conflicts=[]
+        conflicts=conflicts
     )
 
     return response
