@@ -40,7 +40,8 @@ class ConflictExportService(ConflictExportServiceInterface):
                     }
                 ))
 
-        return results
+        # finally return the sorted conflict objects
+        return sorted(results, key=lambda x: x.timestamp, reverse=True)
 
     def _unique_conflict_id(self, **kwargs) -> str:
         """Generate a unique conflict identifier based on provided keyword arguments."""
