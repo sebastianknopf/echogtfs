@@ -25,10 +25,10 @@ class ConflictExportService(ConflictExportServiceInterface):
                 last_failure: datetime | None = ds.logs[-1].timestamp if len(ds.logs) > 0 else None
 
                 results.append(MonitoringConflictObject(
-                    id=self._unique_conflict_id(datasource_id=ds.id, conflict_type=ConflictType.DATASOURCE_FAILURE, last_failure=last_failure),
+                    id=self._unique_conflict_id(datasource_id=ds.id, conflict_type=ConflictType.ERROR_DATASOURCE_FAILURE, last_failure=last_failure),
                     timestamp=last_failure,
-                    conflict_type=ConflictType.DATASOURCE_FAILURE,
-                    message=ConflictType.DATASOURCE_FAILURE.name,
+                    conflict_type=ConflictType.ERROR_DATASOURCE_FAILURE,
+                    message=ConflictType.ERROR_DATASOURCE_FAILURE.name,
                     datasource=MonitoringDatasourceGroupObject(
                         id=ds.id,
                         name=ds.name,
