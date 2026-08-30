@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 import uuid
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select, func, update
 from sqlalchemy.orm import selectinload
 
 from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
@@ -180,6 +180,31 @@ class SystemRepository(RepositoryBase, SystemRepositoryInterface):
                 DataSource.cron.isnot(None),
                 DataSource.is_active == True,
             )
+            .order_by(DataSource.name)
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
+    async def list_data_sources_with_failures(self, min_num_failures: int = 0) -> list[DataSource]:
+        """Return all data sources with at least the given number of failures ordered by name."""
+        failure_count = (
+            select(func.count(DataSourceLog.id))
+            .where(
+                DataSourceLog.data_source_id == DataSource.id,
+                DataSourceLog.status_code != 200,
+            )
+            .correlate(DataSource)
+            .scalar_subquery()
+        )
+
+        stmt = (
+            select(DataSource)
+            .options(
+                selectinload(DataSource.logs),
+            )
+            .where(failure_count >= min_num_failures)
             .order_by(DataSource.name)
         )
 
