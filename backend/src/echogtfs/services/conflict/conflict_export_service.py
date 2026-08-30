@@ -35,7 +35,7 @@ class ConflictExportService(ConflictExportServiceInterface):
                     ),
                     properties={
                         "datasource_id": ds.id,
-                        "last_status": ds.logs[-1].status if len(ds.logs) > 0 else None,
+                        "last_status": ds.logs[-1].status_code if len(ds.logs) > 0 else None,
                         "last_failure": last_failure
                     }
                 ))
