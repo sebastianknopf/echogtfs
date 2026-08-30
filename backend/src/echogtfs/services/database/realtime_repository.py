@@ -1003,18 +1003,29 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
     async def list_realtime_object_statistics(self, route_ids: list[str]) -> dict[str, Any]:
         """Return active alert count plus route-based trip and vehicle statistics."""
         unique_route_ids = list(dict.fromkeys(route_ids))
+        assignment_type_values = [
+            assignment_type.value
+            for assignment_type in AssignmentType
+            if assignment_type != AssignmentType.MATCH_BY_CACHED_ID
+        ]
+
+        def _empty_assignment_types() -> list[dict[str, int]]:
+            return [{assignment_type: 0} for assignment_type in assignment_type_values]
 
         trips_stats = {
             route_id: {
                 "num_running_trips": 0,
                 "num_realtime_trips": 0,
                 "num_monitored_trips": 0,
+                "assignment_types": _empty_assignment_types(),
             }
             for route_id in unique_route_ids
         }
         vehicles_stats = {
             route_id: {
+                "num_running_trips": 0,
                 "num_vehicles": 0,
+                "assignment_types": _empty_assignment_types(),
             }
             for route_id in unique_route_ids
         }
@@ -1028,26 +1039,38 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
             if unique_route_ids:
                 now_value = datetime.now(self._resolve_timezone(self._configured_timezone_name()))
 
-                running_trips_stmt = (
+                running_trip_ids_subq = (
                     select(
-                        GtfsTrip.route_id,
-                        func.count(GtfsTrip.gtfs_id),
+                        GtfsTrip.route_id.label("route_id"),
+                        GtfsTrip.gtfs_id.label("gtfs_trip_id"),
                     )
                     .where(
                         GtfsTrip.route_id.in_(unique_route_ids),
                         GtfsTrip.start_time <= now_value,
                         GtfsTrip.end_time >= now_value,
                     )
-                    .group_by(GtfsTrip.route_id)
+                    .distinct()
+                    .subquery()
+                )
+
+                running_trips_stmt = (
+                    select(
+                        running_trip_ids_subq.c.route_id,
+                        func.count(running_trip_ids_subq.c.gtfs_trip_id),
+                    )
+                    .group_by(running_trip_ids_subq.c.route_id)
                 )
                 running_trips_result = await db.execute(running_trips_stmt)
                 for route_id, count_value in running_trips_result.all():
-                    trips_stats[str(route_id)]["num_running_trips"] = int(count_value or 0)
+                    route_key = str(route_id)
+                    count_int = int(count_value or 0)
+                    trips_stats[route_key]["num_running_trips"] = count_int
+                    vehicles_stats[route_key]["num_running_trips"] = count_int
 
                 per_trip_stop_stats = (
                     select(
                         Trip.id.label("trip_uuid"),
-                        Trip.route_id.label("route_id"),
+                        running_trip_ids_subq.c.route_id.label("route_id"),
                         func.sum(
                             case(
                                 (StopEvent.schedule_relationship != "NO_DATA", 1),
@@ -1061,12 +1084,12 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                             )
                         ).label("num_realtime_events"),
                     )
+                    .join(running_trip_ids_subq, Trip.trip_id == running_trip_ids_subq.c.gtfs_trip_id)
                     .join(StopEvent, StopEvent.trip_id == Trip.trip_id)
                     .where(
-                        Trip.route_id.in_(unique_route_ids),
                         Trip.is_active.is_(True),
                     )
-                    .group_by(Trip.id, Trip.route_id)
+                    .group_by(Trip.id, running_trip_ids_subq.c.route_id)
                     .subquery()
                 )
 
@@ -1094,22 +1117,78 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                     trips_stats[route_key]["num_monitored_trips"] = int(monitored_count or 0)
                     trips_stats[route_key]["num_realtime_trips"] = int(realtime_count or 0)
 
+                trip_assignment_type_stmt = (
+                    select(
+                        running_trip_ids_subq.c.route_id,
+                        Trip.assignment_type,
+                        func.count(Trip.id).label("num_trips"),
+                    )
+                    .join(running_trip_ids_subq, Trip.trip_id == running_trip_ids_subq.c.gtfs_trip_id)
+                    .where(
+                        Trip.is_active.is_(True),
+                        Trip.assignment_type.in_(assignment_type_values),
+                    )
+                    .group_by(running_trip_ids_subq.c.route_id, Trip.assignment_type)
+                )
+                trip_assignment_type_result = await db.execute(trip_assignment_type_stmt)
+                trip_assignment_type_counts: dict[str, dict[str, int]] = {
+                    route_id: {assignment_type: 0 for assignment_type in assignment_type_values}
+                    for route_id in unique_route_ids
+                }
+                for route_id, assignment_type, count_value in trip_assignment_type_result.all():
+                    trip_assignment_type_counts[str(route_id)][str(assignment_type)] = int(count_value or 0)
+
+                for route_id in unique_route_ids:
+                    trips_stats[route_id]["assignment_types"] = [
+                        {assignment_type: trip_assignment_type_counts[route_id][assignment_type]}
+                        for assignment_type in assignment_type_values
+                    ]
+
                 vehicles_stmt = (
                     select(
-                        Trip.route_id,
+                        running_trip_ids_subq.c.route_id,
                         func.count(Vehicle.id).label("num_vehicles"),
                     )
+                    .join(running_trip_ids_subq, running_trip_ids_subq.c.gtfs_trip_id == Vehicle.trip_id)
                     .join(Trip, Trip.trip_id == Vehicle.trip_id)
                     .where(
-                        Trip.route_id.in_(unique_route_ids),
                         Trip.is_active.is_(True),
                         Vehicle.is_active.is_(True),
                     )
-                    .group_by(Trip.route_id)
+                    .group_by(running_trip_ids_subq.c.route_id)
                 )
                 vehicles_result = await db.execute(vehicles_stmt)
                 for route_id, count_value in vehicles_result.all():
                     vehicles_stats[str(route_id)]["num_vehicles"] = int(count_value or 0)
+
+                vehicle_assignment_type_stmt = (
+                    select(
+                        running_trip_ids_subq.c.route_id,
+                        Trip.assignment_type,
+                        func.count(Vehicle.id).label("num_vehicles"),
+                    )
+                    .join(running_trip_ids_subq, running_trip_ids_subq.c.gtfs_trip_id == Vehicle.trip_id)
+                    .join(Trip, Trip.trip_id == Vehicle.trip_id)
+                    .where(
+                        Trip.is_active.is_(True),
+                        Vehicle.is_active.is_(True),
+                        Trip.assignment_type.in_(assignment_type_values),
+                    )
+                    .group_by(running_trip_ids_subq.c.route_id, Trip.assignment_type)
+                )
+                vehicle_assignment_type_result = await db.execute(vehicle_assignment_type_stmt)
+                vehicle_assignment_type_counts: dict[str, dict[str, int]] = {
+                    route_id: {assignment_type: 0 for assignment_type in assignment_type_values}
+                    for route_id in unique_route_ids
+                }
+                for route_id, assignment_type, count_value in vehicle_assignment_type_result.all():
+                    vehicle_assignment_type_counts[str(route_id)][str(assignment_type)] = int(count_value or 0)
+
+                for route_id in unique_route_ids:
+                    vehicles_stats[route_id]["assignment_types"] = [
+                        {assignment_type: vehicle_assignment_type_counts[route_id][assignment_type]}
+                        for assignment_type in assignment_type_values
+                    ]
 
             return {
                 "num_alerts": num_alerts,

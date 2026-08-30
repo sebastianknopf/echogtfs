@@ -1,6 +1,7 @@
 from typing import Annotated
 
 from datetime import date
+from echogtfs.enum.gtfsrt import AssignmentType
 from fastapi import APIRouter, Depends, Query
 
 from echogtfs.services.database import (
@@ -15,7 +16,7 @@ from echogtfs.services.database import (
 from echogtfs.services.database.models import AppSetting
 from echogtfs.services.conflict.conflict_export_service import ConflictExportService
 from echogtfs.enum.gtfs import GtfsImportStatus
-from echogtfs.validation.schemas import MonitoringConflictObject, MonitoringDatasourceGroupObject, MonitoringRouteGroupObject, MonitoringStatisticsObject, MonitoringStatisticsRealtimeObject, MonitoringStatisticsRealtimeAlertsObject, MonitoringStatisticsRealtimeTripsObject, MonitoringStatisticsRealtimeVehiclesObject, MonitoringStatisticsStaticObject, MonitoringConflictsResponse, MonitoringStatisticsResponse, MonitoringSystemFiltersObject, MonitoringSystemResponse
+from echogtfs.validation.schemas import MonitoringConflictObject, MonitoringDatasourceGroupObject, MonitoringRouteGroupObject, MonitoringStatisticsObject, MonitoringStatisticsRealtimeObject, MonitoringStatisticsRealtimeAssignmentsObject, MonitoringStatisticsRealtimeAlertsObject, MonitoringStatisticsRealtimeTripsObject, MonitoringStatisticsRealtimeVehiclesObject, MonitoringStatisticsStaticObject, MonitoringConflictsResponse, MonitoringStatisticsResponse, MonitoringSystemFiltersObject, MonitoringSystemResponse
 from echogtfs.common.security import CurrentPoweruser
 from echogtfs._version import __version__
 
@@ -144,14 +145,31 @@ async def statistics(
                         route=next((obj for obj in routes if obj.id == id), None),
                         num_running_trips=r.get("num_running_trips", 0),
                         num_realtime_trips=r.get("num_realtime_trips", 0),
-                        num_monitored_trips=r.get("num_monitored_trips", 0)
+                        num_monitored_trips=r.get("num_monitored_trips", 0),
+                        assignment_types=[
+                            MonitoringStatisticsRealtimeAssignmentsObject(
+                                assignment_type=AssignmentType(assignment_type),
+                                num_assignments=num_assignments
+                            )
+                            for assignment_counts in r.get("assignment_types", [])
+                            for assignment_type, num_assignments in assignment_counts.items()
+                        ]
                     )
                     for id, r in realtime_statistics.get("trips", {}).items()
                 ],
                 vehicles=[
                     MonitoringStatisticsRealtimeVehiclesObject(
                         route=next((obj for obj in routes if obj.id == id), None),
+                        num_running_trips=r.get("num_running_trips", 0),
                         num_vehicles=r.get("num_vehicles", 0),
+                        assignment_types=[
+                            MonitoringStatisticsRealtimeAssignmentsObject(
+                                assignment_type=AssignmentType(assignment_type),
+                                num_assignments=num_assignments
+                            )
+                            for assignment_counts in r.get("assignment_types", [])
+                            for assignment_type, num_assignments in assignment_counts.items()
+                        ]
                     )
                     for id, r in realtime_statistics.get("vehicles", {}).items()
                 ]

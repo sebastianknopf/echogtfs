@@ -7,7 +7,7 @@ from uuid import UUID
 from echogtfs.enum.conflicts import ConflictType
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
-from echogtfs.enum.gtfsrt import AlertCause, AlertEffect, AlertSeverityLevel, PeriodType
+from echogtfs.enum.gtfsrt import AlertCause, AlertEffect, AlertSeverityLevel, AssignmentType, PeriodType
 from echogtfs.enum.gtfs import GtfsImportStatus
 from echogtfs.enum.system import EnrichmentType, ExpiredRealtimeObjectPolicy, InvalidReferencePolicy, SourceField
 
@@ -433,6 +433,17 @@ class MonitoringStatisticsRealtimeObject(BaseModel):
     )
 
 
+class MonitoringStatisticsRealtimeAssignmentsObject(BaseModel):
+    assignment_type: AssignmentType = Field(
+        examples=[AssignmentType.MATCHED_BY_START_STOP, AssignmentType.MATCHED_BY_INTERMEDIATE_STOPS],
+        description="Assignment type enum value."
+    )
+    num_assignments: int = Field(
+        examples=[1, 2, 3],
+        description="Number of objects assigned by the given assignment type."
+    )
+
+
 class MonitoringStatisticsRealtimeAlertsObject(BaseModel):
     num_alerts: int = Field(
         examples=[10, 11, 12],
@@ -456,15 +467,25 @@ class MonitoringStatisticsRealtimeTripsObject(BaseModel):
         examples=[5, 10, 15],
         description="Number of monitored trips."
     )
+    assignment_types: list[MonitoringStatisticsRealtimeAssignmentsObject] = Field(
+        description="List of assignment types and their corresponding number of objects."
+    )
 
 
 class MonitoringStatisticsRealtimeVehiclesObject(BaseModel):
     route: MonitoringRouteGroupObject = Field(
         description="The nominal GTFS route for which the statistics are reported."
     )
+    num_running_trips: int = Field(
+        examples=[5, 10, 15],
+        description="Number of trips which are currently running based on the nominal data."
+    )
     num_vehicles: int = Field(
         examples=[10, 15, 20],
         description="Number of vehicles which are currently running."
+    )
+    assignment_types: list[MonitoringStatisticsRealtimeAssignmentsObject] = Field(
+        description="List of assignment types and their corresponding number of objects."
     )
 
 
