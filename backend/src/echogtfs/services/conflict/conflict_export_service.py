@@ -16,11 +16,11 @@ class ConflictExportService(ConflictExportServiceInterface):
         self._system_repository = system_repository
         self._realtime_repository = realtime_repository
 
-    def export(self, datasource_id: int | None = None) -> list[MonitoringConflictObject]:
+    async def export(self, datasource_id: int | None = None) -> list[MonitoringConflictObject]:
         results: list[MonitoringConflictObject] = []
 
         # select datasource failures
-        for ds in self._system_repository.list_data_sources_with_failures(min_num_failures=5):
+        for ds in await self._system_repository.list_data_sources_with_failures(min_num_failures=5):
             if datasource_id is None or ds.id == datasource_id:
                 last_failure: datetime | None = ds.logs[-1].timestamp if len(ds.logs) > 0 else None
 

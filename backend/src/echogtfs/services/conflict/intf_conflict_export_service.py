@@ -8,6 +8,6 @@ from echogtfs.validation.schemas import MonitoringConflictObject
 class ConflictExportServiceInterface(ABC):
 
     @abstractmethod
-    def export(self, datasource_id: int | None = None) -> list[MonitoringConflictObject]:
+    async def export(self, datasource_id: int | None = None) -> list[MonitoringConflictObject]:
         """Exports a list of conflicts currently present in the system. Can be restricted to a specific datasource if provided."""
         raise NotImplementedError

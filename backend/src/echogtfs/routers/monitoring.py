@@ -219,7 +219,7 @@ async def conflicts(
         realtime_repository=realtime_repository
     )
 
-    conflicts: list[MonitoringConflictObject] = conflict_export_service.export(datasource_id=data_source_id)
+    conflicts: list[MonitoringConflictObject] = await conflict_export_service.export(datasource_id=data_source_id)
 
     response: MonitoringConflictsResponse = MonitoringConflictsResponse(
         conflicts=conflicts
