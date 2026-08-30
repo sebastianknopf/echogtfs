@@ -7,7 +7,7 @@ from echogtfs.enum.conflicts import ConflictType
 from echogtfs.services.conflict.intf_conflict_export_service import ConflictExportServiceInterface
 from echogtfs.services.database.realtime_repository import RealtimeRepositoryInterface
 from echogtfs.services.database.system_repository import SystemRepositoryInterface
-from echogtfs.validation.schemas import MonitoringConflictObject, MonitoringDataSourceGroupObject
+from echogtfs.validation.schemas import MonitoringConflictObject, MonitoringDatasourceGroupObject
 
 
 class ConflictExportService(ConflictExportServiceInterface):
@@ -29,7 +29,7 @@ class ConflictExportService(ConflictExportServiceInterface):
                     timestamp=last_failure,
                     conflict_type=ConflictType.DATASOURCE_FAILURE,
                     message=ConflictType.DATASOURCE_FAILURE.name,
-                    datasource=MonitoringDataSourceGroupObject(
+                    datasource=MonitoringDatasourceGroupObject(
                         id=ds.id,
                         name=ds.name,
                     ),
