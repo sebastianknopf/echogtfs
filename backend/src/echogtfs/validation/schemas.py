@@ -519,7 +519,7 @@ class MonitoringConflictObject(BaseModel):
     datasource: MonitoringDatasourceGroupObject = Field(
         description="The data source which has raised the data resulting in the conflict."
     )
-    properties: dict[str, str] = Field(
+    properties: dict[str, any] = Field(
         examples=[{"original_trip_id": "TEST-743-SimpleOriginalId"}],
         description="Dictionary of properties related to the conflict, where keys are property names and values are their corresponding values."
     )
