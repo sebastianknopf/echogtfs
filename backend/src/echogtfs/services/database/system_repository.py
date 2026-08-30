@@ -5,7 +5,7 @@ from typing import Any
 import uuid
 
 from sqlalchemy import delete, select, func, update
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import contains_eager, selectinload
 
 from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
 from echogtfs.services.database.models import (
@@ -201,16 +201,20 @@ class SystemRepository(RepositoryBase, SystemRepositoryInterface):
 
         stmt = (
             select(DataSource)
+            .outerjoin(DataSource.logs)
             .options(
-                selectinload(DataSource.logs),
+                contains_eager(DataSource.logs),
             )
             .where(failure_count >= min_num_failures)
-            .order_by(DataSource.name)
+            .order_by(
+                DataSource.name,
+                DataSourceLog.timestamp.desc(),
+            )
         )
 
         async with self.get_session() as db:
             result = await db.execute(stmt)
-            return list(result.scalars().all())
+            return list(result.unique().scalars().all())
 
     async def get_data_source_by_id(self, source_id: int) -> DataSource | None:
         """Return one data source by id with relationships loaded."""
