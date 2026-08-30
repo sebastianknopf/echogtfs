@@ -27,7 +27,7 @@ class ConflictExportService(ConflictExportServiceInterface):
                 results.append(MonitoringConflictObject(
                     id=self._unique_conflict_id(datasource_id=ds.id, conflict_type=ConflictType.ERROR_DATASOURCE_FAILURE, last_failure=last_failure),
                     timestamp=last_failure,
-                    conflict_type=ConflictType.ERROR_DATASOURCE_FAILURE,
+                    code=ConflictType.ERROR_DATASOURCE_FAILURE,
                     message=ConflictType.ERROR_DATASOURCE_FAILURE.name,
                     datasource=MonitoringDatasourceGroupObject(
                         id=ds.id,
