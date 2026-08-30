@@ -867,7 +867,20 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
                     _FakeResult(scalar_one_value=7),
                     _FakeResult(rows=[("R1", 3), ("R2", 1)]),
                     _FakeResult(rows=[("R1", 5, 2), ("R2", 2, 0)]),
+                    _FakeResult(
+                        rows=[
+                            ("R1", "DIRECT_BY_ID", 2),
+                            ("R1", "NO_MATCH_GENERAL", 1),
+                            ("R2", "MATCHED_BY_START_STOP", 1),
+                        ]
+                    ),
                     _FakeResult(rows=[("R1", 4)]),
+                    _FakeResult(
+                        rows=[
+                            ("R1", "DIRECT_BY_ID", 3),
+                            ("R2", "NO_MATCH_AMBIGUOUS_TRIP", 1),
+                        ]
+                    ),
                 ]
             )
         )
@@ -884,26 +897,77 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
                         "num_running_trips": 3,
                         "num_realtime_trips": 2,
                         "num_monitored_trips": 5,
+                        "assignment_types": [
+                            {"DIRECT_BY_ID": 2},
+                            {"MATCHED_BY_START_STOP": 0},
+                            {"MATCHED_BY_INTERMEDIATE_STOPS": 0},
+                            {"NO_MATCH_GENERAL": 1},
+                            {"NO_MATCH_AMBIGUOUS_TRIP": 0},
+                        ],
                     },
                     "R2": {
                         "num_running_trips": 1,
                         "num_realtime_trips": 0,
                         "num_monitored_trips": 2,
+                        "assignment_types": [
+                            {"DIRECT_BY_ID": 0},
+                            {"MATCHED_BY_START_STOP": 1},
+                            {"MATCHED_BY_INTERMEDIATE_STOPS": 0},
+                            {"NO_MATCH_GENERAL": 0},
+                            {"NO_MATCH_AMBIGUOUS_TRIP": 0},
+                        ],
                     },
                     "R3": {
                         "num_running_trips": 0,
                         "num_realtime_trips": 0,
                         "num_monitored_trips": 0,
+                        "assignment_types": [
+                            {"DIRECT_BY_ID": 0},
+                            {"MATCHED_BY_START_STOP": 0},
+                            {"MATCHED_BY_INTERMEDIATE_STOPS": 0},
+                            {"NO_MATCH_GENERAL": 0},
+                            {"NO_MATCH_AMBIGUOUS_TRIP": 0},
+                        ],
                     },
                 },
                 "vehicles": {
-                    "R1": {"num_vehicles": 4},
-                    "R2": {"num_vehicles": 0},
-                    "R3": {"num_vehicles": 0},
+                    "R1": {
+                        "num_running_trips": 3,
+                        "num_vehicles": 4,
+                        "assignment_types": [
+                            {"DIRECT_BY_ID": 3},
+                            {"MATCHED_BY_START_STOP": 0},
+                            {"MATCHED_BY_INTERMEDIATE_STOPS": 0},
+                            {"NO_MATCH_GENERAL": 0},
+                            {"NO_MATCH_AMBIGUOUS_TRIP": 0},
+                        ],
+                    },
+                    "R2": {
+                        "num_running_trips": 1,
+                        "num_vehicles": 0,
+                        "assignment_types": [
+                            {"DIRECT_BY_ID": 0},
+                            {"MATCHED_BY_START_STOP": 0},
+                            {"MATCHED_BY_INTERMEDIATE_STOPS": 0},
+                            {"NO_MATCH_GENERAL": 0},
+                            {"NO_MATCH_AMBIGUOUS_TRIP": 1},
+                        ],
+                    },
+                    "R3": {
+                        "num_running_trips": 0,
+                        "num_vehicles": 0,
+                        "assignment_types": [
+                            {"DIRECT_BY_ID": 0},
+                            {"MATCHED_BY_START_STOP": 0},
+                            {"MATCHED_BY_INTERMEDIATE_STOPS": 0},
+                            {"NO_MATCH_GENERAL": 0},
+                            {"NO_MATCH_AMBIGUOUS_TRIP": 0},
+                        ],
+                    },
                 },
             },
         )
-        self.assertEqual(session.execute.await_count, 4)
+        self.assertEqual(session.execute.await_count, 6)
 
         trips_stmt = session.execute.await_args_list[2].args[0]
         compiled = trips_stmt.compile()
