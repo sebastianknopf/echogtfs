@@ -22,7 +22,7 @@ class ConflictExportService(ConflictExportServiceInterface):
         # select datasource failures
         for ds in await self._system_repository.list_data_sources_with_failures(min_num_failures=5):
             if datasource_id is None or ds.id == datasource_id:
-                last_failure: datetime = ds.logs[-1].timestamp
+                last_failure: datetime = ds.logs[0].timestamp
 
                 results.append(MonitoringConflictObject(
                     id=self._unique_conflict_id(datasource_id=ds.id, conflict_type=ConflictType.ERROR_DATASOURCE_FAILURE, last_failure=last_failure),
@@ -35,7 +35,7 @@ class ConflictExportService(ConflictExportServiceInterface):
                     ),
                     properties={
                         "datasource_id": ds.id,
-                        "last_status": ds.logs[-1].status_code,
+                        "last_status": ds.logs[0].status_code,
                         "last_failure": last_failure
                     }
                 ))
