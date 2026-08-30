@@ -357,6 +357,10 @@ class MonitoringSystemResponse(BaseModel):
         examples=["1.0.0", "v1.2.1.dev6+geddca0dfb.d20260829"],
         description="Current system version"
     )
+    instance: str = Field(
+        examples=["EchoGTFS Instance Name"],
+        description="Name of the EchoGTFS instance."
+    )
     status: bool = Field(
         examples=[True, False],
         description="Current status indicator of the system. True if the system is operational, False otherwise."

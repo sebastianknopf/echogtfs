@@ -72,6 +72,7 @@ async def system(
 
     response: MonitoringSystemResponse = MonitoringSystemResponse(
         version=__version__,
+        instance=await system_repository.get_app_setting(AppSetting.KEY_APP_TITLE),
         status=True,
         filters=MonitoringSystemFiltersObject(
             datasources=datasources,
