@@ -1196,6 +1196,129 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                 "vehicles": vehicles_stats,
             }
 
+    async def list_stop_events_with_invalid_references(self) -> list[StopEvent]:
+        """Return invalid stop events with trip and datasource relations loaded."""
+        stmt = (
+            select(StopEvent)
+            .where(StopEvent.is_valid.is_(False))
+            .options(
+                selectinload(StopEvent.trip).selectinload(Trip.data_source),
+            )
+            .order_by(StopEvent.trip_id.asc())
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
+    async def list_trips_with_invalid_references(self) -> list[Trip]:
+        """Return trips where route or trip references are invalid."""
+        stmt = (
+            select(Trip)
+            .where(
+                (Trip.is_route_valid.is_(False))
+                | (Trip.is_trip_valid.is_(False))
+            )
+            .options(
+                selectinload(Trip.data_source),
+            )
+            .order_by(Trip.trip_id.asc())
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
+    async def list_stop_events_with_implied_deviation_schedule_relationships(self) -> list[StopEvent]:
+        """Return implied deviation stop events with trip and datasource relations loaded."""
+        stmt = (
+            select(StopEvent)
+            .where(
+                StopEvent.is_implied_schedule_relationship.is_(True),
+                StopEvent.schedule_relationship.in_(["ADDED", "SKIPPED"]),
+            )
+            .options(
+                selectinload(StopEvent.trip).selectinload(Trip.data_source),
+            )
+            .order_by(StopEvent.trip_id.asc())
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
+    async def list_stop_events_with_changed_stop_id(self) -> list[StopEvent]:
+        """Return stop events where stop_id differs from original_stop_id."""
+        stmt = (
+            select(StopEvent)
+            .where(
+                StopEvent.stop_id != StopEvent.original_stop_id,
+            )
+            .options(
+                selectinload(StopEvent.trip).selectinload(Trip.data_source),
+            )
+            .order_by(StopEvent.trip_id.asc())
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
+    async def list_stop_events_with_non_global_ids(self, pattern: str) -> list[StopEvent]:
+        """Return stop events whose stop_id does not match the provided global-id pattern."""
+        stmt = (
+            select(StopEvent)
+            .where(
+                StopEvent.stop_id.is_not(None),
+                ~StopEvent.stop_id.op("~")(pattern),
+            )
+            .options(
+                selectinload(StopEvent.trip).selectinload(Trip.data_source),
+            )
+            .order_by(StopEvent.trip_id.asc())
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
+    async def list_trips_with_non_global_ids(self, pattern: str) -> list[Trip]:
+        """Return trips where route_id or trip_id does not match the provided global-id pattern."""
+        stmt = (
+            select(Trip)
+            .where(
+                ((Trip.trip_id.is_not(None)) & (~Trip.trip_id.op("~")(pattern)))
+                | ((Trip.route_id.is_not(None)) & (~Trip.route_id.op("~")(pattern)))
+            )
+            .options(
+                selectinload(Trip.data_source),
+            )
+            .order_by(Trip.trip_id.asc())
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
+    async def list_stop_events_with_departure_before_arrival(self) -> list[StopEvent]:
+        """Return stop events where departure_time is earlier than arrival_time."""
+        stmt = (
+            select(StopEvent)
+            .where(
+                StopEvent.arrival_time.is_not(None),
+                StopEvent.departure_time.is_not(None),
+                StopEvent.departure_time < StopEvent.arrival_time,
+            )
+            .options(
+                selectinload(StopEvent.trip).selectinload(Trip.data_source),
+            )
+            .order_by(StopEvent.trip_id.asc())
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
     @staticmethod
     def _configured_timezone_name() -> str:
         try:
