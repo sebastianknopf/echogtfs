@@ -184,10 +184,10 @@ class ConflictExportService(ConflictExportServiceInterface):
                 timestamp: datetime = ste.trip.created_at
 
                 self._add_conflict(MonitoringConflictObject(
-                    id=self._unique_conflict_id(datasource_id=datasource_id, stop_id=ste.stop_id, conflict_type=ConflictType.WARNING_TRIP_NO_GLOBAL_ID, last_failure=timestamp),
+                    id=self._unique_conflict_id(datasource_id=datasource_id, stop_id=ste.stop_id, conflict_type=ConflictType.WARNING_STOP_NO_GLOBAL_ID, last_failure=timestamp),
                     timestamp=timestamp,
-                    code=ConflictType.WARNING_TRIP_NO_GLOBAL_ID,
-                    message=ConflictType.WARNING_TRIP_NO_GLOBAL_ID.name,
+                    code=ConflictType.WARNING_STOP_NO_GLOBAL_ID,
+                    message=ConflictType.WARNING_STOP_NO_GLOBAL_ID.name,
                     datasource=MonitoringDatasourceGroupObject(
                         id=datasource_id,
                         name=ste.trip.data_source_name,
