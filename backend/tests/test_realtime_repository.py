@@ -980,3 +980,36 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn("NO_DATA", flat_values)
         self.assertIn("ADDED", flat_values)
+
+    async def test_list_stop_events_with_non_global_ids_returns_items_and_uses_pattern(self):
+        stop_event = SimpleNamespace(trip_id="trip-1", stop_id="invalid-stop")
+        session = SimpleNamespace(execute=AsyncMock(return_value=_FakeResult([stop_event])))
+        repository = self._make_repository(session)
+
+        pattern = r"^[A-Z0-9]{3}:[A-Z0-9]{3}:\d+$"
+        result = await repository.list_stop_events_with_non_global_ids(pattern)
+
+        self.assertEqual(result, [stop_event])
+        session.execute.assert_awaited_once()
+
+        stmt = session.execute.await_args.args[0]
+        compiled = stmt.compile()
+        self.assertIn(pattern, compiled.params.values())
+        self.assertIn("~", str(compiled))
+
+    async def test_list_trips_with_non_global_ids_returns_items_and_uses_pattern(self):
+        trip = SimpleNamespace(trip_id="invalid-trip", route_id="invalid-route")
+        session = SimpleNamespace(execute=AsyncMock(return_value=_FakeResult([trip])))
+        repository = self._make_repository(session)
+
+        pattern = r"^[A-Z0-9]{3}:[A-Z0-9]{3}:\d+$"
+        result = await repository.list_trips_with_non_global_ids(pattern)
+
+        self.assertEqual(result, [trip])
+        session.execute.assert_awaited_once()
+
+        stmt = session.execute.await_args.args[0]
+        compiled = stmt.compile()
+        params = list(compiled.params.values())
+        self.assertGreaterEqual(params.count(pattern), 2)
+        self.assertIn("~", str(compiled))
