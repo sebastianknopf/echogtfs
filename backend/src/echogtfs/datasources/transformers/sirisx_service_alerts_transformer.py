@@ -498,6 +498,10 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                     "stop_id": None,
                     "trip_id": None,
                     "direction_id": None,
+                    "is_agency_valid": True,
+                    "is_route_valid": True,
+                    "is_stop_valid": True,
+                    "is_trip_valid": True,
                 }
 
                 operator_ref = affected_line.find(".//siri:OperatorRef", self._siri_ns)
@@ -525,6 +529,10 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                             "stop_id": stop_place_ref.text,
                             "trip_id": None,
                             "direction_id": None,
+                            "is_agency_valid": True,
+                            "is_route_valid": True,
+                            "is_stop_valid": True,
+                            "is_trip_valid": True,
                         }
 
                         operator_ref = affected_line.find(".//siri:OperatorRef", self._siri_ns)
@@ -545,6 +553,10 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                             "stop_id": stop_place_ref.text,
                             "trip_id": None,
                             "direction_id": None,
+                            "is_agency_valid": True,
+                            "is_route_valid": True,
+                            "is_stop_valid": True,
+                            "is_trip_valid": True,
                         }
                     )
 
@@ -563,6 +575,10 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                             "stop_id": stop_point_ref.text,
                             "trip_id": None,
                             "direction_id": None,
+                            "is_agency_valid": True,
+                            "is_route_valid": True,
+                            "is_stop_valid": True,
+                            "is_trip_valid": True,
                         }
 
                         operator_ref = affected_line.find(".//siri:OperatorRef", self._siri_ns)
@@ -583,6 +599,10 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                             "stop_id": stop_point_ref.text,
                             "trip_id": None,
                             "direction_id": None,
+                            "is_agency_valid": True,
+                            "is_route_valid": True,
+                            "is_stop_valid": True,
+                            "is_trip_valid": True,
                         }
                     )
 
@@ -637,7 +657,10 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                                 "stop_id": stop_id,
                                 "trip_id": trip_id,
                                 "direction_id": None,
-                                "is_valid": False,
+                                "is_agency_valid": True,
+                                "is_route_valid": True,
+                                "is_stop_valid": True,
+                                "is_trip_valid": False,
                             }
                         )
                 else:
@@ -649,6 +672,9 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                             "stop_id": None,
                             "trip_id": trip_id,
                             "direction_id": None,
-                            "is_valid": False,
+                            "is_agency_valid": True,
+                            "is_route_valid": True,
+                            "is_stop_valid": True,
+                            "is_trip_valid": False,
                         }
                     )

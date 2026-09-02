@@ -1099,6 +1099,16 @@ const ui = (() => {
     el('alert-periods-container').innerHTML = '';
     _periodCounter = 0;
   }
+
+  // Treat boolean false, numeric 0, and string "false" as invalid markers.
+  function _isEntityInvalid(entity = {}) {
+    return (
+      entity.is_agency_valid === false || entity.is_agency_valid === 0 || entity.is_agency_valid === 'false' ||
+      entity.is_route_valid === false || entity.is_route_valid === 0 || entity.is_route_valid === 'false' ||
+      entity.is_stop_valid === false || entity.is_stop_valid === 0 || entity.is_stop_valid === 'false' ||
+      entity.is_trip_valid === false || entity.is_trip_valid === 0 || entity.is_trip_valid === 'false'
+    );
+  }
   
   // Add entity item
   function _addEntityItem(entity = {}) {
@@ -1113,8 +1123,7 @@ const ui = (() => {
     let routeName = '';
     let stopName = '';
     
-    // Use is_valid flag from API if available
-    const isInvalid = entity.is_valid === false;
+    const isInvalid = _isEntityInvalid(entity);
     
     if (entity.agency_id) {
       agencyName = entity.agency_name || entity.agency_id;
@@ -1552,7 +1561,7 @@ const ui = (() => {
         if (e.stop_id) parts.push(`${window.i18n('alert.entity.stop')}: ${e.stop_name || e.stop_id}`);
         if (e.trip_id) parts.push(`${window.i18n('alert.entity.label.trip')}: ${e.trip_id}`);
         
-        const warning = e.is_valid === false
+        const warning = _isEntityInvalid(e)
           ? `<span class="view-item__warning" title="${window.i18n('alert.entity.invalid.tooltip')}"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg></span>`
           : '';
         

@@ -72,7 +72,10 @@ Allowed data model:
             "stop_id": str | None,
             "trip_id": str | None,
             "direction_id": int | None,
-            "is_valid": bool,
+            "is_agency_valid": bool,
+            "is_route_valid": bool,
+            "is_stop_valid": bool,
+            "is_trip_valid": bool,
         }
     ],
 }
@@ -115,12 +118,17 @@ Processed informed_entities[*] fields:
 - stop_id: optional.
 - trip_id: optional.
 - direction_id: optional.
-- is_valid: optional input; may be set or overridden by invalid-reference policy flow.
+- is_agency_valid: optional input; combined with computed agency-reference validity.
+- is_route_valid: optional input; combined with computed route-reference validity.
+- is_stop_valid: optional input; combined with computed stop-reference validity.
+- is_trip_valid: optional input; combined with computed trip-reference validity.
+
+Aggregate service-alert entity validity is computed internally from all four per-reference flags.
 
 Invalid-reference policy effects for service_alerts:
 
 - `discard_entire_object`: skip the full alert and delete an existing synced alert with the same ID.
-- `discard_invalid`: keep only informed entities where `is_valid` is true.
+- `discard_invalid`: keep only informed entities where all four validity flags evaluate to true.
 - `discard_invalid_elements`: clear invalid `agency_id`, `route_id`, and `stop_id` fields inside an entity, then keep only entities that still have at least one valid reference.
 - `keep_object_disabled`: keep the alert but force `is_active` to false for new alerts.
 - Any alert with no remaining informed entities is deactivated.

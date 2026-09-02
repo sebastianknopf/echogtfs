@@ -219,37 +219,64 @@ class DatasourceBase(DatasourceInterface):
         Returns:
             True if all referenced entities are valid, False otherwise
         """
-        # Trip references are not managed/validated - if only trip_id is set,
-        # mark the entity as invalid (trip_id without other references)
-        has_trip_id = bool(entity_data.get("trip_id"))
+        return self._is_entity_valid_flags(self._entity_validation_flags(entity_data, gtfs_entities))
+
+    @staticmethod
+    def _is_entity_valid_flags(validation_flags: dict[str, bool]) -> bool:
+        """Return aggregate validity from per-reference validation flags."""
+        return bool(
+            validation_flags["is_agency_valid"]
+            and validation_flags["is_route_valid"]
+            and validation_flags["is_stop_valid"]
+            and validation_flags["is_trip_valid"]
+        )
+
+    @staticmethod
+    def _merge_provided_entity_validation_flags(
+        entity_data: dict[str, Any],
+        computed_flags: dict[str, bool],
+    ) -> dict[str, bool]:
+        """Combine provided per-reference validity with computed validation using logical AND."""
+        merged_flags = dict(computed_flags)
+        for key in ("is_agency_valid", "is_route_valid", "is_stop_valid", "is_trip_valid"):
+            provided_value = entity_data.get(key)
+            if provided_value is not None:
+                merged_flags[key] = bool(provided_value) and bool(merged_flags[key])
+
+        return merged_flags
+
+    def _entity_validation_flags(
+        self,
+        entity_data: dict[str, Any],
+        gtfs_entities: dict[str, set[str]],
+    ) -> dict[str, bool]:
+        """Validate per informed-entity reference type and provide aggregate validity."""
         has_agency_id = bool(entity_data.get("agency_id"))
         has_route_id = bool(entity_data.get("route_id"))
         has_stop_id = bool(entity_data.get("stop_id"))
-        
-        # If only trip_id is set (without agency, route, or stop), mark as invalid
-        # direction_id and route_type are just qualifiers, not primary references
-        if has_trip_id and not has_agency_id and not has_route_id and not has_stop_id:
+        has_trip_id = bool(entity_data.get("trip_id"))
+        has_primary_reference = has_agency_id or has_route_id or has_stop_id
+
+        is_agency_valid = (not has_agency_id) or (entity_data["agency_id"] in gtfs_entities["agency"])
+        is_route_valid = (not has_route_id) or (entity_data["route_id"] in gtfs_entities["route"])
+        is_stop_valid = (not has_stop_id) or (entity_data["stop_id"] in gtfs_entities["stop"])
+
+        # Trip references are currently not validated against GTFS and therefore
+        # are treated as invalid when they are the only reference.
+        is_trip_valid = (not has_trip_id) or has_primary_reference
+
+        if has_trip_id and not has_primary_reference:
             logger.debug(
                 f"[{self.get_adapter_type()}] Entity has only trip_id without other references - "
                 f"marking as invalid (trip references not managed): trip_id={entity_data.get('trip_id')}"
             )
-            return False
-        
-        # Check each entity type that is specified
-        if entity_data.get("agency_id"):
-            if entity_data["agency_id"] not in gtfs_entities["agency"]:
-                return False
-        
-        if entity_data.get("route_id"):
-            if entity_data["route_id"] not in gtfs_entities["route"]:
-                return False
-        
-        if entity_data.get("stop_id"):
-            if entity_data["stop_id"] not in gtfs_entities["stop"]:
-                return False
-        
-        # If no entities are specified or all specified entities are valid
-        return True
+
+        return {
+            "is_agency_valid": is_agency_valid,
+            "is_route_valid": is_route_valid,
+            "is_stop_valid": is_stop_valid,
+            "is_trip_valid": is_trip_valid,
+        }
     
     def _validate_and_clean_entity_elements(
         self, 
@@ -275,14 +302,14 @@ class DatasourceBase(DatasourceInterface):
         has_any_valid_reference = False
         removed_fields = []
         
-        # If entity is already marked as invalid (e.g., trip references),
-        # don't clean it further - just return it as-is
-        if entity_data.get("is_valid") is False:
-            return cleaned_entity, False
-        
+        validation_flags = self._merge_provided_entity_validation_flags(
+            cleaned_entity,
+            self._entity_validation_flags(cleaned_entity, gtfs_entities),
+        )
+
         # Check and clean agency_id
         if cleaned_entity.get("agency_id"):
-            if cleaned_entity["agency_id"] not in gtfs_entities["agency"]:
+            if not validation_flags["is_agency_valid"]:
                 removed_fields.append(f"agency_id={cleaned_entity['agency_id']}")
                 cleaned_entity["agency_id"] = None
             else:
@@ -290,7 +317,7 @@ class DatasourceBase(DatasourceInterface):
         
         # Check and clean route_id
         if cleaned_entity.get("route_id"):
-            if cleaned_entity["route_id"] not in gtfs_entities["route"]:
+            if not validation_flags["is_route_valid"]:
                 removed_fields.append(f"route_id={cleaned_entity['route_id']}")
                 cleaned_entity["route_id"] = None
             else:
@@ -298,7 +325,7 @@ class DatasourceBase(DatasourceInterface):
         
         # Check and clean stop_id
         if cleaned_entity.get("stop_id"):
-            if cleaned_entity["stop_id"] not in gtfs_entities["stop"]:
+            if not validation_flags["is_stop_valid"]:
                 removed_fields.append(f"stop_id={cleaned_entity['stop_id']}")
                 cleaned_entity["stop_id"] = None
             else:
@@ -336,7 +363,7 @@ class DatasourceBase(DatasourceInterface):
         deduplicated = []
         
         for entity in entities:
-            # Create a tuple of relevant fields for comparison (excluding is_valid)
+            # Create a tuple of relevant fields for comparison.
             entity_key = (
                 entity.get("agency_id"),
                 entity.get("route_id"),
@@ -838,55 +865,59 @@ class DatasourceBase(DatasourceInterface):
                 mapped_entity_data = self._identifier_mapping_service.apply_mapping(
                     entity_data,
                 )
-                
+
                 # For DISCARD_INVALID_ELEMENTS policy, validate and clean individual fields
                 if policy == InvalidReferencePolicy.DISCARD_INVALID_ELEMENTS:
                     cleaned_entity, has_valid_ref = self._validate_and_clean_entity_elements(
                         mapped_entity_data,
                         gtfs_entities,
                     )
-                    
-                    # Mark as valid if at least one reference is valid
-                    # Unless already explicitly marked as invalid (e.g., trip references)
-                    if "is_valid" not in mapped_entity_data:
-                        cleaned_entity["is_valid"] = has_valid_ref
-                    else:
-                        cleaned_entity["is_valid"] = mapped_entity_data["is_valid"]
-                    
-                    if not cleaned_entity["is_valid"]:
+
+                    cleaned_entity_flags = self._merge_provided_entity_validation_flags(
+                        cleaned_entity,
+                        self._entity_validation_flags(
+                            cleaned_entity,
+                            gtfs_entities,
+                        ),
+                    )
+                    cleaned_entity.update(cleaned_entity_flags)
+                    is_valid_entity = bool(
+                        has_valid_ref and self._is_entity_valid_flags(cleaned_entity_flags)
+                    )
+
+                    if not is_valid_entity:
                         has_invalid_entity = True
                         logger.debug(
                             f"[{self.get_adapter_type()}] Entity has no valid references in alert {alert_id}: "
                             f"{mapped_entity_data}"
                         )
                     
-                    validated_entities.append(cleaned_entity)
+                    validated_entities.append((cleaned_entity, is_valid_entity))
                 else:
                     # Standard validation for other policies
-                    # Check if entity already has is_valid flag set (e.g., trip references)
-                    if "is_valid" in mapped_entity_data:
-                        is_valid = mapped_entity_data["is_valid"]
-                    else:
-                        is_valid = self._validate_entity(
+                    validation_flags = self._merge_provided_entity_validation_flags(
+                        mapped_entity_data,
+                        self._entity_validation_flags(
                             mapped_entity_data,
                             gtfs_entities,
-                        )
-                        # Mark entity as valid/invalid
-                        mapped_entity_data["is_valid"] = is_valid
+                        ),
+                    )
+                    mapped_entity_data.update(validation_flags)
+                    is_valid_entity = self._is_entity_valid_flags(validation_flags)
                     
-                    if not is_valid:
+                    if not is_valid_entity:
                         has_invalid_entity = True
                         logger.debug(
                             f"[{self.get_adapter_type()}] Invalid entity reference in alert {alert_id}: "
                             f"{mapped_entity_data}"
                         )
                     
-                    validated_entities.append(mapped_entity_data)
+                    validated_entities.append((mapped_entity_data, is_valid_entity))
             
             # Apply invalid reference policy
             should_skip_alert = False
             should_deactivate_alert = False
-            entities_to_create = validated_entities
+            entities_to_create = [entity for entity, _ in validated_entities]
             
             if has_invalid_entity:
                 if policy == InvalidReferencePolicy.DISCARD_ENTIRE_OBJECT:
@@ -904,7 +935,7 @@ class DatasourceBase(DatasourceInterface):
                 
                 elif policy == InvalidReferencePolicy.DISCARD_INVALID:
                     # Keep only valid entities
-                    entities_to_create = [e for e in validated_entities if e["is_valid"]]
+                    entities_to_create = [entity for entity, is_valid_entity in validated_entities if is_valid_entity]
                     
                     # If no valid entities remain, deactivate the alert
                     if not entities_to_create:
@@ -922,7 +953,7 @@ class DatasourceBase(DatasourceInterface):
                 elif policy == InvalidReferencePolicy.DISCARD_INVALID_ELEMENTS:
                     # Keep only entities that have at least one valid reference
                     # (invalid fields within entities have already been cleaned)
-                    entities_to_create = [e for e in validated_entities if e["is_valid"]]
+                    entities_to_create = [entity for entity, is_valid_entity in validated_entities if is_valid_entity]
                     
                     # If no valid entities remain, deactivate the alert
                     if not entities_to_create:

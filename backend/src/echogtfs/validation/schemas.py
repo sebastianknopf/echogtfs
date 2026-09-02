@@ -758,7 +758,10 @@ class ServiceAlertInformedEntityCreate(BaseModel):
 class ServiceAlertInformedEntityRead(ServiceAlertInformedEntityCreate):
     """Read model with ID, validation status, and resolved names."""
     id: int
-    is_valid: bool  # Validation status of the entity reference
+    is_agency_valid: bool = True
+    is_route_valid: bool = True
+    is_stop_valid: bool = True
+    is_trip_valid: bool = True
     # Resolved names from GTFS data (populated by API, not from DB)
     agency_name: str | None = None
     route_name: str | None = None

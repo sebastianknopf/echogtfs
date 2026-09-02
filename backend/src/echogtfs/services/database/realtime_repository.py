@@ -26,6 +26,18 @@ from echogtfs.services.database.models import (
 class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
     """SQLAlchemy repository for realtime-table access."""
 
+    @staticmethod
+    def _normalize_informed_entity_payload(entity_data: dict[str, Any]) -> dict[str, Any]:
+        """Normalize service-alert informed-entity payload for persistence."""
+        normalized = dict(entity_data)
+
+        normalized.setdefault("is_agency_valid", True)
+        normalized.setdefault("is_route_valid", True)
+        normalized.setdefault("is_stop_valid", True)
+        normalized.setdefault("is_trip_valid", True)
+
+        return normalized
+
     async def delete_alerts_for_data_source(self, source_id: int) -> int:
         """Delete all alerts for one data source and return deleted row count."""
         stmt = delete(ServiceAlert).where(ServiceAlert.data_source_id == source_id)
@@ -258,7 +270,8 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                 db.add(ServiceAlertActivePeriod(alert_id=alert.id, **period_data))
 
             for entity_data in informed_entities:
-                db.add(ServiceAlertInformedEntity(alert_id=alert.id, **entity_data))
+                normalized_entity_data = self._normalize_informed_entity_payload(entity_data)
+                db.add(ServiceAlertInformedEntity(alert_id=alert.id, **normalized_entity_data))
 
             await self.commit(db)
 
@@ -333,7 +346,8 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                     delete(ServiceAlertInformedEntity).where(ServiceAlertInformedEntity.alert_id == alert_id)
                 )
                 for entity_data in informed_entities:
-                    db.add(ServiceAlertInformedEntity(alert_id=alert_id, **entity_data))
+                    normalized_entity_data = self._normalize_informed_entity_payload(entity_data)
+                    db.add(ServiceAlertInformedEntity(alert_id=alert_id, **normalized_entity_data))
 
             await self.commit(db)
 
@@ -451,7 +465,8 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                 db.add(ServiceAlertActivePeriod(alert_id=alert_id, **period_data))
 
             for entity_data in informed_entities:
-                db.add(ServiceAlertInformedEntity(alert_id=alert_id, **entity_data))
+                normalized_entity_data = self._normalize_informed_entity_payload(entity_data)
+                db.add(ServiceAlertInformedEntity(alert_id=alert_id, **normalized_entity_data))
 
             await self.commit(db)
             return action

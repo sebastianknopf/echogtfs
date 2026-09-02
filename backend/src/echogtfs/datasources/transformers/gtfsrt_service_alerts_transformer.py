@@ -168,6 +168,10 @@ class GtfsRtServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                             if entity_selector.HasField("trip")
                             and entity_selector.trip.HasField("direction_id")
                             else None,
+                            "is_agency_valid": True,
+                            "is_route_valid": True,
+                            "is_stop_valid": True,
+                            "is_trip_valid": True,
                         }
                     )
 

@@ -101,6 +101,18 @@ class TestDatasourceBaseHelpers(unittest.TestCase):
         )
         self.assertFalse(is_valid)
 
+    def test_entity_validation_flags_include_per_reference_booleans(self):
+        flags = self.datasource._entity_validation_flags(
+            {"agency_id": "a1", "route_id": "missing", "stop_id": None, "trip_id": "trip-1"},
+            {"agency": {"a1"}, "route": {"r1"}, "stop": {"s1"}},
+        )
+
+        self.assertTrue(flags["is_agency_valid"])
+        self.assertFalse(flags["is_route_valid"])
+        self.assertTrue(flags["is_stop_valid"])
+        self.assertTrue(flags["is_trip_valid"])
+        self.assertNotIn("is_valid", flags)
+
     def test_validate_and_clean_entity_elements_removes_invalid_fields(self):
         cleaned, has_valid = self.datasource._validate_and_clean_entity_elements(
             {"agency_id": "unknown", "route_id": "r1", "stop_id": "s9"},

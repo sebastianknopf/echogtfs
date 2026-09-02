@@ -62,6 +62,21 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         repository.get_session = lambda: _FakeSessionContext(session)
         return repository
 
+    def test_normalize_informed_entity_payload_sets_per_field_defaults(self):
+        payload = RealtimeRepository._normalize_informed_entity_payload(
+            {
+                "agency_id": "a1",
+                "route_id": "r1",
+                "stop_id": "s1",
+                "trip_id": None,
+            }
+        )
+
+        self.assertTrue(payload["is_agency_valid"])
+        self.assertTrue(payload["is_route_valid"])
+        self.assertTrue(payload["is_stop_valid"])
+        self.assertTrue(payload["is_trip_valid"])
+
     async def test_delete_alerts_for_data_source_returns_rowcount(self):
         session = SimpleNamespace(
             execute=AsyncMock(return_value=_FakeResult(rowcount=3)),
