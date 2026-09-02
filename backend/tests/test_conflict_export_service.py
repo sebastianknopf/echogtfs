@@ -7,6 +7,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
+from echogtfs.enum.gtfsrt import AssignmentType
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from echogtfs.enum.conflicts import ConflictType
@@ -29,6 +31,7 @@ class TestConflictExportService(unittest.IsolatedAsyncioTestCase):
         scheduled_start_time: datetime | None = None,
         scheduled_end_stop_id: str | None = None,
         scheduled_end_time: datetime | None = None,
+        assignment_type: AssignmentType | None = None,
     ) -> SimpleNamespace:
         return SimpleNamespace(
             data_source_id=data_source_id,
@@ -42,6 +45,7 @@ class TestConflictExportService(unittest.IsolatedAsyncioTestCase):
             scheduled_start_time=scheduled_start_time,
             scheduled_end_stop_id=scheduled_end_stop_id,
             scheduled_end_time=scheduled_end_time,
+            assignment_type=assignment_type,
         )
 
     @staticmethod
@@ -256,6 +260,7 @@ class TestConflictExportService(unittest.IsolatedAsyncioTestCase):
             route_id="route-10",
             is_route_valid=False,
             is_trip_valid=False,
+            assignment_type=AssignmentType.DIRECT_BY_ID
         )
         trip_20 = self._make_trip(
             data_source_id=20,
@@ -265,6 +270,7 @@ class TestConflictExportService(unittest.IsolatedAsyncioTestCase):
             route_id="route-20",
             is_route_valid=False,
             is_trip_valid=False,
+            assignment_type=AssignmentType.DIRECT_BY_ID
         )
 
         service, _, _ = self._make_service(
