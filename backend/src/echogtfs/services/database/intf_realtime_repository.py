@@ -8,7 +8,13 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from echogtfs.services.database.models import ServiceAlert, StopEvent, Trip, Vehicle
+from echogtfs.services.database.models import (
+    ServiceAlert,
+    ServiceAlertInformedEntity,
+    StopEvent,
+    Trip,
+    Vehicle,
+)
 
 
 class RealtimeRepositoryInterface(ABC):
@@ -335,6 +341,11 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def list_informed_entities_with_invalid_references(self) -> list[ServiceAlertInformedEntity]:
+        """Return informed entities with invalid references and required alert relations loaded."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def list_stop_events_with_invalid_references(self) -> list[StopEvent]:
         """Return stop events with invalid references and required trip relations loaded."""
         raise NotImplementedError
@@ -352,6 +363,11 @@ class RealtimeRepositoryInterface(ABC):
     @abstractmethod
     async def list_stop_events_with_changed_stop_id(self) -> list[StopEvent]:
         """Return stop events where stop_id differs from original_stop_id."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_informed_entities_with_non_global_ids(self, pattern: str) -> list[ServiceAlertInformedEntity]:
+        """Return informed entities where agency, route, stop, or trip ids do not match global-id pattern."""
         raise NotImplementedError
 
     @abstractmethod

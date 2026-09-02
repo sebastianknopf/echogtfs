@@ -70,6 +70,8 @@ class TestConflictExportService(unittest.IsolatedAsyncioTestCase):
         )
 
         realtime_defaults = {
+            "list_informed_entities_with_invalid_references": AsyncMock(return_value=[]),
+            "list_informed_entities_with_non_global_ids": AsyncMock(return_value=[]),
             "list_stop_events_with_invalid_references": AsyncMock(return_value=[]),
             "list_trips_with_invalid_references": AsyncMock(return_value=[]),
             "list_stop_events_with_implied_deviation_schedule_relationships": AsyncMock(return_value=[]),
@@ -231,10 +233,12 @@ class TestConflictExportService(unittest.IsolatedAsyncioTestCase):
         self.assertIn(ConflictType.WARNING_PREMATURE_DEPARTURE, codes)
 
         system_repository.list_data_sources_with_failures.assert_awaited_once_with(min_num_failures=5)
+        realtime_repository.list_informed_entities_with_invalid_references.assert_awaited_once()
         realtime_repository.list_stop_events_with_invalid_references.assert_awaited_once()
         realtime_repository.list_trips_with_invalid_references.assert_awaited_once()
         realtime_repository.list_stop_events_with_implied_deviation_schedule_relationships.assert_awaited_once()
         realtime_repository.list_stop_events_with_changed_stop_id.assert_awaited_once()
+        realtime_repository.list_informed_entities_with_non_global_ids.assert_awaited_once_with("^de:[a-z]+:[^\\s:]+$")
         realtime_repository.list_stop_events_with_non_global_ids.assert_awaited_once_with("^de:[a-z]+:[^\\s:]+$")
         realtime_repository.list_trips_with_non_global_ids.assert_awaited_once_with("^de:[a-z]+:[^\\s:]+$")
         realtime_repository.list_stop_events_with_departure_before_arrival.assert_awaited_once()

@@ -42,7 +42,82 @@ class ConflictExportService(ConflictExportServiceInterface):
                     }
                 ), results)
 
-        # find invalid stops
+        # find invalid references for service alerts
+        for ie in await self._realtime_repository.list_informed_entities_with_invalid_references():
+            if filter_datasource_id is None or ie.alert.data_source_id == filter_datasource_id:
+                datasource_id: int = ie.alert.data_source_id
+                timestamp: datetime = ie.alert.created_at
+
+                if not ie.is_agency_valid:
+                    self._add_conflict(MonitoringConflictObject(
+                        id=self._unique_conflict_id(datasource_id=datasource_id, agency_id=ie.agency_id, conflict_type=ConflictType.ERROR_NO_AGENCY_FOUND),
+                        timestamp=timestamp,
+                        code=ConflictType.ERROR_NO_AGENCY_FOUND,
+                        message=ConflictType.ERROR_NO_AGENCY_FOUND.name,
+                        datasource=MonitoringDatasourceGroupObject(
+                            id=datasource_id,
+                            name=ie.alert.data_source_name,
+                        ),
+                        properties={
+                            "datasource_id": datasource_id,
+                            "last_failure": timestamp,
+                            "agency_id": ie.agency_id
+                        }
+                    ), results)
+
+                if not ie.is_stop_valid:
+                    self._add_conflict(MonitoringConflictObject(
+                        id=self._unique_conflict_id(datasource_id=datasource_id, stop_id=ie.stop_id, conflict_type=ConflictType.ERROR_NO_STOP_FOUND),
+                        timestamp=timestamp,
+                        code=ConflictType.ERROR_NO_STOP_FOUND,
+                        message=ConflictType.ERROR_NO_STOP_FOUND.name,
+                        datasource=MonitoringDatasourceGroupObject(
+                            id=datasource_id,
+                            name=ie.alert.data_source_name,
+                        ),
+                        properties={
+                            "datasource_id": datasource_id,
+                            "last_failure": timestamp,
+                            "stop_id": ie.stop_id
+                        }
+                    ), results)
+
+                if not ie.is_route_valid:
+                    self._add_conflict(MonitoringConflictObject(
+                        id=self._unique_conflict_id(datasource_id=datasource_id, route_id=ie.route_id, conflict_type=ConflictType.ERROR_NO_ROUTE_FOUND),
+                        timestamp=timestamp,
+                        code=ConflictType.ERROR_NO_ROUTE_FOUND,
+                        message=ConflictType.ERROR_NO_ROUTE_FOUND.name,
+                        datasource=MonitoringDatasourceGroupObject(
+                            id=datasource_id,
+                            name=ie.alert.data_source_name,
+                        ),
+                        properties={
+                            "datasource_id": datasource_id,
+                            "last_failure": timestamp,
+                            "route_id": ie.route_id
+                        }
+                    ), results)
+
+                if not ie.is_trip_valid:
+                    self._add_conflict(MonitoringConflictObject(
+                        id=self._unique_conflict_id(datasource_id=datasource_id, trip_id=ie.trip_id, conflict_type=ConflictType.ERROR_NO_TRIP_FOUND),
+                        timestamp=timestamp,
+                        code=ConflictType.ERROR_NO_TRIP_FOUND,
+                        message=ConflictType.ERROR_NO_TRIP_FOUND.name,
+                        datasource=MonitoringDatasourceGroupObject(
+                            id=datasource_id,
+                            name=ie.alert.data_source_name,
+                        ),
+                        properties={
+                            "datasource_id": datasource_id,
+                            "last_failure": timestamp,
+                            "trip_id": ie.trip_id
+                        }
+                    ), results) 
+
+
+        # find invalid stops for trip updates
         for ste in await self._realtime_repository.list_stop_events_with_invalid_references():
             if filter_datasource_id is None or ste.trip.data_source_id == filter_datasource_id:
                 datasource_id: int = ste.trip.data_source_id
@@ -64,7 +139,7 @@ class ConflictExportService(ConflictExportServiceInterface):
                     }
                 ), results)
 
-        # find invalid routes and trips
+        # find invalid routes and trips for trip updates
         for trip in await self._realtime_repository.list_trips_with_invalid_references():
             if filter_datasource_id is None or trip.data_source_id == filter_datasource_id:
                 datasource_id: int = trip.data_source_id
@@ -177,7 +252,81 @@ class ConflictExportService(ConflictExportServiceInterface):
                     }
                 ), results)
 
-        # find stops with non-global IDs ...
+        # find references with non-global IDs for service alerts
+        for ie in await self._realtime_repository.list_informed_entities_with_non_global_ids(settings.global_id_pattern):
+            if filter_datasource_id is None or ie.alert.data_source_id == filter_datasource_id:
+                datasource_id: int = ie.alert.data_source_id
+                timestamp: datetime = ie.alert.created_at
+
+                if not GlobalId.is_global_id(ie.agency_id):
+                    self._add_conflict(MonitoringConflictObject(
+                        id=self._unique_conflict_id(datasource_id=datasource_id, agency_id=ie.agency_id, conflict_type=ConflictType.WARNING_AGENCY_NO_GLOBAL_ID, last_failure=timestamp),
+                        timestamp=timestamp,
+                        code=ConflictType.WARNING_AGENCY_NO_GLOBAL_ID,
+                        message=ConflictType.WARNING_AGENCY_NO_GLOBAL_ID.name,
+                        datasource=MonitoringDatasourceGroupObject(
+                            id=datasource_id,
+                            name=ie.alert.data_source_name,
+                        ),
+                        properties={
+                            "datasource_id": datasource_id,
+                            "last_failure": timestamp,
+                            "agency_id": ie.agency_id
+                        }
+                    ), results)
+
+                if not GlobalId.is_global_id(ie.stop_id):
+                    self._add_conflict(MonitoringConflictObject(
+                        id=self._unique_conflict_id(datasource_id=datasource_id, stop_id=ie.stop_id, conflict_type=ConflictType.WARNING_STOP_NO_GLOBAL_ID, last_failure=timestamp),
+                        timestamp=timestamp,
+                        code=ConflictType.WARNING_STOP_NO_GLOBAL_ID,
+                        message=ConflictType.WARNING_STOP_NO_GLOBAL_ID.name,
+                        datasource=MonitoringDatasourceGroupObject(
+                            id=datasource_id,
+                            name=ie.alert.data_source_name,
+                        ),
+                        properties={
+                            "datasource_id": datasource_id,
+                            "last_failure": timestamp,
+                            "stop_id": ie.stop_id
+                        }
+                    ), results)
+
+                if not GlobalId.is_global_id(ie.route_id):
+                    self._add_conflict(MonitoringConflictObject(
+                        id=self._unique_conflict_id(datasource_id=datasource_id, route_id=ie.route_id, conflict_type=ConflictType.WARNING_ROUTE_NO_GLOBAL_ID, last_failure=timestamp),
+                        timestamp=timestamp,
+                        code=ConflictType.WARNING_ROUTE_NO_GLOBAL_ID,
+                        message=ConflictType.WARNING_ROUTE_NO_GLOBAL_ID.name,
+                        datasource=MonitoringDatasourceGroupObject(
+                            id=datasource_id,
+                            name=ie.alert.data_source_name,
+                        ),
+                        properties={
+                            "datasource_id": datasource_id,
+                            "last_failure": timestamp,
+                            "route_id": ie.route_id
+                        }
+                    ), results)
+
+                if not GlobalId.is_global_id(ie.trip_id):
+                    self._add_conflict(MonitoringConflictObject(
+                        id=self._unique_conflict_id(datasource_id=datasource_id, trip_id=ie.trip_id, conflict_type=ConflictType.WARNING_TRIP_NO_GLOBAL_ID, last_failure=timestamp),
+                        timestamp=timestamp,
+                        code=ConflictType.WARNING_TRIP_NO_GLOBAL_ID,
+                        message=ConflictType.WARNING_TRIP_NO_GLOBAL_ID.name,
+                        datasource=MonitoringDatasourceGroupObject(
+                            id=datasource_id,
+                            name=ie.alert.data_source_name,
+                        ),
+                        properties={
+                            "datasource_id": datasource_id,
+                            "last_failure": timestamp,
+                            "trip_id": ie.trip_id
+                        }
+                    ), results)
+
+        # find stops with non-global IDs for trip updates
         for ste in await self._realtime_repository.list_stop_events_with_non_global_ids(settings.global_id_pattern):
             if filter_datasource_id is None or ste.trip.data_source_id == filter_datasource_id:
                 datasource_id: int = ste.trip.data_source_id

@@ -1211,6 +1211,26 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                 "vehicles": vehicles_stats,
             }
 
+    async def list_informed_entities_with_invalid_references(self) -> list[ServiceAlertInformedEntity]:
+        """Return informed entities with any invalid reference and alert relations loaded."""
+        stmt = (
+            select(ServiceAlertInformedEntity)
+            .where(
+                (ServiceAlertInformedEntity.is_agency_valid.is_(False))
+                | (ServiceAlertInformedEntity.is_route_valid.is_(False))
+                | (ServiceAlertInformedEntity.is_stop_valid.is_(False))
+                | (ServiceAlertInformedEntity.is_trip_valid.is_(False))
+            )
+            .options(
+                selectinload(ServiceAlertInformedEntity.alert).selectinload(ServiceAlert.data_source),
+            )
+            .order_by(ServiceAlertInformedEntity.alert_id.asc())
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
     async def list_stop_events_with_invalid_references(self) -> list[StopEvent]:
         """Return invalid stop events with trip and datasource relations loaded."""
         stmt = (
@@ -1273,6 +1293,26 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                 selectinload(StopEvent.trip).selectinload(Trip.data_source),
             )
             .order_by(StopEvent.trip_id.asc())
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
+    async def list_informed_entities_with_non_global_ids(self, pattern: str) -> list[ServiceAlertInformedEntity]:
+        """Return informed entities whose ids do not match the provided global-id pattern."""
+        stmt = (
+            select(ServiceAlertInformedEntity)
+            .where(
+                ((ServiceAlertInformedEntity.agency_id.is_not(None)) & (~ServiceAlertInformedEntity.agency_id.op("~")(pattern)))
+                | ((ServiceAlertInformedEntity.route_id.is_not(None)) & (~ServiceAlertInformedEntity.route_id.op("~")(pattern)))
+                | ((ServiceAlertInformedEntity.stop_id.is_not(None)) & (~ServiceAlertInformedEntity.stop_id.op("~")(pattern)))
+                | ((ServiceAlertInformedEntity.trip_id.is_not(None)) & (~ServiceAlertInformedEntity.trip_id.op("~")(pattern)))
+            )
+            .options(
+                selectinload(ServiceAlertInformedEntity.alert).selectinload(ServiceAlert.data_source),
+            )
+            .order_by(ServiceAlertInformedEntity.alert_id.asc())
         )
 
         async with self.get_session() as db:

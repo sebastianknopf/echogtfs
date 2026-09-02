@@ -996,6 +996,48 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         self.assertIn("NO_DATA", flat_values)
         self.assertIn("ADDED", flat_values)
 
+    async def test_list_informed_entities_with_invalid_references_returns_items(self):
+        informed_entity = SimpleNamespace(alert_id=uuid.uuid4())
+        session = SimpleNamespace(execute=AsyncMock(return_value=_FakeResult([informed_entity])))
+        repository = self._make_repository(session)
+
+        result = await repository.list_informed_entities_with_invalid_references()
+
+        self.assertEqual(result, [informed_entity])
+        session.execute.assert_awaited_once()
+
+        stmt = session.execute.await_args.args[0]
+        compiled = stmt.compile()
+        sql = str(compiled)
+
+        self.assertIn("is_agency_valid", sql)
+        self.assertIn("is_route_valid", sql)
+        self.assertIn("is_stop_valid", sql)
+        self.assertIn("is_trip_valid", sql)
+
+    async def test_list_informed_entities_with_non_global_ids_returns_items_and_uses_pattern(self):
+        informed_entity = SimpleNamespace(alert_id=uuid.uuid4(), stop_id="invalid-stop")
+        session = SimpleNamespace(execute=AsyncMock(return_value=_FakeResult([informed_entity])))
+        repository = self._make_repository(session)
+
+        pattern = r"^[A-Z0-9]{3}:[A-Z0-9]{3}:\d+$"
+        result = await repository.list_informed_entities_with_non_global_ids(pattern)
+
+        self.assertEqual(result, [informed_entity])
+        session.execute.assert_awaited_once()
+
+        stmt = session.execute.await_args.args[0]
+        compiled = stmt.compile()
+        sql = str(compiled)
+        params = list(compiled.params.values())
+
+        self.assertIn("agency_id", sql)
+        self.assertIn("route_id", sql)
+        self.assertIn("stop_id", sql)
+        self.assertIn("trip_id", sql)
+        self.assertGreaterEqual(params.count(pattern), 4)
+        self.assertIn("~", sql)
+
     async def test_list_stop_events_with_non_global_ids_returns_items_and_uses_pattern(self):
         stop_event = SimpleNamespace(trip_id="trip-1", stop_id="invalid-stop")
         session = SimpleNamespace(execute=AsyncMock(return_value=_FakeResult([stop_event])))
