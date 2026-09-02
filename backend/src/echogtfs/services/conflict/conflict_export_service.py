@@ -179,7 +179,8 @@ class ConflictExportService(ConflictExportServiceInterface):
                             "scheduled_start_stop_id": trip.scheduled_start_stop_id,
                             "scheduled_start_time": trip.scheduled_start_time,
                             "scheduled_end_stop_id": trip.scheduled_end_stop_id,
-                            "scheduled_end_time": trip.scheduled_end_time
+                            "scheduled_end_time": trip.scheduled_end_time,
+                            "assignment_type": trip.assignment_type
                         }
                     ), results)  
 
