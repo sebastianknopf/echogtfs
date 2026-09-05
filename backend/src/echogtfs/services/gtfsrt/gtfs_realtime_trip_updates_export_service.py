@@ -52,10 +52,11 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
         exclude_value = await self._system_repository.get_app_setting(
             AppSetting.KEY_GTFS_RT_TRIP_UPDATES_EXCLUDE_TRIPS_WITHOUT_REALTIME_DATA
         )
+        
         if exclude_value is None or exclude_value.strip().lower() != "true":
             return trips
 
-        return [trip for trip in trips if self._has_realtime_stop_event(trip)]
+        return [trip for trip in trips if self._has_realtime_stop_event(trip) or self._is_canceled_trip(trip)]
 
     @staticmethod
     def _wheelchair_accessible_to_enum(value: WheelchairAccessible | str | None) -> int | None:
@@ -96,7 +97,7 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
             return None
 
     @staticmethod
-    def _trip_schedule_relationship_text(value: object | None) -> str | None:
+    def _schedule_relationship_text(value: object | None) -> str | None:
         if value is None:
             return None
 
@@ -109,10 +110,13 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
 
     def _has_realtime_stop_event(self, trip_model: Trip) -> bool:
         return any(
-            self._trip_schedule_relationship_text(stop_event.schedule_relationship)
+            self._schedule_relationship_text(stop_event.schedule_relationship)
             in {"SCHEDULED", "SKIPPED"}
             for stop_event in trip_model.stop_events
         )
+
+    def _is_canceled_trip(self, trip_model: Trip) -> bool:
+        return self._schedule_relationship_text(trip_model.schedule_relationship) == "CANCELED"
 
     # GTFS-RT StopTimeUpdate only defines these relationships; anything else is not exposed.
     _EXPORTABLE_STOP_TIME_SCHEDULE_RELATIONSHIPS = {"SCHEDULED", "SKIPPED", "NO_DATA"}
@@ -124,7 +128,7 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
         *,
         allow_added_stops: bool = False,
     ) -> int | None:
-        text = cls._trip_schedule_relationship_text(value)
+        text = cls._schedule_relationship_text(value)
         if allow_added_stops and text == "ADDED":
             text = "SCHEDULED"
 
@@ -145,7 +149,7 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
             stop_event
             for stop_event in trip_model.stop_events
             if allow_added_stops
-            or cls._trip_schedule_relationship_text(stop_event.schedule_relationship) != "ADDED"
+            or cls._schedule_relationship_text(stop_event.schedule_relationship) != "ADDED"
         ]
 
         return sorted(stop_events, key=lambda item: cls._stop_sequence_value(item) or 0)
@@ -242,7 +246,7 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
         feed.header.timestamp = int(time.time())
 
         for trip_model in trips:
-            trip_schedule_relationship_text = self._trip_schedule_relationship_text(trip_model.schedule_relationship)
+            trip_schedule_relationship_text = self._schedule_relationship_text(trip_model.schedule_relationship)
             defines_full_stop_sequence = trip_schedule_relationship_text in {"NEW", "REPLACEMENT"}
             stop_events = self._exportable_stop_events(
                 trip_model,
@@ -301,7 +305,7 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
                     stop_time_update.schedule_relationship = stop_time_relationship
 
                 is_no_data = (
-                    self._trip_schedule_relationship_text(stop_event.schedule_relationship) == "NO_DATA"
+                    self._schedule_relationship_text(stop_event.schedule_relationship) == "NO_DATA"
                 )
                 if is_no_data and not defines_full_stop_sequence:
                     continue
