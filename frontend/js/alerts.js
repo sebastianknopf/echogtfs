@@ -283,8 +283,13 @@ const alerts = (() => {
       let entityBadges = '';
       let hasInvalidEntities = false;
       if (alert.informed_entities && alert.informed_entities.length > 0) {
-        // Check if any entity is invalid
-        hasInvalidEntities = alert.informed_entities.some(entity => entity.is_valid === false);
+        // Check if any informed entity has at least one invalid reference type.
+        hasInvalidEntities = alert.informed_entities.some(entity => (
+          entity.is_agency_valid === false ||
+          entity.is_route_valid === false ||
+          entity.is_stop_valid === false ||
+          entity.is_trip_valid === false
+        ));
         
         // Collect all resolved entity names (entities that have at least one resolved name)
         const resolvedNames = [];

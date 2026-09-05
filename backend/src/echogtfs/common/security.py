@@ -10,7 +10,10 @@ from echogtfs.services.database.models import User
 
 logger = logging.getLogger("uvicorn.error")
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
+oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl="/api/auth/token",
+    auto_error=False
+)
 
 
 async def _get_current_active_user(

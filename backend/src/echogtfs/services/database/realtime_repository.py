@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 from echogtfs.services.database.base import RepositoryBase
 from echogtfs.services.database.intf_realtime_repository import RealtimeRepositoryInterface
 from echogtfs.services.database.models import (
+    GtfsTrip,
     ServiceAlert,
     ServiceAlertActivePeriod,
     ServiceAlertInformedEntity,
@@ -24,6 +25,18 @@ from echogtfs.services.database.models import (
 
 class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
     """SQLAlchemy repository for realtime-table access."""
+
+    @staticmethod
+    def _normalize_informed_entity_payload(entity_data: dict[str, Any]) -> dict[str, Any]:
+        """Normalize service-alert informed-entity payload for persistence."""
+        normalized = dict(entity_data)
+
+        normalized.setdefault("is_agency_valid", True)
+        normalized.setdefault("is_route_valid", True)
+        normalized.setdefault("is_stop_valid", True)
+        normalized.setdefault("is_trip_valid", True)
+
+        return normalized
 
     async def delete_alerts_for_data_source(self, source_id: int) -> int:
         """Delete all alerts for one data source and return deleted row count."""
@@ -257,7 +270,8 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                 db.add(ServiceAlertActivePeriod(alert_id=alert.id, **period_data))
 
             for entity_data in informed_entities:
-                db.add(ServiceAlertInformedEntity(alert_id=alert.id, **entity_data))
+                normalized_entity_data = self._normalize_informed_entity_payload(entity_data)
+                db.add(ServiceAlertInformedEntity(alert_id=alert.id, **normalized_entity_data))
 
             await self.commit(db)
 
@@ -332,7 +346,8 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                     delete(ServiceAlertInformedEntity).where(ServiceAlertInformedEntity.alert_id == alert_id)
                 )
                 for entity_data in informed_entities:
-                    db.add(ServiceAlertInformedEntity(alert_id=alert_id, **entity_data))
+                    normalized_entity_data = self._normalize_informed_entity_payload(entity_data)
+                    db.add(ServiceAlertInformedEntity(alert_id=alert_id, **normalized_entity_data))
 
             await self.commit(db)
 
@@ -450,7 +465,8 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                 db.add(ServiceAlertActivePeriod(alert_id=alert_id, **period_data))
 
             for entity_data in informed_entities:
-                db.add(ServiceAlertInformedEntity(alert_id=alert_id, **entity_data))
+                normalized_entity_data = self._normalize_informed_entity_payload(entity_data)
+                db.add(ServiceAlertInformedEntity(alert_id=alert_id, **normalized_entity_data))
 
             await self.commit(db)
             return action
@@ -998,6 +1014,365 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
 
             await self.commit(db)
             return action
+
+    async def list_realtime_object_statistics(self, route_ids: list[str]) -> dict[str, Any]:
+        """Return active alert count plus route-based trip and vehicle statistics."""
+        unique_route_ids = list(dict.fromkeys(route_ids))
+        assignment_type_values = [
+            assignment_type.value
+            for assignment_type in AssignmentType
+            if assignment_type != AssignmentType.MATCH_BY_CACHED_ID
+        ]
+
+        def _empty_assignment_types() -> list[dict[str, int]]:
+            return [{assignment_type: 0} for assignment_type in assignment_type_values]
+
+        trips_stats = {
+            route_id: {
+                "num_running_trips": 0,
+                "num_realtime_trips": 0,
+                "num_monitored_trips": 0,
+                "assignment_types": _empty_assignment_types(),
+            }
+            for route_id in unique_route_ids
+        }
+        vehicles_stats = {
+            route_id: {
+                "num_running_trips": 0,
+                "num_vehicles": 0,
+                "assignment_types": _empty_assignment_types(),
+            }
+            for route_id in unique_route_ids
+        }
+
+        async with self.get_session() as db:
+            alerts_count_result = await db.execute(
+                select(func.count(ServiceAlert.id)).where(ServiceAlert.is_active.is_(True))
+            )
+            num_alerts = int(alerts_count_result.scalar_one())
+
+            if unique_route_ids:
+                now_value = datetime.now(self._resolve_timezone(self._configured_timezone_name()))
+
+                running_trip_ids_subq = (
+                    select(
+                        GtfsTrip.route_id.label("route_id"),
+                        GtfsTrip.gtfs_id.label("gtfs_trip_id"),
+                    )
+                    .where(
+                        GtfsTrip.route_id.in_(unique_route_ids),
+                        GtfsTrip.start_time <= now_value,
+                        GtfsTrip.end_time >= now_value,
+                    )
+                    .distinct()
+                    .subquery()
+                )
+
+                running_trips_stmt = (
+                    select(
+                        running_trip_ids_subq.c.route_id,
+                        func.count(running_trip_ids_subq.c.gtfs_trip_id),
+                    )
+                    .group_by(running_trip_ids_subq.c.route_id)
+                )
+                running_trips_result = await db.execute(running_trips_stmt)
+                for route_id, count_value in running_trips_result.all():
+                    route_key = str(route_id)
+                    count_int = int(count_value or 0)
+                    trips_stats[route_key]["num_running_trips"] = count_int
+                    vehicles_stats[route_key]["num_running_trips"] = count_int
+
+                per_trip_stop_stats = (
+                    select(
+                        Trip.id.label("trip_uuid"),
+                        running_trip_ids_subq.c.route_id.label("route_id"),
+                        func.sum(
+                            case(
+                                (StopEvent.schedule_relationship != "NO_DATA", 1),
+                                else_=0,
+                            )
+                        ).label("num_non_no_data_events"),
+                        func.sum(
+                            case(
+                                (StopEvent.schedule_relationship.notin_(["NO_DATA", "ADDED"]), 1),
+                                else_=0,
+                            )
+                        ).label("num_realtime_events"),
+                    )
+                    .join(running_trip_ids_subq, Trip.trip_id == running_trip_ids_subq.c.gtfs_trip_id)
+                    .join(StopEvent, StopEvent.trip_id == Trip.trip_id)
+                    .where(
+                        Trip.is_active.is_(True),
+                    )
+                    .group_by(Trip.id, running_trip_ids_subq.c.route_id)
+                    .subquery()
+                )
+
+                realtime_trips_stmt = (
+                    select(
+                        per_trip_stop_stats.c.route_id,
+                        func.sum(
+                            case(
+                                (per_trip_stop_stats.c.num_non_no_data_events == 0, 1),
+                                else_=0,
+                            )
+                        ).label("num_monitored_trips"),
+                        func.sum(
+                            case(
+                                (per_trip_stop_stats.c.num_realtime_events > 0, 1),
+                                else_=0,
+                            )
+                        ).label("num_realtime_trips"),
+                    )
+                    .group_by(per_trip_stop_stats.c.route_id)
+                )
+                realtime_trips_result = await db.execute(realtime_trips_stmt)
+                for route_id, monitored_count, realtime_count in realtime_trips_result.all():
+                    route_key = str(route_id)
+                    trips_stats[route_key]["num_monitored_trips"] = int(monitored_count or 0)
+                    trips_stats[route_key]["num_realtime_trips"] = int(realtime_count or 0)
+
+                trip_assignment_type_stmt = (
+                    select(
+                        running_trip_ids_subq.c.route_id,
+                        Trip.assignment_type,
+                        func.count(Trip.id).label("num_trips"),
+                    )
+                    .join(running_trip_ids_subq, Trip.trip_id == running_trip_ids_subq.c.gtfs_trip_id)
+                    .where(
+                        Trip.is_active.is_(True),
+                        Trip.assignment_type.in_(assignment_type_values),
+                    )
+                    .group_by(running_trip_ids_subq.c.route_id, Trip.assignment_type)
+                )
+                trip_assignment_type_result = await db.execute(trip_assignment_type_stmt)
+                trip_assignment_type_counts: dict[str, dict[str, int]] = {
+                    route_id: {assignment_type: 0 for assignment_type in assignment_type_values}
+                    for route_id in unique_route_ids
+                }
+                for route_id, assignment_type, count_value in trip_assignment_type_result.all():
+                    trip_assignment_type_counts[str(route_id)][str(assignment_type)] = int(count_value or 0)
+
+                for route_id in unique_route_ids:
+                    trips_stats[route_id]["assignment_types"] = [
+                        {assignment_type: trip_assignment_type_counts[route_id][assignment_type]}
+                        for assignment_type in assignment_type_values
+                    ]
+
+                vehicles_stmt = (
+                    select(
+                        running_trip_ids_subq.c.route_id,
+                        func.count(Vehicle.id).label("num_vehicles"),
+                    )
+                    .join(running_trip_ids_subq, running_trip_ids_subq.c.gtfs_trip_id == Vehicle.trip_id)
+                    .join(Trip, Trip.trip_id == Vehicle.trip_id)
+                    .where(
+                        Trip.is_active.is_(True),
+                        Vehicle.is_active.is_(True),
+                    )
+                    .group_by(running_trip_ids_subq.c.route_id)
+                )
+                vehicles_result = await db.execute(vehicles_stmt)
+                for route_id, count_value in vehicles_result.all():
+                    vehicles_stats[str(route_id)]["num_vehicles"] = int(count_value or 0)
+
+                vehicle_assignment_type_stmt = (
+                    select(
+                        running_trip_ids_subq.c.route_id,
+                        Trip.assignment_type,
+                        func.count(Vehicle.id).label("num_vehicles"),
+                    )
+                    .join(running_trip_ids_subq, running_trip_ids_subq.c.gtfs_trip_id == Vehicle.trip_id)
+                    .join(Trip, Trip.trip_id == Vehicle.trip_id)
+                    .where(
+                        Trip.is_active.is_(True),
+                        Vehicle.is_active.is_(True),
+                        Trip.assignment_type.in_(assignment_type_values),
+                    )
+                    .group_by(running_trip_ids_subq.c.route_id, Trip.assignment_type)
+                )
+                vehicle_assignment_type_result = await db.execute(vehicle_assignment_type_stmt)
+                vehicle_assignment_type_counts: dict[str, dict[str, int]] = {
+                    route_id: {assignment_type: 0 for assignment_type in assignment_type_values}
+                    for route_id in unique_route_ids
+                }
+                for route_id, assignment_type, count_value in vehicle_assignment_type_result.all():
+                    vehicle_assignment_type_counts[str(route_id)][str(assignment_type)] = int(count_value or 0)
+
+                for route_id in unique_route_ids:
+                    vehicles_stats[route_id]["assignment_types"] = [
+                        {assignment_type: vehicle_assignment_type_counts[route_id][assignment_type]}
+                        for assignment_type in assignment_type_values
+                    ]
+
+            return {
+                "num_alerts": num_alerts,
+                "trips": trips_stats,
+                "vehicles": vehicles_stats,
+            }
+
+    async def list_informed_entities_with_invalid_references(self) -> list[ServiceAlertInformedEntity]:
+        """Return informed entities with any invalid reference and alert relations loaded."""
+        stmt = (
+            select(ServiceAlertInformedEntity)
+            .where(
+                (ServiceAlertInformedEntity.is_agency_valid.is_(False))
+                | (ServiceAlertInformedEntity.is_route_valid.is_(False))
+                | (ServiceAlertInformedEntity.is_stop_valid.is_(False))
+                | (ServiceAlertInformedEntity.is_trip_valid.is_(False))
+            )
+            .options(
+                selectinload(ServiceAlertInformedEntity.alert).selectinload(ServiceAlert.data_source),
+            )
+            .order_by(ServiceAlertInformedEntity.alert_id.asc())
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
+    async def list_stop_events_with_invalid_references(self) -> list[StopEvent]:
+        """Return invalid stop events with trip and datasource relations loaded."""
+        stmt = (
+            select(StopEvent)
+            .where(StopEvent.is_valid.is_(False))
+            .options(
+                selectinload(StopEvent.trip).selectinload(Trip.data_source),
+            )
+            .order_by(StopEvent.trip_id.asc())
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
+    async def list_trips_with_invalid_references(self) -> list[Trip]:
+        """Return trips where route or trip references are invalid."""
+        stmt = (
+            select(Trip)
+            .where(
+                (Trip.is_route_valid.is_(False))
+                | (Trip.is_trip_valid.is_(False))
+            )
+            .options(
+                selectinload(Trip.data_source),
+            )
+            .order_by(Trip.trip_id.asc())
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
+    async def list_stop_events_with_implied_deviation_schedule_relationships(self) -> list[StopEvent]:
+        """Return implied deviation stop events with trip and datasource relations loaded."""
+        stmt = (
+            select(StopEvent)
+            .where(
+                StopEvent.is_implied_schedule_relationship.is_(True),
+                StopEvent.schedule_relationship.in_(["ADDED", "SKIPPED"]),
+            )
+            .options(
+                selectinload(StopEvent.trip).selectinload(Trip.data_source),
+            )
+            .order_by(StopEvent.trip_id.asc())
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
+    async def list_stop_events_with_changed_stop_id(self) -> list[StopEvent]:
+        """Return stop events where stop_id differs from original_stop_id."""
+        stmt = (
+            select(StopEvent)
+            .where(
+                StopEvent.stop_id != StopEvent.original_stop_id,
+            )
+            .options(
+                selectinload(StopEvent.trip).selectinload(Trip.data_source),
+            )
+            .order_by(StopEvent.trip_id.asc())
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
+    async def list_informed_entities_with_non_global_ids(self, pattern: str) -> list[ServiceAlertInformedEntity]:
+        """Return informed entities whose ids do not match the provided global-id pattern."""
+        stmt = (
+            select(ServiceAlertInformedEntity)
+            .where(
+                ((ServiceAlertInformedEntity.agency_id.is_not(None)) & (~ServiceAlertInformedEntity.agency_id.op("~")(pattern)))
+                | ((ServiceAlertInformedEntity.route_id.is_not(None)) & (~ServiceAlertInformedEntity.route_id.op("~")(pattern)))
+                | ((ServiceAlertInformedEntity.stop_id.is_not(None)) & (~ServiceAlertInformedEntity.stop_id.op("~")(pattern)))
+                | ((ServiceAlertInformedEntity.trip_id.is_not(None)) & (~ServiceAlertInformedEntity.trip_id.op("~")(pattern)))
+            )
+            .options(
+                selectinload(ServiceAlertInformedEntity.alert).selectinload(ServiceAlert.data_source),
+            )
+            .order_by(ServiceAlertInformedEntity.alert_id.asc())
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
+    async def list_stop_events_with_non_global_ids(self, pattern: str) -> list[StopEvent]:
+        """Return stop events whose stop_id does not match the provided global-id pattern."""
+        stmt = (
+            select(StopEvent)
+            .where(
+                StopEvent.stop_id.is_not(None),
+                ~StopEvent.stop_id.op("~")(pattern),
+            )
+            .options(
+                selectinload(StopEvent.trip).selectinload(Trip.data_source),
+            )
+            .order_by(StopEvent.trip_id.asc())
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
+    async def list_trips_with_non_global_ids(self, pattern: str) -> list[Trip]:
+        """Return trips where route_id or trip_id does not match the provided global-id pattern."""
+        stmt = (
+            select(Trip)
+            .where(
+                ((Trip.trip_id.is_not(None)) & (~Trip.trip_id.op("~")(pattern)))
+                | ((Trip.route_id.is_not(None)) & (~Trip.route_id.op("~")(pattern)))
+            )
+            .options(
+                selectinload(Trip.data_source),
+            )
+            .order_by(Trip.trip_id.asc())
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
+    async def list_stop_events_with_departure_before_arrival(self) -> list[StopEvent]:
+        """Return stop events where departure_time is earlier than arrival_time."""
+        stmt = (
+            select(StopEvent)
+            .where(
+                StopEvent.arrival_time.is_not(None),
+                StopEvent.departure_time.is_not(None),
+                StopEvent.departure_time < StopEvent.arrival_time,
+            )
+            .options(
+                selectinload(StopEvent.trip).selectinload(Trip.data_source),
+            )
+            .order_by(StopEvent.trip_id.asc())
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
 
     @staticmethod
     def _configured_timezone_name() -> str:

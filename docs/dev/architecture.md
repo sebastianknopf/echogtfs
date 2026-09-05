@@ -169,3 +169,13 @@ CORS is configured via the `CORS_ORIGINS` environment variable (comma-separated 
 ### Logging
 
 All application logging goes through Python's standard `logging` module using the `uvicorn.error` logger name. Log level is controlled by the `DEBUG` environment variable.
+
+## Monitoring-API
+
+The monitoring API is designed to open access of EchoGTFS backend to external monitoring and dashboard tools. Its main purpose is to provide a controlled access to the actual realtime availability state and conflicts detected in the system under following circumstances:
+
+- The API **always provides access to the current status of the system**, there's no overview over historical conflicts and status values
+- The API provides access to the **conflicts within the system**, conflicts in the incoming base data are currently **not monitored** and available
+- For finding the conflicts in the system, the data sources need to be configured to **not discard invalid entities or references**, but **disable the corresponding objects**. By discarding invalid objects or references, the never become visible for the monitoring.
+
+The statistics are completely computed by the `RealtimeRepository`. Most of the conflict detection work is also done in the `RealtimeRepository`, however, packaging and final checks on the conflicts as well as uniquifying them is done in the separate `ConflictExportService` class and then handed to the API endpoint.

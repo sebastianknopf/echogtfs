@@ -116,7 +116,16 @@ Language is read from `xml:lang` and defaults to `de` when absent.
 	- `trip_id` from `VehicleJourneyRef` or fallback `DatedVehicleJourneyRef`
 	- optional `agency_id` from `Operator/OperatorRef`
 	- optional stop references from `Route/StopPoints/AffectedStopPoint`
-	- emitted with `is_valid = False`
+	- emitted with `is_trip_valid = False`
+
+All informed-entity records include the following per-reference validity flags:
+
+- `is_agency_valid`
+- `is_route_valid`
+- `is_stop_valid`
+- `is_trip_valid`
+
+Default values are `True` unless explicitly set otherwise by transformer-specific parsing rules.
 
 No deduplication is performed by the transformer.
 

@@ -62,6 +62,21 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         repository.get_session = lambda: _FakeSessionContext(session)
         return repository
 
+    def test_normalize_informed_entity_payload_sets_per_field_defaults(self):
+        payload = RealtimeRepository._normalize_informed_entity_payload(
+            {
+                "agency_id": "a1",
+                "route_id": "r1",
+                "stop_id": "s1",
+                "trip_id": None,
+            }
+        )
+
+        self.assertTrue(payload["is_agency_valid"])
+        self.assertTrue(payload["is_route_valid"])
+        self.assertTrue(payload["is_stop_valid"])
+        self.assertTrue(payload["is_trip_valid"])
+
     async def test_delete_alerts_for_data_source_returns_rowcount(self):
         session = SimpleNamespace(
             execute=AsyncMock(return_value=_FakeResult(rowcount=3)),
@@ -859,3 +874,199 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(existing_vehicle.trip_id, "trip-4")
         session.flush.assert_not_awaited()
         session.commit.assert_awaited_once()
+
+    async def test_list_realtime_object_statistics_returns_counts_per_route(self):
+        session = SimpleNamespace(
+            execute=AsyncMock(
+                side_effect=[
+                    _FakeResult(scalar_one_value=7),
+                    _FakeResult(rows=[("R1", 3), ("R2", 1)]),
+                    _FakeResult(rows=[("R1", 5, 2), ("R2", 2, 0)]),
+                    _FakeResult(
+                        rows=[
+                            ("R1", "DIRECT_BY_ID", 2),
+                            ("R1", "NO_MATCH_GENERAL", 1),
+                            ("R2", "MATCHED_BY_START_STOP", 1),
+                        ]
+                    ),
+                    _FakeResult(rows=[("R1", 4)]),
+                    _FakeResult(
+                        rows=[
+                            ("R1", "DIRECT_BY_ID", 3),
+                            ("R2", "NO_MATCH_AMBIGUOUS_TRIP", 1),
+                        ]
+                    ),
+                ]
+            )
+        )
+        repository = self._make_repository(session)
+
+        result = await repository.list_realtime_object_statistics(["R1", "R2", "R3"])
+
+        self.assertEqual(
+            result,
+            {
+                "num_alerts": 7,
+                "trips": {
+                    "R1": {
+                        "num_running_trips": 3,
+                        "num_realtime_trips": 2,
+                        "num_monitored_trips": 5,
+                        "assignment_types": [
+                            {"DIRECT_BY_ID": 2},
+                            {"MATCHED_BY_START_STOP": 0},
+                            {"MATCHED_BY_INTERMEDIATE_STOPS": 0},
+                            {"NO_MATCH_GENERAL": 1},
+                            {"NO_MATCH_AMBIGUOUS_TRIP": 0},
+                        ],
+                    },
+                    "R2": {
+                        "num_running_trips": 1,
+                        "num_realtime_trips": 0,
+                        "num_monitored_trips": 2,
+                        "assignment_types": [
+                            {"DIRECT_BY_ID": 0},
+                            {"MATCHED_BY_START_STOP": 1},
+                            {"MATCHED_BY_INTERMEDIATE_STOPS": 0},
+                            {"NO_MATCH_GENERAL": 0},
+                            {"NO_MATCH_AMBIGUOUS_TRIP": 0},
+                        ],
+                    },
+                    "R3": {
+                        "num_running_trips": 0,
+                        "num_realtime_trips": 0,
+                        "num_monitored_trips": 0,
+                        "assignment_types": [
+                            {"DIRECT_BY_ID": 0},
+                            {"MATCHED_BY_START_STOP": 0},
+                            {"MATCHED_BY_INTERMEDIATE_STOPS": 0},
+                            {"NO_MATCH_GENERAL": 0},
+                            {"NO_MATCH_AMBIGUOUS_TRIP": 0},
+                        ],
+                    },
+                },
+                "vehicles": {
+                    "R1": {
+                        "num_running_trips": 3,
+                        "num_vehicles": 4,
+                        "assignment_types": [
+                            {"DIRECT_BY_ID": 3},
+                            {"MATCHED_BY_START_STOP": 0},
+                            {"MATCHED_BY_INTERMEDIATE_STOPS": 0},
+                            {"NO_MATCH_GENERAL": 0},
+                            {"NO_MATCH_AMBIGUOUS_TRIP": 0},
+                        ],
+                    },
+                    "R2": {
+                        "num_running_trips": 1,
+                        "num_vehicles": 0,
+                        "assignment_types": [
+                            {"DIRECT_BY_ID": 0},
+                            {"MATCHED_BY_START_STOP": 0},
+                            {"MATCHED_BY_INTERMEDIATE_STOPS": 0},
+                            {"NO_MATCH_GENERAL": 0},
+                            {"NO_MATCH_AMBIGUOUS_TRIP": 1},
+                        ],
+                    },
+                    "R3": {
+                        "num_running_trips": 0,
+                        "num_vehicles": 0,
+                        "assignment_types": [
+                            {"DIRECT_BY_ID": 0},
+                            {"MATCHED_BY_START_STOP": 0},
+                            {"MATCHED_BY_INTERMEDIATE_STOPS": 0},
+                            {"NO_MATCH_GENERAL": 0},
+                            {"NO_MATCH_AMBIGUOUS_TRIP": 0},
+                        ],
+                    },
+                },
+            },
+        )
+        self.assertEqual(session.execute.await_count, 6)
+
+        trips_stmt = session.execute.await_args_list[2].args[0]
+        compiled = trips_stmt.compile()
+        flat_values = []
+        for value in compiled.params.values():
+            if isinstance(value, (list, tuple, set)):
+                flat_values.extend(value)
+            else:
+                flat_values.append(value)
+
+        self.assertIn("NO_DATA", flat_values)
+        self.assertIn("ADDED", flat_values)
+
+    async def test_list_informed_entities_with_invalid_references_returns_items(self):
+        informed_entity = SimpleNamespace(alert_id=uuid.uuid4())
+        session = SimpleNamespace(execute=AsyncMock(return_value=_FakeResult([informed_entity])))
+        repository = self._make_repository(session)
+
+        result = await repository.list_informed_entities_with_invalid_references()
+
+        self.assertEqual(result, [informed_entity])
+        session.execute.assert_awaited_once()
+
+        stmt = session.execute.await_args.args[0]
+        compiled = stmt.compile()
+        sql = str(compiled)
+
+        self.assertIn("is_agency_valid", sql)
+        self.assertIn("is_route_valid", sql)
+        self.assertIn("is_stop_valid", sql)
+        self.assertIn("is_trip_valid", sql)
+
+    async def test_list_informed_entities_with_non_global_ids_returns_items_and_uses_pattern(self):
+        informed_entity = SimpleNamespace(alert_id=uuid.uuid4(), stop_id="invalid-stop")
+        session = SimpleNamespace(execute=AsyncMock(return_value=_FakeResult([informed_entity])))
+        repository = self._make_repository(session)
+
+        pattern = r"^[A-Z0-9]{3}:[A-Z0-9]{3}:\d+$"
+        result = await repository.list_informed_entities_with_non_global_ids(pattern)
+
+        self.assertEqual(result, [informed_entity])
+        session.execute.assert_awaited_once()
+
+        stmt = session.execute.await_args.args[0]
+        compiled = stmt.compile()
+        sql = str(compiled)
+        params = list(compiled.params.values())
+
+        self.assertIn("agency_id", sql)
+        self.assertIn("route_id", sql)
+        self.assertIn("stop_id", sql)
+        self.assertIn("trip_id", sql)
+        self.assertGreaterEqual(params.count(pattern), 4)
+        self.assertIn("~", sql)
+
+    async def test_list_stop_events_with_non_global_ids_returns_items_and_uses_pattern(self):
+        stop_event = SimpleNamespace(trip_id="trip-1", stop_id="invalid-stop")
+        session = SimpleNamespace(execute=AsyncMock(return_value=_FakeResult([stop_event])))
+        repository = self._make_repository(session)
+
+        pattern = r"^[A-Z0-9]{3}:[A-Z0-9]{3}:\d+$"
+        result = await repository.list_stop_events_with_non_global_ids(pattern)
+
+        self.assertEqual(result, [stop_event])
+        session.execute.assert_awaited_once()
+
+        stmt = session.execute.await_args.args[0]
+        compiled = stmt.compile()
+        self.assertIn(pattern, compiled.params.values())
+        self.assertIn("~", str(compiled))
+
+    async def test_list_trips_with_non_global_ids_returns_items_and_uses_pattern(self):
+        trip = SimpleNamespace(trip_id="invalid-trip", route_id="invalid-route")
+        session = SimpleNamespace(execute=AsyncMock(return_value=_FakeResult([trip])))
+        repository = self._make_repository(session)
+
+        pattern = r"^[A-Z0-9]{3}:[A-Z0-9]{3}:\d+$"
+        result = await repository.list_trips_with_non_global_ids(pattern)
+
+        self.assertEqual(result, [trip])
+        session.execute.assert_awaited_once()
+
+        stmt = session.execute.await_args.args[0]
+        compiled = stmt.compile()
+        params = list(compiled.params.values())
+        self.assertGreaterEqual(params.count(pattern), 2)
+        self.assertIn("~", str(compiled))

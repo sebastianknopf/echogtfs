@@ -514,8 +514,12 @@ class ServiceAlertInformedEntity(Base):
     # Optional direction filter (0 or 1)
     direction_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     
-    # Validation status - marks whether this entity reference is valid
-    is_valid: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Per-reference validation flags.
+    # trip_id is currently not validated against GTFS, but tracked explicitly.
+    is_agency_valid: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_route_valid: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_stop_valid: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_trip_valid: Mapped[bool] = mapped_column(Boolean, default=True)
     
     # Relationship
     alert: Mapped["ServiceAlert"] = relationship(back_populates="informed_entities")

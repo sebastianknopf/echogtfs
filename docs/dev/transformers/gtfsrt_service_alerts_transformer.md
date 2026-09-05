@@ -82,6 +82,10 @@ For each `alert.informed_entity` selector, create one dictionary with:
 - `stop_id` from `stop_id` if present.
 - `trip_id` from `trip.trip_id` if present.
 - `direction_id` from `trip.direction_id` if present.
+- `is_agency_valid = True`
+- `is_route_valid = True`
+- `is_stop_valid = True`
+- `is_trip_valid = True`
 
 Missing values are stored as `None`.
 

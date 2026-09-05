@@ -91,10 +91,10 @@ async def _load_gtfs_entity_ids(repository: GtfsRepositoryInterface) -> dict[str
     return await repository.list_gtfs_entity_ids()
 
 
-def _validate_entity(
+def _entity_validation_flags(
     entity: dict[str, Any],
     entity_ids: dict[str, set[str]]
-) -> bool:
+) -> dict[str, bool]:
     """
     Validate if an informed entity references valid GTFS entities.
     
@@ -103,35 +103,31 @@ def _validate_entity(
         entity_ids: Dictionary of valid GTFS IDs from _load_gtfs_entity_ids()
     
     Returns:
-        True if all referenced entities are valid, False otherwise
+        Per-reference and aggregate validity flags.
     """
-    # Trip references are not managed/validated - if only trip_id is set,
-    # mark the entity as invalid (trip_id without other references)
-    has_trip_id = bool(entity.get("trip_id"))
     has_agency_id = bool(entity.get("agency_id"))
     has_route_id = bool(entity.get("route_id"))
     has_stop_id = bool(entity.get("stop_id"))
+    has_trip_id = bool(entity.get("trip_id"))
+    has_primary_reference = has_agency_id or has_route_id or has_stop_id
     
-    # If only trip_id is set (without agency, route, or stop), mark as invalid
-    # direction_id and route_type are just qualifiers, not primary references
-    if has_trip_id and not has_agency_id and not has_route_id and not has_stop_id:
+    if has_trip_id and not has_primary_reference:
         logger.debug(
             f"Entity has only trip_id without other references - "
             f"marking as invalid (trip references not managed): trip_id={entity.get('trip_id')}"
         )
-        return False
-    
-    # Check each entity type that is specified
-    if entity.get("agency_id") and entity["agency_id"] not in entity_ids["agency"]:
-        return False
-    
-    if entity.get("route_id") and entity["route_id"] not in entity_ids["route"]:
-        return False
-    
-    if entity.get("stop_id") and entity["stop_id"] not in entity_ids["stop"]:
-        return False
-    
-    return True
+
+    is_agency_valid = (not has_agency_id) or (entity["agency_id"] in entity_ids["agency"])
+    is_route_valid = (not has_route_id) or (entity["route_id"] in entity_ids["route"])
+    is_stop_valid = (not has_stop_id) or (entity["stop_id"] in entity_ids["stop"])
+    is_trip_valid = (not has_trip_id) or has_primary_reference
+
+    return {
+        "is_agency_valid": is_agency_valid,
+        "is_route_valid": is_route_valid,
+        "is_stop_valid": is_stop_valid,
+        "is_trip_valid": is_trip_valid,
+    }
 
 
 def _enrich_alerts_with_entity_names(
@@ -148,6 +144,12 @@ def _enrich_alerts_with_entity_names(
     """
     for alert in alerts:
         for entity in alert.get("informed_entities", []):
+            # Always expose per-reference validity flags in response payloads.
+            entity["is_agency_valid"] = bool(entity.get("is_agency_valid", True))
+            entity["is_route_valid"] = bool(entity.get("is_route_valid", True))
+            entity["is_stop_valid"] = bool(entity.get("is_stop_valid", True))
+            entity["is_trip_valid"] = bool(entity.get("is_trip_valid", True))
+
             # Resolve agency name
             if entity.get("agency_id"):
                 entity["agency_name"] = entity_names["agency"].get(entity["agency_id"])
@@ -263,7 +265,7 @@ async def create_alert(
             "trip_id": entity_data.trip_id,
             "direction_id": entity_data.direction_id,
         }
-        entity_payload["is_valid"] = _validate_entity(entity_payload, entity_ids)
+        entity_payload.update(_entity_validation_flags(entity_payload, entity_ids))
         informed_entities.append(entity_payload)
 
     alert = await repository.create_service_alert(
@@ -386,7 +388,7 @@ async def update_alert(
                 "trip_id": entity_data.trip_id,
                 "direction_id": entity_data.direction_id,
             }
-            entity_payload["is_valid"] = _validate_entity(entity_payload, entity_ids)
+            entity_payload.update(_entity_validation_flags(entity_payload, entity_ids))
             informed_entities_data.append(entity_payload)
 
     alert = await repository.update_service_alert(

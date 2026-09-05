@@ -4,8 +4,8 @@ from datetime import datetime
 from typing import Any
 import uuid
 
-from sqlalchemy import delete, select, update
-from sqlalchemy.orm import selectinload
+from sqlalchemy import case, delete, select, func, update
+from sqlalchemy.orm import contains_eager, selectinload
 
 from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
 from echogtfs.services.database.models import (
@@ -186,6 +186,63 @@ class SystemRepository(RepositoryBase, SystemRepositoryInterface):
         async with self.get_session() as db:
             result = await db.execute(stmt)
             return list(result.scalars().all())
+
+    async def list_data_sources_with_failures(self, min_num_failures: int = 0) -> list[DataSource]:
+        """Return all data sources with at least the given number of failures ordered by name."""
+        ranked_logs = (
+            select(
+                DataSourceLog.data_source_id.label("data_source_id"),
+                DataSourceLog.status_code.label("status_code"),
+                func.row_number()
+                .over(
+                    partition_by=DataSourceLog.data_source_id,
+                    order_by=(
+                        DataSourceLog.timestamp.desc(),
+                        DataSourceLog.id.desc(),
+                    ),
+                )
+                .label("rn"),
+            )
+            .subquery()
+        )
+
+        stmt = (
+            select(DataSource)
+            .outerjoin(DataSource.logs)
+            .options(
+                contains_eager(DataSource.logs),
+            )
+        )
+
+        if min_num_failures > 0:
+            failing_data_sources = (
+                select(ranked_logs.c.data_source_id)
+                .where(ranked_logs.c.rn <= min_num_failures)
+                .group_by(ranked_logs.c.data_source_id)
+                .having(
+                    func.count(ranked_logs.c.data_source_id) >= min_num_failures,
+                    func.sum(
+                        case(
+                            (ranked_logs.c.status_code != 200, 1),
+                            else_=0,
+                        )
+                    ) == min_num_failures,
+                )
+            )
+
+            stmt = stmt.where(
+                DataSource.id.in_(failing_data_sources)
+            )
+
+        stmt = stmt.order_by(
+            DataSource.name,
+            DataSourceLog.timestamp.desc(),
+            DataSourceLog.id.desc(),
+        )
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.unique().scalars().all())
 
     async def get_data_source_by_id(self, source_id: int) -> DataSource | None:
         """Return one data source by id with relationships loaded."""

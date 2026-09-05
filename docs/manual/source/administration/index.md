@@ -6,4 +6,5 @@
 accounts
 system-settings
 system-copy
+monitoring-api
 ```

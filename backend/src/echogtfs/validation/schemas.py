@@ -1,12 +1,15 @@
 ﻿from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 import re
+from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, field_validator, model_validator
+from echogtfs.enum.conflicts import ConflictType
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
-from echogtfs.enum.gtfsrt import AlertCause, AlertEffect, AlertSeverityLevel, PeriodType
+from echogtfs.enum.gtfsrt import AlertCause, AlertEffect, AlertSeverityLevel, AssignmentType, PeriodType
+from echogtfs.enum.gtfs import GtfsImportStatus
 from echogtfs.enum.system import EnrichmentType, ExpiredRealtimeObjectPolicy, InvalidReferencePolicy, SourceField
 
 _HEX_COLOR = re.compile(r'^#[0-9a-fA-F]{6}$')
@@ -321,6 +324,209 @@ class DataSourceLogRead(BaseModel):
     model_config = {"from_attributes": True}
 
 # ---------------------------------------------------------------------------
+# Monitoring
+# ---------------------------------------------------------------------------
+
+class MonitoringRouteGroupObject(BaseModel):
+    id: str = Field(
+        examples=["de:vpe:04743_:", "de:vpe:04744_:"],
+        description="Identifier of the nominal GTFS route."
+    )
+    short_name: str | None = Field(
+        examples=["743", "744"],
+        description="Short name of the nominal GTFS route."
+    )
+    long_name: str | None = Field(
+        examples=["Pforzheim - Büchenbronn - Samlbach - Kapfenhardt", "Another Long Name"],
+        description="Long name of the nominal GTFS route."
+    )
+
+
+class MonitoringDatasourceGroupObject(BaseModel):
+    id: int = Field(
+        examples=[10, 11, 12],
+        description="Internal ID of the data source."
+    )
+    name: str = Field(
+        examples=["ENTUR-SIRI-SX", "DELFI-SIRI-ET-TEST"],
+        description="Name of the data source."
+    )
+
+
+class MonitoringSystemResponse(BaseModel):
+    version: str = Field(
+        examples=["1.0.0", "v1.2.1.dev6+geddca0dfb.d20260829"],
+        description="Current system version"
+    )
+    instance: str = Field(
+        examples=["EchoGTFS Instance Name"],
+        description="Name of the EchoGTFS instance."
+    )
+    status: bool = Field(
+        examples=[True, False],
+        description="Current status indicator of the system. True if the system is operational, False otherwise."
+    )
+    filters: MonitoringSystemFiltersObject = Field(
+        description="Filters available for statistics and conflicts endpoint."
+    )
+
+
+class MonitoringSystemFiltersObject(BaseModel):
+    datasources: list[MonitoringDatasourceGroupObject] = Field(
+        description="List of data sources in the system."
+    )
+    routes: list[MonitoringRouteGroupObject] = Field(
+        description="List of routes in the nominal GTFS data."
+    )
+
+
+class MonitoringStatisticsResponse(BaseModel):
+    statistics: MonitoringStatisticsObject = Field(
+        description="Monitored statistics for the data source."
+    )
+
+
+class MonitoringStatisticsObject(BaseModel):
+    static: MonitoringStatisticsStaticObject = Field(
+        description="Statistics related to the nominal timetable data."
+    )
+    realtime: MonitoringStatisticsRealtimeObject = Field(
+        description="Statistics related to the real-time data."
+    )
+
+
+class MonitoringStatisticsStaticObject(BaseModel):
+    last_import_timestamp: datetime | None = Field(
+        examples=["2024-06-01T12:00:00Z"],
+        description="Timestamp of the last import for the GTFS import data run."
+    )
+    last_import_status: GtfsImportStatus | None = Field(
+        examples=[GtfsImportStatus.IDLE, GtfsImportStatus.RUNNING, GtfsImportStatus.SUCCESS, GtfsImportStatus.ERROR],
+        description="Status of the last import for the GTFS import data run."
+    )
+    num_agencies: int = Field(
+        examples=[0, 1, 2],
+        description="Number of agencies in the nominal GTFS data."
+    )
+    num_routes: int = Field(
+        examples=[10, 20, 30],
+        description="Number of routes in the nominal GTFS data."
+    )
+    num_stops: int = Field(
+        examples=[1044, 744],
+        description="Number of stops in the nominal GTFS data."
+    )
+    num_trips: int = Field(
+        examples=[2000, 2003, 2338],
+        description="Number of trips in the nominal GTFS data."
+    )
+    operation_day_dates: list[date] = Field(
+        examples=[["2024-06-01"], ["2024-06-02", "2024-06-03"]],
+        description="List of loaded operation day dates in the nominal GTFS data."
+    )
+
+
+class MonitoringStatisticsRealtimeObject(BaseModel):
+    alerts: MonitoringStatisticsRealtimeAlertsObject = Field(
+        description="Statistics related to real-time alerts."
+    )
+    trips: list[MonitoringStatisticsRealtimeTripsObject] = Field(
+        description="Statistics related to real-time trips."
+    )
+    vehicles: list[MonitoringStatisticsRealtimeVehiclesObject] = Field(
+        description="Statistics related to real-time vehicles."
+    )
+
+
+class MonitoringStatisticsRealtimeAssignmentsObject(BaseModel):
+    assignment_type: AssignmentType = Field(
+        examples=[AssignmentType.MATCHED_BY_START_STOP, AssignmentType.MATCHED_BY_INTERMEDIATE_STOPS],
+        description="Assignment type enum value."
+    )
+    num_assignments: int = Field(
+        examples=[1, 2, 3],
+        description="Number of objects assigned by the given assignment type."
+    )
+
+
+class MonitoringStatisticsRealtimeAlertsObject(BaseModel):
+    num_alerts: int = Field(
+        examples=[10, 11, 12],
+        description="Number of active real-time alerts."
+    )
+
+
+class MonitoringStatisticsRealtimeTripsObject(BaseModel):
+    route: MonitoringRouteGroupObject = Field(
+        description="The nominal GTFS route for which the statistics are reported."
+    )
+    num_running_trips: int = Field(
+        examples=[5, 10, 15],
+        description="Number of trips which are currently running based on the nominal data."
+    )
+    num_realtime_trips: int = Field(
+        examples=[5, 10, 15],
+        description="Number of trips with realtime data available."
+    )
+    num_monitored_trips: int = Field(
+        examples=[5, 10, 15],
+        description="Number of monitored trips."
+    )
+    assignment_types: list[MonitoringStatisticsRealtimeAssignmentsObject] = Field(
+        description="List of assignment types and their corresponding number of objects."
+    )
+
+
+class MonitoringStatisticsRealtimeVehiclesObject(BaseModel):
+    route: MonitoringRouteGroupObject = Field(
+        description="The nominal GTFS route for which the statistics are reported."
+    )
+    num_running_trips: int = Field(
+        examples=[5, 10, 15],
+        description="Number of trips which are currently running based on the nominal data."
+    )
+    num_vehicles: int = Field(
+        examples=[10, 15, 20],
+        description="Number of vehicles which are currently running."
+    )
+    assignment_types: list[MonitoringStatisticsRealtimeAssignmentsObject] = Field(
+        description="List of assignment types and their corresponding number of objects."
+    )
+
+
+class MonitoringConflictsResponse(BaseModel):
+    conflicts: list[MonitoringConflictObject] = Field(
+        description="List of current conflicts in the system."
+    )
+
+
+class MonitoringConflictObject(BaseModel):
+    id: str = Field(
+        examples=["fa9498ef-cd63-467e-b614-1f2549e24ec3"],
+        description="Unique identifier for the conflict"
+    )
+    timestamp: datetime = Field(
+        examples=["2024-06-01T12:00:00Z"],
+        description="Timestamp indicating when the conflict was detected."
+    )
+    code: ConflictType = Field(
+        examples=[ConflictType.ERROR_NO_TRIP_FOUND, ConflictType.WARNING_IMPLIED_ADDITIONAL_STOP],
+        description="Numeric code representing the type of conflict."
+    )
+    message: str = Field(
+        examples=["ERROR_NO_TRIP_FOUND", "WARNING_IMPLIED_ADDITIONAL_STOP"],
+        description="Human-readable name describing the conflict."
+    )
+    datasource: MonitoringDatasourceGroupObject = Field(
+        description="The data source which has raised the data resulting in the conflict."
+    )
+    properties: dict[str, Any] = Field(
+        examples=[{"original_trip_id": "TEST-743-SimpleOriginalId"}],
+        description="Dictionary of properties related to the conflict, where keys are property names and values are their corresponding values."
+    )
+
+
+# ---------------------------------------------------------------------------
 # GTFS
 # ---------------------------------------------------------------------------
 
@@ -352,7 +558,7 @@ class RouteRead(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# ServiceAlerts (GTFS-RT)
+# GTFS-RT
 # ---------------------------------------------------------------------------
 
 class ServiceAlertCreate(BaseModel):
@@ -552,7 +758,10 @@ class ServiceAlertInformedEntityCreate(BaseModel):
 class ServiceAlertInformedEntityRead(ServiceAlertInformedEntityCreate):
     """Read model with ID, validation status, and resolved names."""
     id: int
-    is_valid: bool  # Validation status of the entity reference
+    is_agency_valid: bool = True
+    is_route_valid: bool = True
+    is_stop_valid: bool = True
+    is_trip_valid: bool = True
     # Resolved names from GTFS data (populated by API, not from DB)
     agency_name: str | None = None
     route_name: str | None = None

@@ -21,11 +21,11 @@ _Repo = Annotated[SystemRepositoryInterface, Depends(get_system_repository)]
         "/token", 
         responses={
             200: {
-                "description": "Successful login",
+                "description": "Successful Login",
                 "model": Token,
             },
             400: {
-                "description": "Inactive user",
+                "description": "Inactive User",
                 "content": {
                     "application/json": {
                         "example": {"detail": _ERR_INACTIVE_USER}
@@ -33,7 +33,7 @@ _Repo = Annotated[SystemRepositoryInterface, Depends(get_system_repository)]
                 },
             },
             401: {
-                "description": "Invalid username or password",
+                "description": "Invalid Username or Password",
                 "content": {
                     "application/json": {
                         "example": {"detail": _ERR_INVALID_CREDENTIALS}

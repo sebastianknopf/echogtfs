@@ -8,7 +8,13 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from echogtfs.services.database.models import ServiceAlert, Trip, Vehicle
+from echogtfs.services.database.models import (
+    ServiceAlert,
+    ServiceAlertInformedEntity,
+    StopEvent,
+    Trip,
+    Vehicle,
+)
 
 
 class RealtimeRepositoryInterface(ABC):
@@ -327,4 +333,54 @@ class RealtimeRepositoryInterface(ABC):
         is_valid: bool,
     ) -> str:
         """Create or update one synchronized vehicle position and ensure linked trip exists."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_realtime_object_statistics(self, route_ids: list[str]) -> dict[str, Any]:
+        """Return active alert count plus route-based trip and vehicle statistics."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_informed_entities_with_invalid_references(self) -> list[ServiceAlertInformedEntity]:
+        """Return informed entities with invalid references and required alert relations loaded."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_stop_events_with_invalid_references(self) -> list[StopEvent]:
+        """Return stop events with invalid references and required trip relations loaded."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_trips_with_invalid_references(self) -> list[Trip]:
+        """Return trips with invalid route or trip references and required relations loaded."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_stop_events_with_implied_deviation_schedule_relationships(self) -> list[StopEvent]:
+        """Return implied deviation stop events with required trip relations loaded."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_stop_events_with_changed_stop_id(self) -> list[StopEvent]:
+        """Return stop events where stop_id differs from original_stop_id."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_informed_entities_with_non_global_ids(self, pattern: str) -> list[ServiceAlertInformedEntity]:
+        """Return informed entities where agency, route, stop, or trip ids do not match global-id pattern."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_stop_events_with_non_global_ids(self, pattern: str) -> list[StopEvent]:
+        """Return stop events whose stop_id does not match the provided global-id pattern."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_trips_with_non_global_ids(self, pattern: str) -> list[Trip]:
+        """Return trips where route_id or trip_id does not match the provided global-id pattern."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_stop_events_with_departure_before_arrival(self) -> list[StopEvent]:
+        """Return stop events where departure_time is earlier than arrival_time."""
         raise NotImplementedError

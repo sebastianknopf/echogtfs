@@ -120,6 +120,11 @@ class SystemRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def list_data_sources_with_failures(self, min_num_failures: int) -> list[DataSource]:
+        """Return all data sources with at least the given number of failures ordered by name."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def get_data_source_by_id(self, source_id: int) -> DataSource | None:
         """Return one data source by id with mappings and enrichments, or None when not found."""
         raise NotImplementedError
