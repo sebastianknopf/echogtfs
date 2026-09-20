@@ -666,12 +666,20 @@ const sources = (() => {
       // Error badge if the last run had an error (4xx/5xx status code)
       const errorBadge = source.has_error ? `<span class="badge badge--error" title="${window.i18n('sources.badge.error')}">${window.i18n('sources.badge.error')}</span>` : '';
       const isRunning = _runningSourceIds.has(source.id);
+      const isEventBased = source.execution_type === 'event_based';
       const runTitle = !source.is_active
         ? window.i18n('sources.run.disabled')
         : (isRunning ? window.i18n('sources.run.running') : window.i18n('sources.run.title'));
       const runIcon = isRunning
         ? '<span class="btn-spinner source-run-spinner" aria-hidden="true"></span>'
         : '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+      const runButton = isEventBased ? '' : `
+          <button class="icon-btn" data-action="run" data-id="${source.id}"
+            title="${runTitle}" 
+            aria-label="${window.i18n('sources.run.title')} ${ui.esc(source.name)}" 
+            data-ripple ${(!source.is_active || isRunning) ? 'disabled' : ''}>
+            ${runIcon}
+          </button>`;
       
       tr.innerHTML = `
         <td>${ui.esc(String(source.id))}</td>
@@ -682,12 +690,7 @@ const sources = (() => {
         <td><div class="user-table__actions">
           ${inactiveBadge}
           ${errorBadge}
-          <button class="icon-btn" data-action="run" data-id="${source.id}"
-            title="${runTitle}" 
-            aria-label="${window.i18n('sources.run.title')} ${ui.esc(source.name)}" 
-            data-ripple ${(!source.is_active || isRunning) ? 'disabled' : ''}>
-            ${runIcon}
-          </button>
+          ${runButton}
           <button class="icon-btn" data-action="view-logs" data-id="${source.id}"
             title="${window.i18n('sources.logs.title')}" aria-label="${window.i18n('sources.logs.title')} ${ui.esc(source.name)}" data-ripple>
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
@@ -1013,7 +1016,7 @@ const sources = (() => {
             row.classList.toggle('user-table__row--inactive', !isActive);
             
             // Update/add/remove inactive badge in actions cell
-            const actionsCell = row.cells[4]; // Last cell
+            const actionsCell = row.cells[5]; // Last cell
             if (actionsCell) {
               const actionsDiv = actionsCell.querySelector('.user-table__actions');
               if (actionsDiv) {

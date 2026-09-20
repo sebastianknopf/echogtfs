@@ -23,6 +23,7 @@ from echogtfs.validation.schemas import DataSourceCreate, DataSourceRead, DataSo
 from echogtfs.common.security import CurrentPoweruser
 from echogtfs.common.report_progress_queue import ReportProgressQueue
 from echogtfs.datasources import DATASOURCE_REGISTRY
+from echogtfs.enum.system import DataSourceExecutionType
 from echogtfs.services.datalog import DatalogService
 from echogtfs.services.mapping import MappingExportService, MappingImportService, MappingServiceError
 
@@ -30,6 +31,7 @@ router = APIRouter()
 logger = logging.getLogger("uvicorn")
 
 _ERR_SOURCE_NOT_FOUND = "error.source_not_found"
+_ERR_SOURCE_EVENT_BASED = "error.source_event_based"
 
 _Repo = Annotated[SystemRepositoryInterface, Depends(get_system_repository)]
 _RealtimeRepo = Annotated[RealtimeRepositoryInterface, Depends(get_realtime_repository)]
@@ -341,9 +343,13 @@ async def run_source_import(
     Returns:
         Accepted response - import runs in background
     """
-    # Check if source exists
-    if await repository.get_data_source_by_id(source_id) is None:
+    # Check if source exists and is eligible for manual (time-based) execution
+    source = await repository.get_data_source_by_id(source_id)
+    if source is None:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
+
+    if source.execution_type == DataSourceExecutionType.EVENT_BASED:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_ERR_SOURCE_EVENT_BASED)
 
     # Trigger import task asynchronously
     queue: ReportProgressQueue = ReportProgressQueue()

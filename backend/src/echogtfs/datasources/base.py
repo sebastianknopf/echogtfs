@@ -136,6 +136,13 @@ class DatasourceBase(DatasourceInterface):
     # Backward-compatible alias used by existing log messages.
     def get_adapter_type(self) -> str:
         return self.get_datasource_type()
+
+    def _is_event_based_execution(self) -> bool:
+        """Return True when the owning data source only runs via the push API.
+
+        Polling-only config fields (e.g. endpoint) are not required in that case.
+        """
+        return self.config.get("_execution_type") == "event_based"
     
     @classmethod
     def get_config_schema(cls) -> list[dict[str, Any]]:
@@ -191,7 +198,7 @@ class DatasourceBase(DatasourceInterface):
             logger.error(f"[{adapter_type}] Failed to decode pushed payload: {exc}")
             await self._log_request(
                 source_id=self.config.get("_source_id"),
-                request_url="push",
+                request_url="",
                 request_headers=request_headers,
                 response_headers=None,
                 response_status_code=422,
@@ -202,7 +209,7 @@ class DatasourceBase(DatasourceInterface):
 
         await self._log_request(
             source_id=self.config.get("_source_id"),
-            request_url="push",
+            request_url="",
             request_headers=request_headers,
             response_headers=None,
             response_status_code=200,
@@ -216,7 +223,7 @@ class DatasourceBase(DatasourceInterface):
             logger.error(f"[{adapter_type}] Failed to parse pushed XML: {exc}")
             await self._log_request(
                 source_id=self.config.get("_source_id"),
-                request_url="push",
+                request_url="",
                 request_headers=request_headers,
                 response_headers=None,
                 response_status_code=500,

@@ -73,31 +73,37 @@ class SiriSxDatasource(DatasourceBase):
     ]
 
     def _validate_config(self) -> None:
-        if "endpoint" not in self.config:
-            raise ValueError("SiriSx datasource requires 'endpoint' in config")
+        is_event_based = self._is_event_based_execution()
 
-        if "participantref" not in self.config:
-            raise ValueError("SiriSx datasource requires 'participantref' in config")
+        endpoint = self.config.get("endpoint")
+        if not endpoint:
+            if not is_event_based:
+                raise ValueError("SiriSx datasource requires 'endpoint' in config")
+        elif not isinstance(endpoint, str):
+            raise ValueError("'endpoint' must be a string")
 
-        if "method" not in self.config:
-            raise ValueError("SiriSx datasource requires 'method' in config")
+        participantref = self.config.get("participantref")
+        if not participantref:
+            if not is_event_based:
+                raise ValueError("SiriSx datasource requires 'participantref' in config")
+        elif not isinstance(participantref, str):
+            raise ValueError("'participantref' must be a string")
+
+        method = self.config.get("method")
+        if not method:
+            if not is_event_based:
+                raise ValueError("SiriSx datasource requires 'method' in config")
+        else:
+            try:
+                SiriSxMethod(method)
+            except ValueError:
+                valid_methods = [method.value for method in SiriSxMethod]
+                raise ValueError(
+                    f"Invalid method '{self.config['method']}'. Valid options: {', '.join(valid_methods)}"
+                )
 
         if "dialect" not in self.config:
             raise ValueError("SiriSx datasource requires 'dialect' in config")
-
-        if not isinstance(self.config["endpoint"], str):
-            raise ValueError("'endpoint' must be a string")
-
-        if not isinstance(self.config["participantref"], str):
-            raise ValueError("'participantref' must be a string")
-
-        try:
-            SiriSxMethod(self.config["method"])
-        except ValueError:
-            valid_methods = [method.value for method in SiriSxMethod]
-            raise ValueError(
-                f"Invalid method '{self.config['method']}'. Valid options: {', '.join(valid_methods)}"
-            )
 
         try:
             SiriSxDialect(self.config["dialect"])
@@ -155,7 +161,7 @@ class SiriSxDatasource(DatasourceBase):
         """Parse an already-provided SIRI-SX payload (push API)."""
         root = await self._parse_and_log_xml_payload(payload, content_type)
         request_headers = {"Content-Type": content_type} if content_type else None
-        return await self._transform_root(root, request_url="push", request_headers=request_headers)
+        return await self._transform_root(root, request_url="", request_headers=request_headers)
 
     async def _transform_root(
         self,

@@ -83,14 +83,15 @@ class SiriLiteDatasource(DatasourceBase):
         self.config.setdefault("treat_unexpected_stop_as_added_stop", False)
         self.config.setdefault("treat_missing_stop_as_canceled_stop", False)
 
-        if "endpoint" not in self.config:
-            raise ValueError("SiriLite datasource requires 'endpoint' in config")
+        endpoint = self.config.get("endpoint")
+        if not endpoint:
+            if not self._is_event_based_execution():
+                raise ValueError("SiriLite datasource requires 'endpoint' in config")
+        elif not isinstance(endpoint, str):
+            raise ValueError("'endpoint' must be a string")
 
         if "dialect" not in self.config:
             raise ValueError("SiriLite datasource requires 'dialect' in config")
-
-        if not isinstance(self.config["endpoint"], str):
-            raise ValueError("'endpoint' must be a string")
 
         if "token" in self.config and self.config["token"] is not None:
             if not isinstance(self.config["token"], str):
@@ -126,7 +127,7 @@ class SiriLiteDatasource(DatasourceBase):
         """Parse an already-provided SIRI-Lite payload (push API)."""
         root = await self._parse_and_log_xml_payload(payload, content_type)
         request_headers = {"Content-Type": content_type} if content_type else None
-        return await self._transform_root(root, request_url="push", request_headers=request_headers)
+        return await self._transform_root(root, request_url="", request_headers=request_headers)
 
     async def _transform_root(
         self,

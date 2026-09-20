@@ -69,10 +69,11 @@ class GtfsRealtimeDatasource(DatasourceBase):
         return "gtfsrt"
 
     def _validate_config(self) -> None:
-        if "endpoint" not in self.config:
-            raise ValueError("GtfsRt datasource requires 'endpoint' in config")
-
-        if not isinstance(self.config["endpoint"], str):
+        endpoint = self.config.get("endpoint")
+        if not endpoint:
+            if not self._is_event_based_execution():
+                raise ValueError("GtfsRt datasource requires 'endpoint' in config")
+        elif not isinstance(endpoint, str):
             raise ValueError("'endpoint' must be a string")
 
         if "dialect" not in self.config:
@@ -149,7 +150,7 @@ class GtfsRealtimeDatasource(DatasourceBase):
         return await self._parse_and_transform(
             payload,
             source_name=source_name,
-            request_url="push",
+            request_url="",
             request_headers=request_headers,
             response_headers=None,
             response_status_code=200,

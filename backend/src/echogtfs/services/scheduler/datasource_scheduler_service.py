@@ -74,7 +74,9 @@ async def _run_datasource_process_async(
         if source is None or not source.is_active:
             return {"added": 0, "updated": 0, "deleted": 0}
 
-        datasource = get_datasource(source.type, json.loads(source.config))
+        config = json.loads(source.config)
+        config["_execution_type"] = source.execution_type
+        datasource = get_datasource(source.type, config)
 
         return await datasource.sync_records(
             system_repository,
@@ -139,7 +141,9 @@ async def _run_datasource_push_process_async(
         if source.execution_type != DataSourceExecutionType.EVENT_BASED:
             raise PushServiceError(status_code=403, detail="error.source_not_event_based")
 
-        datasource = get_datasource(source.type, json.loads(source.config))
+        config = json.loads(source.config)
+        config["_execution_type"] = source.execution_type
+        datasource = get_datasource(source.type, config)
 
         try:
             return await datasource.sync_records_from_payload(
