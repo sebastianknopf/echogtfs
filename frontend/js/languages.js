@@ -343,7 +343,7 @@ window.translations = {
     'source.type.placeholder': 'Typ auswählen...',
     'source.execution_type': 'Ausführungsart',
     'source.execution_type.time_based': 'Zeitbasiert',
-    'source.execution_type.event_based': 'Ereignisbasiert',
+    'source.execution_type.event_based': 'Eventbasiert',
     'source.cron': 'Cron-Ausdruck (optional)',
     'source.cron.helper': 'z.B. 0 3 * * * für täglich um 3 Uhr',
     'source.invalid_reference_policy': 'Verfahrensweise bei ungültigen Bezügen',
