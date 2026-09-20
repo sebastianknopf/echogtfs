@@ -15,7 +15,13 @@ from echogtfs.enum.gtfsrt import (
     VehicleStopStatus,
     WheelchairAccessible,
 )
-from echogtfs.enum.system import EnrichmentType, ExpiredRealtimeObjectPolicy, InvalidReferencePolicy, SourceField
+from echogtfs.enum.system import (
+    DataSourceExecutionType,
+    EnrichmentType,
+    ExpiredRealtimeObjectPolicy,
+    InvalidReferencePolicy,
+    SourceField,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -50,6 +56,10 @@ class AppSetting(Base):
     KEY_CLEANUP_EXPIRED_POLICY: ClassVar[str] = "cleanup_expired_policy"
     KEY_CLEANUP_DELETE_AFTER_DAYS: ClassVar[str] = "cleanup_delete_after_days"
 
+    KEY_PUSH_API_ENABLED: ClassVar[str] = "push_api_enabled"
+    KEY_PUSH_API_USERNAME: ClassVar[str] = "push_api_username"
+    KEY_PUSH_API_PASSWORD: ClassVar[str] = "push_api_password"
+
     KEY_GTFS_FEED_URL: ClassVar[str] = "gtfs_feed_url"
     KEY_GTFS_IMPORT_STATUS: ClassVar[str] = "gtfs_import_status"
     KEY_GTFS_IMPORT_TIME: ClassVar[str] = "gtfs_import_time"
@@ -70,6 +80,9 @@ class AppSetting(Base):
         KEY_CLEANUP_CRON,
         KEY_CLEANUP_EXPIRED_POLICY,
         KEY_CLEANUP_DELETE_AFTER_DAYS,
+        KEY_PUSH_API_ENABLED,
+        KEY_PUSH_API_USERNAME,
+        KEY_PUSH_API_PASSWORD,
         KEY_GTFS_FEED_URL,
         KEY_GTFS_IMPORT_STATUS,
         KEY_GTFS_IMPORT_TIME,
@@ -125,6 +138,11 @@ class DataSource(Base):
     # Policy for handling invalid entity references
     invalid_reference_policy: Mapped[InvalidReferencePolicy] = mapped_column(
         String(32), default=InvalidReferencePolicy.NOT_SPECIFIED
+    )
+    
+    # Whether this source runs on a cron schedule or only via the push API
+    execution_type: Mapped[DataSourceExecutionType] = mapped_column(
+        String(32), default=DataSourceExecutionType.TIME_BASED
     )
     
     # Last execution timestamp

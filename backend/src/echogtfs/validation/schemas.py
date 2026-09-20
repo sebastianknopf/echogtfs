@@ -59,6 +59,11 @@ class AppSettings(BaseModel):
     cleanup_expired_policy:   ExpiredRealtimeObjectPolicy = ExpiredRealtimeObjectPolicy.DEACTIVATE
     cleanup_delete_after_days: int = -1  # -1 = never, >= 0 = days after expiration
 
+    # Push API configuration (event-based data sources)
+    push_api_enabled:  bool = False
+    push_api_username: str = ''
+    push_api_password: str | None = ''
+
     @field_validator('color_primary', 'color_secondary')
     @classmethod
     def must_be_hex(cls, v: str) -> str:

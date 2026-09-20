@@ -496,6 +496,25 @@
                   <label class="md-field__checkbox-label" for="settings-gtfs-rt-trip-updates-exclude-trips-without-realtime-data" data-i18n="settings.gtfs_rt_trip_updates_exclude_trips_without_realtime_data">Fahrten ohne Echtzeitdaten aus TripUpdates ausschließen</label>
                 </div>
 
+                <p class="settings-section-label" data-i18n="settings.section.push_api">Push-API</p>
+
+                <div class="md-field__checkbox">
+                  <input type="checkbox" id="settings-push-api-enabled" />
+                  <label class="md-field__checkbox-label" for="settings-push-api-enabled" data-i18n="settings.push_api_enabled">Push-API aktivieren</label>
+                </div>
+
+                <div class="md-field">
+                  <input type="text" id="settings-push-api-username" class="md-field__input" placeholder=" " maxlength="64" autocomplete="off" />
+                  <label class="md-field__label" for="settings-push-api-username" data-i18n="settings.push_api_username">Basic Auth Benutzername (optional)</label>
+                  <div class="md-field__helper" data-i18n="settings.push_api_username.helper">Beide Felder löschen, um Basic Auth zu deaktivieren</div>
+                </div>
+
+                <div class="md-field">
+                  <input type="password" id="settings-push-api-password" class="md-field__input" placeholder=" " maxlength="128" autocomplete="new-password" />
+                  <label class="md-field__label" for="settings-push-api-password" data-i18n="settings.push_api_password">Basic Auth Passwort (optional)</label>
+                  <div class="md-field__helper" id="settings-push-api-password-helper" data-i18n="settings.push_api_password.helper">Leer lassen für neues Passwort oder altes Passwort behalten</div>
+                </div>
+
                 <p class="settings-section-label" data-i18n="settings.section.cleanup">Datenbereinigung</p>
 
                 <div class="md-field__helper" style="margin-top: 0; margin-bottom: 16px;" data-i18n="settings.cleanup_info">Die Datenbereinigung gilt nur für interne Objekte und Logs von Datenquellen. Objekte von externen Datenquellen werden immer ausgehend von ihrer Datenquelle synchronisiert.</div>

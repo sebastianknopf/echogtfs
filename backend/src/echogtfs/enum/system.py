@@ -32,3 +32,10 @@ class ExpiredRealtimeObjectPolicy(str, Enum):
 
     DEACTIVATE = "deactivate"  # Set is_active=False for expired alerts
     DELETE = "delete"  # Delete expired alerts from database
+
+
+class DataSourceExecutionType(str, Enum):
+    """How a data source is triggered."""
+
+    TIME_BASED = "time_based"  # Runs on a cron schedule
+    EVENT_BASED = "event_based"  # Runs only when triggered via the push API
