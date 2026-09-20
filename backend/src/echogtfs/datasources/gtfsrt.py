@@ -97,8 +97,6 @@ class GtfsRealtimeDatasource(DatasourceBase):
 
         source_name = self.config.get("_source_name", "gtfsrt")
 
-        dialect = GtfsRtDialect(self.config["dialect"])
-
         endpoint = self.config["endpoint"]
         token = self.config.get("token", "").strip()
 
@@ -134,15 +132,51 @@ class GtfsRealtimeDatasource(DatasourceBase):
             )
             raise ValueError(f"Failed to fetch GTFS-RT feed: {exc}") from exc
 
+        return await self._parse_and_transform(
+            protobuf_data,
+            source_name=source_name,
+            request_url=final_url,
+            request_headers=headers,
+            response_headers=dict(response.headers) if response and response.headers else None,
+            response_status_code=response.status_code if response is not None else 404,
+        )
+
+    async def _fetch_records_from_payload(self, payload: bytes, content_type: str | None) -> dict[str, Any]:
+        """Parse an already-provided GTFS-RT protobuf payload (push API)."""
+        source_name = self.config.get("_source_name", "gtfsrt")
+        request_headers = {"Content-Type": content_type} if content_type else None
+
+        return await self._parse_and_transform(
+            payload,
+            source_name=source_name,
+            request_url="push",
+            request_headers=request_headers,
+            response_headers=None,
+            response_status_code=200,
+        )
+
+    async def _parse_and_transform(
+        self,
+        protobuf_data: bytes,
+        *,
+        source_name: str,
+        request_url: str,
+        request_headers: dict[str, str] | None,
+        response_headers: dict[str, str] | None,
+        response_status_code: int,
+    ) -> dict[str, Any]:
+        """Parse a GTFS-RT protobuf payload and transform it into internal alert records."""
+        dialect = GtfsRtDialect(self.config["dialect"])
+
         try:
             feed = await self._run_cpu_bound(_parse_feed_message, protobuf_data)
         except Exception as exc:
             logger.error(f"[GtfsRealtimeDatasource] Failed to parse protobuf: {exc}")
             await self._log_request(
                 source_id=self.config.get("_source_id"),
-                request_url=final_url,
-                request_headers=headers,
-                response_headers=dict(response.headers) if response and response.headers else None,
+                request_url=request_url,
+                request_headers=request_headers,
+                response_headers=response_headers,
                 response_status_code=500,
                 response_content=str(exc),
                 response_content_type="text/plain",
@@ -151,10 +185,10 @@ class GtfsRealtimeDatasource(DatasourceBase):
 
         await self._log_request(
             source_id=self.config.get("_source_id"),
-            request_url=final_url,
-            request_headers=headers,
-            response_headers=dict(response.headers) if response and response.headers else None,
-            response_status_code=response.status_code if response is not None else 404,
+            request_url=request_url,
+            request_headers=request_headers,
+            response_headers=response_headers,
+            response_status_code=response_status_code,
             response_content=await self._run_cpu_bound(_serialize_feed_json, feed),
             response_content_type="application/json",
         )
@@ -173,9 +207,9 @@ class GtfsRealtimeDatasource(DatasourceBase):
             logger.error(f"[GtfsRealtimeDatasource] Failed to transform payload: {exc}", exc_info=True)
             await self._log_request(
                 source_id=self.config.get("_source_id"),
-                request_url=final_url,
-                request_headers=headers,
-                response_headers=dict(response.headers) if response and response.headers else None,
+                request_url=request_url,
+                request_headers=request_headers,
+                response_headers=response_headers,
                 response_status_code=500,
                 response_content=str(exc),
                 response_content_type="text/plain",

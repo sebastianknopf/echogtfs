@@ -2,11 +2,13 @@
 
 import asyncio
 from abc import abstractmethod
+from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 import logging
 import sys
 import uuid
+import xml.etree.ElementTree as ET
 from time import perf_counter
 from typing import Any
 
@@ -177,6 +179,51 @@ class DatasourceBase(DatasourceInterface):
                 f"[{self.get_adapter_type()}] Failed to log request: {exc}",
                 exc_info=True,
             )
+
+    async def _parse_and_log_xml_payload(self, payload: bytes, content_type: str | None) -> ET.Element:
+        """Decode, log, and parse an XML payload provided directly by the push API."""
+        adapter_type = self.get_adapter_type()
+        request_headers = {"Content-Type": content_type} if content_type else None
+
+        try:
+            xml_content = payload.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            logger.error(f"[{adapter_type}] Failed to decode pushed payload: {exc}")
+            await self._log_request(
+                source_id=self.config.get("_source_id"),
+                request_url="push",
+                request_headers=request_headers,
+                response_headers=None,
+                response_status_code=422,
+                response_content=str(exc),
+                response_content_type="text/plain",
+            )
+            raise ValueError(f"Failed to decode pushed {adapter_type} payload: {exc}") from exc
+
+        await self._log_request(
+            source_id=self.config.get("_source_id"),
+            request_url="push",
+            request_headers=request_headers,
+            response_headers=None,
+            response_status_code=200,
+            response_content=xml_content,
+            response_content_type="application/xml",
+        )
+
+        try:
+            return await self._run_cpu_bound(ET.fromstring, xml_content)
+        except ET.ParseError as exc:
+            logger.error(f"[{adapter_type}] Failed to parse pushed XML: {exc}")
+            await self._log_request(
+                source_id=self.config.get("_source_id"),
+                request_url="push",
+                request_headers=request_headers,
+                response_headers=None,
+                response_status_code=500,
+                response_content=str(exc),
+                response_content_type="text/plain",
+            )
+            raise ValueError(f"Failed to parse pushed {adapter_type} XML: {exc}") from exc
 
     
     async def _load_gtfs_entities(
@@ -653,19 +700,67 @@ class DatasourceBase(DatasourceInterface):
         Returns:
             Dictionary with keys 'added', 'updated', 'deleted' containing counts
         """
-        adapter_type = self.get_adapter_type()
-        logger.info(f"[{adapter_type}] Starting import from '{source_name}'")
-        total_start = perf_counter()
-
         # Inject source_name and source_id into config so adapters can use them
         self.config["_source_name"] = source_name
         self.config["_source_id"] = source_id
         self.config["_log_dumps"] = bool(log_dumps)
-        
-        # Fetch records from external source.
+
+        return await self._sync_from_fetch(
+            self._fetch_records,
+            repository=repository,
+            realtime_repository=realtime_repository,
+            gtfs_repository=gtfs_repository,
+            source_id=source_id,
+            source_name=source_name,
+        )
+
+    async def sync_records_from_payload(
+        self,
+        payload: bytes,
+        content_type: str | None,
+        repository: SystemRepositoryInterface,
+        realtime_repository: RealtimeRepositoryInterface,
+        gtfs_repository: GtfsRepositoryInterface,
+        source_id: int,
+        source_name: str,
+        log_dumps: bool,
+    ) -> dict[str, int]:
+        """Synchronize records from an already-provided payload (push API)."""
+        self.config["_source_name"] = source_name
+        self.config["_source_id"] = source_id
+        self.config["_log_dumps"] = bool(log_dumps)
+
+        async def _fetch() -> dict[str, Any]:
+            return await self._fetch_records_from_payload(payload, content_type)
+
+        return await self._sync_from_fetch(
+            _fetch,
+            repository=repository,
+            realtime_repository=realtime_repository,
+            gtfs_repository=gtfs_repository,
+            source_id=source_id,
+            source_name=source_name,
+        )
+
+    async def _sync_from_fetch(
+        self,
+        fetch_callable: Callable[[], Awaitable[dict[str, Any]]],
+        *,
+        repository: SystemRepositoryInterface,
+        realtime_repository: RealtimeRepositoryInterface,
+        gtfs_repository: GtfsRepositoryInterface,
+        source_id: int,
+        source_name: str,
+    ) -> dict[str, int]:
+        """Shared orchestration for both HTTP-fetched and push-provided payloads."""
+        adapter_type = self.get_adapter_type()
+        logger.info(f"[{adapter_type}] Starting import from '{source_name}'")
+        total_start = perf_counter()
+
+        # Fetch records from the external source or from the provided payload.
         # Record shape and record type are defined by the selected dialect transformer.
         extract_start = perf_counter()
-        fetched_payload = await self._fetch_records()
+        fetched_payload = await fetch_callable()
         extract_elapsed_ms = (perf_counter() - extract_start) * 1000
         transform_runtime_ms = fetched_payload.get("_transform_runtime_ms")
         if transform_runtime_ms is None:

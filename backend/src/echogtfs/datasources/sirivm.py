@@ -161,6 +161,25 @@ class SiriVmDatasource(DatasourceBase):
 
     async def _fetch_records(self) -> dict[str, Any]:
         root = await self._fetch_and_parse_xml()
+        return await self._transform_root(
+            root,
+            request_url=self.config.get("endpoint", ""),
+            request_headers={"Content-Type": "application/xml; charset=utf-8"},
+        )
+
+    async def _fetch_records_from_payload(self, payload: bytes, content_type: str | None) -> dict[str, Any]:
+        """Parse an already-provided SIRI-VM payload (push API)."""
+        root = await self._parse_and_log_xml_payload(payload, content_type)
+        request_headers = {"Content-Type": content_type} if content_type else None
+        return await self._transform_root(root, request_url="push", request_headers=request_headers)
+
+    async def _transform_root(
+        self,
+        root: ET.Element,
+        *,
+        request_url: str,
+        request_headers: dict[str, str] | None,
+    ) -> dict[str, Any]:
         source_name = self.config.get("_source_name", "sirivm")
 
         dialect = SiriVmDialect(self.config["dialect"])
@@ -181,8 +200,8 @@ class SiriVmDatasource(DatasourceBase):
 
             await self._log_request(
                 source_id=self.config.get("_source_id"),
-                request_url=self.config.get("endpoint", ""),
-                request_headers={"Content-Type": "application/xml; charset=utf-8"},
+                request_url=request_url,
+                request_headers=request_headers,
                 response_headers=None,
                 response_status_code=500,
                 response_content=str(exc),
