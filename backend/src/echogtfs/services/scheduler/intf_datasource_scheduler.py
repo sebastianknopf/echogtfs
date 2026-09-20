@@ -27,6 +27,16 @@ class DatasourceSchedulerInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def run_push_task(
+        self,
+        source_id: int,
+        payload: bytes,
+        content_type: str | None,
+    ) -> dict[str, int]:
+        """Execute one datasource push run synchronously and return the sync result counts."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def close(self) -> None:
         """Stop datasource scheduling and drain worker processes."""
         raise NotImplementedError

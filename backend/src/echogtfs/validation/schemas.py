@@ -351,6 +351,13 @@ class DataSourceLogRead(BaseModel):
     created_at: datetime
     model_config = {"from_attributes": True}
 
+
+class PushResultResponse(BaseModel):
+    """Result of a synchronous push-API data source execution."""
+    added: int
+    updated: int
+    deleted: int
+
 # ---------------------------------------------------------------------------
 # Monitoring
 # ---------------------------------------------------------------------------
