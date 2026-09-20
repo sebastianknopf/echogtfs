@@ -265,6 +265,7 @@ class SystemCopyService(SystemCopyInterface):
                 "type": source.type,
                 "config": source.config,
                 "cron": source.cron,
+                "execution_type": self._to_enum_value(source.execution_type),
                 "is_active": source.is_active,
                 "log_dumps": source.log_dumps,
                 "invalid_reference_policy": self._to_enum_value(source.invalid_reference_policy),
@@ -421,6 +422,7 @@ class SystemCopyService(SystemCopyInterface):
                 existing.type = str(row.get("type", existing.type))
                 existing.config = str(row.get("config", existing.config))
                 existing.cron = self._none_or_str(row.get("cron"))
+                existing.execution_type = str(row.get("execution_type", self._to_enum_value(existing.execution_type)))
                 existing.is_active = bool(row.get("is_active", existing.is_active))
                 existing.log_dumps = bool(row.get("log_dumps", existing.log_dumps))
                 existing.invalid_reference_policy = str(
@@ -442,6 +444,7 @@ class SystemCopyService(SystemCopyInterface):
                 type=str(row.get("type", "")),
                 config=str(row.get("config", "{}")),
                 cron=self._none_or_str(row.get("cron")),
+                execution_type=str(row.get("execution_type", "time_based")),
                 is_active=bool(row.get("is_active", True)),
                 log_dumps=bool(row.get("log_dumps", False)),
                 invalid_reference_policy=str(row.get("invalid_reference_policy", "not_specified")),

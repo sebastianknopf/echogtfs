@@ -749,6 +749,14 @@
           <div id="source-config-fields"></div>
           
           <div class="md-field">
+            <select class="md-field__input" id="source-execution-type" name="execution_type" placeholder=" ">
+              <option value="time_based" selected data-i18n="source.execution_type.time_based">Zeitbasiert</option>
+              <option value="event_based" data-i18n="source.execution_type.event_based">Ereignisbasiert</option>
+            </select>
+            <label class="md-field__label" for="source-execution-type" data-i18n="source.execution_type">Ausführungsart</label>
+          </div>
+          
+          <div class="md-field" id="source-cron-field">
             <input class="md-field__input" type="text" id="source-cron" name="cron" placeholder=" " />
             <label class="md-field__label" for="source-cron" data-i18n="source.cron">Cron-Ausdruck (optional)</label>
             <div class="md-field__helper" data-i18n="source.cron.helper">z.B. 0 3 * * * für täglich um 3 Uhr</div>

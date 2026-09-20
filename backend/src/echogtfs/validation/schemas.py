@@ -10,7 +10,13 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, mo
 
 from echogtfs.enum.gtfsrt import AlertCause, AlertEffect, AlertSeverityLevel, AssignmentType, PeriodType
 from echogtfs.enum.gtfs import GtfsImportStatus
-from echogtfs.enum.system import EnrichmentType, ExpiredRealtimeObjectPolicy, InvalidReferencePolicy, SourceField
+from echogtfs.enum.system import (
+    DataSourceExecutionType,
+    EnrichmentType,
+    ExpiredRealtimeObjectPolicy,
+    InvalidReferencePolicy,
+    SourceField,
+)
 
 _HEX_COLOR = re.compile(r'^#[0-9a-fA-F]{6}$')
 
@@ -202,11 +208,19 @@ class DataSourceCreate(BaseModel):
     type: str
     config: str = "{}"
     cron: str | None = None
+    execution_type: DataSourceExecutionType = DataSourceExecutionType.TIME_BASED
     is_active: bool = True
     log_dumps: bool = False
     invalid_reference_policy: InvalidReferencePolicy = InvalidReferencePolicy.NOT_SPECIFIED
     mappings: list[DataSourceMappingCreate] = []
     enrichments: list[DataSourceEnrichmentCreate] = []
+
+    @model_validator(mode='after')
+    def clear_cron_for_event_based(self):
+        """Event-based sources are never cron-scheduled."""
+        if self.execution_type == DataSourceExecutionType.EVENT_BASED:
+            self.cron = None
+        return self
 
 
 class DataSourceUpdate(BaseModel):
@@ -215,11 +229,19 @@ class DataSourceUpdate(BaseModel):
     type: str | None = None
     config: str | None = None
     cron: str | None = None
+    execution_type: DataSourceExecutionType | None = None
     is_active: bool | None = None
     log_dumps: bool | None = None
     invalid_reference_policy: InvalidReferencePolicy | None = None
     mappings: list[DataSourceMappingCreate] | None = None
     enrichments: list[DataSourceEnrichmentCreate] | None = None
+
+    @model_validator(mode='after')
+    def clear_cron_for_event_based(self):
+        """Event-based sources are never cron-scheduled."""
+        if self.execution_type == DataSourceExecutionType.EVENT_BASED:
+            self.cron = None
+        return self
 
 
 class DataSourceRead(BaseModel):
@@ -229,6 +251,7 @@ class DataSourceRead(BaseModel):
     type: str
     config: str
     cron: str | None
+    execution_type: DataSourceExecutionType
     is_active: bool
     log_dumps: bool
     invalid_reference_policy: InvalidReferencePolicy

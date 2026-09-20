@@ -627,9 +627,10 @@ const sources = (() => {
     table.className = 'user-table';
     table.innerHTML = `
       <thead><tr>
+        <th data-i18n="sources.table.id">${window.i18n('sources.table.id')}</th>
         <th data-i18n="sources.table.name">${window.i18n('sources.table.name')}</th>
         <th data-i18n="sources.table.type">${window.i18n('sources.table.type')}</th>
-        <th data-i18n="sources.table.cron">${window.i18n('sources.table.cron')}</th>
+        <th data-i18n="sources.table.execution_type">${window.i18n('sources.table.execution_type')}</th>
         <th data-i18n="sources.table.lastrun">${window.i18n('sources.table.lastrun')}</th>
         <th></th>
       </tr></thead>
@@ -642,7 +643,9 @@ const sources = (() => {
         tr.classList.add('user-table__row--inactive');
       }
       
-      const cronText = source.cron || '—';
+      const executionTypeText = source.execution_type === 'event_based'
+        ? window.i18n('source.execution_type.event_based')
+        : window.i18n('source.execution_type.time_based');
       const lastRunText = source.last_run_at 
         ? (() => {
             const lastRunDate = new Date(source.last_run_at);
@@ -671,9 +674,10 @@ const sources = (() => {
         : '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
       
       tr.innerHTML = `
+        <td>${ui.esc(String(source.id))}</td>
         <td>${ui.esc(source.name)}</td>
         <td>${ui.esc(source.type)}</td>
-        <td><code>${ui.esc(cronText)}</code></td>
+        <td>${ui.esc(executionTypeText)}</td>
         <td>${ui.esc(lastRunText)}</td>
         <td><div class="user-table__actions">
           ${inactiveBadge}
@@ -726,7 +730,7 @@ const sources = (() => {
   }
 
   // Source modal management
-  function _openSourceModal({ title, name = '', type = '', config = {}, cron = '', is_active = true, log_dumps = false, invalid_reference_policy = 'not_specified', mappings = [], enrichments = [] } = {}) {
+  function _openSourceModal({ title, name = '', type = '', config = {}, cron = '', execution_type = 'time_based', is_active = true, log_dumps = false, invalid_reference_policy = 'not_specified', mappings = [], enrichments = [] } = {}) {
     ui.el('source-modal-title').textContent = title;
     ui.el('source-name').value = name;
     ui.el('source-name').readOnly = false;
@@ -749,6 +753,8 @@ const sources = (() => {
     _renderConfigFields(type, configObj);
     
     ui.el('source-cron').value = cron || '';
+    ui.el('source-execution-type').value = execution_type || 'time_based';
+    _toggleCronFieldVisibility();
     ui.el('source-is-active').checked = is_active;
     ui.el('source-log-dumps').checked = !!log_dumps;
     ui.el('source-invalid-reference-policy').value = invalid_reference_policy || 'not_specified';
@@ -796,6 +802,11 @@ const sources = (() => {
     ui.el('source-modal').hidden = true;
   }
   
+  function _toggleCronFieldVisibility() {
+    const executionType = ui.el('source-execution-type').value;
+    ui.el('source-cron-field').hidden = executionType === 'event_based';
+  }
+  
   function _setSourceModalBusy(busy) {
     ui.el('source-modal-submit-btn').disabled = busy;
     ui.el('source-modal-submit-spinner').hidden = !busy;
@@ -821,6 +832,7 @@ const sources = (() => {
       type: '',
       config: {},
       cron: '',
+      execution_type: 'time_based',
       log_dumps: false,
       mappings: [],
       enrichments: []
@@ -854,6 +866,7 @@ const sources = (() => {
         type: source.type,
         config: configObj,
         cron: source.cron || '',
+        execution_type: source.execution_type || 'time_based',
         is_active: source.is_active !== undefined ? source.is_active : true,
         log_dumps: source.log_dumps !== undefined ? source.log_dumps : false,
         invalid_reference_policy: source.invalid_reference_policy || 'not_specified',
@@ -874,6 +887,7 @@ const sources = (() => {
     const name = ui.el('source-name').value.trim();
     const type = ui.el('source-type').value;
     const cron = ui.el('source-cron').value.trim();
+    const executionType = ui.el('source-execution-type').value;
     const isActive = ui.el('source-is-active').checked;
     const logDumps = ui.el('source-log-dumps').checked;
     const invalidReferencePolicy = ui.el('source-invalid-reference-policy').value;
@@ -932,7 +946,8 @@ const sources = (() => {
         name, 
         type, 
         config: JSON.stringify(config), 
-        cron: cron || null,
+        cron: executionType === 'event_based' ? null : (cron || null),
+        execution_type: executionType,
         is_active: isActive,
         log_dumps: logDumps,
         invalid_reference_policy: invalidReferencePolicy,
@@ -1449,6 +1464,9 @@ const sources = (() => {
       const selectedType = e.target.value;
       _renderConfigFields(selectedType, {});
     });
+
+    // Execution type change handler
+    ui.el('source-execution-type')?.addEventListener('change', _toggleCronFieldVisibility);
 
     // Mapping entity type change handler
     ui.el('mapping-entity-type-select')?.addEventListener('change', (e) => {
