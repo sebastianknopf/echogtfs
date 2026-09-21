@@ -146,7 +146,7 @@ async def push_datasource(
     Push a payload into one event-based data source and synchronize it synchronously.
 
     The request body and its Content-Type header are handed over to the data
-    source's adapter as-is. Only data sources that are active and configured
+    source's adapter as-it-is. Only data sources that are active and configured
     for event-based execution can be triggered this way.
     """
     payload = await request.body()
