@@ -23,6 +23,7 @@ from echogtfs.validation.schemas import DataSourceCreate, DataSourceRead, DataSo
 from echogtfs.common.security import CurrentPoweruser
 from echogtfs.common.report_progress_queue import ReportProgressQueue
 from echogtfs.datasources import DATASOURCE_REGISTRY
+from echogtfs.enum.system import DataSourceExecutionType
 from echogtfs.services.datalog import DatalogService
 from echogtfs.services.mapping import MappingExportService, MappingImportService, MappingServiceError
 
@@ -30,6 +31,7 @@ router = APIRouter()
 logger = logging.getLogger("uvicorn")
 
 _ERR_SOURCE_NOT_FOUND = "error.source_not_found"
+_ERR_SOURCE_EVENT_BASED = "error.source_event_based"
 
 _Repo = Annotated[SystemRepositoryInterface, Depends(get_system_repository)]
 _RealtimeRepo = Annotated[RealtimeRepositoryInterface, Depends(get_realtime_repository)]
@@ -65,6 +67,7 @@ async def _enrich_source_with_error_flag(source: DataSource, repository: SystemR
         "type": source.type,
         "config": source.config,
         "cron": source.cron,
+        "execution_type": source.execution_type,
         "is_active": source.is_active,
         "log_dumps": source.log_dumps,
         "invalid_reference_policy": source.invalid_reference_policy,
@@ -296,6 +299,7 @@ async def create_source(
         source_type=source_data.type,
         config=source_data.config,
         cron=source_data.cron,
+        execution_type=source_data.execution_type,
         is_active=source_data.is_active,
         log_dumps=source_data.log_dumps,
         invalid_reference_policy=source_data.invalid_reference_policy,
@@ -339,9 +343,13 @@ async def run_source_import(
     Returns:
         Accepted response - import runs in background
     """
-    # Check if source exists
-    if await repository.get_data_source_by_id(source_id) is None:
+    # Check if source exists and is eligible for manual (time-based) execution
+    source = await repository.get_data_source_by_id(source_id)
+    if source is None:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
+
+    if source.execution_type == DataSourceExecutionType.EVENT_BASED:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_ERR_SOURCE_EVENT_BASED)
 
     # Trigger import task asynchronously
     queue: ReportProgressQueue = ReportProgressQueue()
@@ -524,6 +532,8 @@ async def update_source(
         source_type=source_data.type,
         config=source_data.config,
         cron=source_data.cron,
+        clear_cron=source_data.cron is None,
+        execution_type=source_data.execution_type,
         is_active=source_data.is_active,
         log_dumps=source_data.log_dumps,
         invalid_reference_policy=source_data.invalid_reference_policy,

@@ -14,8 +14,10 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from echogtfs.common.config import settings
+from echogtfs.enum.system import DataSourceExecutionType
 from echogtfs.services.database.models import AppSetting
 from echogtfs.services.scheduler.intf_datasource_scheduler import DatasourceSchedulerInterface
+from echogtfs.services.scheduler.push_service_error import PushServiceError
 
 from echogtfs.datasources import get_datasource
 from echogtfs.services.caching import CachingService, set_caching_service
@@ -72,7 +74,9 @@ async def _run_datasource_process_async(
         if source is None or not source.is_active:
             return {"added": 0, "updated": 0, "deleted": 0}
 
-        datasource = get_datasource(source.type, json.loads(source.config))
+        config = json.loads(source.config)
+        config["_execution_type"] = source.execution_type
+        datasource = get_datasource(source.type, config)
 
         return await datasource.sync_records(
             system_repository,
@@ -82,6 +86,78 @@ async def _run_datasource_process_async(
             source.name,
             source.log_dumps,
         )
+    finally:
+        await caching_service.close()
+        await gtfs_repository.close()
+        await realtime_repository.close()
+        await system_repository.close()
+
+
+def _run_datasource_push_process(
+    source_id: int,
+    payload: bytes,
+    content_type: str | None,
+    database_url: str,
+    redis_url: str,
+    debug: bool,
+) -> dict[str, int]:
+    """Run one datasource push in a child process with child-local resources."""
+    return asyncio.run(
+        _run_datasource_push_process_async(source_id, payload, content_type, database_url, redis_url, debug)
+    )
+
+
+async def _run_datasource_push_process_async(
+    source_id: int,
+    payload: bytes,
+    content_type: str | None,
+    database_url: str,
+    redis_url: str,
+    debug: bool,
+) -> dict[str, int]:
+    system_repository = SystemRepository(database_url, debug)
+    gtfs_repository = GtfsRepository(database_url, debug)
+    realtime_repository = RealtimeRepository(database_url, debug)
+    caching_service = CachingService(redis_url)
+
+    try:
+        await system_repository.initialize()
+        await gtfs_repository.initialize()
+        await realtime_repository.initialize()
+        await caching_service.initialize()
+
+        set_system_repository(system_repository)
+        set_gtfs_repository(gtfs_repository)
+        set_realtime_repository(realtime_repository)
+        set_caching_service(caching_service)
+
+        source = await system_repository.get_data_source_by_id(source_id)
+        if source is None:
+            raise PushServiceError(status_code=404, detail="error.source_not_found")
+
+        if not source.is_active:
+            raise PushServiceError(status_code=403, detail="error.source_not_active")
+
+        if source.execution_type != DataSourceExecutionType.EVENT_BASED:
+            raise PushServiceError(status_code=403, detail="error.source_not_event_based")
+
+        config = json.loads(source.config)
+        config["_execution_type"] = source.execution_type
+        datasource = get_datasource(source.type, config)
+
+        try:
+            return await datasource.sync_records_from_payload(
+                payload,
+                content_type,
+                system_repository,
+                realtime_repository,
+                gtfs_repository,
+                source.id,
+                source.name,
+                source.log_dumps,
+            )
+        except ValueError as exc:
+            raise PushServiceError(status_code=422, detail=str(exc)) from exc
     finally:
         await caching_service.close()
         await gtfs_repository.close()
@@ -150,6 +226,25 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
             self._get_process_pool(),
             _run_datasource_process,
             source_id,
+            settings.database_url,
+            settings.redis_url,
+            settings.debug,
+        )
+
+    async def _run_datasource_push_in_process(
+        self,
+        source_id: int,
+        payload: bytes,
+        content_type: str | None,
+    ) -> dict[str, int]:
+        loop = asyncio.get_running_loop()
+
+        return await loop.run_in_executor(
+            self._get_process_pool(),
+            _run_datasource_push_process,
+            source_id,
+            payload,
+            content_type,
             settings.database_url,
             settings.redis_url,
             settings.debug,
@@ -339,6 +434,69 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
                         source_id,
                     )
         finally:
+            await self._mark_source_finished(source_id)
+
+    async def run_push_task(
+        self,
+        source_id: int,
+        payload: bytes,
+        content_type: str | None,
+    ) -> dict[str, int]:
+        """Execute one datasource push synchronously and return the sync result counts."""
+        if self._closing:
+            raise PushServiceError(status_code=503, detail="error.scheduler_closing")
+
+        source = await self._system_repository.get_data_source_by_id(source_id)
+        if source is None:
+            raise PushServiceError(status_code=404, detail="error.source_not_found")
+
+        if not source.is_active:
+            raise PushServiceError(status_code=403, detail="error.source_not_active")
+
+        if source.execution_type != DataSourceExecutionType.EVENT_BASED:
+            raise PushServiceError(status_code=403, detail="error.source_not_event_based")
+
+        if await self._is_gtfs_import_running():
+            raise PushServiceError(status_code=409, detail="error.gtfs_import_running")
+
+        is_marked = await self._try_mark_source_running(source_id)
+        if not is_marked:
+            raise PushServiceError(status_code=409, detail="error.source_already_running")
+
+        logger.info("[DatasourceScheduler] Starting push for data source ID %s ('%s')", source_id, source.name)
+
+        try:
+            stats = await self._run_datasource_push_in_process(source_id, payload, content_type)
+
+            logger.info(
+                "[DatasourceScheduler] Push task completed for '%s': created=%s, updated=%s, deleted=%s",
+                source.name,
+                stats["added"],
+                stats["updated"],
+                stats["deleted"],
+            )
+
+            return stats
+        except PushServiceError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "[DatasourceScheduler] Push task failed for '%s': %s",
+                source.name,
+                exc,
+                exc_info=True,
+            )
+            raise PushServiceError(status_code=500, detail="error.push_failed") from exc
+        finally:
+            timestamp = datetime.now(UTC)
+
+            updated = await self._system_repository.update_data_source_last_run_at(source_id, timestamp)
+            if not updated:
+                logger.error(
+                    "[DatasourceScheduler] Failed to update last_run_at for data source %s",
+                    source_id,
+                )
+
             await self._mark_source_finished(source_id)
 
     async def close(self) -> None:

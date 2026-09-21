@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from echogtfs.services.scheduler.datasource_scheduler_service import DatasourceSchedulerService
 from echogtfs.services.scheduler import datasource_scheduler_service as scheduler_module
+from echogtfs.services.scheduler.push_service_error import PushServiceError
 
 
 @dataclass
@@ -23,6 +24,7 @@ class _DataSourceStub:
     type: str = "dummy"
     config: str = "{}"
     cron: str | None = None
+    execution_type: str = "time_based"
     is_active: bool = True
     log_dumps: bool = False
 
@@ -171,3 +173,122 @@ class TestDatasourceSchedulerService(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(scheduler.removed_job_ids, ["alert_import_8"])
         pool.shutdown.assert_called_once_with(wait=True, cancel_futures=False)
+
+    async def test_run_push_task_returns_stats_and_updates_last_run_at_on_success(self):
+        repository = _RepositoryStub()
+        repository.get_data_source_by_id.return_value = _DataSourceStub(
+            id=7, name="Alpha", execution_type="event_based"
+        )
+        service = DatasourceSchedulerService(repository, SimpleNamespace(), SimpleNamespace())
+        service._run_datasource_push_in_process = AsyncMock(
+            return_value={"added": 1, "updated": 2, "deleted": 3}
+        )
+
+        stats = await service.run_push_task(7, b"payload", "application/xml")
+
+        self.assertEqual(stats, {"added": 1, "updated": 2, "deleted": 3})
+        service._run_datasource_push_in_process.assert_awaited_once_with(7, b"payload", "application/xml")
+        repository.update_data_source_last_run_at.assert_awaited_once()
+        self.assertNotIn(7, service._running_source_ids)
+
+    async def test_run_push_task_raises_404_when_source_not_found(self):
+        repository = _RepositoryStub()
+        repository.get_data_source_by_id.return_value = None
+        service = DatasourceSchedulerService(repository, SimpleNamespace(), SimpleNamespace())
+
+        with self.assertRaises(PushServiceError) as ctx:
+            await service.run_push_task(1, b"payload", None)
+
+        self.assertEqual(ctx.exception.status_code, 404)
+        repository.update_data_source_last_run_at.assert_not_awaited()
+
+    async def test_run_push_task_raises_403_when_source_inactive(self):
+        repository = _RepositoryStub()
+        repository.get_data_source_by_id.return_value = _DataSourceStub(
+            id=2, name="Alpha", execution_type="event_based", is_active=False
+        )
+        service = DatasourceSchedulerService(repository, SimpleNamespace(), SimpleNamespace())
+
+        with self.assertRaises(PushServiceError) as ctx:
+            await service.run_push_task(2, b"payload", None)
+
+        self.assertEqual(ctx.exception.status_code, 403)
+        self.assertEqual(ctx.exception.detail, "error.source_not_active")
+        repository.update_data_source_last_run_at.assert_not_awaited()
+
+    async def test_run_push_task_raises_403_when_source_not_event_based(self):
+        repository = _RepositoryStub()
+        repository.get_data_source_by_id.return_value = _DataSourceStub(
+            id=3, name="Alpha", execution_type="time_based"
+        )
+        service = DatasourceSchedulerService(repository, SimpleNamespace(), SimpleNamespace())
+
+        with self.assertRaises(PushServiceError) as ctx:
+            await service.run_push_task(3, b"payload", None)
+
+        self.assertEqual(ctx.exception.status_code, 403)
+        self.assertEqual(ctx.exception.detail, "error.source_not_event_based")
+
+    async def test_run_push_task_raises_409_when_gtfs_import_running(self):
+        repository = _RepositoryStub()
+        repository.get_data_source_by_id.return_value = _DataSourceStub(
+            id=4, name="Alpha", execution_type="event_based"
+        )
+        repository.get_app_setting.return_value = "running"
+        service = DatasourceSchedulerService(repository, SimpleNamespace(), SimpleNamespace())
+
+        with self.assertRaises(PushServiceError) as ctx:
+            await service.run_push_task(4, b"payload", None)
+
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertEqual(ctx.exception.detail, "error.gtfs_import_running")
+
+    async def test_run_push_task_raises_409_when_already_running(self):
+        repository = _RepositoryStub()
+        repository.get_data_source_by_id.return_value = _DataSourceStub(
+            id=5, name="Alpha", execution_type="event_based"
+        )
+        service = DatasourceSchedulerService(repository, SimpleNamespace(), SimpleNamespace())
+        service._running_source_ids.add(5)
+        service._run_datasource_push_in_process = AsyncMock()
+
+        with self.assertRaises(PushServiceError) as ctx:
+            await service.run_push_task(5, b"payload", None)
+
+        self.assertEqual(ctx.exception.status_code, 409)
+        self.assertEqual(ctx.exception.detail, "error.source_already_running")
+        service._run_datasource_push_in_process.assert_not_awaited()
+
+    async def test_run_push_task_wraps_unexpected_error_as_500_and_updates_last_run_at(self):
+        repository = _RepositoryStub()
+        repository.get_data_source_by_id.return_value = _DataSourceStub(
+            id=6, name="Alpha", execution_type="event_based"
+        )
+        service = DatasourceSchedulerService(repository, SimpleNamespace(), SimpleNamespace())
+        service._run_datasource_push_in_process = AsyncMock(side_effect=RuntimeError("boom"))
+
+        with patch.object(scheduler_module.logger, "error"):
+            with self.assertRaises(PushServiceError) as ctx:
+                await service.run_push_task(6, b"payload", None)
+
+        self.assertEqual(ctx.exception.status_code, 500)
+        repository.update_data_source_last_run_at.assert_awaited_once()
+        self.assertNotIn(6, service._running_source_ids)
+
+    async def test_run_push_task_propagates_push_service_error_from_process(self):
+        repository = _RepositoryStub()
+        repository.get_data_source_by_id.return_value = _DataSourceStub(
+            id=8, name="Alpha", execution_type="event_based"
+        )
+        service = DatasourceSchedulerService(repository, SimpleNamespace(), SimpleNamespace())
+        service._run_datasource_push_in_process = AsyncMock(
+            side_effect=PushServiceError(status_code=422, detail="error.parse_failed")
+        )
+
+        with self.assertRaises(PushServiceError) as ctx:
+            await service.run_push_task(8, b"payload", None)
+
+        self.assertEqual(ctx.exception.status_code, 422)
+        self.assertEqual(ctx.exception.detail, "error.parse_failed")
+        repository.update_data_source_last_run_at.assert_awaited_once()
+        self.assertNotIn(8, service._running_source_ids)

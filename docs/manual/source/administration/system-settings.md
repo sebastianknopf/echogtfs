@@ -20,20 +20,32 @@ Im Abschnitt "Allgemein" und "Erscheinungsbild" können Sie folgende Einstellung
 
 (h-system-settings-gtfs-rt)=
 
-## GTFS-Realtime
+## Konfiguration GTFS-Realtime
 
 Im Abschnitt "GTFS-Realtime" können Sie folgende Einstellungen vornehmen:
 
 - **GTFS-RT ServiceAlerts Pfad**: Pfad zum GTFS-RT Endpunkt für ServiceAlerts
 - **GTFS-RT TripUpdates Pfad**: Pfad zum öffentlichen GTFS-RT Endpunkt für TripUpdates
 - **GTFS-RT VehiclePositions Pfad**: Pfad zum öffentlichen GTFS-RT Endpunkt für VehiclePositions
-- **BasicAuth Benutzername:** _(optional)_ Benutzername um die GTFS-RT Endpunkte mit BasicAuth abzusichern
-- **BasicAuth Passwort:** _(optional)_ Password um die GTFS-RT Endpunkte mit BasicAuth abzusichern
+- **BasicAuth Benutzername:** _(optional)_ Benutzername um die GTFS-RT Endpunkte mit BasicAuth abzusichern. Leer lassen, um BasicAuth für die GTFS-RT Endpunkte zu deaktivieren
+- **BasicAuth Passwort:** _(optional)_ Passwort um die GTFS-RT Endpunkte mit BasicAuth abzusichern. Leer lassen, um das bestehende Passwort weiter zu verwenden
 - **Fahrten ohne Echtzeitdaten aus TripUpdates ausschließen**: Schließt überwachte Fahrten (siehe dazu {ref}`h-trips-trips`) aus dem GTFS-RT feed aus
+
+(h-system-settings-push-api)=
+
+## Konfiguration Push-API
+
+Im Abschnitt "Push-API" können Sie folgende Einstellungen vornehmen:
+
+- **Push-API Aktiv**: Schaltet die Push-API für eventbasierte Datenquellen frei
+- **BasicAuth Benutzername:** _(optional)_ Benutzername umd ie Push-API mit BasicAuth abzusichern. Leer lassen, um BasicAuth für die Push-API zu deaktivieren
+- **BasicAuth Passwort:** _(optional)_ Passwort um die Push-API mit BasicAuth abzusichern. Leer lassen, um das bestehende Passwort weiter zu verwenden
+
+Die Push-API wird benötigt, um eventbasierte Schnittstellen aus externen Systemen ansprechen zu können.
 
 (h-system-settings-cleanup)=
 
-## Datenbereinigung
+## Konfiguration Datenbereinigung
 
 Im Abschnitt "Datenbereinigung" können Sie das Verhalten des Berenigungs-Dienstes beeinflussen. Folgende Einstellungen stehen zur Verfügung:
 

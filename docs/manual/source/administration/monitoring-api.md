@@ -10,9 +10,9 @@ Die Monitoring-API bietet stets Zugriff auf den **aktuellen Systemzustand**.
 
 Die Monitoring-API bietet drei wichtige Endpunkte:
 
-- `/api/monitoring/system`: Aktuell aktive Datenquellen und im Soll-Fahrplan importierte Linien zum Filtern der nachfolgenden beiden Endpunkte
-- `/api/monitoring/statistics`: Aktuelle KPIs bzw. Daten zur Berechnung von KPIs über den aktuellen Systemzustand
-- `/api/monitoring/conflicts`: Aktuell anliegende und erkannte Konflikte in den enthaltenen Daten
+- `GET /api/monitoring/system`: Aktuell aktive Datenquellen und im Soll-Fahrplan importierte Linien zum Filtern der nachfolgenden beiden Endpunkte
+- `GET /api/monitoring/statistics`: Aktuelle KPIs bzw. Daten zur Berechnung von KPIs über den aktuellen Systemzustand
+- `GET /api/monitoring/conflicts`: Aktuell anliegende und erkannte Konflikte in den enthaltenen Daten
 
 ## Restriktionen
 

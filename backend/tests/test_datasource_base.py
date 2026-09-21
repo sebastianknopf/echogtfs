@@ -27,6 +27,9 @@ class _TestDatasource(DatasourceBase):
     async def _fetch_records(self):
         return self.config.get("_payload", {"record_type": "service_alerts", "records": []})
 
+    async def _fetch_records_from_payload(self, payload: bytes, content_type: str | None):
+        return self.config.get("_payload", {"record_type": "service_alerts", "records": []})
+
 
 class _SystemRepositoryStub:
     def __init__(self):

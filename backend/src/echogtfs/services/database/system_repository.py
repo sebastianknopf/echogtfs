@@ -285,6 +285,7 @@ class SystemRepository(RepositoryBase, SystemRepositoryInterface):
         source_type: str,
         config: str,
         cron: str | None,
+        execution_type: str = "time_based",
         is_active: bool,
         log_dumps: bool,
         invalid_reference_policy: str,
@@ -298,6 +299,7 @@ class SystemRepository(RepositoryBase, SystemRepositoryInterface):
                 type=source_type,
                 config=config,
                 cron=cron,
+                execution_type=execution_type,
                 is_active=is_active,
                 log_dumps=log_dumps,
                 invalid_reference_policy=invalid_reference_policy,
@@ -350,6 +352,8 @@ class SystemRepository(RepositoryBase, SystemRepositoryInterface):
         source_type: str | None = None,
         config: str | None = None,
         cron: str | None = None,
+        clear_cron: bool = False,
+        execution_type: str | None = None,
         is_active: bool | None = None,
         log_dumps: bool | None = None,
         invalid_reference_policy: str | None = None,
@@ -380,6 +384,10 @@ class SystemRepository(RepositoryBase, SystemRepositoryInterface):
                 source.config = config
             if cron is not None:
                 source.cron = cron
+            elif clear_cron:
+                source.cron = None
+            if execution_type is not None:
+                source.execution_type = execution_type
             if is_active is not None:
                 source.is_active = is_active
             if log_dumps is not None:

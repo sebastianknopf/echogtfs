@@ -90,31 +90,37 @@ class SiriEtDatasource(DatasourceBase):
         self.config.setdefault("treat_unexpected_stop_as_added_stop", False)
         self.config.setdefault("treat_missing_stop_as_canceled_stop", False)
 
-        if "endpoint" not in self.config:
-            raise ValueError("SiriEt datasource requires 'endpoint' in config")
+        is_event_based = self._is_event_based_execution()
 
-        if "participantref" not in self.config:
-            raise ValueError("SiriEt datasource requires 'participantref' in config")
+        endpoint = self.config.get("endpoint")
+        if not endpoint:
+            if not is_event_based:
+                raise ValueError("SiriEt datasource requires 'endpoint' in config")
+        elif not isinstance(endpoint, str):
+            raise ValueError("'endpoint' must be a string")
 
-        if "method" not in self.config:
-            raise ValueError("SiriEt datasource requires 'method' in config")
+        participantref = self.config.get("participantref")
+        if not participantref:
+            if not is_event_based:
+                raise ValueError("SiriEt datasource requires 'participantref' in config")
+        elif not isinstance(participantref, str):
+            raise ValueError("'participantref' must be a string")
+
+        method = self.config.get("method")
+        if not method:
+            if not is_event_based:
+                raise ValueError("SiriEt datasource requires 'method' in config")
+        else:
+            try:
+                SiriEtMethod(method)
+            except ValueError:
+                valid_methods = [method.value for method in SiriEtMethod]
+                raise ValueError(
+                    f"Invalid method '{self.config['method']}'. Valid options: {', '.join(valid_methods)}"
+                )
 
         if "dialect" not in self.config:
             raise ValueError("SiriEt datasource requires 'dialect' in config")
-
-        if not isinstance(self.config["endpoint"], str):
-            raise ValueError("'endpoint' must be a string")
-
-        if not isinstance(self.config["participantref"], str):
-            raise ValueError("'participantref' must be a string")
-
-        try:
-            SiriEtMethod(self.config["method"])
-        except ValueError:
-            valid_methods = [method.value for method in SiriEtMethod]
-            raise ValueError(
-                f"Invalid method '{self.config['method']}'. Valid options: {', '.join(valid_methods)}"
-            )
 
         try:
             SiriEtDialect(self.config["dialect"])
@@ -170,6 +176,25 @@ class SiriEtDatasource(DatasourceBase):
 
     async def _fetch_records(self) -> dict[str, Any]:
         root = await self._fetch_and_parse_xml()
+        return await self._transform_root(
+            root,
+            request_url=self.config.get("endpoint", ""),
+            request_headers={"Content-Type": "application/xml; charset=utf-8"},
+        )
+
+    async def _fetch_records_from_payload(self, payload: bytes, content_type: str | None) -> dict[str, Any]:
+        """Parse an already-provided SIRI-ET payload (push API)."""
+        root = await self._parse_and_log_xml_payload(payload, content_type)
+        request_headers = {"Content-Type": content_type} if content_type else None
+        return await self._transform_root(root, request_url="", request_headers=request_headers)
+
+    async def _transform_root(
+        self,
+        root: ET.Element,
+        *,
+        request_url: str,
+        request_headers: dict[str, str] | None,
+    ) -> dict[str, Any]:
         source_name = self.config.get("_source_name", "siriet")
         self.config["treat_unexpected_stop_as_added_stop"] = bool(
             self.config.get("treat_unexpected_stop_as_added_stop", False)
@@ -196,8 +221,8 @@ class SiriEtDatasource(DatasourceBase):
 
             await self._log_request(
                 source_id=self.config.get("_source_id"),
-                request_url=self.config.get("endpoint", ""),
-                request_headers={"Content-Type": "application/xml; charset=utf-8"},
+                request_url=request_url,
+                request_headers=request_headers,
                 response_headers=None,
                 response_status_code=500,
                 response_content=str(exc),

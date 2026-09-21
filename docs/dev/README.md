@@ -7,6 +7,7 @@ This directory contains technical documentation for the EchoGTFS system, intende
 - [architecture.md](architecture.md): Overall system architecture, component responsibilities, data flow, and technology stack.
 - [authentication.md](authentication.md): Authentication and authorization model, JWT lifecycle, sliding sessions, and role system.
 - [realtime.md](realtime.md): Relations and implications bewteen realtime models in exports and internal handling.
+- [push-api.md](push-api.md): Push endpoint authentication, execution flow, scheduler integration, and error/status mapping.
 - [matching.md](matching.md): Matching-service behavior for resolving external realtime trip IDs to nominal GTFS trips, including cache flow and fallback stages.
 - [transformation.md](transformation.md): Transformer output contract and internal datasource record model for service alerts, trip updates, and vehicle positions.
 - [transformers/README.md](transformers/README.md): Index of implementation-oriented notes for the concrete transformers.

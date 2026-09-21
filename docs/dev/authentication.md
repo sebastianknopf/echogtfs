@@ -105,6 +105,12 @@ async def delete_user(user_id: int, current_user: CurrentSuperuser, db: _DB):
 
 The GTFS-RT output endpoint (`/api/realtime/feed`) uses a separate optional Basic Auth mechanism, not the JWT system. If both `gtfs_rt_username` and `gtfs_rt_password` are present in the `app_settings` table, the endpoint requires an `Authorization: Basic` header. This allows consumer applications (e.g., journey planners) to access the feed without needing a user account.
 
+## Push API Authentication
+
+The push endpoint (`/api/push/datasource/{source_id}`) also uses optional Basic Auth from app settings (`push_api_username`, `push_api_password`) and an additional feature flag (`push_api_enabled`).
+
+Push API authentication and status behavior are documented in `docs/dev/push-api.md`.
+
 ## First Superuser Bootstrap
 
 If the `users` table is empty at startup, `main.py` creates one user from the environment variables `FIRST_SUPERUSER`, `FIRST_SUPERUSER_EMAIL`, and `FIRST_SUPERUSER_PASSWORD`. This user is created with `is_superuser=True` and `is_active=True`. The password is bcrypt-hashed before storage.

@@ -19,7 +19,7 @@ Um Datenquellen zu verwalten, wechseln Sie in den Bereich "Datenquellen" im Seit
 - Über den "Deactivate"-Button können **bestehende Datenquellen deaktiviert / aktiviert** werden
 
 ```{note}
-Eine deaktivierte Datenquelle bleibt im System enthalten, wird allerdings vom Scheduler nicht ausgeführt. Bei der Deaktivierung einer Datenquelle werden alle Objekte (Meldungen, Fahrten, Fahrzeuge), die in Zusammenhang mit dieser Datenquelle stehen, gelöscht. Nach der Aktivierung wird die Datenquelle zum nächsten regulären Zeitpunkt vom Scheduler ausgeführt.
+Eine deaktivierte Datenquelle bleibt im System enthalten, wird allerdings vom Scheduler nicht ausgeführt. Bei der Deaktivierung einer Datenquelle werden alle Objekte (Meldungen, Fahrten, Fahrzeuge), die in Zusammenhang mit dieser Datenquelle stehen, gelöscht. Nach der Aktivierung wird die Datenquelle zum nächsten regulären Zeitpunkt oder eventbasiert über die {ref}`h-push-api-push-api` vom Scheduler ausgeführt.
 ```
 
 (h-datasources-general-edit)=
@@ -35,8 +35,9 @@ Um eine neue Datenquelle anzulegen, klicken Sie auf den "Hinzufügen"-Button obe
 Für jede Datenquelle können folgende Informationen gepflegt werden:
 - **Name**: _eindeutige Bezeichnung_ innerhalb des Systems für die Datenquelle
 - **Adapter**: Typ der Datenquelle (GTFS-RT, SIRI-Lite, SIRI-...)
-- **Endpunkt-URL**: URL, von der die Daten bei der Ausführung der Datenquelle abgerufen werden
-- **Cron-Ausdruck**: Cron-Ausdruck zur Angabe der gewünschten Ausführungsintervalle
+- **Endpunkt-URL**: URL, von der die Daten bei der Ausführung der Datenquelle abgerufen werden. Optional bei eventbasierten Datenquellen, je nach verwendetem Adapter-Typ
+- **Ausführungsart**: Ausführungsart der Datenquelle. Zeitbasiert = über Cron-Ausdruck, Eventbasiert = über {ref}`h-push-api-push-api`
+- **Cron-Ausdruck**: Cron-Ausdruck zur Angabe der gewünschten Ausführungsintervalle. Nur relevant bei zeitbasierter Ausführung
 - **Verfahrensweise bei ungültigen Bezügen**: Angabe zum Umgang mit Objekten mit ungültigen Bezügen
 - **Aktiv**: Aktivierung oder Deaktivierung der Datenquelle
 - **Log Dumps**: Aktivierung oder Deaktivierung der Log-Dump, bei Deaktivierung werden nur die Log-Metadaten gespeichert
@@ -46,6 +47,14 @@ Neben diesen Parametern können in Abhängigkeit vom Adapter-Typ weitere, dynami
 Für jede Datenquelle können außerdem sogenannte **Mappings** und **Anreicherungen** definiert werden.
 
 Bestätigen Sie den Dialog mit Klick auf "Speichern". Im Anschluss wird die Datenquelle in der Übersicht angezeigt und kann sofort verwendet werden.
+
+(h-datasources-time-vs-event-based)=
+
+### Zeit- und Eventbasierte Ausführung
+
+Standardmäßig werden Datenquellen zeitbasiert ausgeführt. Dabei werden sie vom internen Scheduler zu regelmäßgen, über den Cron-Ausdruck definierten Zeitpunkten ausgeführt. Die Daten werden dabei von EchoGTFS vom Quellsystem abgefragt.
+
+Bei besonders zeitkritischen Datenquellen (z.B. Fahrzeugpositionen) besteht alternativ die Möglichkeit, die Datenquelle eventbasiert auszuführen. Dabei werden die Daten aktiv vom Quellsystem an den Endpunkt der {ref}`h-push-api-push-api` für die jeweilige Datenquelle übermittelt und die Datenquelle unmittelbar ausgeführt.
 
 (h-datasources-invalid-reference-policies)=
 

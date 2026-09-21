@@ -24,6 +24,10 @@ class DatasourceInterface(ABC):
         """Fetch and transform external realtime payloads into dialect-defined records."""
 
     @abstractmethod
+    async def _fetch_records_from_payload(self, payload: bytes, content_type: str | None) -> dict[str, Any]:
+        """Parse and transform an already-provided payload into dialect-defined records (push API)."""
+
+    @abstractmethod
     async def sync_records(
         self,
         repository: SystemRepositoryInterface,
@@ -34,6 +38,20 @@ class DatasourceInterface(ABC):
         log_dumps: bool,
     ) -> dict[str, int]:
         """Synchronize datasource records into the database."""
+
+    @abstractmethod
+    async def sync_records_from_payload(
+        self,
+        payload: bytes,
+        content_type: str | None,
+        repository: SystemRepositoryInterface,
+        realtime_repository: RealtimeRepositoryInterface,
+        gtfs_repository: GtfsRepositoryInterface,
+        source_id: int,
+        source_name: str,
+        log_dumps: bool,
+    ) -> dict[str, int]:
+        """Synchronize datasource records from an already-provided payload (push API)."""
 
     @abstractmethod
     def get_datasource_type(self) -> str:

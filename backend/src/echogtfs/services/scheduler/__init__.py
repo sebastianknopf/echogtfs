@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from echogtfs.services.scheduler.datasource_scheduler_service import DatasourceSchedulerService
 from echogtfs.services.scheduler.intf_datasource_scheduler import DatasourceSchedulerInterface
+from echogtfs.services.scheduler.push_service_error import PushServiceError
 
 _datasource_scheduler_service: DatasourceSchedulerInterface | None = None
 
@@ -25,6 +26,7 @@ def get_datasource_scheduler_service() -> DatasourceSchedulerInterface:
 __all__ = [
     "DatasourceSchedulerInterface",
     "DatasourceSchedulerService",
+    "PushServiceError",
     "set_datasource_scheduler_service",
     "get_datasource_scheduler_service",
 ]

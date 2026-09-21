@@ -72,6 +72,7 @@ Each router file under `routers/` maps to a URL prefix registered in `main.py`:
 | `gtfs.py` | `/api/gtfs` | GTFS Static feed management and entity lookup |
 | `systemcopy.py` | `/api/systemcopy` | Superuser system configuration export and import |
 | `realtime.py` | `/api` | Public GTFS-RT feed output in protobuf or JSON format |
+| `push.py` | `/api/push` | Public push endpoint for synchronous event-based datasource execution |
 
 The API routers are meant to have as less logic as possible and only do the I/O networking stuff, mainly communication to the frontend, but also provision of GTFS-RT data.
 
@@ -138,6 +139,8 @@ The scheduler service ensures that each data source can **only have no concurren
 The `DatasourceSchedulerService` checks for the configured cron expressions and runs the data sources independently form the main event loop. This is to avoid blocking behaviour of the frontend and other parts of the application. Each data source run is executed in a separate process in the process pool.
 
 To configure the maximum number of workers for data sources, set the desired value in the environment variable `DATASOURCE_PROCESS_POOL_SIZE`. Default value is `2`.
+
+Push-specific authentication, request flow, and status mapping are documented in `docs/dev/push-api.md`.
 
 ## GTFS-Realtime Feed
 
