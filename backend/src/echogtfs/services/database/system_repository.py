@@ -698,3 +698,14 @@ class SystemRepository(RepositoryBase, SystemRepositoryInterface):
             if policy is None:
                 raise ValueError(f"Data source {source_id} not found")
             return policy.value if hasattr(policy, "value") else str(policy)
+
+    async def get_data_source_is_differential_updates(self, source_id: int) -> bool:
+        """Return whether a data source is configured for differential/incremental updates."""
+        stmt = select(DataSource.is_differential_updates).where(DataSource.id == source_id)
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            is_differential_updates = result.scalar_one_or_none()
+            if is_differential_updates is None:
+                raise ValueError(f"Data source {source_id} not found")
+            return bool(is_differential_updates)

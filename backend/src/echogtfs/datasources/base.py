@@ -1185,6 +1185,8 @@ class DatasourceBase(DatasourceInterface):
         if isinstance(policy, str):
             policy = InvalidReferencePolicy(policy)
 
+        is_differential_updates = await repository.get_data_source_is_differential_updates(source_id)
+
         logger.info(
             f"[{self.get_adapter_type()}] Synchronizing trip-update records from '{source_name}' "
             f"(policy: {policy.value})"
@@ -1493,7 +1495,7 @@ class DatasourceBase(DatasourceInterface):
             if trip.data_source_id == source_id
             and trip_id not in processed_trip_uuids
             and trip_id not in policy_based_deletes
-        }
+        } if not is_differential_updates else {}
 
         if trips_to_delete:
             await realtime_repository.delete_trips_for_data_source_by_ids(
@@ -1541,6 +1543,8 @@ class DatasourceBase(DatasourceInterface):
         policy = await repository.get_data_source_invalid_reference_policy(source_id)
         if isinstance(policy, str):
             policy = InvalidReferencePolicy(policy)
+
+        is_differential_updates = await repository.get_data_source_is_differential_updates(source_id)
 
         logger.info(
             f"[{self.get_adapter_type()}] Synchronizing vehicle-position records from '{source_name}' "
@@ -1838,7 +1842,7 @@ class DatasourceBase(DatasourceInterface):
             if vehicle.data_source_id == source_id
             and vehicle_id not in persisted_vehicle_uuids
             and vehicle_id not in policy_based_deletes
-        }
+        } if not is_differential_updates else set()
 
         if vehicles_to_delete:
             await realtime_repository.delete_vehicles_for_data_source_by_ids(

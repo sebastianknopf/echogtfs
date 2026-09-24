@@ -285,3 +285,8 @@ class SystemRepositoryInterface(ABC):
     async def get_data_source_invalid_reference_policy(self, source_id: int) -> str:
         """Return invalid reference policy configured for a data source."""
         raise NotImplementedError
+
+    @abstractmethod
+    async def get_data_source_is_differential_updates(self, source_id: int) -> bool:
+        """Return whether a data source is configured for differential/incremental updates."""
+        raise NotImplementedError
