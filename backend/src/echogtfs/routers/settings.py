@@ -53,8 +53,10 @@ DEFAULTS = AppSettings(
     gtfs_rt_username="",
     gtfs_rt_password="",
     cleanup_cron="*/10 * * * *",
-    cleanup_expired_policy=ExpiredRealtimeObjectPolicy.DEACTIVATE,
-    cleanup_delete_after_days=-1,
+    cleanup_expired_alerts_policy=ExpiredRealtimeObjectPolicy.DEACTIVATE,
+    cleanup_delete_alerts_after_days=7,
+    cleanup_expired_trips_max_age=120,
+    cleanup_expired_vehicles_max_age=5,
     push_api_enabled=False,
     push_api_username="",
     push_api_password="",
@@ -99,12 +101,30 @@ async def _load() -> AppSettings:
     if AppSetting.KEY_CLEANUP_CRON not in rows:
         await repository.set_app_setting(AppSetting.KEY_CLEANUP_CRON, DEFAULTS.cleanup_cron)
         rows[AppSetting.KEY_CLEANUP_CRON] = DEFAULTS.cleanup_cron
-    if AppSetting.KEY_CLEANUP_EXPIRED_POLICY not in rows:
-        await repository.set_app_setting(AppSetting.KEY_CLEANUP_EXPIRED_POLICY, DEFAULTS.cleanup_expired_policy.value)
-        rows[AppSetting.KEY_CLEANUP_EXPIRED_POLICY] = DEFAULTS.cleanup_expired_policy.value
-    if AppSetting.KEY_CLEANUP_DELETE_AFTER_DAYS not in rows:
-        await repository.set_app_setting(AppSetting.KEY_CLEANUP_DELETE_AFTER_DAYS, str(DEFAULTS.cleanup_delete_after_days))
-        rows[AppSetting.KEY_CLEANUP_DELETE_AFTER_DAYS] = str(DEFAULTS.cleanup_delete_after_days)
+    if AppSetting.KEY_CLEANUP_EXPIRED_ALERTS_POLICY not in rows:
+        await repository.set_app_setting(
+            AppSetting.KEY_CLEANUP_EXPIRED_ALERTS_POLICY,
+            DEFAULTS.cleanup_expired_alerts_policy.value,
+        )
+        rows[AppSetting.KEY_CLEANUP_EXPIRED_ALERTS_POLICY] = DEFAULTS.cleanup_expired_alerts_policy.value
+    if AppSetting.KEY_CLEANUP_DELETE_ALERTS_AFTER_DAYS not in rows:
+        await repository.set_app_setting(
+            AppSetting.KEY_CLEANUP_DELETE_ALERTS_AFTER_DAYS,
+            str(DEFAULTS.cleanup_delete_alerts_after_days),
+        )
+        rows[AppSetting.KEY_CLEANUP_DELETE_ALERTS_AFTER_DAYS] = str(DEFAULTS.cleanup_delete_alerts_after_days)
+    if AppSetting.KEY_CLEANUP_EXPIRED_TRIPS_MAX_AGE not in rows:
+        await repository.set_app_setting(
+            AppSetting.KEY_CLEANUP_EXPIRED_TRIPS_MAX_AGE,
+            str(DEFAULTS.cleanup_expired_trips_max_age),
+        )
+        rows[AppSetting.KEY_CLEANUP_EXPIRED_TRIPS_MAX_AGE] = str(DEFAULTS.cleanup_expired_trips_max_age)
+    if AppSetting.KEY_CLEANUP_EXPIRED_VEHICLES_MAX_AGE not in rows:
+        await repository.set_app_setting(
+            AppSetting.KEY_CLEANUP_EXPIRED_VEHICLES_MAX_AGE,
+            str(DEFAULTS.cleanup_expired_vehicles_max_age),
+        )
+        rows[AppSetting.KEY_CLEANUP_EXPIRED_VEHICLES_MAX_AGE] = str(DEFAULTS.cleanup_expired_vehicles_max_age)
     if AppSetting.KEY_PUSH_API_ENABLED not in rows:
         await repository.set_app_setting(AppSetting.KEY_PUSH_API_ENABLED, str(DEFAULTS.push_api_enabled).lower())
         rows[AppSetting.KEY_PUSH_API_ENABLED] = str(DEFAULTS.push_api_enabled).lower()
@@ -139,11 +159,17 @@ async def _load() -> AppSettings:
         gtfs_rt_username = rows.get(AppSetting.KEY_GTFS_RT_USERNAME, DEFAULTS.gtfs_rt_username),
         gtfs_rt_password = rows.get(AppSetting.KEY_GTFS_RT_PASSWORD, DEFAULTS.gtfs_rt_password),
         cleanup_cron     = rows.get(AppSetting.KEY_CLEANUP_CRON, DEFAULTS.cleanup_cron),
-        cleanup_expired_policy = ExpiredRealtimeObjectPolicy(
-            rows.get(AppSetting.KEY_CLEANUP_EXPIRED_POLICY, DEFAULTS.cleanup_expired_policy.value)
+        cleanup_expired_alerts_policy = ExpiredRealtimeObjectPolicy(
+            rows.get(AppSetting.KEY_CLEANUP_EXPIRED_ALERTS_POLICY, DEFAULTS.cleanup_expired_alerts_policy.value)
         ),
-        cleanup_delete_after_days = int(
-            rows.get(AppSetting.KEY_CLEANUP_DELETE_AFTER_DAYS, str(DEFAULTS.cleanup_delete_after_days))
+        cleanup_delete_alerts_after_days = int(
+            rows.get(AppSetting.KEY_CLEANUP_DELETE_ALERTS_AFTER_DAYS, str(DEFAULTS.cleanup_delete_alerts_after_days))
+        ),
+        cleanup_expired_trips_max_age = int(
+            rows.get(AppSetting.KEY_CLEANUP_EXPIRED_TRIPS_MAX_AGE, str(DEFAULTS.cleanup_expired_trips_max_age))
+        ),
+        cleanup_expired_vehicles_max_age = int(
+            rows.get(AppSetting.KEY_CLEANUP_EXPIRED_VEHICLES_MAX_AGE, str(DEFAULTS.cleanup_expired_vehicles_max_age))
         ),
         push_api_enabled = rows.get(
             AppSetting.KEY_PUSH_API_ENABLED,
@@ -203,8 +229,22 @@ async def update_settings(
     
     # Cleanup settings
     await repository.set_app_setting(AppSetting.KEY_CLEANUP_CRON, cleanup_cron)
-    await repository.set_app_setting(AppSetting.KEY_CLEANUP_EXPIRED_POLICY, payload.cleanup_expired_policy.value)
-    await repository.set_app_setting(AppSetting.KEY_CLEANUP_DELETE_AFTER_DAYS, str(payload.cleanup_delete_after_days))
+    await repository.set_app_setting(
+        AppSetting.KEY_CLEANUP_EXPIRED_ALERTS_POLICY,
+        payload.cleanup_expired_alerts_policy.value,
+    )
+    await repository.set_app_setting(
+        AppSetting.KEY_CLEANUP_DELETE_ALERTS_AFTER_DAYS,
+        str(payload.cleanup_delete_alerts_after_days),
+    )
+    await repository.set_app_setting(
+        AppSetting.KEY_CLEANUP_EXPIRED_TRIPS_MAX_AGE,
+        str(payload.cleanup_expired_trips_max_age),
+    )
+    await repository.set_app_setting(
+        AppSetting.KEY_CLEANUP_EXPIRED_VEHICLES_MAX_AGE,
+        str(payload.cleanup_expired_vehicles_max_age),
+    )
     
     # Push API enabled flag
     await repository.set_app_setting(AppSetting.KEY_PUSH_API_ENABLED, str(payload.push_api_enabled).lower())

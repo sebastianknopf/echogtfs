@@ -190,12 +190,22 @@ const settings = (() => {
     
     const cleanupPolicy = ui.el('settings-cleanup-policy');
     if (cleanupPolicy) {
-      cleanupPolicy.value = settings.cleanup_expired_policy || 'deactivate';
+      cleanupPolicy.value = settings.cleanup_expired_alerts_policy || 'deactivate';
     }
     
     const cleanupDeleteDays = ui.el('settings-cleanup-delete-days');
     if (cleanupDeleteDays) {
-      cleanupDeleteDays.value = String(settings.cleanup_delete_after_days ?? -1);
+      cleanupDeleteDays.value = String(settings.cleanup_delete_alerts_after_days ?? 7);
+    }
+    
+    const cleanupTripsMaxAge = ui.el('settings-cleanup-trips-max-age');
+    if (cleanupTripsMaxAge) {
+      cleanupTripsMaxAge.value = String(settings.cleanup_expired_trips_max_age ?? 120);
+    }
+    
+    const cleanupVehiclesMaxAge = ui.el('settings-cleanup-vehicles-max-age');
+    if (cleanupVehiclesMaxAge) {
+      cleanupVehiclesMaxAge.value = String(settings.cleanup_expired_vehicles_max_age ?? 5);
     }
     
     // Password field stays empty for security
@@ -294,8 +304,10 @@ const settings = (() => {
         push_api_username: ui.el('settings-push-api-username')?.value || '',
         push_api_password: ui.el('settings-push-api-password')?.value || '',
         cleanup_cron: ui.el('settings-cleanup-cron')?.value || '*/10 * * * *',
-        cleanup_expired_policy: ui.el('settings-cleanup-policy')?.value || 'deactivate',
-        cleanup_delete_after_days: parseInt(ui.el('settings-cleanup-delete-days')?.value || '-1', 10),
+        cleanup_expired_alerts_policy: ui.el('settings-cleanup-policy')?.value || 'deactivate',
+        cleanup_delete_alerts_after_days: parseInt(ui.el('settings-cleanup-delete-days')?.value || '7', 10),
+        cleanup_expired_trips_max_age: parseInt(ui.el('settings-cleanup-trips-max-age')?.value || '120', 10),
+        cleanup_expired_vehicles_max_age: parseInt(ui.el('settings-cleanup-vehicles-max-age')?.value || '5', 10),
       };
       
       const result = await api.updateSettings(data);
@@ -355,8 +367,10 @@ const settings = (() => {
         push_api_username: '',
         push_api_password: '',
         cleanup_cron: '*/10 * * * *',
-        cleanup_expired_policy: 'deactivate',
-        cleanup_delete_after_days: -1,
+        cleanup_expired_alerts_policy: 'deactivate',
+        cleanup_delete_alerts_after_days: 7,
+        cleanup_expired_trips_max_age: 120,
+        cleanup_expired_vehicles_max_age: 5,
       };
       
       const result = await api.updateSettings(defaults);

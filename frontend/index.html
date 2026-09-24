@@ -517,7 +517,7 @@
 
                 <p class="settings-section-label" data-i18n="settings.section.cleanup">Datenbereinigung</p>
 
-                <div class="md-field__helper" style="margin-top: 0; margin-bottom: 16px;" data-i18n="settings.cleanup_info">Die Datenbereinigung gilt nur für interne Objekte und Logs von Datenquellen. Objekte von externen Datenquellen werden immer ausgehend von ihrer Datenquelle synchronisiert.</div>
+                <div class="md-field__helper" style="margin-top: 0; margin-bottom: 16px;" data-i18n="settings.cleanup_info">Abgelaufene Meldungen, Fahrten und Fahrzeugpositionen werden unabhängig von ihrer Datenquelle bereinigt. Meldungen werden anhand ihrer Gültigkeitszeiträume erkannt und je nach Verfahrensweise deaktiviert oder gelöscht (inkl. Bezüge, Übersetzungen und Gültigkeitszeiträume); endgültig gelöscht werden sie frühestens nach der gewählten Anzahl an Tagen. Fahrten und Fahrzeugpositionen werden anhand ihres letzten Aktualisierungszeitpunkts bereinigt: Bei abgelaufenen Fahrten werden die Fahrzeiten entfernt, die Fahrt selbst bleibt jedoch bestehen, solange noch eine Fahrzeugposition vorhanden ist. Bei abgelaufenen Fahrzeugpositionen wird die Position gelöscht; die zugehörige Fahrt bleibt bestehen, solange noch Fahrzeiten vorhanden sind.</div>
 
                 <div class="md-field">
                   <input type="text" id="settings-cleanup-cron" class="md-field__input" placeholder="*/10 * * * *" maxlength="64" />
@@ -530,17 +530,41 @@
                     <option value="deactivate" selected data-i18n="settings.cleanup_policy.deactivate">Deaktivieren</option>
                     <option value="delete" data-i18n="settings.cleanup_policy.delete">Löschen</option>
                   </select>
-                  <label class="md-field__label" for="settings-cleanup-policy" data-i18n="settings.cleanup_policy">Verfahrensweise bei abgelaufenen Objekten</label>
+                  <label class="md-field__label" for="settings-cleanup-policy" data-i18n="settings.cleanup_policy">Verfahrensweise bei abgelaufenen Meldungen</label>
                 </div>
 
                 <div class="md-field">
                   <select id="settings-cleanup-delete-days" class="md-field__input">
-                    <option value="-1" selected data-i18n="settings.cleanup_delete_days.never">Niemals</option>
+                    <option value="-1" data-i18n="settings.cleanup_delete_days.never">Niemals</option>
                     <option value="1" data-i18n="settings.cleanup_delete_days.1">Nach 1 Tag</option>
-                    <option value="7" data-i18n="settings.cleanup_delete_days.7">Nach 7 Tagen</option>
+                    <option value="7" selected data-i18n="settings.cleanup_delete_days.7">Nach 7 Tagen</option>
                     <option value="30" data-i18n="settings.cleanup_delete_days.30">Nach 30 Tagen</option>
                   </select>
-                  <label class="md-field__label" for="settings-cleanup-delete-days" data-i18n="settings.cleanup_delete_days">Endgültiges Löschen</label>
+                  <label class="md-field__label" for="settings-cleanup-delete-days" data-i18n="settings.cleanup_delete_days">Endgültiges Löschen abgelaufener Meldungen</label>
+                </div>
+
+                <div class="md-field">
+                  <select id="settings-cleanup-trips-max-age" class="md-field__input">
+                    <option value="5" data-i18n="settings.cleanup_max_age.5">5 Minuten</option>
+                    <option value="10" data-i18n="settings.cleanup_max_age.10">10 Minuten</option>
+                    <option value="30" data-i18n="settings.cleanup_max_age.30">30 Minuten</option>
+                    <option value="60" data-i18n="settings.cleanup_max_age.60">60 Minuten</option>
+                    <option value="120" selected data-i18n="settings.cleanup_max_age.120">120 Minuten</option>
+                  </select>
+                  <label class="md-field__label" for="settings-cleanup-trips-max-age" data-i18n="settings.cleanup_trips_max_age">Maximales Alter für Fahrten</label>
+                  <div class="md-field__helper" data-i18n="settings.cleanup_trips_max_age.helper">Fahrten, deren letzte Aktualisierung länger zurückliegt, werden bereinigt.</div>
+                </div>
+
+                <div class="md-field">
+                  <select id="settings-cleanup-vehicles-max-age" class="md-field__input">
+                    <option value="5" selected data-i18n="settings.cleanup_max_age.5">5 Minuten</option>
+                    <option value="10" data-i18n="settings.cleanup_max_age.10">10 Minuten</option>
+                    <option value="30" data-i18n="settings.cleanup_max_age.30">30 Minuten</option>
+                    <option value="60" data-i18n="settings.cleanup_max_age.60">60 Minuten</option>
+                    <option value="120" data-i18n="settings.cleanup_max_age.120">120 Minuten</option>
+                  </select>
+                  <label class="md-field__label" for="settings-cleanup-vehicles-max-age" data-i18n="settings.cleanup_vehicles_max_age">Maximales Alter für Fahrzeugpositionen</label>
+                  <div class="md-field__helper" data-i18n="settings.cleanup_vehicles_max_age.helper">Fahrzeugpositionen, deren letzte Aktualisierung länger zurückliegt, werden gelöscht.</div>
                 </div>
 
                 <p id="settings-error" class="login-card__error" role="alert"></p>

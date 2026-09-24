@@ -60,8 +60,10 @@ class SystemCopyService(SystemCopyInterface):
         AppSetting.KEY_GTFS_RT_USERNAME,
         AppSetting.KEY_GTFS_RT_PASSWORD,
         AppSetting.KEY_CLEANUP_CRON,
-        AppSetting.KEY_CLEANUP_EXPIRED_POLICY,
-        AppSetting.KEY_CLEANUP_DELETE_AFTER_DAYS,
+        AppSetting.KEY_CLEANUP_EXPIRED_ALERTS_POLICY,
+        AppSetting.KEY_CLEANUP_DELETE_ALERTS_AFTER_DAYS,
+        AppSetting.KEY_CLEANUP_EXPIRED_TRIPS_MAX_AGE,
+        AppSetting.KEY_CLEANUP_EXPIRED_VEHICLES_MAX_AGE,
     )
 
     def __init__(self, repository: SystemRepositoryInterface | None = None):

@@ -53,8 +53,10 @@ class AppSetting(Base):
     KEY_GTFS_RT_PASSWORD: ClassVar[str] = "gtfs_rt_password"
 
     KEY_CLEANUP_CRON: ClassVar[str] = "cleanup_cron"
-    KEY_CLEANUP_EXPIRED_POLICY: ClassVar[str] = "cleanup_expired_policy"
-    KEY_CLEANUP_DELETE_AFTER_DAYS: ClassVar[str] = "cleanup_delete_after_days"
+    KEY_CLEANUP_EXPIRED_ALERTS_POLICY: ClassVar[str] = "cleanup_expired_alerts_policy"
+    KEY_CLEANUP_DELETE_ALERTS_AFTER_DAYS: ClassVar[str] = "cleanup_delete_alerts_after_days"
+    KEY_CLEANUP_EXPIRED_TRIPS_MAX_AGE: ClassVar[str] = "cleanup_expired_trips_max_age"
+    KEY_CLEANUP_EXPIRED_VEHICLES_MAX_AGE: ClassVar[str] = "cleanup_expired_vehicles_max_age"
 
     KEY_PUSH_API_ENABLED: ClassVar[str] = "push_api_enabled"
     KEY_PUSH_API_USERNAME: ClassVar[str] = "push_api_username"
@@ -78,8 +80,10 @@ class AppSetting(Base):
         KEY_GTFS_RT_USERNAME,
         KEY_GTFS_RT_PASSWORD,
         KEY_CLEANUP_CRON,
-        KEY_CLEANUP_EXPIRED_POLICY,
-        KEY_CLEANUP_DELETE_AFTER_DAYS,
+        KEY_CLEANUP_EXPIRED_ALERTS_POLICY,
+        KEY_CLEANUP_DELETE_ALERTS_AFTER_DAYS,
+        KEY_CLEANUP_EXPIRED_TRIPS_MAX_AGE,
+        KEY_CLEANUP_EXPIRED_VEHICLES_MAX_AGE,
         KEY_PUSH_API_ENABLED,
         KEY_PUSH_API_USERNAME,
         KEY_PUSH_API_PASSWORD,

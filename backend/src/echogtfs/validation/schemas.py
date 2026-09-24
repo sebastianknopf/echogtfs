@@ -62,8 +62,10 @@ class AppSettings(BaseModel):
     
     # Data cleanup configuration
     cleanup_cron:             str = '*/10 * * * *'  # Every 10 minutes
-    cleanup_expired_policy:   ExpiredRealtimeObjectPolicy = ExpiredRealtimeObjectPolicy.DEACTIVATE
-    cleanup_delete_after_days: int = -1  # -1 = never, >= 0 = days after expiration
+    cleanup_expired_alerts_policy:   ExpiredRealtimeObjectPolicy = ExpiredRealtimeObjectPolicy.DEACTIVATE
+    cleanup_delete_alerts_after_days: int = 7  # -1 = never, >= 0 = days after expiration
+    cleanup_expired_trips_max_age: int = 120  # minutes, based on Trip.updated_at
+    cleanup_expired_vehicles_max_age: int = 5  # minutes, based on Vehicle.updated_at
 
     # Push API configuration (event-based data sources)
     push_api_enabled:  bool = False
@@ -77,11 +79,18 @@ class AppSettings(BaseModel):
             raise ValueError('Must be a 6-digit hex color, e.g. #008c99')
         return v.lower()
     
-    @field_validator('cleanup_delete_after_days')
+    @field_validator('cleanup_delete_alerts_after_days')
     @classmethod
     def validate_delete_days(cls, v: int) -> int:
         if v < -1:
-            raise ValueError('cleanup_delete_after_days must be >= -1 (-1 = never)')
+            raise ValueError('cleanup_delete_alerts_after_days must be >= -1 (-1 = never)')
+        return v
+
+    @field_validator('cleanup_expired_trips_max_age', 'cleanup_expired_vehicles_max_age')
+    @classmethod
+    def validate_max_age(cls, v: int) -> int:
+        if v not in (5, 10, 30, 60, 120):
+            raise ValueError('Max age must be one of 5, 10, 30, 60, 120 minutes')
         return v
 
 
