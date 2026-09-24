@@ -302,6 +302,7 @@ async def create_source(
         execution_type=source_data.execution_type,
         is_active=source_data.is_active,
         log_dumps=source_data.log_dumps,
+        is_differential_updates=source_data.is_differential_updates,
         invalid_reference_policy=source_data.invalid_reference_policy,
         mappings=[
             {
@@ -536,6 +537,7 @@ async def update_source(
         execution_type=source_data.execution_type,
         is_active=source_data.is_active,
         log_dumps=source_data.log_dumps,
+        is_differential_updates=source_data.is_differential_updates,
         invalid_reference_policy=source_data.invalid_reference_policy,
         mappings=(
             [

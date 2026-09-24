@@ -288,6 +288,7 @@ class SystemRepository(RepositoryBase, SystemRepositoryInterface):
         execution_type: str = "time_based",
         is_active: bool,
         log_dumps: bool,
+        is_differential_updates: bool = False,
         invalid_reference_policy: str,
         mappings: list[dict[str, str]],
         enrichments: list[dict[str, str | int]],
@@ -302,6 +303,7 @@ class SystemRepository(RepositoryBase, SystemRepositoryInterface):
                 execution_type=execution_type,
                 is_active=is_active,
                 log_dumps=log_dumps,
+                is_differential_updates=is_differential_updates,
                 invalid_reference_policy=invalid_reference_policy,
             )
             db.add(source)
@@ -356,6 +358,7 @@ class SystemRepository(RepositoryBase, SystemRepositoryInterface):
         execution_type: str | None = None,
         is_active: bool | None = None,
         log_dumps: bool | None = None,
+        is_differential_updates: bool | None = None,
         invalid_reference_policy: str | None = None,
         mappings: list[dict[str, str]] | None = None,
         enrichments: list[dict[str, str | int]] | None = None,
@@ -392,6 +395,8 @@ class SystemRepository(RepositoryBase, SystemRepositoryInterface):
                 source.is_active = is_active
             if log_dumps is not None:
                 source.log_dumps = log_dumps
+            if is_differential_updates is not None:
+                source.is_differential_updates = is_differential_updates
             if invalid_reference_policy is not None:
                 source.invalid_reference_policy = invalid_reference_policy
 

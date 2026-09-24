@@ -699,6 +699,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
         scheduled_end_stop_id: str | None = None,
         scheduled_start_time: datetime | None = None,
         scheduled_end_time: datetime | None = None,
+        is_complete_stop_sequence: bool = True,
     ) -> str:
         """Create or update a synchronized trip update and replace stop events."""
         async with self.get_session() as db:
@@ -726,6 +727,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                     is_active=is_active_on_create,
                     is_trip_valid=is_trip_valid,
                     is_route_valid=is_route_valid,
+                    is_complete_stop_sequence=is_complete_stop_sequence,
                 )
 
                 db.add(existing)
@@ -744,6 +746,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                 existing.start_date = start_date
                 existing.route_id = route_id
                 existing.schedule_relationship = schedule_relationship
+                existing.is_complete_stop_sequence = is_complete_stop_sequence
 
                 if assignment_type != AssignmentType.MATCH_BY_CACHED_ID:
                     existing.assignment_type = assignment_type

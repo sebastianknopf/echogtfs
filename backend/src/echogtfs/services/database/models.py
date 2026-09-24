@@ -134,7 +134,10 @@ class DataSource(Base):
 
     # Controls whether response dump files should be persisted for this source
     log_dumps: Mapped[bool] = mapped_column(Boolean, default=False)
-    
+
+    # Disables implicit absence-based deletion; records are expected to arrive as partial updates
+    is_differential_updates: Mapped[bool] = mapped_column(Boolean, default=False)
+
     # Policy for handling invalid entity references
     invalid_reference_policy: Mapped[InvalidReferencePolicy] = mapped_column(
         String(32), default=InvalidReferencePolicy.NOT_SPECIFIED
@@ -574,6 +577,9 @@ class Trip(Base):
     is_trip_valid: Mapped[bool] = mapped_column(Boolean, default=True)
     is_route_valid: Mapped[bool] = mapped_column(Boolean, default=True)
 
+    # False when only a partial (incremental) stop sequence has been received so far
+    is_complete_stop_sequence: Mapped[bool] = mapped_column(Boolean, default=True)
+
     data_source: Mapped["DataSource | None"] = relationship(back_populates="trips")
     stop_events: Mapped[list["StopEvent"]] = relationship(
         back_populates="trip", cascade="all, delete-orphan"
@@ -608,6 +614,8 @@ class StopEvent(Base):
     stop_sequence: Mapped[str] = mapped_column(Text, primary_key=True)
     arrival_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     departure_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    scheduled_arrival_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    scheduled_departure_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     schedule_relationship: Mapped[str] = mapped_column(Text, default="SCHEDULED")
     is_implied_schedule_relationship: Mapped[bool] = mapped_column(Boolean, default=False)
     is_valid: Mapped[bool] = mapped_column(Boolean, default=True)

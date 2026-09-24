@@ -251,6 +251,7 @@ class RealtimeRepositoryInterface(ABC):
         scheduled_end_stop_id: str | None = None,
         scheduled_start_time: datetime | None = None,
         scheduled_end_time: datetime | None = None,
+        is_complete_stop_sequence: bool = True,
     ) -> str:
         """Create or update one synchronized trip update and replace stop event records."""
         raise NotImplementedError

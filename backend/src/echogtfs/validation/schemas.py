@@ -211,6 +211,7 @@ class DataSourceCreate(BaseModel):
     execution_type: DataSourceExecutionType = DataSourceExecutionType.TIME_BASED
     is_active: bool = True
     log_dumps: bool = False
+    is_differential_updates: bool = False
     invalid_reference_policy: InvalidReferencePolicy = InvalidReferencePolicy.NOT_SPECIFIED
     mappings: list[DataSourceMappingCreate] = []
     enrichments: list[DataSourceEnrichmentCreate] = []
@@ -232,6 +233,7 @@ class DataSourceUpdate(BaseModel):
     execution_type: DataSourceExecutionType | None = None
     is_active: bool | None = None
     log_dumps: bool | None = None
+    is_differential_updates: bool | None = None
     invalid_reference_policy: InvalidReferencePolicy | None = None
     mappings: list[DataSourceMappingCreate] | None = None
     enrichments: list[DataSourceEnrichmentCreate] | None = None
@@ -254,6 +256,7 @@ class DataSourceRead(BaseModel):
     execution_type: DataSourceExecutionType
     is_active: bool
     log_dumps: bool
+    is_differential_updates: bool
     invalid_reference_policy: InvalidReferencePolicy
     last_run_at: datetime | None
     created_at: datetime
@@ -655,6 +658,8 @@ class StopEventRead(BaseModel):
     stop_sequence: str
     arrival_time: datetime
     departure_time: datetime
+    scheduled_arrival_time: datetime | None = None
+    scheduled_departure_time: datetime | None = None
     schedule_relationship: str
     is_implied_schedule_relationship: bool = False
     is_valid: bool
@@ -687,6 +692,7 @@ class TripRead(BaseModel):
     updated_at: datetime
     is_trip_valid: bool = True
     is_route_valid: bool = True
+    is_complete_stop_sequence: bool = True
     is_valid: bool
     stop_events: list[StopEventRead]
     data_source_name: str | None = None
