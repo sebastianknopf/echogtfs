@@ -256,7 +256,7 @@ class DataSourceRead(BaseModel):
     execution_type: DataSourceExecutionType
     is_active: bool
     log_dumps: bool
-    is_differential_updates: bool
+    is_differential_updates: bool = False
     invalid_reference_policy: InvalidReferencePolicy
     last_run_at: datetime | None
     created_at: datetime

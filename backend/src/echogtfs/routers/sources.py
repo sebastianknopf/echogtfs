@@ -70,6 +70,7 @@ async def _enrich_source_with_error_flag(source: DataSource, repository: SystemR
         "execution_type": source.execution_type,
         "is_active": source.is_active,
         "log_dumps": source.log_dumps,
+        "is_differential_updates": source.is_differential_updates,
         "invalid_reference_policy": source.invalid_reference_policy,
         "last_run_at": source.last_run_at,
         "created_at": source.created_at,
