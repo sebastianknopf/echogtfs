@@ -962,6 +962,8 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                     is_active=trip_is_active_on_create,
                     is_trip_valid=trip_is_trip_valid,
                     is_route_valid=trip_is_route_valid,
+                    # Vehicle-position-only trips carry no stop events, so the sequence is never complete
+                    is_complete_stop_sequence=False,
                 )
                 
                 db.add(existing_trip)

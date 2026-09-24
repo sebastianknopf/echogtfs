@@ -290,6 +290,8 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
                 )
                 arrival_time = self._parse_datetime(expected_arrival_text)
                 departure_time = self._parse_datetime(expected_departure_text)
+                scheduled_arrival_time = self._parse_datetime(aimed_arrival_text)
+                scheduled_departure_time = self._parse_datetime(aimed_departure_text)
 
                 if arrival_time is None:
                     arrival_time = self._parse_datetime(aimed_arrival_text)
@@ -334,6 +336,8 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
                 has_expected_data = bool(expected_arrival_text or expected_departure_text)
                 arrival_time = self._parse_datetime(expected_arrival_text)
                 departure_time = self._parse_datetime(expected_departure_text)
+                scheduled_arrival_time = self._parse_datetime(aimed_arrival_text)
+                scheduled_departure_time = self._parse_datetime(aimed_departure_text)
 
                 if arrival_time is None:
                     arrival_time = self._parse_datetime(aimed_arrival_text)
@@ -368,6 +372,8 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
                     "stop_sequence": stop_sequence,
                     "arrival_time": arrival_time,
                     "departure_time": departure_time,
+                    "scheduled_arrival_time": scheduled_arrival_time,
+                    "scheduled_departure_time": scheduled_departure_time,
                     "schedule_relationship": schedule_relationship,
                 }
             )

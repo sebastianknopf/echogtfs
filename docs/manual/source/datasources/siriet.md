@@ -26,6 +26,10 @@ Die folgenden Parameter können in der Konfiguration der Datenquelle gesetzt wer
 - **Filter**: Optionaler Filter für Betreiberkennungen.
   - Ergebnis: Wenn ein Filter gesetzt ist, werden nur Fahrten aus passenden Betreiberreferenzen berücksichtigt. `*` wird als Wildcard behandelt und steht für beliebig viele beliebige Zeichen.
 
+## Planmäßige Ankunfts- und Abfahrtszeiten
+
+Für jeden Halt werden neben den tatsächlichen (erwarteten) Ankunfts- und Abfahrtszeiten auch die planmäßigen Zeiten (`AimedArrivalTime`/`AimedDepartureTime`) aus dem SIRI-ET-Feed übernommen und getrennt gespeichert. Dadurch bleiben die planmäßigen Zeiten auch dann verfügbar, wenn eine Fahrt keiner Soll-Fahrt zugeordnet werden konnte (`NO_MATCH_GENERAL`) und somit keine GTFS-Solldaten zur Ergänzung herangezogen werden können.
+
 ```{warning}
 In der aktuellen Umsetzungsvariante wird die Ausgabe von Zusatzhalten über GTFS-RT nicht unterstützt! Die hierzu notwendige [Erweiterung mit `TripModifications`](https://gtfs.org/documentation/realtime/reference/#message-tripmodifications) ist aktuell noch experimentell und [wird von GoogleTransit noch nicht unterstützt](https://developers.google.com/transit/gtfs-realtime/reference?hl=de).
 ```

@@ -1475,6 +1475,7 @@ class DatasourceBase(DatasourceInterface):
                 ),
                 scheduled_start_time=scheduled_start_time,
                 scheduled_end_time=scheduled_end_time,
+                is_complete_stop_sequence=is_complete_stop_sequence,
             )
 
             if (
