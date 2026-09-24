@@ -1706,14 +1706,14 @@ body {
 .modal__switches + .md-field__helper { margin-top: 8px; margin-left: 0; line-height: 1.5; }
 .source-switch-grid {
   display: flex;
-  gap: 24px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 16px;
   margin-top: 8px;
   padding-top: 4px;
 }
 
 .source-switch-item {
-  flex: 1 1 260px;
+  flex: 1 1 auto;
 }
 
 .source-switch-item .md-field__helper {

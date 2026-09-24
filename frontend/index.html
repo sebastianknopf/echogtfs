@@ -738,6 +738,7 @@
             <input class="md-field__input" type="text" id="source-name" name="name" placeholder=" " required />
             <label class="md-field__label" for="source-name" data-i18n="source.name">Name</label>
           </div>
+
           <div class="md-field">
             <select class="md-field__input" id="source-type" name="type" placeholder=" " required>
               <option value="" data-i18n="source.type.placeholder">Typ auswählen...</option>
@@ -782,6 +783,15 @@
                 <span class="md-switch__label" data-i18n="source.active">Aktiv</span>
               </label>
               <div class="md-field__helper" data-i18n="source.inactive.helper">Inaktive Datenquellen führen keine Importe durch und deren Meldungen werden gelöscht.</div>
+            </div>
+
+            <div class="source-switch-item">
+              <label class="md-switch">
+                <input type="checkbox" id="source-is-differential-updates" />
+                <span class="md-switch__track"></span>
+                <span class="md-switch__label" data-i18n="source.differential_updates">Differenzielle Updates</span>
+              </label>
+              <div class="md-field__helper" data-i18n="source.differential_updates.helper">Bei aktivierten differenziellen Updates wird die implizite Löschung fehlender Objekte deaktiviert; die Bereinigung erfolgt stattdessen altersbasiert.</div>
             </div>
 
             <div class="source-switch-item">

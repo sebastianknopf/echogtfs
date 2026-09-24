@@ -241,6 +241,8 @@ const trips = (() => {
     const normalizedStopEvents = stopEvents.map((stopEvent) => {
       const arrivalDate = stopEvent?.arrival_time ? new Date(stopEvent.arrival_time) : null;
       const departureDate = stopEvent?.departure_time ? new Date(stopEvent.departure_time) : null;
+      const scheduledArrivalDate = stopEvent?.scheduled_arrival_time ? new Date(stopEvent.scheduled_arrival_time) : null;
+      const scheduledDepartureDate = stopEvent?.scheduled_departure_time ? new Date(stopEvent.scheduled_departure_time) : null;
 
       const statusCode = String(stopEvent?.schedule_relationship || '');
       const statusLabel = statusCode === 'ADDED'
@@ -253,6 +255,8 @@ const trips = (() => {
         originalStopId: stopEvent?.original_stop_id ? String(stopEvent.original_stop_id) : null,
         arrivalTimeLabel: _formatTimeExtended(arrivalDate, operationDayDate),
         departureTimeLabel: _formatTimeExtended(departureDate, operationDayDate),
+        scheduledArrivalTimeLabel: _formatTimeExtended(scheduledArrivalDate, operationDayDate),
+        scheduledDepartureTimeLabel: _formatTimeExtended(scheduledDepartureDate, operationDayDate),
         statusCode,
         statusLabel,
         isImpliedScheduleRelationship: stopEvent?.is_implied_schedule_relationship === true,
@@ -294,6 +298,7 @@ const trips = (() => {
       isValid,
       isTripValid,
       isRouteValid,
+      isCompleteStopSequence: item.is_complete_stop_sequence !== false,
       hasOnlyNoDataStopEvents,
       hasImpliedStopWarnings,
       isMatched: stopEvents.length > 0,
@@ -351,8 +356,10 @@ const trips = (() => {
           <div class="view-item view-item--entity">
             <div class="view-item__content">
               <strong>${ui.esc(stopEvent.stopDisplayName)}${stopIdSuffix}</strong><br>
-              ${ui.esc(window.i18n('trips.view.arrival'))}: ${ui.esc(stopEvent.arrivalTimeLabel)} •
-              ${ui.esc(window.i18n('trips.view.departure'))}: ${ui.esc(stopEvent.departureTimeLabel)} •
+              ${ui.esc(window.i18n('trips.view.planned_arrival'))}: ${ui.esc(stopEvent.scheduledArrivalTimeLabel)} •
+              ${ui.esc(window.i18n('trips.view.actual_arrival'))}: ${ui.esc(stopEvent.arrivalTimeLabel)} •
+              ${ui.esc(window.i18n('trips.view.planned_departure'))}: ${ui.esc(stopEvent.scheduledDepartureTimeLabel)} •
+              ${ui.esc(window.i18n('trips.view.actual_departure'))}: ${ui.esc(stopEvent.departureTimeLabel)} •
               ${ui.esc(window.i18n('trips.view.status'))}: <span class="${_getStopEventStatusClass(stopEvent.statusCode)}">${ui.esc(stopEvent.statusLabel)}</span>
             </div>
             ${warnings ? `<div class="view-item__warnings">${warnings}</div>` : ''}
@@ -379,6 +386,10 @@ const trips = (() => {
         <div class="view-item">
           <div class="view-item__label">${ui.esc(window.i18n('trips.view.original_trip_id'))}</div>
           <div class="view-item__content">${ui.esc(trip.originalTripId)}</div>
+        </div>
+        <div class="view-item">
+          <div class="view-item__label">${ui.esc(window.i18n('trips.view.full_stop_sequence'))}</div>
+          <div class="view-item__content">${ui.esc(trip.isCompleteStopSequence ? window.i18n('common.yes') : window.i18n('common.no'))}</div>
         </div>
         <div class="view-item">
           <div class="view-item__label">${ui.esc(window.i18n('trips.view.route'))}</div>
