@@ -4,7 +4,7 @@ import asyncio
 from abc import abstractmethod
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 import logging
 import sys
 import uuid
@@ -488,15 +488,16 @@ class DatasourceBase(DatasourceInterface):
     def _coerce_stop_time_for_sort(value: Any) -> datetime:
         """Best-effort datetime conversion used only for stop-event merge ordering."""
         if isinstance(value, datetime):
-            return value
+            return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
 
         if isinstance(value, str):
             try:
-                return datetime.fromisoformat(value.replace("Z", "+00:00"))
+                parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+                return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
             except ValueError:
-                return datetime.max
+                return datetime.max.replace(tzinfo=timezone.utc)
 
-        return datetime.max
+        return datetime.max.replace(tzinfo=timezone.utc)
 
     @staticmethod
     def _normalize_stop_id_for_matching(value: Any) -> str:
@@ -1472,7 +1473,7 @@ class DatasourceBase(DatasourceInterface):
         processed_trip_uuids: set[uuid.UUID] = set()
 
         for record in records:
-            is_complete_stop_sequence = bool(record.get("is_complete_stop_sequence", False))
+            is_complete_stop_sequence = bool(record.get("is_complete_stop_sequence", True))
             schedule_relationship = str(record.get("schedule_relationship", "SCHEDULED") or "SCHEDULED").upper()
 
             mapped_trip = self._identifier_mapping_service.apply_mapping(
