@@ -31,6 +31,8 @@ The trip updates may have implications on the vehicle positions. Internally, the
 - a table for realtime trips (entrypoint for `GtfsRealtimeTripUpdatesExportService`)
 - a table for stop events related to the trip
 
+Detailed behavior for partial stop sequences, incremental merge propagation, and export rules is documented in [differential-incremental.md](differential-incremental.md).
+
 ### Relations
 
 - a realtime trip **may live without stop events**, when it has schedule relationship `DELETED` or `CANCELED` or only the vehicle information is available
