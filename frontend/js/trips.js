@@ -206,13 +206,10 @@ const trips = (() => {
       return String(a.stop_sequence ?? '').localeCompare(String(b.stop_sequence ?? ''));
     });
 
-    const firstStopEvent = stopEvents[0] || null;
-    const lastStopEvent = stopEvents.length ? stopEvents[stopEvents.length - 1] : null;
-
     const scheduledStartTime = _coerceDate(item.scheduled_start_time);
     const scheduledEndTime = _coerceDate(item.scheduled_end_time);
-    const startDate = scheduledStartTime || _parseServiceDateTime(item.start_date, item.start_time);
-    const endDate = scheduledEndTime || startDate;
+    const startDate = scheduledStartTime;
+    const endDate = scheduledEndTime;
     const operationDayDate = _parseOperationDay(item.start_date);
     const hasInvalidStopEvent = stopEvents.some((stopEvent) => stopEvent?.is_valid === false);
     const hasImpliedStopWarnings = stopEvents.some(
@@ -264,8 +261,8 @@ const trips = (() => {
       };
     });
 
-    const startStopName = scheduledStartStopName || scheduledStartStopId || firstStopEvent?.stop_name || firstStopEvent?.stop_id || '-';
-    const endStopName = scheduledEndStopName || scheduledEndStopId || lastStopEvent?.stop_name || lastStopEvent?.stop_id || '-';
+    const startStopName = scheduledStartStopName || scheduledStartStopId || '-';
+    const endStopName = scheduledEndStopName || scheduledEndStopId || '-';
 
     const hasScheduledDisplayData = Boolean(
       scheduledStartStopId && scheduledEndStopId && scheduledStartTime && scheduledEndTime
@@ -282,9 +279,9 @@ const trips = (() => {
       endDate,
       operationDayDate,
       startStopName,
-      startStopId: scheduledStartStopId || firstStopEvent?.stop_id || '-',
+      startStopId: scheduledStartStopId || '-',
       endStopName,
-      endStopId: scheduledEndStopId || lastStopEvent?.stop_id || '-',
+      endStopId: scheduledEndStopId || '-',
       scheduledStartTime,
       scheduledEndTime,
       scheduledStartStopId,
