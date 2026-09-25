@@ -566,7 +566,8 @@ class Trip(Base):
     scheduled_end_stop_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     scheduled_start_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     scheduled_end_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    start_time: Mapped[str] = mapped_column(Text)
+    # Unknown until a full update establishes the trip's actual start-of-day time
+    start_time: Mapped[str | None] = mapped_column(Text, nullable=True)
     start_date: Mapped[str] = mapped_column(Text)
     route_id: Mapped[str] = mapped_column(Text)
     schedule_relationship: Mapped[str] = mapped_column(Text, default="SCHEDULED")

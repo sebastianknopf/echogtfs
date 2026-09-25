@@ -30,6 +30,10 @@ Die folgenden Parameter können in der Konfiguration der Datenquelle gesetzt wer
 
 Für jeden Halt werden neben den tatsächlichen (erwarteten) Ankunfts- und Abfahrtszeiten auch die planmäßigen Zeiten (`AimedArrivalTime`/`AimedDepartureTime`) aus dem SIRI-ET-Feed übernommen und getrennt gespeichert. Dadurch bleiben die planmäßigen Zeiten auch dann verfügbar, wenn eine Fahrt keiner Soll-Fahrt zugeordnet werden konnte (`NO_MATCH_GENERAL`) und somit keine GTFS-Solldaten zur Ergänzung herangezogen werden können.
 
+Die planmäßige Start- und Endzeit der gesamten Fahrt (`scheduled_start_time`/`scheduled_end_time`) wird nur dann gesetzt, wenn `IsCompleteStopSequence` auf `true` steht. Bei einer unvollständigen (differenziellen) Aktualisierung sind der erste und letzte übermittelte Halt lediglich der erste und letzte Halt dieser Teilmeldung und nicht zwangsläufig Start bzw. Ziel der Fahrt; in diesem Fall bleiben die Felder leer, sofern nicht bereits eine vollständige Fahrt mit bekannter Start-/Endzeit in der Datenbank existiert.
+
+Aus demselben Grund wird auch die Startzeit der Fahrt (`start_time`) nur dann aus der Meldung übernommen, wenn diese eine vollständige Haltefolge (`IsCompleteStopSequence: true`) enthält. Erhält eine bislang unbekannte Fahrt zunächst nur eine unvollständige (differenzielle) Aktualisierung, bleibt `start_time` leer, da sie sich aus einer Teilmeldung nicht zuverlässig bestimmen lässt. Existiert für die Fahrt bereits ein Datensatz, bleibt dessen `start_time` bei einer nachfolgenden differenziellen Aktualisierung unverändert erhalten.
+
 ```{warning}
 In der aktuellen Umsetzungsvariante wird die Ausgabe von Zusatzhalten über GTFS-RT nicht unterstützt! Die hierzu notwendige [Erweiterung mit `TripModifications`](https://gtfs.org/documentation/realtime/reference/#message-tripmodifications) ist aktuell noch experimentell und [wird von GoogleTransit noch nicht unterstützt](https://developers.google.com/transit/gtfs-realtime/reference?hl=de).
 ```

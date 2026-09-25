@@ -689,7 +689,7 @@ class TripRead(BaseModel):
     scheduled_end_stop_name: str | None = None
     scheduled_start_time: datetime | None = None
     scheduled_end_time: datetime | None = None
-    start_time: str
+    start_time: str | None = None
     start_date: str
     route_id: str
     route_name: str | None = None
@@ -723,7 +723,7 @@ class VehicleTripSummaryRead(BaseModel):
     trip_id: str
     route_id: str
     route_name: str | None = None
-    start_time: str
+    start_time: str | None = None
     start_date: str
     schedule_relationship: str
     is_active: bool

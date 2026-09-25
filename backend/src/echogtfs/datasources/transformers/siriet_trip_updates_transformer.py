@@ -156,18 +156,28 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
         first_call = ordered_calls[0][0]
         last_call = ordered_calls[-1][0]
 
+        is_complete_stop_sequence = self._parse_bool(
+            self._get_text(journey.find("siri:IsCompleteStopSequence", self._siri_ns)),
+            default=False,
+        )
+
         scheduled_start_stop_id = self._get_text(first_call.find("siri:StopPointRef", self._siri_ns))
         scheduled_end_stop_id = self._get_text(last_call.find("siri:StopPointRef", self._siri_ns))
 
-        scheduled_start_time = self._parse_datetime(
+        # First/last call are only reliable trip anchors for a complete stop sequence; for a
+        # partial/incremental update they are merely the first/last stop of this batch.
+        aimed_start_time = self._parse_datetime(
             self._get_text(first_call.find("siri:AimedDepartureTime", self._siri_ns))
             or self._get_text(first_call.find("siri:AimedArrivalTime", self._siri_ns))
         )
 
-        scheduled_end_time = self._parse_datetime(
+        aimed_end_time = self._parse_datetime(
             self._get_text(last_call.find("siri:AimedArrivalTime", self._siri_ns))
             or self._get_text(last_call.find("siri:AimedDepartureTime", self._siri_ns))
         )
+
+        scheduled_start_time = aimed_start_time if is_complete_stop_sequence else None
+        scheduled_end_time = aimed_end_time if is_complete_stop_sequence else None
 
         if not scheduled_start_stop_id or not scheduled_end_stop_id:
             logger.warning(
@@ -186,12 +196,12 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
 
             return None
 
-        if not start_date and scheduled_start_time is not None:
-            start_date = scheduled_start_time.date().isoformat()
+        if not start_date and aimed_start_time is not None:
+            start_date = aimed_start_time.date().isoformat()
 
         start_time = self._format_start_time(
             start_date=start_date,
-            scheduled_start_time=scheduled_start_time,
+            scheduled_start_time=aimed_start_time,
         )
 
         trip_canceled = self._parse_bool(
@@ -204,23 +214,21 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
             default=False,
         )
 
-        is_complete_stop_sequence = self._parse_bool(
-            self._get_text(journey.find("siri:IsCompleteStopSequence", self._siri_ns)),
-            default=False,
-        )
-
         schedule_relationship = "SCHEDULED"
         if trip_extra_journey:
             schedule_relationship = "NEW"
         elif trip_canceled:
             schedule_relationship = "CANCELED"
 
-        scheduled_intermediate_stops = self._extract_scheduled_intermediate_stops_from_calls(journey)
+        scheduled_intermediate_stops = self._extract_scheduled_intermediate_stops_from_calls(
+            journey,
+            is_complete_stop_sequence=is_complete_stop_sequence,
+        )
 
         return {
             "trip_id": trip_id,
             "route_id": route_id,
-            "start_time": start_time,
+            "start_time": start_time if is_complete_stop_sequence else None,
             "start_date": start_date or "",
             "schedule_relationship": schedule_relationship,
             "is_complete_stop_sequence": is_complete_stop_sequence,
@@ -235,13 +243,24 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
     def _extract_scheduled_intermediate_stops_from_calls(
         self,
         journey: ET.Element,
+        *,
+        is_complete_stop_sequence: bool,
     ) -> list[tuple[str, datetime]]:
         ordered_calls = self._iter_calls_in_order(journey)
-        if len(ordered_calls) <= 2:
-            return []
+
+        if is_complete_stop_sequence:
+            if len(ordered_calls) <= 2:
+                return []
+            # First/last calls are already used as strong start/end anchors; only the
+            # remaining stops are useful as a fallback matching signal.
+            candidate_calls = ordered_calls[1:-1]
+        else:
+            # Partial/incremental updates carry no reliable start/end anchor, so every
+            # delivered stop is a usable intermediate-stop matching anchor.
+            candidate_calls = ordered_calls
 
         extracted: list[tuple[str, datetime]] = []
-        for call_element, _, _ in ordered_calls[1:-1]:
+        for call_element, _, _ in candidate_calls:
             stop_id = self._get_text(call_element.find("siri:StopPointRef", self._siri_ns))
             if not stop_id:
                 continue
