@@ -21,10 +21,17 @@ class MatchingServiceInterface(ABC):
         scheduled_start_stop_id: str | None = None,
         scheduled_end_stop_id: str | None = None,
         scheduled_intermediate_stops: list[tuple[str, datetime]] | None = None,
+        is_complete_stop_sequence: bool = True,
+        intermediate_stop_sample_size: int = 3,
     ) -> tuple[str | None, AssignmentType]:
         """Return one matched GTFS trip ID with the assignment type describing the match.
 
         The trip ID is None when no unique match exists; the assignment type then
-        describes why no trip was assigned.
+        describes why no trip was assigned. When is_complete_stop_sequence is False,
+        start/end anchor matching is skipped since incomplete sequences don't reliably
+        carry valid first/last stops; matching then relies on the cached ID and
+        intermediate-stop fallback only. intermediate_stop_sample_size sets the minimum
+        number of intermediate stops considered before random-sampling down; callers
+        with fewer available candidates simply use all of them.
         """
         raise NotImplementedError

@@ -34,6 +34,8 @@ class MatchingService(MatchingServiceInterface):
         scheduled_start_stop_id: str | None = None,
         scheduled_end_stop_id: str | None = None,
         scheduled_intermediate_stops: list[tuple[str, datetime]] | None = None,
+        is_complete_stop_sequence: bool = True,
+        intermediate_stop_sample_size: int = 3,
     ) -> tuple[str | None, AssignmentType]:
         """Return one matched GTFS trip ID with the assignment type describing the match."""
 
@@ -55,17 +57,19 @@ class MatchingService(MatchingServiceInterface):
             else None
         )
 
-        internal_trip_id, anchors_are_ambiguous = await self._match_by_start_end_anchors(
-            route_id=route_id,
-            operation_day_date=operation_day_date,
-            scheduled_start_time=scheduled_start_time,
-            scheduled_end_time=scheduled_end_time,
-            scheduled_start_stop_id=reduced_start_stop_id,
-            scheduled_end_stop_id=reduced_end_stop_id,
-        )
+        anchors_are_ambiguous = False
+        if is_complete_stop_sequence:
+            internal_trip_id, anchors_are_ambiguous = await self._match_by_start_end_anchors(
+                route_id=route_id,
+                operation_day_date=operation_day_date,
+                scheduled_start_time=scheduled_start_time,
+                scheduled_end_time=scheduled_end_time,
+                scheduled_start_stop_id=reduced_start_stop_id,
+                scheduled_end_stop_id=reduced_end_stop_id,
+            )
 
-        if internal_trip_id is not None:
-            return internal_trip_id, AssignmentType.MATCHED_BY_START_STOP
+            if internal_trip_id is not None:
+                return internal_trip_id, AssignmentType.MATCHED_BY_START_STOP
 
         fallback_assignment_type = (
             AssignmentType.NO_MATCH_AMBIGUOUS_TRIP
@@ -77,8 +81,9 @@ class MatchingService(MatchingServiceInterface):
             scheduled_intermediate_stops or []
         )
 
-        if len(reduced_intermediate_stops) > 3:
-            reduced_intermediate_stops = random.sample(reduced_intermediate_stops, 3)
+        sample_size = max(3, intermediate_stop_sample_size)
+        if len(reduced_intermediate_stops) > sample_size:
+            reduced_intermediate_stops = random.sample(reduced_intermediate_stops, sample_size)
 
         if not reduced_intermediate_stops:
             return None, fallback_assignment_type
