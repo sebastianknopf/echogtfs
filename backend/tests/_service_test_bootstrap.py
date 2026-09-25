@@ -8,6 +8,12 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+# Import echogtfs.common before echogtfs.services.security: security_service.py
+# triggers echogtfs.common's own package init, which imports back from
+# echogtfs.services.security, causing a circular-import error unless
+# echogtfs.common is already fully initialized first.
+import echogtfs.common  # noqa: F401
+
 from echogtfs.services.caching import set_caching_service
 from echogtfs.services.database import (
     set_gtfs_repository,

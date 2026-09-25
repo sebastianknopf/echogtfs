@@ -142,8 +142,10 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
         self.assertEqual(
             trips[0]["scheduled_intermediate_stops"],
             [
+                ("STOP1", stop_1_time),
                 ("STOP2", stop_2_time),
                 ("STOP3", stop_3_time),
+                ("STOP4", stop_4_time),
             ],
         )
 
@@ -179,6 +181,131 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
 
         self.assertEqual(len(trips), 1)
         self.assertEqual(trips[0]["stop_events"][0]["schedule_relationship"], "ADDED")
+
+    def test_start_time_is_none_when_stop_sequence_is_incomplete(self) -> None:
+        payload = self._build_payload(extra_journey="false", complete_sequence="false")
+
+        trips = self.transformer.transform({"root": payload})
+
+        self.assertEqual(len(trips), 1)
+        self.assertIsNone(trips[0]["start_time"])
+
+    def test_start_time_is_set_when_stop_sequence_is_complete(self) -> None:
+        payload = self._build_payload(extra_journey="false", complete_sequence="true")
+
+        trips = self.transformer.transform({"root": payload})
+
+        self.assertEqual(len(trips), 1)
+        self.assertIsNotNone(trips[0]["start_time"])
+
+    def test_scheduled_start_and_end_time_are_none_when_incomplete(self) -> None:
+        payload = self._build_payload(extra_journey="false", complete_sequence="false")
+
+        trips = self.transformer.transform({"root": payload})
+
+        self.assertEqual(len(trips), 1)
+        self.assertIsNone(trips[0]["scheduled_start_time"])
+        self.assertIsNone(trips[0]["scheduled_end_time"])
+
+    def test_scheduled_start_and_end_time_are_set_when_complete(self) -> None:
+        payload = self._build_payload(extra_journey="false", complete_sequence="true")
+
+        trips = self.transformer.transform({"root": payload})
+
+        self.assertEqual(len(trips), 1)
+        self.assertIsNotNone(trips[0]["scheduled_start_time"])
+        self.assertIsNotNone(trips[0]["scheduled_end_time"])
+
+    def test_incomplete_journey_with_only_past_reported_stops_is_kept(self) -> None:
+        now = datetime.now(timezone.utc)
+        past_time = (now - timedelta(minutes=10)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+        xml = f"""<siri:Root xmlns:siri=\"http://www.siri.org.uk/siri\">
+  <siri:EstimatedVehicleJourney>
+    <siri:Monitored>true</siri:Monitored>
+    <siri:OperatorRef>OP1</siri:OperatorRef>
+    <siri:ExtraJourney>false</siri:ExtraJourney>
+    <siri:IsCompleteStopSequence>false</siri:IsCompleteStopSequence>
+    <siri:LineRef>LINE1</siri:LineRef>
+    <siri:FramedVehicleJourneyRef>
+      <siri:DatedVehicleJourneyRef>TRIP1</siri:DatedVehicleJourneyRef>
+      <siri:DataFrameRef>{now.date().isoformat()}</siri:DataFrameRef>
+    </siri:FramedVehicleJourneyRef>
+    <siri:RecordedCalls>
+      <siri:RecordedCall>
+        <siri:StopPointRef>STOP1</siri:StopPointRef>
+        <siri:AimedArrivalTime>{past_time}</siri:AimedArrivalTime>
+        <siri:ExpectedArrivalTime>{past_time}</siri:ExpectedArrivalTime>
+        <siri:AimedDepartureTime>{past_time}</siri:AimedDepartureTime>
+        <siri:ExpectedDepartureTime>{past_time}</siri:ExpectedDepartureTime>
+        <siri:Order>1</siri:Order>
+      </siri:RecordedCall>
+    </siri:RecordedCalls>
+  </siri:EstimatedVehicleJourney>
+</siri:Root>"""
+
+        trips = self.transformer.transform({"root": ET.fromstring(xml)})
+
+        self.assertEqual(len(trips), 1)
+
+    def test_complete_journey_with_only_past_reported_stops_is_discarded(self) -> None:
+        now = datetime.now(timezone.utc)
+        past_time = (now - timedelta(minutes=10)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+        xml = f"""<siri:Root xmlns:siri=\"http://www.siri.org.uk/siri\">
+  <siri:EstimatedVehicleJourney>
+    <siri:Monitored>true</siri:Monitored>
+    <siri:OperatorRef>OP1</siri:OperatorRef>
+    <siri:ExtraJourney>false</siri:ExtraJourney>
+    <siri:IsCompleteStopSequence>true</siri:IsCompleteStopSequence>
+    <siri:LineRef>LINE1</siri:LineRef>
+    <siri:FramedVehicleJourneyRef>
+      <siri:DatedVehicleJourneyRef>TRIP1</siri:DatedVehicleJourneyRef>
+      <siri:DataFrameRef>{now.date().isoformat()}</siri:DataFrameRef>
+    </siri:FramedVehicleJourneyRef>
+    <siri:RecordedCalls>
+      <siri:RecordedCall>
+        <siri:StopPointRef>STOP1</siri:StopPointRef>
+        <siri:AimedArrivalTime>{past_time}</siri:AimedArrivalTime>
+        <siri:ExpectedArrivalTime>{past_time}</siri:ExpectedArrivalTime>
+        <siri:AimedDepartureTime>{past_time}</siri:AimedDepartureTime>
+        <siri:ExpectedDepartureTime>{past_time}</siri:ExpectedDepartureTime>
+        <siri:Order>1</siri:Order>
+      </siri:RecordedCall>
+    </siri:RecordedCalls>
+  </siri:EstimatedVehicleJourney>
+</siri:Root>"""
+
+        trips = self.transformer.transform({"root": ET.fromstring(xml)})
+
+        self.assertEqual(trips, [])
+
+    def test_journey_with_first_stop_too_far_in_future_is_discarded(self) -> None:
+        now = datetime.now(timezone.utc)
+        far_future = (now + timedelta(hours=5)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+        xml = f"""<siri:Root xmlns:siri=\"http://www.siri.org.uk/siri\">
+  <siri:EstimatedVehicleJourney>
+    <siri:Monitored>true</siri:Monitored>
+    <siri:OperatorRef>OP1</siri:OperatorRef>
+    <siri:ExtraJourney>false</siri:ExtraJourney>
+    <siri:IsCompleteStopSequence>false</siri:IsCompleteStopSequence>
+    <siri:LineRef>LINE1</siri:LineRef>
+    <siri:FramedVehicleJourneyRef>
+      <siri:DatedVehicleJourneyRef>TRIP1</siri:DatedVehicleJourneyRef>
+      <siri:DataFrameRef>{now.date().isoformat()}</siri:DataFrameRef>
+    </siri:FramedVehicleJourneyRef>
+    <siri:RecordedCalls>
+      <siri:RecordedCall>
+        <siri:StopPointRef>STOP1</siri:StopPointRef>
+        <siri:AimedArrivalTime>{far_future}</siri:AimedArrivalTime>
+        <siri:ExpectedArrivalTime>{far_future}</siri:ExpectedArrivalTime>
+        <siri:Order>1</siri:Order>
+      </siri:RecordedCall>
+    </siri:RecordedCalls>
+  </siri:EstimatedVehicleJourney>
+</siri:Root>"""
+
+        trips = self.transformer.transform({"root": ET.fromstring(xml)})
+
+        self.assertEqual(trips, [])
 
     def _build_payload(
         self,

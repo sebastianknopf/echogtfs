@@ -109,22 +109,22 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(items, [alert])
         session.execute.assert_awaited_once()
 
-    async def test_list_expired_internal_alert_ids_returns_ids(self):
+    async def test_list_expired_alert_ids_returns_ids(self):
         alert_id = uuid.uuid4()
         session = SimpleNamespace(execute=AsyncMock(return_value=_FakeResult(rows=[(alert_id,)])))
         repository = self._make_repository(session)
 
-        result = await repository.list_expired_internal_alert_ids(12345, only_active=True)
+        result = await repository.list_expired_alert_ids(12345, only_active=True)
 
         self.assertEqual(result, [alert_id])
         session.execute.assert_awaited_once()
 
-    async def test_list_internal_alert_ids_expired_before_returns_ids(self):
+    async def test_list_alert_ids_expired_before_returns_ids(self):
         alert_id = uuid.uuid4()
         session = SimpleNamespace(execute=AsyncMock(return_value=_FakeResult(rows=[(alert_id,)])))
         repository = self._make_repository(session)
 
-        result = await repository.list_internal_alert_ids_expired_before(12345)
+        result = await repository.list_alert_ids_expired_before(12345)
 
         self.assertEqual(result, [alert_id])
         session.execute.assert_awaited_once()
