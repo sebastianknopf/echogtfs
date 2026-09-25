@@ -462,6 +462,12 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
         if first_timestamp > now_utc + timedelta(hours=2):
             return False
 
+        if not trip.get("is_complete_stop_sequence", True):
+            # An incremental update only ever reports a subset of the trip's stops, which may
+            # legitimately already lie in the recent past (just-observed calls) while later,
+            # unreported stops are still ahead; the trip is not stale just because of that.
+            return True
+
         latest_timestamp: datetime | None = None
         for event in stop_events:
             event_ts = self._event_timestamp(event)
