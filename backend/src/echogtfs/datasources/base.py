@@ -653,6 +653,217 @@ class DatasourceBase(DatasourceInterface):
         return ordered_events
 
     @staticmethod
+    def _stop_event_to_dict(event: Any) -> dict[str, Any]:
+        """Convert a persisted StopEvent row into a plain dict for merge processing."""
+        return {
+            "stop_id": event.stop_id,
+            "original_stop_id": event.original_stop_id,
+            "stop_sequence": event.stop_sequence,
+            "arrival_time": event.arrival_time,
+            "departure_time": event.departure_time,
+            "scheduled_arrival_time": event.scheduled_arrival_time,
+            "scheduled_departure_time": event.scheduled_departure_time,
+            "schedule_relationship": event.schedule_relationship,
+            "is_implied_schedule_relationship": event.is_implied_schedule_relationship,
+            "is_valid": event.is_valid,
+        }
+
+    def _merge_incremental_stop_events(
+        self,
+        existing_stop_events: list[dict[str, Any]],
+        incoming_stop_events: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Merge a partial (incomplete) stop-event update into an already-complete sequence.
+
+        Incoming stops overwrite their matched counterparts; stops between/after matched
+        stops are re-projected using the delay carried forward from the nearest preceding
+        matched stop, converging back to nominal times at stops with planned dwell time
+        (timepoints).
+        """
+        if not existing_stop_events:
+            return [dict(event) for event in incoming_stop_events]
+
+        merged_events = [dict(event) for event in existing_stop_events]
+
+        candidates_by_stop_id: dict[str, list[int]] = {}
+        index_by_stop_and_sequence: dict[tuple[str, str], int] = {}
+        for index, event in enumerate(merged_events):
+            reduced_stop_id = self._normalize_stop_id_for_matching(event.get("stop_id"))
+            if not reduced_stop_id:
+                continue
+
+            candidates_by_stop_id.setdefault(reduced_stop_id, []).append(index)
+            stop_sequence = event.get("stop_sequence")
+            if stop_sequence is not None:
+                index_by_stop_and_sequence[(reduced_stop_id, str(stop_sequence))] = index
+
+        matched_indexes: set[int] = set()
+
+        for incoming_event in incoming_stop_events:
+            reduced_stop_id = self._normalize_stop_id_for_matching(incoming_event.get("stop_id"))
+            incoming_sequence = incoming_event.get("stop_sequence")
+
+            # Primary match key: stop_id + stop_sequence delivered by the transformer.
+            match_index = None
+            if reduced_stop_id and incoming_sequence:
+                candidate_index = index_by_stop_and_sequence.get((reduced_stop_id, str(incoming_sequence)))
+                if candidate_index is not None and candidate_index not in matched_indexes:
+                    match_index = candidate_index
+
+            # Fallback: stop_sequence not available/usable, match by planned time instead.
+            if match_index is None:
+                candidates = [
+                    index for index in candidates_by_stop_id.get(reduced_stop_id, [])
+                    if index not in matched_indexes
+                ]
+                match_index = self._resolve_incremental_match_index(merged_events, incoming_event, candidates)
+
+            if match_index is None:
+                merged_events.append(dict(incoming_event))
+                match_index = len(merged_events) - 1
+
+            merged_events[match_index].update(incoming_event)
+            matched_indexes.add(match_index)
+
+        if matched_indexes:
+            self._propagate_incremental_delay(merged_events, matched_indexes)
+
+        return merged_events
+
+    def _resolve_incremental_match_index(
+        self,
+        existing_events: list[dict[str, Any]],
+        incoming_event: dict[str, Any],
+        candidates: list[int],
+    ) -> int | None:
+        """Match by planned departure/arrival time, used only when stop_sequence didn't resolve."""
+        if len(candidates) == 1:
+            return candidates[0]
+
+        if candidates:
+            best_index = self._closest_by_scheduled_time(existing_events, incoming_event, candidates)
+            # Same stop visited more than once (e.g. round trip); fall back to visit order
+            # when there is no reliable time signal to disambiguate.
+            return best_index if best_index is not None else candidates[0]
+
+        # No candidate shares the stop_id (e.g. remapped identifier); try time-only matching.
+        return self._closest_by_scheduled_time(existing_events, incoming_event, range(len(existing_events)), tolerance_seconds=120)
+
+    def _closest_by_scheduled_time(
+        self,
+        existing_events: list[dict[str, Any]],
+        incoming_event: dict[str, Any],
+        candidates: Any,
+        *,
+        tolerance_seconds: float | None = None,
+    ) -> int | None:
+        """Return the candidate index whose planned departure time is closest to the incoming event's."""
+        incoming_time = self._coerce_stop_time_for_sort(
+            incoming_event.get("scheduled_departure_time") or incoming_event.get("scheduled_arrival_time")
+        )
+        if incoming_time == datetime.max:
+            return None
+
+        best_index = None
+        best_delta = None
+        for index in candidates:
+            candidate_time = self._coerce_stop_time_for_sort(
+                existing_events[index].get("scheduled_departure_time")
+                or existing_events[index].get("scheduled_arrival_time")
+            )
+            if candidate_time == datetime.max:
+                continue
+
+            delta = abs((candidate_time - incoming_time).total_seconds())
+            if best_delta is None or delta < best_delta:
+                best_delta = delta
+                best_index = index
+
+        if tolerance_seconds is not None and (best_delta is None or best_delta > tolerance_seconds):
+            return None
+
+        return best_index
+
+    def _propagate_incremental_delay(
+        self,
+        stop_events: list[dict[str, Any]],
+        matched_indexes: set[int],
+    ) -> None:
+        """Continue the delay prognosis segment-by-segment using only each stop's own scheduled_* data.
+
+        Starting from an explicitly reported stop, the chain runs departure(0) -> arrival(1) ->
+        departure(1) -> arrival(2) -> departure(2) -> ... up to the next explicitly reported stop
+        (or the trip's last stop). A planned dwell (timepoint, i.e. scheduled arrival < scheduled
+        departure) tries to converge back towards the nominal departure: running early is floored
+        to 0 delay there, while running late is never clamped and keeps propagating.
+        """
+        sorted_matched = sorted(matched_indexes)
+
+        for position, matched_index in enumerate(sorted_matched):
+            segment_end = sorted_matched[position + 1] if position + 1 < len(sorted_matched) else len(stop_events)
+            if segment_end <= matched_index + 1:
+                continue
+
+            reference_event = stop_events[matched_index]
+            ref_scheduled_arrival = self._coerce_datetime(reference_event.get("scheduled_arrival_time"))
+            ref_scheduled_departure = self._coerce_datetime(reference_event.get("scheduled_departure_time"))
+            ref_actual_arrival = self._coerce_datetime(reference_event.get("arrival_time"))
+            ref_actual_departure = self._coerce_datetime(reference_event.get("departure_time"))
+
+            # A departure earlier than its own arrival is not a valid dwell; such inconsistent
+            # data is ignored in favor of the (always reliable) arrival for the delay reference.
+            departure_is_valid_reference = ref_scheduled_departure is not None and (
+                ref_scheduled_arrival is None or ref_scheduled_departure >= ref_scheduled_arrival
+            )
+
+            if departure_is_valid_reference and ref_actual_departure is not None:
+                reference_actual = ref_actual_departure
+                reference_scheduled = ref_scheduled_departure
+            elif ref_actual_arrival is not None and ref_scheduled_arrival is not None:
+                reference_actual = ref_actual_arrival
+                reference_scheduled = ref_scheduled_arrival
+            else:
+                continue
+
+            # Delay carried forward from the reference stop's departure.
+            current_delay = reference_actual - reference_scheduled
+
+            for index in range(matched_index + 1, segment_end):
+                event = stop_events[index]
+                scheduled_arrival = self._coerce_datetime(event.get("scheduled_arrival_time"))
+                scheduled_departure = self._coerce_datetime(event.get("scheduled_departure_time"))
+
+                if scheduled_arrival is None and scheduled_departure is None:
+                    continue
+
+                # Step: departure(previous) -> arrival(this stop).
+                if scheduled_arrival is not None:
+                    event["arrival_time"] = scheduled_arrival + current_delay
+                elif scheduled_departure is not None:
+                    # Origin-like stop with no scheduled arrival: mirror the departure step,
+                    # same as the transformer does when only one actual time is delivered.
+                    event["arrival_time"] = scheduled_departure + current_delay
+
+                # Step: arrival(this stop) -> departure(this stop); a timepoint dwell converges
+                # back towards the nominal departure when running early, never when running late.
+                if scheduled_departure is not None:
+                    departure_estimate = scheduled_departure + current_delay
+
+                    is_timepoint = scheduled_arrival is not None and scheduled_departure > scheduled_arrival
+                    if is_timepoint and departure_estimate < scheduled_departure:
+                        departure_estimate = scheduled_departure
+
+                    event["departure_time"] = departure_estimate
+                    current_delay = departure_estimate - scheduled_departure
+                elif scheduled_arrival is not None:
+                    # Terminus/no-departure stop: mirror the propagated arrival, same as the
+                    # transformer does when only one of the two actual times is delivered.
+                    event["departure_time"] = event["arrival_time"]
+                    current_delay = event["arrival_time"] - scheduled_arrival
+
+                event["schedule_relationship"] = "SCHEDULED"
+
+    @staticmethod
     def _extract_vehicle_trip_payload(record: dict[str, Any]) -> dict[str, Any]:
         """Normalize vehicle trip payload from flat or nested dialect shapes."""
         payload = record.get("trip", {})
@@ -1358,6 +1569,8 @@ class DatasourceBase(DatasourceInterface):
                         else None
                     ),
                     scheduled_intermediate_stops=scheduled_intermediate_stops,
+                    is_complete_stop_sequence=is_complete_stop_sequence,
+                    intermediate_stop_sample_size=max(3, len(record.get("stop_events") or [])),
                 )
 
                 if matched_trip_id is not None:
@@ -1375,21 +1588,70 @@ class DatasourceBase(DatasourceInterface):
                 persisted_trip_uuid = self._make_unique_id(resolved_trip_id, source_name)
 
             existing_trip = persisted_trip_uuid in existing_trip_ids
+            existing_trip_model = existing_trips.get(persisted_trip_uuid)
+            persist_is_complete_stop_sequence = is_complete_stop_sequence
 
             if not is_new_trip:
-                nominal_trip = await gtfs_repository.get_gtfs_trip_with_stop_times(resolved_trip_id)
-                nominal_stop_times = list(nominal_trip.stop_times) if nominal_trip is not None else []
-                stop_events = self._propagate_trip_update_stop_events(
-                    stop_events,
-                    nominal_stop_times,
-                    treat_unexpected_stop_as_added_stop=treat_unexpected_stop_as_added_stop,
-                    treat_missing_stop_as_canceled_stop=treat_missing_stop_as_canceled_stop,
-                    is_complete_stop_sequence=is_complete_stop_sequence,
-                )
-
                 if is_complete_stop_sequence:
+                    nominal_trip = await gtfs_repository.get_gtfs_trip_with_stop_times(resolved_trip_id)
+                    nominal_stop_times = list(nominal_trip.stop_times) if nominal_trip is not None else []
+                    stop_events = self._propagate_trip_update_stop_events(
+                        stop_events,
+                        nominal_stop_times,
+                        treat_unexpected_stop_as_added_stop=treat_unexpected_stop_as_added_stop,
+                        treat_missing_stop_as_canceled_stop=treat_missing_stop_as_canceled_stop,
+                        is_complete_stop_sequence=is_complete_stop_sequence,
+                    )
+
                     for idx, event in enumerate(stop_events, start=1):
                         event["stop_sequence"] = str(idx)
+                elif existing_trip_model is not None and existing_trip_model.is_complete_stop_sequence:
+                    # Incremental update on top of an already-complete sequence: merge instead of replacing.
+                    existing_stop_events = await realtime_repository.list_stop_events_for_trip(
+                        existing_trip_model.trip_id
+                    )
+                    stop_events = self._merge_incremental_stop_events(
+                        [self._stop_event_to_dict(event) for event in existing_stop_events],
+                        stop_events,
+                    )
+                    persist_is_complete_stop_sequence = True
+
+                    for idx, event in enumerate(stop_events, start=1):
+                        event["stop_sequence"] = str(idx)
+                else:
+                    # No prior complete sequence exists yet: a stop's true position within the
+                    # full trip is unknown, so stop_sequence is intentionally left blank.
+                    for event in stop_events:
+                        event["stop_sequence"] = ""
+
+            # An incremental update only carries partial stop data and must never overwrite the
+            # trip's known scheduled start/end anchors; keep them for an already-complete trip,
+            # or leave them unset when the trip has never had a complete stop sequence.
+            if is_complete_stop_sequence:
+                persist_scheduled_start_time = scheduled_start_time
+                persist_scheduled_end_time = scheduled_end_time
+                persist_scheduled_start_stop_id = scheduled_start_stop_id
+                persist_scheduled_end_stop_id = scheduled_end_stop_id
+            elif existing_trip_model is not None and existing_trip_model.is_complete_stop_sequence:
+                persist_scheduled_start_time = existing_trip_model.scheduled_start_time
+                persist_scheduled_end_time = existing_trip_model.scheduled_end_time
+                persist_scheduled_start_stop_id = existing_trip_model.scheduled_start_stop_id
+                persist_scheduled_end_stop_id = existing_trip_model.scheduled_end_stop_id
+            else:
+                persist_scheduled_start_time = None
+                persist_scheduled_end_time = None
+                persist_scheduled_start_stop_id = None
+                persist_scheduled_end_stop_id = None
+
+            # start_time is derived from the first stop of a full update; an incremental update's
+            # first delivered stop is not necessarily the trip's actual start, so it must not
+            # overwrite an already-known start_time, and stays unset for a brand-new trip.
+            if is_complete_stop_sequence:
+                persist_start_time = str(record["start_time"])
+            elif existing_trip_model is not None:
+                persist_start_time = existing_trip_model.start_time
+            else:
+                persist_start_time = None
 
             has_invalid_stop_reference = any(not bool(event.get("is_valid", True)) for event in stop_events)
 
@@ -1455,7 +1717,7 @@ class DatasourceBase(DatasourceInterface):
                 source_id=source_id,
                 source_name=source_name,
                 trip_id=resolved_trip_id,
-                start_time=str(record["start_time"]),
+                start_time=persist_start_time,
                 start_date=str(record["start_date"]),
                 route_id=route_id_to_persist,
                 schedule_relationship=str(record.get("schedule_relationship", "SCHEDULED")),
@@ -1466,18 +1728,18 @@ class DatasourceBase(DatasourceInterface):
                 stop_events=stop_events_to_persist,
                 original_trip_id=original_trip_id,
                 scheduled_start_stop_id=(
-                    str(scheduled_start_stop_id)
-                    if scheduled_start_stop_id is not None
+                    str(persist_scheduled_start_stop_id)
+                    if persist_scheduled_start_stop_id is not None
                     else None
                 ),
                 scheduled_end_stop_id=(
-                    str(scheduled_end_stop_id)
-                    if scheduled_end_stop_id is not None
+                    str(persist_scheduled_end_stop_id)
+                    if persist_scheduled_end_stop_id is not None
                     else None
                 ),
-                scheduled_start_time=scheduled_start_time,
-                scheduled_end_time=scheduled_end_time,
-                is_complete_stop_sequence=is_complete_stop_sequence,
+                scheduled_start_time=persist_scheduled_start_time,
+                scheduled_end_time=persist_scheduled_end_time,
+                is_complete_stop_sequence=persist_is_complete_stop_sequence,
             )
 
             if (

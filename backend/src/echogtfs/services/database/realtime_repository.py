@@ -641,6 +641,25 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
             
             return {str(value) for value in result.scalars().all()}
 
+    async def list_stop_events_for_trip(self, trip_id: str) -> list[StopEvent]:
+        """Return persisted stop events for one trip_id, ordered by stop_sequence."""
+        stmt = select(StopEvent).where(StopEvent.trip_id == trip_id)
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            events = list(result.scalars().all())
+
+        events.sort(key=lambda event: self._stop_event_sort_key(event.stop_sequence))
+        return events
+
+    @staticmethod
+    def _stop_event_sort_key(stop_sequence: str) -> tuple[int, int, str]:
+        """Sort numeric stop_sequence values first, then fall back to string comparison."""
+        try:
+            return (0, int(stop_sequence), "")
+        except (TypeError, ValueError):
+            return (1, 0, str(stop_sequence))
+
     async def list_trip_ids_updated_before(self, cutoff: datetime) -> list[str]:
         """Return trip_id values for all realtime trips last updated before cutoff."""
         stmt = select(Trip.trip_id).where(Trip.updated_at < cutoff)
@@ -710,7 +729,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
         source_id: int,
         source_name: str,
         trip_id: str,
-        start_time: str,
+        start_time: str | None,
         start_date: str,
         route_id: str,
         schedule_relationship: str,

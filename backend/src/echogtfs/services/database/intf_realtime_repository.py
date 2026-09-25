@@ -216,6 +216,11 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def list_stop_events_for_trip(self, trip_id: str) -> list[StopEvent]:
+        """Return persisted stop events for one trip_id, ordered by stop_sequence."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def list_trip_ids_updated_before(self, cutoff: datetime) -> list[str]:
         """Return trip_id values for all realtime trips last updated before cutoff, regardless of data source."""
         raise NotImplementedError
@@ -252,7 +257,7 @@ class RealtimeRepositoryInterface(ABC):
         source_id: int,
         source_name: str,
         trip_id: str,
-        start_time: str,
+        start_time: str | None,
         start_date: str,
         route_id: str,
         schedule_relationship: str,
