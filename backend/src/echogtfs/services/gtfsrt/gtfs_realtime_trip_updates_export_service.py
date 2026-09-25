@@ -264,7 +264,9 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
             trip_descriptor = trip_update.trip
             trip_descriptor.trip_id = trip_model.trip_id
             trip_descriptor.route_id = trip_model.route_id
-            trip_descriptor.start_time = self._localize_start_time(trip_model.start_date, trip_model.start_time) or ""
+            localized_start_time = self._localize_start_time(trip_model.start_date, trip_model.start_time)
+            if localized_start_time:
+                trip_descriptor.start_time = localized_start_time
             trip_descriptor.start_date = self._normalize_start_date(trip_model.start_date)
 
             trip_schedule_relationship = self._trip_schedule_relationship_to_enum(trip_model.schedule_relationship)
@@ -295,7 +297,8 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
             for stop_sequence, stop_event in enumerate(stop_events, start=1):
                 stop_time_update = trip_update.stop_time_update.add()
                 stop_time_update.stop_id = stop_event.stop_id
-                stop_time_update.stop_sequence = stop_sequence
+                if trip_model.is_complete_stop_sequence:
+                    stop_time_update.stop_sequence = stop_sequence
 
                 stop_time_relationship = self._stop_time_schedule_relationship_to_enum(
                     stop_event.schedule_relationship,
