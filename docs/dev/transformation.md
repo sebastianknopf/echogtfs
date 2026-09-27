@@ -145,6 +145,8 @@ Not mapped in service_alerts:
 
 ## record_type trip_updates
 
+For differential source behavior and incremental merge semantics in the sync pipeline, see [differential-incremental.md](differential-incremental.md).
+
 Allowed data model:
 
 ```python

@@ -18,7 +18,7 @@ class TestCleanupService(unittest.IsolatedAsyncioTestCase):
     async def test_handle_expired_alerts_deactivate(self):
         system_repo = SimpleNamespace()
         realtime_repo = SimpleNamespace(
-            list_expired_internal_alert_ids=AsyncMock(return_value=["a", "b"]),
+            list_expired_alert_ids=AsyncMock(return_value=["a", "b"]),
             deactivate_service_alerts=AsyncMock(),
             delete_service_alerts_by_ids=AsyncMock(),
         )
@@ -33,7 +33,7 @@ class TestCleanupService(unittest.IsolatedAsyncioTestCase):
     async def test_delete_old_expired_alerts(self):
         system_repo = SimpleNamespace()
         realtime_repo = SimpleNamespace(
-            list_internal_alert_ids_expired_before=AsyncMock(return_value=["x"]),
+            list_alert_ids_expired_before=AsyncMock(return_value=["x"]),
             delete_service_alerts_by_ids=AsyncMock(),
         )
         service = CleanupService(system_repo, realtime_repo)
@@ -46,7 +46,7 @@ class TestCleanupService(unittest.IsolatedAsyncioTestCase):
     async def test_delete_old_expired_alerts_negative_days_returns_zero(self):
         system_repo = SimpleNamespace()
         realtime_repo = SimpleNamespace(
-            list_internal_alert_ids_expired_before=AsyncMock(return_value=["x"]),
+            list_alert_ids_expired_before=AsyncMock(return_value=["x"]),
             delete_service_alerts_by_ids=AsyncMock(),
         )
         service = CleanupService(system_repo, realtime_repo)
@@ -54,7 +54,7 @@ class TestCleanupService(unittest.IsolatedAsyncioTestCase):
         count = await service._delete_old_expired_alerts(-1)
 
         self.assertEqual(count, 0)
-        realtime_repo.list_internal_alert_ids_expired_before.assert_not_awaited()
+        realtime_repo.list_alert_ids_expired_before.assert_not_awaited()
 
     async def test_schedule_from_settings_uses_timezone_from_environment(self):
         class _FakeScheduler:

@@ -234,6 +234,71 @@ class TestGtfsRealtimeTripUpdatesExportService(unittest.IsolatedAsyncioTestCase)
         self.assertEqual(stop_time_updates[1].arrival.time, 1700000300)
         self.assertEqual(stop_time_updates[1].departure.time, 1700000400)
 
+    def test_build_feed_message_omits_stop_sequence_when_stop_sequence_incomplete(self):
+        trip = self._make_trip(is_complete_stop_sequence=False)
+
+        with patch.object(
+            GtfsRealtimeTripUpdatesExportService,
+            "_configured_timezone_name",
+            return_value="UTC",
+        ):
+            service = self._make_service()
+
+        with patch("echogtfs.services.gtfsrt.gtfs_realtime_trip_updates_export_service.time.time", return_value=1700000000):
+            feed = service._build_feed_message([trip])
+
+        stop_time_update = feed.entity[0].trip_update.stop_time_update[0]
+        self.assertFalse(stop_time_update.HasField("stop_sequence"))
+
+    def test_build_feed_message_sets_stop_sequence_when_stop_sequence_complete(self):
+        trip = self._make_trip(is_complete_stop_sequence=True)
+
+        with patch.object(
+            GtfsRealtimeTripUpdatesExportService,
+            "_configured_timezone_name",
+            return_value="UTC",
+        ):
+            service = self._make_service()
+
+        with patch("echogtfs.services.gtfsrt.gtfs_realtime_trip_updates_export_service.time.time", return_value=1700000000):
+            feed = service._build_feed_message([trip])
+
+        stop_time_update = feed.entity[0].trip_update.stop_time_update[0]
+        self.assertTrue(stop_time_update.HasField("stop_sequence"))
+        self.assertEqual(stop_time_update.stop_sequence, 1)
+
+    def test_build_feed_message_omits_start_time_when_none(self):
+        trip = self._make_trip(start_time=None)
+
+        with patch.object(
+            GtfsRealtimeTripUpdatesExportService,
+            "_configured_timezone_name",
+            return_value="UTC",
+        ):
+            service = self._make_service()
+
+        with patch("echogtfs.services.gtfsrt.gtfs_realtime_trip_updates_export_service.time.time", return_value=1700000000):
+            feed = service._build_feed_message([trip])
+
+        trip_descriptor = feed.entity[0].trip_update.trip
+        self.assertFalse(trip_descriptor.HasField("start_time"))
+
+    def test_build_feed_message_sets_start_time_when_present(self):
+        trip = self._make_trip(start_time="08:00:00")
+
+        with patch.object(
+            GtfsRealtimeTripUpdatesExportService,
+            "_configured_timezone_name",
+            return_value="UTC",
+        ):
+            service = self._make_service()
+
+        with patch("echogtfs.services.gtfsrt.gtfs_realtime_trip_updates_export_service.time.time", return_value=1700000000):
+            feed = service._build_feed_message([trip])
+
+        trip_descriptor = feed.entity[0].trip_update.trip
+        self.assertTrue(trip_descriptor.HasField("start_time"))
+
     def test_build_feed_message_suppresses_added_stop_events_and_reindexes_sequence(self):
         stop_events = [
             SimpleNamespace(
@@ -491,6 +556,7 @@ class TestGtfsRealtimeTripUpdatesExportService(unittest.IsolatedAsyncioTestCase)
         start_date: str = "20260721",
         stop_events: list[SimpleNamespace] | None = None,
         vehicle: SimpleNamespace | None = None,
+        is_complete_stop_sequence: bool = True,
     ) -> SimpleNamespace:
         if stop_events is None:
             stop_events = [
@@ -522,4 +588,5 @@ class TestGtfsRealtimeTripUpdatesExportService(unittest.IsolatedAsyncioTestCase)
             updated_at=1700000001,
             stop_events=stop_events,
             vehicle=vehicle,
+            is_complete_stop_sequence=is_complete_stop_sequence,
         )

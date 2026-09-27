@@ -1,4 +1,4 @@
-"""Service alert cleanup service."""
+"""Cleanup service for expired alerts, outdated trips/vehicles, and old data source logs."""
 
 from __future__ import annotations
 
@@ -80,15 +80,15 @@ class CleanupService:
             logger.info("[Cleanup] No cron expression set, cleanup job not scheduled")
 
     async def run_cleanup_task(self) -> None:
-        """Execute cleanup of expired internal service alerts and old data source logs."""
+        """Execute cleanup of expired internal service alerts, outdated trips/vehicles, and old data source logs."""
         logger.info("[Cleanup] Starting cleanup task")
 
         try:
-            policy_str = await self._repository.get_app_setting(AppSetting.KEY_CLEANUP_EXPIRED_POLICY) or "deactivate"
+            policy_str = await self._repository.get_app_setting(AppSetting.KEY_CLEANUP_EXPIRED_ALERTS_POLICY) or "deactivate"
             policy = ExpiredRealtimeObjectPolicy(policy_str)
 
-            delete_days_value = await self._repository.get_app_setting(AppSetting.KEY_CLEANUP_DELETE_AFTER_DAYS)
-            delete_after_days = int(delete_days_value) if delete_days_value is not None else -1
+            delete_days_value = await self._repository.get_app_setting(AppSetting.KEY_CLEANUP_DELETE_ALERTS_AFTER_DAYS)
+            delete_after_days = int(delete_days_value) if delete_days_value is not None else 7
 
             logger.info("[Cleanup] Policy: %s, Delete after days: %s", policy.value, delete_after_days)
 
@@ -100,12 +100,18 @@ class CleanupService:
             else:
                 logger.info("[Cleanup] Delete after days is -1 (never), skipping deletion")
 
+            deleted_trips_count = await self._delete_expired_trips()
+            deleted_vehicles_count = await self._delete_expired_vehicles()
+
             logs_deleted_count = await self._delete_old_logs()
 
             logger.info(
-                "[Cleanup] Task completed. Expired alerts processed: %s, Old alerts deleted: %s, Old logs deleted: %s",
+                "[Cleanup] Task completed. Expired alerts processed: %s, Old alerts deleted: %s, "
+                "Trips deleted: %s, Vehicles deleted: %s, Old logs deleted: %s",
                 expired_count,
                 deleted_count,
+                deleted_trips_count,
+                deleted_vehicles_count,
                 logs_deleted_count,
             )
         except Exception as exc:  # noqa: BLE001
@@ -113,22 +119,22 @@ class CleanupService:
 
     async def _handle_expired_alerts(self, policy: ExpiredRealtimeObjectPolicy) -> int:
         current_timestamp = int(datetime.now(UTC).timestamp())
-        alert_ids = await self._realtime_repository.list_expired_internal_alert_ids(
+        alert_ids = await self._realtime_repository.list_expired_alert_ids(
             current_timestamp,
             only_active=policy == ExpiredRealtimeObjectPolicy.DEACTIVATE,
         )
 
         if not alert_ids:
-            logger.info("[Cleanup] No expired internal alerts found")
+            logger.info("[Cleanup] No expired alerts found")
             return 0
 
         count = len(alert_ids)
         if policy == ExpiredRealtimeObjectPolicy.DEACTIVATE:
             await self._realtime_repository.deactivate_service_alerts(alert_ids)
-            logger.info("[Cleanup] Deactivated %s expired internal alerts", count)
+            logger.info("[Cleanup] Deactivated %s expired alerts", count)
         elif policy == ExpiredRealtimeObjectPolicy.DELETE:
             await self._realtime_repository.delete_service_alerts_by_ids(alert_ids)
-            logger.info("[Cleanup] Deleted %s expired internal alerts", count)
+            logger.info("[Cleanup] Deleted %s expired alerts", count)
 
         return count
 
@@ -140,15 +146,15 @@ class CleanupService:
         cutoff_datetime = datetime.combine(cutoff_date + timedelta(days=1), datetime.min.time()).replace(tzinfo=UTC)
         cutoff_timestamp = int(cutoff_datetime.timestamp())
 
-        alert_ids = await self._realtime_repository.list_internal_alert_ids_expired_before(cutoff_timestamp)
+        alert_ids = await self._realtime_repository.list_alert_ids_expired_before(cutoff_timestamp)
         if not alert_ids:
-            logger.info("[Cleanup] No internal alerts older than %s days found", days)
+            logger.info("[Cleanup] No alerts older than %s days found", days)
             return 0
 
         count = len(alert_ids)
         await self._realtime_repository.delete_service_alerts_by_ids(alert_ids)
         
-        logger.info("[Cleanup] Deleted %s internal alerts expired for more than %s days", count, days)
+        logger.info("[Cleanup] Deleted %s alerts (incl. informed entities, translations, active periods) expired for more than %s days", count, days)
         
         return count
 
@@ -171,3 +177,63 @@ class CleanupService:
         )
 
         return count
+
+    async def _delete_expired_trips(self) -> int:
+        """Purge stop events of trips not updated within the configured max age, deleting the trip itself when no vehicle remains."""
+        max_age_value = await self._repository.get_app_setting(AppSetting.KEY_CLEANUP_EXPIRED_TRIPS_MAX_AGE)
+        max_age_minutes = int(max_age_value) if max_age_value is not None else 120
+        cutoff = datetime.now(UTC) - timedelta(minutes=max_age_minutes)
+
+        trip_ids = await self._realtime_repository.list_trip_ids_updated_before(cutoff)
+        if not trip_ids:
+            logger.info("[Cleanup] No trips older than %s minutes found", max_age_minutes)
+            return 0
+
+        await self._realtime_repository.delete_stop_events_for_trip_ids(trip_ids)
+
+        trip_ids_with_vehicle = await self._realtime_repository.list_trip_ids_with_vehicle(trip_ids)
+        trip_ids_to_delete = [trip_id for trip_id in trip_ids if trip_id not in trip_ids_with_vehicle]
+
+        deleted_count = 0
+        if trip_ids_to_delete:
+            deleted_count = await self._realtime_repository.delete_trips_by_trip_ids(trip_ids_to_delete)
+
+        logger.info(
+            "[Cleanup] Purged stop events for %s trips older than %s minutes (%s trips deleted, %s kept alive by an active vehicle)",
+            len(trip_ids),
+            max_age_minutes,
+            deleted_count,
+            len(trip_ids) - len(trip_ids_to_delete),
+        )
+
+        return deleted_count
+
+    async def _delete_expired_vehicles(self) -> int:
+        """Delete vehicle positions not updated within the configured max age, deleting the trip too when no stop events remain."""
+        max_age_value = await self._repository.get_app_setting(AppSetting.KEY_CLEANUP_EXPIRED_VEHICLES_MAX_AGE)
+        max_age_minutes = int(max_age_value) if max_age_value is not None else 5
+        cutoff = datetime.now(UTC) - timedelta(minutes=max_age_minutes)
+
+        vehicles = await self._realtime_repository.list_vehicles_updated_before(cutoff)
+        if not vehicles:
+            logger.info("[Cleanup] No vehicles older than %s minutes found", max_age_minutes)
+            return 0
+
+        vehicle_ids = [vehicle.id for vehicle in vehicles]
+        trip_ids = [vehicle.trip_id for vehicle in vehicles if vehicle.trip_id]
+
+        deleted_count = await self._realtime_repository.delete_vehicles_by_ids(vehicle_ids)
+
+        if trip_ids:
+            trip_ids_with_stop_events = await self._realtime_repository.list_trip_ids_with_stop_events(trip_ids)
+            trip_ids_to_delete = [trip_id for trip_id in trip_ids if trip_id not in trip_ids_with_stop_events]
+            if trip_ids_to_delete:
+                await self._realtime_repository.delete_trips_by_trip_ids(trip_ids_to_delete)
+
+        logger.info(
+            "[Cleanup] Deleted %s vehicles older than %s minutes",
+            deleted_count,
+            max_age_minutes,
+        )
+
+        return deleted_count

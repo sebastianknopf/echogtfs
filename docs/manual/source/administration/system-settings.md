@@ -49,10 +49,12 @@ Die Push-API wird benötigt, um eventbasierte Schnittstellen aus externen System
 
 Im Abschnitt "Datenbereinigung" können Sie das Verhalten des Berenigungs-Dienstes beeinflussen. Folgende Einstellungen stehen zur Verfügung:
 
-```{note}
-Der Berenigungs-Dienst bezieht sich aktuell ausschließlich auf Datenquellen-Logs und **interne Meldungen**. Datenquellen-Logs werden grundsätzlich **nach 24 Stunden** gelöscht. Objekte, welche über Datenquellen synchronisiert werden, werden vom Berenigungs-Dienst nicht verändert.
-```
-
 - **Cron-Ausdruck**: Cron-Ausdruck mit dem der Berenigungs-Dienst im Hintergrund ausgeführt wird
-- **Verfahrensweise bei abgelaufenen Objekten**: Legt fest, ob abgelaufene Objekte **gelöscht** oder **deaktiviert** werden sollen
-- **Endgültiges Löschen**: Legt fest, ab welchem Alter Objekte endgültig gelöscht werden
+- **Verfahrensweise bei abgelaufenen Meldungen**: Legt fest, ob abgelaufene Meldungen **gelöscht** oder **deaktiviert** werden sollen
+- **Endgültiges Löschen abgelaufender Meldungen**: Legt fest, ab welchem Alter Meldugnen endgültig gelöscht werden
+- **Maximales Alter für Fahrten**: Legt fest, wie lange das letzte Update einer Fahrt her sein darf, bevor sie gelöscht wird
+- **Maximales Alter für Fahrzeuge**: Legt fest, wie lange das letzte Update eines Fahrzeuges her sein darf, bevor es gelöscht wird
+
+```{note}
+Der Berenigungs-Dienst bezieht sich aktuell ausschließlich auf Datenquellen-Logs und Daten, welche nicht von einer  {ref}`differentiellen Datenquelle <h-datasources-differential-incremental-updates>` stammen. Datenquellen-Logs werden grundsätzlich **nach 24 Stunden** gelöscht. Objekte, welche über nicht-differenzielle Datenquellen synchronisiert werden, werden vom Berenigungs-Dienst nicht verändert.
+```

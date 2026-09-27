@@ -62,8 +62,10 @@ class AppSettings(BaseModel):
     
     # Data cleanup configuration
     cleanup_cron:             str = '*/10 * * * *'  # Every 10 minutes
-    cleanup_expired_policy:   ExpiredRealtimeObjectPolicy = ExpiredRealtimeObjectPolicy.DEACTIVATE
-    cleanup_delete_after_days: int = -1  # -1 = never, >= 0 = days after expiration
+    cleanup_expired_alerts_policy:   ExpiredRealtimeObjectPolicy = ExpiredRealtimeObjectPolicy.DEACTIVATE
+    cleanup_delete_alerts_after_days: int = 7  # -1 = never, >= 0 = days after expiration
+    cleanup_expired_trips_max_age: int = 120  # minutes, based on Trip.updated_at
+    cleanup_expired_vehicles_max_age: int = 5  # minutes, based on Vehicle.updated_at
 
     # Push API configuration (event-based data sources)
     push_api_enabled:  bool = False
@@ -77,11 +79,18 @@ class AppSettings(BaseModel):
             raise ValueError('Must be a 6-digit hex color, e.g. #008c99')
         return v.lower()
     
-    @field_validator('cleanup_delete_after_days')
+    @field_validator('cleanup_delete_alerts_after_days')
     @classmethod
     def validate_delete_days(cls, v: int) -> int:
         if v < -1:
-            raise ValueError('cleanup_delete_after_days must be >= -1 (-1 = never)')
+            raise ValueError('cleanup_delete_alerts_after_days must be >= -1 (-1 = never)')
+        return v
+
+    @field_validator('cleanup_expired_trips_max_age', 'cleanup_expired_vehicles_max_age')
+    @classmethod
+    def validate_max_age(cls, v: int) -> int:
+        if v not in (5, 10, 30, 60, 120):
+            raise ValueError('Max age must be one of 5, 10, 30, 60, 120 minutes')
         return v
 
 
@@ -211,6 +220,7 @@ class DataSourceCreate(BaseModel):
     execution_type: DataSourceExecutionType = DataSourceExecutionType.TIME_BASED
     is_active: bool = True
     log_dumps: bool = False
+    is_differential_updates: bool = False
     invalid_reference_policy: InvalidReferencePolicy = InvalidReferencePolicy.NOT_SPECIFIED
     mappings: list[DataSourceMappingCreate] = []
     enrichments: list[DataSourceEnrichmentCreate] = []
@@ -232,6 +242,7 @@ class DataSourceUpdate(BaseModel):
     execution_type: DataSourceExecutionType | None = None
     is_active: bool | None = None
     log_dumps: bool | None = None
+    is_differential_updates: bool | None = None
     invalid_reference_policy: InvalidReferencePolicy | None = None
     mappings: list[DataSourceMappingCreate] | None = None
     enrichments: list[DataSourceEnrichmentCreate] | None = None
@@ -254,6 +265,7 @@ class DataSourceRead(BaseModel):
     execution_type: DataSourceExecutionType
     is_active: bool
     log_dumps: bool
+    is_differential_updates: bool = False
     invalid_reference_policy: InvalidReferencePolicy
     last_run_at: datetime | None
     created_at: datetime
@@ -655,6 +667,8 @@ class StopEventRead(BaseModel):
     stop_sequence: str
     arrival_time: datetime
     departure_time: datetime
+    scheduled_arrival_time: datetime | None = None
+    scheduled_departure_time: datetime | None = None
     schedule_relationship: str
     is_implied_schedule_relationship: bool = False
     is_valid: bool
@@ -675,7 +689,7 @@ class TripRead(BaseModel):
     scheduled_end_stop_name: str | None = None
     scheduled_start_time: datetime | None = None
     scheduled_end_time: datetime | None = None
-    start_time: str
+    start_time: str | None = None
     start_date: str
     route_id: str
     route_name: str | None = None
@@ -687,6 +701,7 @@ class TripRead(BaseModel):
     updated_at: datetime
     is_trip_valid: bool = True
     is_route_valid: bool = True
+    is_complete_stop_sequence: bool = True
     is_valid: bool
     stop_events: list[StopEventRead]
     data_source_name: str | None = None
@@ -708,7 +723,7 @@ class VehicleTripSummaryRead(BaseModel):
     trip_id: str
     route_id: str
     route_name: str | None = None
-    start_time: str
+    start_time: str | None = None
     start_date: str
     schedule_relationship: str
     is_active: bool

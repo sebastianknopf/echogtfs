@@ -53,8 +53,10 @@ class AppSetting(Base):
     KEY_GTFS_RT_PASSWORD: ClassVar[str] = "gtfs_rt_password"
 
     KEY_CLEANUP_CRON: ClassVar[str] = "cleanup_cron"
-    KEY_CLEANUP_EXPIRED_POLICY: ClassVar[str] = "cleanup_expired_policy"
-    KEY_CLEANUP_DELETE_AFTER_DAYS: ClassVar[str] = "cleanup_delete_after_days"
+    KEY_CLEANUP_EXPIRED_ALERTS_POLICY: ClassVar[str] = "cleanup_expired_alerts_policy"
+    KEY_CLEANUP_DELETE_ALERTS_AFTER_DAYS: ClassVar[str] = "cleanup_delete_alerts_after_days"
+    KEY_CLEANUP_EXPIRED_TRIPS_MAX_AGE: ClassVar[str] = "cleanup_expired_trips_max_age"
+    KEY_CLEANUP_EXPIRED_VEHICLES_MAX_AGE: ClassVar[str] = "cleanup_expired_vehicles_max_age"
 
     KEY_PUSH_API_ENABLED: ClassVar[str] = "push_api_enabled"
     KEY_PUSH_API_USERNAME: ClassVar[str] = "push_api_username"
@@ -78,8 +80,10 @@ class AppSetting(Base):
         KEY_GTFS_RT_USERNAME,
         KEY_GTFS_RT_PASSWORD,
         KEY_CLEANUP_CRON,
-        KEY_CLEANUP_EXPIRED_POLICY,
-        KEY_CLEANUP_DELETE_AFTER_DAYS,
+        KEY_CLEANUP_EXPIRED_ALERTS_POLICY,
+        KEY_CLEANUP_DELETE_ALERTS_AFTER_DAYS,
+        KEY_CLEANUP_EXPIRED_TRIPS_MAX_AGE,
+        KEY_CLEANUP_EXPIRED_VEHICLES_MAX_AGE,
         KEY_PUSH_API_ENABLED,
         KEY_PUSH_API_USERNAME,
         KEY_PUSH_API_PASSWORD,
@@ -134,7 +138,10 @@ class DataSource(Base):
 
     # Controls whether response dump files should be persisted for this source
     log_dumps: Mapped[bool] = mapped_column(Boolean, default=False)
-    
+
+    # Disables implicit absence-based deletion; records are expected to arrive as partial updates
+    is_differential_updates: Mapped[bool] = mapped_column(Boolean, default=False)
+
     # Policy for handling invalid entity references
     invalid_reference_policy: Mapped[InvalidReferencePolicy] = mapped_column(
         String(32), default=InvalidReferencePolicy.NOT_SPECIFIED
@@ -559,7 +566,8 @@ class Trip(Base):
     scheduled_end_stop_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     scheduled_start_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     scheduled_end_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    start_time: Mapped[str] = mapped_column(Text)
+    # Unknown until a full update establishes the trip's actual start-of-day time
+    start_time: Mapped[str | None] = mapped_column(Text, nullable=True)
     start_date: Mapped[str] = mapped_column(Text)
     route_id: Mapped[str] = mapped_column(Text)
     schedule_relationship: Mapped[str] = mapped_column(Text, default="SCHEDULED")
@@ -573,6 +581,9 @@ class Trip(Base):
     )
     is_trip_valid: Mapped[bool] = mapped_column(Boolean, default=True)
     is_route_valid: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    # False when only a partial (incremental) stop sequence has been received so far
+    is_complete_stop_sequence: Mapped[bool] = mapped_column(Boolean, default=True)
 
     data_source: Mapped["DataSource | None"] = relationship(back_populates="trips")
     stop_events: Mapped[list["StopEvent"]] = relationship(
@@ -608,6 +619,8 @@ class StopEvent(Base):
     stop_sequence: Mapped[str] = mapped_column(Text, primary_key=True)
     arrival_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     departure_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    scheduled_arrival_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    scheduled_departure_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     schedule_relationship: Mapped[str] = mapped_column(Text, default="SCHEDULED")
     is_implied_schedule_relationship: Mapped[bool] = mapped_column(Boolean, default=False)
     is_valid: Mapped[bool] = mapped_column(Boolean, default=True)

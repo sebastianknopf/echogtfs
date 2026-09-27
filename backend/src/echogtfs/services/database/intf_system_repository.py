@@ -150,6 +150,7 @@ class SystemRepositoryInterface(ABC):
         execution_type: str = "time_based",
         is_active: bool,
         log_dumps: bool,
+        is_differential_updates: bool = False,
         invalid_reference_policy: str,
         mappings: list[dict[str, str]],
         enrichments: list[dict[str, str | int]],
@@ -170,6 +171,7 @@ class SystemRepositoryInterface(ABC):
         execution_type: str | None = None,
         is_active: bool | None = None,
         log_dumps: bool | None = None,
+        is_differential_updates: bool | None = None,
         invalid_reference_policy: str | None = None,
         mappings: list[dict[str, str]] | None = None,
         enrichments: list[dict[str, str | int]] | None = None,
@@ -282,4 +284,9 @@ class SystemRepositoryInterface(ABC):
     @abstractmethod
     async def get_data_source_invalid_reference_policy(self, source_id: int) -> str:
         """Return invalid reference policy configured for a data source."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_data_source_is_differential_updates(self, source_id: int) -> bool:
+        """Return whether a data source is configured for differential/incremental updates."""
         raise NotImplementedError

@@ -733,7 +733,7 @@ const sources = (() => {
   }
 
   // Source modal management
-  function _openSourceModal({ title, name = '', type = '', config = {}, cron = '', execution_type = 'time_based', is_active = true, log_dumps = false, invalid_reference_policy = 'not_specified', mappings = [], enrichments = [] } = {}) {
+  function _openSourceModal({ title, name = '', type = '', config = {}, cron = '', execution_type = 'time_based', is_active = true, log_dumps = false, is_differential_updates = false, invalid_reference_policy = 'not_specified', mappings = [], enrichments = [] } = {}) {
     ui.el('source-modal-title').textContent = title;
     ui.el('source-name').value = name;
     ui.el('source-name').readOnly = false;
@@ -760,6 +760,7 @@ const sources = (() => {
     _toggleCronFieldVisibility();
     ui.el('source-is-active').checked = is_active;
     ui.el('source-log-dumps').checked = !!log_dumps;
+    ui.el('source-is-differential-updates').checked = !!is_differential_updates;
     ui.el('source-invalid-reference-policy').value = invalid_reference_policy || 'not_specified';
     
     // Initialize mappings
@@ -837,6 +838,7 @@ const sources = (() => {
       cron: '',
       execution_type: 'time_based',
       log_dumps: false,
+      is_differential_updates: false,
       mappings: [],
       enrichments: []
     });
@@ -872,6 +874,7 @@ const sources = (() => {
         execution_type: source.execution_type || 'time_based',
         is_active: source.is_active !== undefined ? source.is_active : true,
         log_dumps: source.log_dumps !== undefined ? source.log_dumps : false,
+        is_differential_updates: source.is_differential_updates !== undefined ? source.is_differential_updates : false,
         invalid_reference_policy: source.invalid_reference_policy || 'not_specified',
         mappings: source.mappings || [],
         enrichments: source.enrichments || []
@@ -893,6 +896,7 @@ const sources = (() => {
     const executionType = ui.el('source-execution-type').value;
     const isActive = ui.el('source-is-active').checked;
     const logDumps = ui.el('source-log-dumps').checked;
+    const isDifferentialUpdates = ui.el('source-is-differential-updates').checked;
     const invalidReferencePolicy = ui.el('source-invalid-reference-policy').value;
 
     if (!name || !type) {
@@ -953,6 +957,7 @@ const sources = (() => {
         execution_type: executionType,
         is_active: isActive,
         log_dumps: logDumps,
+        is_differential_updates: isDifferentialUpdates,
         invalid_reference_policy: invalidReferencePolicy,
         mappings,
         enrichments

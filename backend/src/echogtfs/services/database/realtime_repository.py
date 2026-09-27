@@ -73,8 +73,8 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
             result = await db.execute(stmt)
             return list(result.scalars().all())
 
-    async def list_expired_internal_alert_ids(self, current_timestamp: int, *, only_active: bool) -> list[uuid.UUID]:
-        """Return internal alert ids where all active periods already ended."""
+    async def list_expired_alert_ids(self, current_timestamp: int, *, only_active: bool) -> list[uuid.UUID]:
+        """Return alert ids, regardless of data source, where all active periods already ended."""
         subquery = (
             select(ServiceAlertActivePeriod.alert_id)
             .group_by(ServiceAlertActivePeriod.alert_id)
@@ -84,10 +84,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
             )
         )
 
-        stmt = select(ServiceAlert.id).where(
-            ServiceAlert.data_source_id.is_(None),
-            ServiceAlert.id.in_(subquery),
-        )
+        stmt = select(ServiceAlert.id).where(ServiceAlert.id.in_(subquery))
 
         if only_active:
             stmt = stmt.where(ServiceAlert.is_active == True)
@@ -96,8 +93,8 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
             result = await db.execute(stmt)
             return [row[0] for row in result.all()]
 
-    async def list_internal_alert_ids_expired_before(self, cutoff_timestamp: int) -> list[uuid.UUID]:
-        """Return internal alert ids where all active periods ended before cutoff timestamp."""
+    async def list_alert_ids_expired_before(self, cutoff_timestamp: int) -> list[uuid.UUID]:
+        """Return alert ids, regardless of data source, where all active periods ended before cutoff timestamp."""
         subquery = (
             select(ServiceAlertActivePeriod.alert_id)
             .group_by(ServiceAlertActivePeriod.alert_id)
@@ -107,10 +104,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
             )
         )
 
-        stmt = select(ServiceAlert.id).where(
-            ServiceAlert.data_source_id.is_(None),
-            ServiceAlert.id.in_(subquery),
-        )
+        stmt = select(ServiceAlert.id).where(ServiceAlert.id.in_(subquery))
 
         async with self.get_session() as db:
             result = await db.execute(stmt)
@@ -647,6 +641,56 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
             
             return {str(value) for value in result.scalars().all()}
 
+    async def list_stop_events_for_trip(self, trip_id: str) -> list[StopEvent]:
+        """Return persisted stop events for one trip_id, ordered by stop_sequence."""
+        stmt = select(StopEvent).where(StopEvent.trip_id == trip_id)
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            events = list(result.scalars().all())
+
+        events.sort(key=lambda event: self._stop_event_sort_key(event.stop_sequence))
+        return events
+
+    @staticmethod
+    def _stop_event_sort_key(stop_sequence: str) -> tuple[int, int, str]:
+        """Sort numeric stop_sequence values first, then fall back to string comparison."""
+        try:
+            return (0, int(stop_sequence), "")
+        except (TypeError, ValueError):
+            return (1, 0, str(stop_sequence))
+
+    async def list_trip_ids_updated_before(self, cutoff: datetime) -> list[str]:
+        """Return trip_id values for all realtime trips last updated before cutoff."""
+        stmt = select(Trip.trip_id).where(Trip.updated_at < cutoff)
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return [str(value) for value in result.scalars().all()]
+
+    async def list_trip_ids_with_vehicle(self, trip_ids: list[str]) -> set[str]:
+        """Return trip_id values that currently have a linked realtime vehicle position."""
+        if not trip_ids:
+            return set()
+
+        stmt = select(Vehicle.trip_id).where(Vehicle.trip_id.in_(trip_ids)).distinct()
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return {str(value) for value in result.scalars().all()}
+
+    async def delete_stop_events_for_trip_ids(self, trip_ids: list[str]) -> int:
+        """Delete realtime stop events for the given trip_id values without touching the trip itself."""
+        if not trip_ids:
+            return 0
+
+        stmt = delete(StopEvent).where(StopEvent.trip_id.in_(trip_ids))
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            await self.commit(db)
+            return int(result.rowcount or 0)
+
     async def delete_trips_by_trip_ids(self, trip_ids: list[str]) -> int:
             """Delete realtime trip rows by trip_id and return the deleted row count."""
             if not trip_ids:
@@ -685,7 +729,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
         source_id: int,
         source_name: str,
         trip_id: str,
-        start_time: str,
+        start_time: str | None,
         start_date: str,
         route_id: str,
         schedule_relationship: str,
@@ -699,6 +743,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
         scheduled_end_stop_id: str | None = None,
         scheduled_start_time: datetime | None = None,
         scheduled_end_time: datetime | None = None,
+        is_complete_stop_sequence: bool = True,
     ) -> str:
         """Create or update a synchronized trip update and replace stop events."""
         async with self.get_session() as db:
@@ -726,6 +771,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                     is_active=is_active_on_create,
                     is_trip_valid=is_trip_valid,
                     is_route_valid=is_route_valid,
+                    is_complete_stop_sequence=is_complete_stop_sequence,
                 )
 
                 db.add(existing)
@@ -744,6 +790,7 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                 existing.start_date = start_date
                 existing.route_id = route_id
                 existing.schedule_relationship = schedule_relationship
+                existing.is_complete_stop_sequence = is_complete_stop_sequence
 
                 if assignment_type != AssignmentType.MATCH_BY_CACHED_ID:
                     existing.assignment_type = assignment_type
@@ -893,6 +940,26 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
             result = await db.execute(stmt)
             return list(result.scalars().all())
 
+    async def list_vehicles_updated_before(self, cutoff: datetime) -> list[Vehicle]:
+        """Return all realtime vehicles last updated before cutoff."""
+        stmt = select(Vehicle).where(Vehicle.updated_at < cutoff)
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
+    async def delete_vehicles_by_ids(self, vehicle_ids: list[uuid.UUID]) -> int:
+        """Delete realtime vehicles by ids, regardless of data source."""
+        if not vehicle_ids:
+            return 0
+
+        stmt = delete(Vehicle).where(Vehicle.id.in_(vehicle_ids))
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            await self.commit(db)
+            return int(result.rowcount or 0)
+
     async def delete_vehicles_for_data_source_by_ids(
         self,
         source_id: int,
@@ -959,6 +1026,8 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
                     is_active=trip_is_active_on_create,
                     is_trip_valid=trip_is_trip_valid,
                     is_route_valid=trip_is_route_valid,
+                    # Vehicle-position-only trips carry no stop events, so the sequence is never complete
+                    is_complete_stop_sequence=False,
                 )
                 
                 db.add(existing_trip)

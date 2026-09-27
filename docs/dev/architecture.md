@@ -122,6 +122,8 @@ Most repositories hold a reference to open a separate database connection on dem
 
 External datasources live in `backend/src/echogtfs/datasources` and inherit from `DatasourceBase` (`base.py`). The `DatasourceBase` encapsulates all main logic for calling the mapping service, the enrichment service and the finally the matching if the entities could not be matched to a GTFS entity by ID.
 
+The detailed runtime behavior for differential sources and incremental trip updates is documented in [differential-incremental.md](differential-incremental.md).
+
 The specific datasource implementation encapsulates source related specifics like request / response patterns, content and I/O handling, and datasource related parameters.
 
 For reading and parsing the external data, the transformers are implemented in `backend/src/echogtfs/datasources/transformers`. There's one transformer interface for each GTFS-RT entity and several specific transformer implementations. The transformers are kept as generic as possible, however, proprietary transformers may be required to include arbitrary data.

@@ -51,13 +51,13 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def list_expired_internal_alert_ids(self, current_timestamp: int, *, only_active: bool) -> list[uuid.UUID]:
-        """Return internal alert ids where all active periods ended before current timestamp."""
+    async def list_expired_alert_ids(self, current_timestamp: int, *, only_active: bool) -> list[uuid.UUID]:
+        """Return alert ids, regardless of data source, where all active periods ended before current timestamp."""
         raise NotImplementedError
 
     @abstractmethod
-    async def list_internal_alert_ids_expired_before(self, cutoff_timestamp: int) -> list[uuid.UUID]:
-        """Return internal alert ids where all active periods ended before cutoff timestamp."""
+    async def list_alert_ids_expired_before(self, cutoff_timestamp: int) -> list[uuid.UUID]:
+        """Return alert ids, regardless of data source, where all active periods ended before cutoff timestamp."""
         raise NotImplementedError
 
     @abstractmethod
@@ -216,6 +216,26 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def list_stop_events_for_trip(self, trip_id: str) -> list[StopEvent]:
+        """Return persisted stop events for one trip_id, ordered by stop_sequence."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_trip_ids_updated_before(self, cutoff: datetime) -> list[str]:
+        """Return trip_id values for all realtime trips last updated before cutoff, regardless of data source."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_trip_ids_with_vehicle(self, trip_ids: list[str]) -> set[str]:
+        """Return trip_id values that currently have a linked realtime vehicle position."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def delete_stop_events_for_trip_ids(self, trip_ids: list[str]) -> int:
+        """Delete realtime stop events for the given trip_id values without touching the trip itself."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def delete_trips_by_trip_ids(self, trip_ids: list[str]) -> int:
         """Delete realtime trip rows by trip_id and return the deleted row count."""
         raise NotImplementedError
@@ -237,7 +257,7 @@ class RealtimeRepositoryInterface(ABC):
         source_id: int,
         source_name: str,
         trip_id: str,
-        start_time: str,
+        start_time: str | None,
         start_date: str,
         route_id: str,
         schedule_relationship: str,
@@ -251,6 +271,7 @@ class RealtimeRepositoryInterface(ABC):
         scheduled_end_stop_id: str | None = None,
         scheduled_start_time: datetime | None = None,
         scheduled_end_time: datetime | None = None,
+        is_complete_stop_sequence: bool = True,
     ) -> str:
         """Create or update one synchronized trip update and replace stop event records."""
         raise NotImplementedError
@@ -290,6 +311,16 @@ class RealtimeRepositoryInterface(ABC):
     @abstractmethod
     async def list_vehicles_by_ids(self, vehicle_ids: list[uuid.UUID]) -> list[Vehicle]:
         """Return realtime vehicles by ids."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_vehicles_updated_before(self, cutoff: datetime) -> list[Vehicle]:
+        """Return all realtime vehicles last updated before cutoff, regardless of data source."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def delete_vehicles_by_ids(self, vehicle_ids: list[uuid.UUID]) -> int:
+        """Delete realtime vehicles by ids, regardless of data source, and return deleted row count."""
         raise NotImplementedError
 
     @abstractmethod

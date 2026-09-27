@@ -36,6 +36,7 @@ class _SystemRepositoryStub:
         self.get_data_source_invalid_reference_policy = AsyncMock(
             return_value=InvalidReferencePolicy.DISCARD_INVALID
         )
+        self.get_data_source_is_differential_updates = AsyncMock(return_value=False)
         self.list_data_source_mappings_grouped = AsyncMock(return_value={})
         self.list_gtfs_entity_ids = AsyncMock(
             return_value={"agency": {"a1"}, "route": {"r1"}, "stop": {"s1"}, "trip": {"trip-1"}}
@@ -57,6 +58,7 @@ class _RealtimeRepositoryStub:
         self.list_trips_by_trip_ids = AsyncMock(return_value=[])
         self.delete_trips_by_trip_ids = AsyncMock()
         self.list_trip_ids_with_stop_events = AsyncMock(return_value=set())
+        self.list_stop_events_for_trip = AsyncMock(return_value=[])
         self.delete_trips_for_data_source_by_ids = AsyncMock()
         self.update_trip_update_from_sync = AsyncMock()
         self.list_vehicles_for_data_source = AsyncMock(return_value=[])
@@ -396,6 +398,317 @@ class TestDatasourceBaseHelpers(unittest.TestCase):
             [event["departure_time"].minute for event in propagated],
             [5, 40],
         )
+
+
+class TestMergeIncrementalStopEvents(unittest.TestCase):
+    """Smoke tests for the incremental stop-event merge helper only."""
+
+    def setUp(self):
+        self.datasource = _TestDatasource({})
+
+    @staticmethod
+    def _dt(minute, hour=8):
+        return datetime(2026, 8, 1, hour, minute, tzinfo=timezone.utc)
+
+    def _existing_events(self):
+        return [
+            {
+                "stop_id": "s1",
+                "stop_sequence": "1",
+                "arrival_time": self._dt(0),
+                "departure_time": self._dt(0),
+                "scheduled_arrival_time": self._dt(0),
+                "scheduled_departure_time": self._dt(0),
+            },
+            {
+                "stop_id": "s2",
+                "stop_sequence": "2",
+                "arrival_time": self._dt(10),
+                "departure_time": self._dt(11),
+                "scheduled_arrival_time": self._dt(10),
+                "scheduled_departure_time": self._dt(11),
+            },
+            {
+                "stop_id": "s3",
+                "stop_sequence": "3",
+                "arrival_time": self._dt(20),
+                "departure_time": self._dt(20),
+                "scheduled_arrival_time": self._dt(20),
+                "scheduled_departure_time": self._dt(20),
+            },
+        ]
+
+    def test_returns_incoming_as_is_when_no_existing_baseline(self):
+        incoming = [{"stop_id": "s1", "stop_sequence": "1"}]
+
+        merged = self.datasource._merge_incremental_stop_events([], incoming)
+
+        self.assertEqual(merged, incoming)
+        self.assertIsNot(merged, incoming)
+
+    def test_matches_primary_key_by_stop_id_and_stop_sequence(self):
+        incoming = [
+            {
+                "stop_id": "s2",
+                "stop_sequence": "2",
+                "arrival_time": self._dt(15),
+                "departure_time": self._dt(16),
+                "scheduled_arrival_time": self._dt(10),
+                "scheduled_departure_time": self._dt(11),
+            }
+        ]
+
+        merged = self.datasource._merge_incremental_stop_events(self._existing_events(), incoming)
+
+        self.assertEqual(merged[1]["arrival_time"], self._dt(15))
+        self.assertEqual(merged[1]["departure_time"], self._dt(16))
+
+    def test_falls_back_to_scheduled_time_when_stop_sequence_does_not_match(self):
+        # incoming stop_sequence is "1" (positional in the batch), not "2" (its real position).
+        incoming = [
+            {
+                "stop_id": "s2",
+                "stop_sequence": "1",
+                "arrival_time": self._dt(15),
+                "departure_time": self._dt(16),
+                "scheduled_arrival_time": self._dt(10),
+                "scheduled_departure_time": self._dt(11),
+            }
+        ]
+
+        merged = self.datasource._merge_incremental_stop_events(self._existing_events(), incoming)
+
+        self.assertEqual(merged[1]["stop_id"], "s2")
+        self.assertEqual(merged[1]["arrival_time"], self._dt(15))
+
+    def test_unmatched_stop_id_is_appended_as_new(self):
+        incoming = [{"stop_id": "unknown-stop", "stop_sequence": "99"}]
+
+        merged = self.datasource._merge_incremental_stop_events(self._existing_events(), incoming)
+
+        self.assertEqual(len(merged), 4)
+        self.assertEqual(merged[-1]["stop_id"], "unknown-stop")
+
+    def test_matched_stop_delay_propagates_to_later_stops(self):
+        incoming = [
+            {
+                "stop_id": "s1",
+                "stop_sequence": "1",
+                "arrival_time": self._dt(0),
+                "departure_time": self._dt(5),
+                "scheduled_arrival_time": self._dt(0),
+                "scheduled_departure_time": self._dt(0),
+            }
+        ]
+
+        merged = self.datasource._merge_incremental_stop_events(self._existing_events(), incoming)
+
+        self.assertEqual(merged[1]["arrival_time"], self._dt(15))
+        self.assertEqual(merged[1]["departure_time"], self._dt(16))
+        self.assertEqual(merged[2]["arrival_time"], self._dt(25))
+
+
+class TestPropagateIncrementalDelay(unittest.TestCase):
+    """Smoke tests for the pure per-stop delay propagation helper only."""
+
+    def setUp(self):
+        self.datasource = _TestDatasource({})
+
+    @staticmethod
+    def _dt(minute, hour=8):
+        return datetime(2026, 8, 1, hour, minute, tzinfo=timezone.utc)
+
+    def test_propagates_delay_forward_through_arrival_and_departure(self):
+        stop_events = [
+            {
+                "stop_id": "s1",
+                "arrival_time": self._dt(8),
+                "departure_time": self._dt(8),
+                "scheduled_arrival_time": self._dt(0),
+                "scheduled_departure_time": self._dt(0),
+            },
+            {
+                "stop_id": "s2",
+                "scheduled_arrival_time": self._dt(10),
+                "scheduled_departure_time": self._dt(11),
+            },
+            {
+                "stop_id": "s3",
+                "scheduled_arrival_time": self._dt(20),
+                "scheduled_departure_time": self._dt(20),
+            },
+        ]
+
+        self.datasource._propagate_incremental_delay(stop_events, {0})
+
+        self.assertEqual(stop_events[1]["arrival_time"], self._dt(18))
+        self.assertEqual(stop_events[1]["departure_time"], self._dt(19))
+        self.assertEqual(stop_events[2]["arrival_time"], self._dt(28))
+        self.assertEqual(stop_events[2]["departure_time"], self._dt(28))
+
+    def test_does_not_touch_stops_without_any_scheduled_time(self):
+        stop_events = [
+            {
+                "stop_id": "s1",
+                "arrival_time": self._dt(8),
+                "departure_time": self._dt(8),
+                "scheduled_arrival_time": self._dt(0),
+                "scheduled_departure_time": self._dt(0),
+            },
+            {"stop_id": "s2"},
+        ]
+
+        self.datasource._propagate_incremental_delay(stop_events, {0})
+
+        self.assertNotIn("arrival_time", stop_events[1])
+        self.assertNotIn("departure_time", stop_events[1])
+
+    def test_running_early_is_floored_to_scheduled_departure_at_timepoint(self):
+        stop_events = [
+            {
+                "stop_id": "s1",
+                "arrival_time": self._dt(7),
+                "departure_time": self._dt(7),
+                "scheduled_arrival_time": self._dt(10),
+                "scheduled_departure_time": self._dt(10),
+            },
+            {
+                "stop_id": "s2",
+                # timepoint dwell: scheduled departure is later than scheduled arrival
+                "scheduled_arrival_time": self._dt(30),
+                "scheduled_departure_time": self._dt(32),
+            },
+        ]
+
+        self.datasource._propagate_incremental_delay(stop_events, {0})
+
+        self.assertEqual(stop_events[1]["arrival_time"], self._dt(27))
+        self.assertEqual(stop_events[1]["departure_time"], self._dt(32))
+
+    def test_running_late_is_never_clamped_at_timepoint(self):
+        stop_events = [
+            {
+                "stop_id": "s1",
+                "arrival_time": self._dt(13),
+                "departure_time": self._dt(13),
+                "scheduled_arrival_time": self._dt(10),
+                "scheduled_departure_time": self._dt(10),
+            },
+            {
+                "stop_id": "s2",
+                "scheduled_arrival_time": self._dt(30),
+                "scheduled_departure_time": self._dt(32),
+            },
+        ]
+
+        self.datasource._propagate_incremental_delay(stop_events, {0})
+
+        self.assertEqual(stop_events[1]["arrival_time"], self._dt(33))
+        self.assertEqual(stop_events[1]["departure_time"], self._dt(35))
+
+    def test_terminus_without_scheduled_departure_mirrors_propagated_arrival(self):
+        stop_events = [
+            {
+                "stop_id": "s1",
+                "arrival_time": self._dt(8),
+                "departure_time": self._dt(8),
+                "scheduled_arrival_time": self._dt(0),
+                "scheduled_departure_time": self._dt(0),
+            },
+            {
+                "stop_id": "terminus",
+                "scheduled_arrival_time": self._dt(20),
+                "scheduled_departure_time": None,
+            },
+        ]
+
+        self.datasource._propagate_incremental_delay(stop_events, {0})
+
+        self.assertEqual(stop_events[1]["arrival_time"], self._dt(28))
+        self.assertEqual(stop_events[1]["departure_time"], self._dt(28))
+
+    def test_origin_without_scheduled_arrival_mirrors_propagated_departure(self):
+        stop_events = [
+            {
+                "stop_id": "s1",
+                "arrival_time": self._dt(8),
+                "departure_time": self._dt(8),
+                "scheduled_arrival_time": self._dt(0),
+                "scheduled_departure_time": self._dt(0),
+            },
+            {
+                "stop_id": "origin-like",
+                "scheduled_arrival_time": None,
+                "scheduled_departure_time": self._dt(20),
+            },
+        ]
+
+        self.datasource._propagate_incremental_delay(stop_events, {0})
+
+        self.assertEqual(stop_events[1]["arrival_time"], self._dt(28))
+        self.assertEqual(stop_events[1]["departure_time"], self._dt(28))
+
+    def test_segment_resets_at_each_matched_stop(self):
+        stop_events = [
+            {
+                "stop_id": "s1",
+                "arrival_time": self._dt(8),
+                "departure_time": self._dt(8),
+                "scheduled_arrival_time": self._dt(0),
+                "scheduled_departure_time": self._dt(0),
+            },
+            {
+                "stop_id": "s2",
+                "scheduled_arrival_time": self._dt(10),
+                "scheduled_departure_time": self._dt(10),
+            },
+            {
+                "stop_id": "s3",
+                "arrival_time": self._dt(21),
+                "departure_time": self._dt(21),
+                "scheduled_arrival_time": self._dt(20),
+                "scheduled_departure_time": self._dt(20),
+            },
+            {
+                "stop_id": "s4",
+                "scheduled_arrival_time": self._dt(30),
+                "scheduled_departure_time": self._dt(30),
+            },
+        ]
+
+        self.datasource._propagate_incremental_delay(stop_events, {0, 2})
+
+        self.assertEqual(stop_events[1]["arrival_time"], self._dt(18))
+        self.assertEqual(stop_events[3]["arrival_time"], self._dt(31))
+
+    def test_inconsistent_departure_before_arrival_falls_back_to_arrival_reference(self):
+        stop_events = [
+            {
+                "stop_id": "s1",
+                # invalid/reversed: departure earlier than arrival at the same stop
+                "arrival_time": self._dt(10),
+                "departure_time": self._dt(2),
+                "scheduled_arrival_time": self._dt(5),
+                "scheduled_departure_time": self._dt(0),
+            },
+            {
+                "stop_id": "s2",
+                "scheduled_arrival_time": self._dt(20),
+                "scheduled_departure_time": self._dt(20),
+            },
+        ]
+
+        self.datasource._propagate_incremental_delay(stop_events, {0})
+
+        # delay is derived from arrival (10 - 5 = +5 min), not the inconsistent departure.
+        self.assertEqual(stop_events[1]["arrival_time"], self._dt(25))
+
+    def test_no_matched_indexes_does_nothing(self):
+        stop_events = [{"stop_id": "s1", "scheduled_arrival_time": self._dt(0)}]
+
+        self.datasource._propagate_incremental_delay(stop_events, set())
+
+        self.assertNotIn("arrival_time", stop_events[0])
 
 
 class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
@@ -1622,3 +1935,296 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
         kwargs = realtime_repository.update_trip_update_from_sync.await_args.kwargs
         self.assertEqual([e["stop_id"] for e in kwargs["stop_events"]], ["s1", "s2"])
         self.assertEqual([e["stop_sequence"] for e in kwargs["stop_events"]], ["1", "2"])
+
+    async def test_sync_trip_update_records_merges_incremental_into_existing_complete_trip(self):
+        repository = _SystemRepositoryStub()
+        realtime_repository = _RealtimeRepositoryStub()
+        gtfs_repository = _GtfsRepositoryStub()
+        datasource = _TestDatasource({})
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=(None, AssignmentType.NO_MATCH_GENERAL))
+        )
+        datasource._identifier_mapping_service = SimpleNamespace(
+            initialize=AsyncMock(),
+            get_loaded_mapping_count=lambda: 0,
+            apply_mapping=lambda entity: entity,
+        )
+        gtfs_repository.list_gtfs_entity_ids = AsyncMock(
+            return_value={"agency": {"a1"}, "route": {"r1"}, "stop": {"s1", "s2", "s3"}, "trip": {"trip-1"}}
+        )
+
+        trip_uuid = datasource._make_unique_id("trip-1", "Demo")
+        scheduled_start = datetime(2026, 8, 1, 8, 0, tzinfo=timezone.utc)
+        scheduled_end = datetime(2026, 8, 1, 9, 0, tzinfo=timezone.utc)
+        existing_trip = SimpleNamespace(
+            id=trip_uuid,
+            trip_id="trip-1",
+            data_source_id=2,
+            is_active=True,
+            is_complete_stop_sequence=True,
+            scheduled_start_time=scheduled_start,
+            scheduled_end_time=scheduled_end,
+            scheduled_start_stop_id="s1",
+            scheduled_end_stop_id="s3",
+            start_time="08:00:00",
+        )
+        realtime_repository.list_trips_for_data_source = AsyncMock(return_value=[existing_trip])
+        realtime_repository.list_trips_by_trip_ids = AsyncMock(return_value=[existing_trip])
+
+        existing_stop_event = SimpleNamespace(
+            stop_id="s2",
+            original_stop_id="s2",
+            stop_sequence="2",
+            arrival_time=datetime(2026, 8, 1, 8, 10, tzinfo=timezone.utc),
+            departure_time=datetime(2026, 8, 1, 8, 11, tzinfo=timezone.utc),
+            scheduled_arrival_time=datetime(2026, 8, 1, 8, 10, tzinfo=timezone.utc),
+            scheduled_departure_time=datetime(2026, 8, 1, 8, 11, tzinfo=timezone.utc),
+            schedule_relationship="SCHEDULED",
+            is_implied_schedule_relationship=False,
+            is_valid=True,
+        )
+        realtime_repository.list_stop_events_for_trip = AsyncMock(return_value=[existing_stop_event])
+
+        records = [
+            {
+                "id": "trip-upd-1",
+                "trip_id": "trip-1",
+                "start_time": None,
+                "start_date": "20260801",
+                "route_id": "r1",
+                "is_complete_stop_sequence": False,
+                "stop_events": [
+                    {
+                        "stop_id": "s2",
+                        "stop_sequence": "2",
+                        "arrival_time": datetime(2026, 8, 1, 8, 15, tzinfo=timezone.utc),
+                        "departure_time": datetime(2026, 8, 1, 8, 16, tzinfo=timezone.utc),
+                        "scheduled_arrival_time": datetime(2026, 8, 1, 8, 10, tzinfo=timezone.utc),
+                        "scheduled_departure_time": datetime(2026, 8, 1, 8, 11, tzinfo=timezone.utc),
+                        "is_valid": True,
+                    }
+                ],
+            }
+        ]
+
+        await datasource._sync_trip_update_records(
+            repository=repository,
+            realtime_repository=realtime_repository,
+            gtfs_repository=gtfs_repository,
+            source_id=2,
+            source_name="Demo",
+            records=records,
+        )
+
+        realtime_repository.list_stop_events_for_trip.assert_awaited_once()
+        kwargs = realtime_repository.update_trip_update_from_sync.await_args.kwargs
+        self.assertTrue(kwargs["is_complete_stop_sequence"])
+        self.assertEqual(kwargs["scheduled_start_time"], scheduled_start)
+        self.assertEqual(kwargs["scheduled_end_time"], scheduled_end)
+        self.assertEqual(kwargs["scheduled_start_stop_id"], "s1")
+        self.assertEqual(kwargs["scheduled_end_stop_id"], "s3")
+        self.assertEqual(kwargs["start_time"], "08:00:00")
+        self.assertEqual(len(kwargs["stop_events"]), 1)
+        self.assertEqual(
+            kwargs["stop_events"][0]["arrival_time"],
+            datetime(2026, 8, 1, 8, 15, tzinfo=timezone.utc),
+        )
+
+    async def test_sync_trip_update_records_incomplete_without_existing_baseline_stores_as_is(self):
+        repository = _SystemRepositoryStub()
+        realtime_repository = _RealtimeRepositoryStub()
+        gtfs_repository = _GtfsRepositoryStub()
+        datasource = _TestDatasource({})
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=(None, AssignmentType.NO_MATCH_GENERAL))
+        )
+        datasource._identifier_mapping_service = SimpleNamespace(
+            initialize=AsyncMock(),
+            get_loaded_mapping_count=lambda: 0,
+            apply_mapping=lambda entity: entity,
+        )
+
+        records = [
+            {
+                "id": "trip-upd-1",
+                "trip_id": "trip-1",
+                "start_time": None,
+                "start_date": "20260801",
+                "route_id": "r1",
+                "is_complete_stop_sequence": False,
+                "stop_events": [
+                    {
+                        "stop_id": "s1",
+                        "stop_sequence": "5",
+                        "arrival_time": datetime(2026, 8, 1, 8, 15, tzinfo=timezone.utc),
+                        "departure_time": datetime(2026, 8, 1, 8, 16, tzinfo=timezone.utc),
+                        "is_valid": True,
+                    }
+                ],
+            }
+        ]
+
+        await datasource._sync_trip_update_records(
+            repository=repository,
+            realtime_repository=realtime_repository,
+            gtfs_repository=gtfs_repository,
+            source_id=2,
+            source_name="Demo",
+            records=records,
+        )
+
+        realtime_repository.list_stop_events_for_trip.assert_not_awaited()
+        kwargs = realtime_repository.update_trip_update_from_sync.await_args.kwargs
+        self.assertFalse(kwargs["is_complete_stop_sequence"])
+        self.assertIsNone(kwargs["scheduled_start_time"])
+        self.assertIsNone(kwargs["scheduled_end_time"])
+        self.assertIsNone(kwargs["scheduled_start_stop_id"])
+        self.assertIsNone(kwargs["scheduled_end_stop_id"])
+        self.assertIsNone(kwargs["start_time"])
+        self.assertEqual(kwargs["stop_events"][0]["stop_sequence"], "")
+
+    async def test_sync_trip_update_records_incomplete_with_existing_incomplete_trip_does_not_merge(self):
+        repository = _SystemRepositoryStub()
+        realtime_repository = _RealtimeRepositoryStub()
+        gtfs_repository = _GtfsRepositoryStub()
+        datasource = _TestDatasource({})
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=(None, AssignmentType.NO_MATCH_GENERAL))
+        )
+        datasource._identifier_mapping_service = SimpleNamespace(
+            initialize=AsyncMock(),
+            get_loaded_mapping_count=lambda: 0,
+            apply_mapping=lambda entity: entity,
+        )
+
+        trip_uuid = datasource._make_unique_id("trip-1", "Demo")
+        existing_trip = SimpleNamespace(
+            id=trip_uuid,
+            trip_id="trip-1",
+            data_source_id=2,
+            is_active=True,
+            is_complete_stop_sequence=False,
+            scheduled_start_time=None,
+            scheduled_end_time=None,
+            scheduled_start_stop_id=None,
+            scheduled_end_stop_id=None,
+            start_time=None,
+        )
+        realtime_repository.list_trips_for_data_source = AsyncMock(return_value=[existing_trip])
+        realtime_repository.list_trips_by_trip_ids = AsyncMock(return_value=[existing_trip])
+
+        records = [
+            {
+                "id": "trip-upd-1",
+                "trip_id": "trip-1",
+                "start_time": None,
+                "start_date": "20260801",
+                "route_id": "r1",
+                "is_complete_stop_sequence": False,
+                "stop_events": [
+                    {
+                        "stop_id": "s1",
+                        "stop_sequence": "5",
+                        "arrival_time": datetime(2026, 8, 1, 8, 15, tzinfo=timezone.utc),
+                        "departure_time": datetime(2026, 8, 1, 8, 16, tzinfo=timezone.utc),
+                        "is_valid": True,
+                    }
+                ],
+            }
+        ]
+
+        await datasource._sync_trip_update_records(
+            repository=repository,
+            realtime_repository=realtime_repository,
+            gtfs_repository=gtfs_repository,
+            source_id=2,
+            source_name="Demo",
+            records=records,
+        )
+
+        realtime_repository.list_stop_events_for_trip.assert_not_awaited()
+        kwargs = realtime_repository.update_trip_update_from_sync.await_args.kwargs
+        self.assertFalse(kwargs["is_complete_stop_sequence"])
+        self.assertEqual(kwargs["stop_events"][0]["stop_sequence"], "")
+
+    async def test_sync_trip_update_records_is_differential_updates_keeps_untouched_trips(self):
+        repository = _SystemRepositoryStub()
+        repository.get_data_source_is_differential_updates = AsyncMock(return_value=True)
+        realtime_repository = _RealtimeRepositoryStub()
+        gtfs_repository = _GtfsRepositoryStub()
+        datasource = _TestDatasource({})
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=(None, AssignmentType.NO_MATCH_GENERAL))
+        )
+        datasource._identifier_mapping_service = SimpleNamespace(
+            initialize=AsyncMock(),
+            get_loaded_mapping_count=lambda: 0,
+            apply_mapping=lambda entity: entity,
+        )
+
+        untouched_trip_uuid = datasource._make_unique_id("trip-old", "Demo")
+        untouched_trip = SimpleNamespace(
+            id=untouched_trip_uuid,
+            trip_id="trip-old",
+            data_source_id=2,
+            is_active=True,
+            is_complete_stop_sequence=True,
+            original_trip_id="trip-old",
+        )
+        realtime_repository.list_trips_for_data_source = AsyncMock(return_value=[untouched_trip])
+        realtime_repository.list_trips_by_trip_ids = AsyncMock(return_value=[])
+
+        records: list[dict] = []
+
+        await datasource._sync_trip_update_records(
+            repository=repository,
+            realtime_repository=realtime_repository,
+            gtfs_repository=gtfs_repository,
+            source_id=2,
+            source_name="Demo",
+            records=records,
+        )
+
+        realtime_repository.delete_trips_for_data_source_by_ids.assert_not_awaited()
+
+    async def test_sync_trip_update_records_deletes_untouched_trips_when_not_differential(self):
+        repository = _SystemRepositoryStub()
+        repository.get_data_source_is_differential_updates = AsyncMock(return_value=False)
+        realtime_repository = _RealtimeRepositoryStub()
+        gtfs_repository = _GtfsRepositoryStub()
+        datasource = _TestDatasource({})
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=(None, AssignmentType.NO_MATCH_GENERAL))
+        )
+        datasource._identifier_mapping_service = SimpleNamespace(
+            initialize=AsyncMock(),
+            get_loaded_mapping_count=lambda: 0,
+            apply_mapping=lambda entity: entity,
+        )
+
+        untouched_trip_uuid = datasource._make_unique_id("trip-old", "Demo")
+        untouched_trip = SimpleNamespace(
+            id=untouched_trip_uuid,
+            trip_id="trip-old",
+            data_source_id=2,
+            is_active=True,
+            is_complete_stop_sequence=True,
+            original_trip_id="trip-old",
+        )
+        realtime_repository.list_trips_for_data_source = AsyncMock(return_value=[untouched_trip])
+        realtime_repository.list_trips_by_trip_ids = AsyncMock(return_value=[])
+
+        records: list[dict] = []
+
+        await datasource._sync_trip_update_records(
+            repository=repository,
+            realtime_repository=realtime_repository,
+            gtfs_repository=gtfs_repository,
+            source_id=2,
+            source_name="Demo",
+            records=records,
+        )
+
+        realtime_repository.delete_trips_for_data_source_by_ids.assert_awaited_once_with(
+            2, [untouched_trip_uuid]
+        )
