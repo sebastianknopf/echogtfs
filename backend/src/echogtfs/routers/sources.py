@@ -32,6 +32,8 @@ logger = logging.getLogger("uvicorn")
 
 _ERR_SOURCE_NOT_FOUND = "error.source_not_found"
 _ERR_SOURCE_EVENT_BASED = "error.source_event_based"
+_ERR_SOURCE_STILL_RUNNING = "error.source_still_running"
+_DEACTIVATION_WAIT_TIMEOUT_SECONDS = 300.0
 
 _Repo = Annotated[SystemRepositoryInterface, Depends(get_system_repository)]
 _RealtimeRepo = Annotated[RealtimeRepositoryInterface, Depends(get_realtime_repository)]
@@ -81,6 +83,36 @@ async def _enrich_source_with_error_flag(source: DataSource, repository: SystemR
     }
     
     return DataSourceRead.model_validate(source_dict)
+
+
+async def _wait_and_delete_source_realtime_objects(
+    source: DataSource,
+    realtime_repository: RealtimeRepositoryInterface,
+) -> None:
+    scheduler = get_datasource_scheduler_service()
+    await scheduler.schedule_data_source_import(source.id, source.name, None)
+
+    is_idle = await scheduler.wait_for_source_idle(source.id, timeout_seconds=_DEACTIVATION_WAIT_TIMEOUT_SECONDS)
+    if not is_idle:
+        logger.info(
+            "[Sources] Timed out waiting for source %s (%s) to finish before deactivation cleanup",
+            source.name,
+            source.id,
+        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=_ERR_SOURCE_STILL_RUNNING)
+
+    deleted_alerts = await realtime_repository.delete_alerts_for_data_source(source.id)
+    deleted_trips = await realtime_repository.delete_trips_for_data_source(source.id)
+    deleted_vehicles = await realtime_repository.delete_vehicles_for_data_source(source.id)
+
+    logger.info(
+        "Deactivated data source %s '%s': Deleted %s alerts, %s trips, and %s vehicles",
+        source.id,
+        source.name,
+        deleted_alerts,
+        deleted_trips,
+        deleted_vehicles,
+    )
 
 
 @router.get("/adapter-types", include_in_schema=False)
@@ -417,25 +449,13 @@ async def toggle_source_active(
     if source is None:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
     
-    # If deactivating, delete all alerts from this source
+    # If deactivating, wait for an in-flight run to finish before deleting realtime objects.
     if old_status and not source.is_active:
-        deleted_alerts = await realtime_repository.delete_alerts_for_data_source(source_id)
-        deleted_trips = await realtime_repository.delete_trips_for_data_source(source_id)
-        deleted_vehicles = await realtime_repository.delete_vehicles_for_data_source(source_id)
-
-        logger.info(
-            f"Deactivated data source {source_id} '{source.name}': "
-            f"Deleted {deleted_alerts} alerts, {deleted_trips} trips, "
-            f"and {deleted_vehicles} vehicles"
-        )
+        await _wait_and_delete_source_realtime_objects(source, realtime_repository)
     
-    # Update cron job: remove if deactivated, add if activated
+    # Update cron job only for active sources here; deactivation path unschedules in helper.
     if source.is_active and source.cron:
-        # Re-schedule the cron job when activating
         await get_datasource_scheduler_service().schedule_data_source_import(source.id, source.name, source.cron)
-    elif not source.is_active:
-        # Remove the cron job when deactivating
-        await get_datasource_scheduler_service().schedule_data_source_import(source.id, source.name, None)
     
     source = await repository.get_data_source_by_id(source.id)
     if source is None:
@@ -512,21 +532,7 @@ async def update_source(
             raise HTTPException(status_code=400, detail="Data source with this name already exists")
         await realtime_repository.update_service_alert_source_name(old_name, source_data.name)
     
-    # Handle is_active changes
-    if source_data.is_active is not None:
-        old_status = source.is_active
-
-        # If deactivating, delete all realtime data from this source
-        if old_status and not source_data.is_active:
-            deleted_alerts = await realtime_repository.delete_alerts_for_data_source(source_id)
-            deleted_trips = await realtime_repository.delete_trips_for_data_source(source_id)
-            deleted_vehicles = await realtime_repository.delete_vehicles_for_data_source(source_id)
-
-            logger.info(
-                f"Deactivated data source {source_id} '{source.name}': "
-                f"Deleted {deleted_alerts} alerts, {deleted_trips} trips, "
-                f"and {deleted_vehicles} vehicles"
-            )
+    should_cleanup_on_deactivate = source_data.is_active is False
 
     source = await repository.update_data_source(
         source_id,
@@ -570,12 +576,12 @@ async def update_source(
 
     if source is None:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
-    
-    # Update cron job: only schedule if active, otherwise remove
-    if source.is_active and source.cron:
+
+    if should_cleanup_on_deactivate and not source.is_active:
+        await _wait_and_delete_source_realtime_objects(source, realtime_repository)
+    elif source.is_active and source.cron:
         await get_datasource_scheduler_service().schedule_data_source_import(source.id, source.name, source.cron)
     else:
-        # Remove cron job if inactive or no cron expression
         await get_datasource_scheduler_service().schedule_data_source_import(source.id, source.name, None)
 
     return await _enrich_source_with_error_flag(source, repository)

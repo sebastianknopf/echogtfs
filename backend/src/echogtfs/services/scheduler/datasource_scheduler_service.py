@@ -196,6 +196,7 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
         self._gtfs_repository = gtfs_repository
         self._scheduler_timezone = self._resolve_scheduler_timezone()
         self._run_state_lock = asyncio.Lock()
+        self._run_state_condition = asyncio.Condition(self._run_state_lock)
         self._running_source_ids: set[int] = set()
         self._process_pool: ProcessPoolExecutor | None = None
         self._closing = False
@@ -251,7 +252,7 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
         )
 
     async def _try_mark_source_running(self, source_id: int) -> bool:
-        async with self._run_state_lock:
+        async with self._run_state_condition:
             if source_id in self._running_source_ids:
                 return False
 
@@ -259,8 +260,25 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
             return True
 
     async def _mark_source_finished(self, source_id: int) -> None:
-        async with self._run_state_lock:
+        async with self._run_state_condition:
             self._running_source_ids.discard(source_id)
+            self._run_state_condition.notify_all()
+
+    async def wait_for_source_idle(self, source_id: int, timeout_seconds: float | None) -> bool:
+        async def _wait_until_idle() -> None:
+            async with self._run_state_condition:
+                while source_id in self._running_source_ids:
+                    await self._run_state_condition.wait()
+
+        try:
+            if timeout_seconds is None:
+                await _wait_until_idle()
+            else:
+                await asyncio.wait_for(_wait_until_idle(), timeout=timeout_seconds)
+
+            return True
+        except TimeoutError:
+            return False
 
     async def _is_gtfs_import_running(self) -> bool:
         status_value = await self._system_repository.get_app_setting(AppSetting.KEY_GTFS_IMPORT_STATUS)

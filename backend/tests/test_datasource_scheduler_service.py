@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 import unittest
@@ -292,3 +293,31 @@ class TestDatasourceSchedulerService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ctx.exception.detail, "error.parse_failed")
         repository.update_data_source_last_run_at.assert_awaited_once()
         self.assertNotIn(8, service._running_source_ids)
+
+    async def test_wait_for_source_idle_returns_true_when_source_is_not_running(self):
+        repository = _RepositoryStub()
+        service = DatasourceSchedulerService(repository, SimpleNamespace(), SimpleNamespace())
+
+        is_idle = await service.wait_for_source_idle(42, timeout_seconds=0.1)
+
+        self.assertTrue(is_idle)
+
+    async def test_wait_for_source_idle_unblocks_when_source_finishes(self):
+        repository = _RepositoryStub()
+        service = DatasourceSchedulerService(repository, SimpleNamespace(), SimpleNamespace())
+        service._running_source_ids.add(9)
+
+        wait_task = asyncio.create_task(service.wait_for_source_idle(9, timeout_seconds=1.0))
+        await asyncio.sleep(0)
+        await service._mark_source_finished(9)
+
+        self.assertTrue(await wait_task)
+
+    async def test_wait_for_source_idle_returns_false_on_timeout(self):
+        repository = _RepositoryStub()
+        service = DatasourceSchedulerService(repository, SimpleNamespace(), SimpleNamespace())
+        service._running_source_ids.add(10)
+
+        is_idle = await service.wait_for_source_idle(10, timeout_seconds=0.01)
+
+        self.assertFalse(is_idle)
