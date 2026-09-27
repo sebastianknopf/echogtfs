@@ -144,6 +144,37 @@ To configure the maximum number of workers for data sources, set the desired val
 
 Push-specific authentication, request flow, and status mapping are documented in `docs/dev/push-api.md`.
 
+### Data Source Deactivation and Run Coordination
+
+Deactivation in `sources.py` is coordinated with active scheduler runs to prevent data from being reinserted after cleanup.
+
+#### Runtime Flow (Deactivation)
+
+1. The source is switched to inactive in the database.
+2. The source cron job is removed from the scheduler.
+3. The router calls `wait_for_source_idle(source_id, timeout_seconds=300.0)`.
+4. If the source is still running after timeout, the API returns `409` with `error.source_still_running` and does not delete realtime objects.
+5. If the source is idle, realtime alerts, trips, and vehicles of that source are deleted.
+
+#### Scheduler State Model
+
+- `DatasourceSchedulerService` tracks active source runs in `_running_source_ids`.
+- `run_import_task(...)` and `run_push_task(...)` add the source to this set when execution starts.
+- Both tasks remove the source from this set in `finally` via `_mark_source_finished(...)`.
+- `wait_for_source_idle(...)` waits on an async condition until the source ID is no longer in `_running_source_ids`.
+
+#### Scope of Coordination
+
+- The waiting behavior applies to time-based runs triggered by cron (`run_import_task(...)`).
+- The same waiting behavior applies to event-based runs triggered by push (`run_push_task(...)`).
+- No extra final run is triggered during deactivation. The logic only waits for an already running execution to finish.
+
+#### Deactivation Coordination Values
+
+| Name | Default | Meaning |
+|---|---|---|
+| `_DEACTIVATION_WAIT_TIMEOUT_SECONDS` | `300.0` | Maximum wait time for a running source execution to finish before returning `409`. |
+
 ## GTFS-Realtime Feed
 
 The GTFS-RT endpoint is the public output endpoint. It serializes realtime data to GTFS-RT compliant protobuf stream. The endpoint also supports a `?format=json` query parameter for JSON output. 
