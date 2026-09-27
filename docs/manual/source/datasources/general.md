@@ -40,6 +40,7 @@ Für jede Datenquelle können folgende Informationen gepflegt werden:
 - **Cron-Ausdruck**: Cron-Ausdruck zur Angabe der gewünschten Ausführungsintervalle. Nur relevant bei zeitbasierter Ausführung
 - **Verfahrensweise bei ungültigen Bezügen**: Angabe zum Umgang mit Objekten mit ungültigen Bezügen
 - **Aktiv**: Aktivierung oder Deaktivierung der Datenquelle
+- **Differentielle Updates**: Aktivierung oder Deaktivierung von differentiellen Updates für die jeweilge Datenquelle
 - **Log Dumps**: Aktivierung oder Deaktivierung der Log-Dump, bei Deaktivierung werden nur die Log-Metadaten gespeichert
 
 Neben diesen Parametern können in Abhängigkeit vom Adapter-Typ weitere, dynamische Parameter gepflegt werden.
@@ -50,15 +51,25 @@ Bestätigen Sie den Dialog mit Klick auf "Speichern". Im Anschluss wird die Date
 
 (h-datasources-time-vs-event-based)=
 
-### Zeit- und Eventbasierte Ausführung
+## Zeit- und Eventbasierte Ausführung
 
 Standardmäßig werden Datenquellen zeitbasiert ausgeführt. Dabei werden sie vom internen Scheduler zu regelmäßgen, über den Cron-Ausdruck definierten Zeitpunkten ausgeführt. Die Daten werden dabei von EchoGTFS vom Quellsystem abgefragt.
 
 Bei besonders zeitkritischen Datenquellen (z.B. Fahrzeugpositionen) besteht alternativ die Möglichkeit, die Datenquelle eventbasiert auszuführen. Dabei werden die Daten aktiv vom Quellsystem an den Endpunkt der {ref}`h-push-api-push-api` für die jeweilige Datenquelle übermittelt und die Datenquelle unmittelbar ausgeführt.
 
+(h-datasources-differential-incremental-updates)=
+
+## Differentielle und Inkrementelle Updates
+
+Grundsätzlich gehen Datenquellen immer davon aus, dass der vollständige aktuellen Datenstand eines Quellsystems übermittelt wird. Ausgehend von diesem Datenstand werden alle Daten in EchoGTFS für die jeweilge Datenquelle synchronisiert. Dabei werden neue Objekte hinzugefügt, bestehende Objekte geupdated und nicht mehr vorhandene Objekte gelöscht. Als Alternative bieten sich differentielle und inkrementelle Updates, insbesondere bei event-basierten Datenquellen an, um die Rechenleistung und die Menge der mit jedem Durchlauf zu verarbeitenden Daten drastisch zu reduzieren.
+
+Bei **differentiellen Updates** werden hingegen nur noch die Änderungen an Objekten synchronisiert, aber keine Objekte mehr implizit gelöscht. Stattdessen müssen die Objekte durch die Datenquelle mittels eines entsprechenden Delete-Flags gelöscht werden. Wird ein Objekt nicht explizit durch ein solches Delete-Flag gelöscht, wird das Objekt stattdessen durch den internen Cleanup-Service aufgegriffen und nach der konfigurierten Zeit gelöscht. Damit eine Datenquelle differentielle Updates verarbeitet, muss dies an der jeweiligen Datenquelle aktiviert werden.
+
+Mit **inkrementellen Updates** werden nur einzelne Eigenschaften von Objekten (z.B. die Pünktlichkeitsprognose bei einer Fahrt) geupdated. Aktuell werden inkrementelle Updates **nur für Fahrten** unterstützt. Im Optimalfall wird dabei zunächst eine sogenanne Komplettfahrt übermittelt, bei der alle Eigenschaften einer Fahrt einmal vollständig enthalten sind. Mit den folgenden Updates wird dann die Prognose für einzelne Haltestellen überschrieben. In diesem Fall schreibt EchoGTFS die Prognose dann auf alle nachfolgenden Haltestellen fort, bis entweder die letzte Haltestelle erreicht ist, oder abweichende Prognosedaten für eine Haltestelle in dem Update vorliegen. Werden hingegen von Anfang an nur inkrementelle Updates für eine Fahrt gesandt, so werden die nur die Daten aus dem jeweils letzten Update gespeichert. Inkrementelle Updates werden standardmäßig unterstützt, da die Information, dass es sich um ein inkrementelles Update handelt, aus den Daten selbst hervorgeht. Eine gesonderte Aktivierung ist daher nicht notwendig.
+
 (h-datasources-invalid-reference-policies)=
 
-### Verfahrensweisen bei ungültigen Bezügen
+## Verfahrensweisen bei ungültigen Bezügen
 
 Wenn ein Objekt nach dem Mapping keinem Objekt aus dem GTFS-Feed zugeordnet werden kann, gibt es verschiedene Verfahrensweisen zum Umgang mit diesem Objekt.
 
@@ -81,6 +92,8 @@ Die Datenquellen sind darauf ausgerichtet, Massendaten zu verarbeiten. Entscheid
 
 - **Anzahl der zu verarbeitetenden Objekte**: Insbesondere Datenquellen, die Prognosedaten verarbeiten, haben eine vergleichsweise hohe Last auf der Datenbank, da in kurzer Zeit eine Vielzahl von Objekten ersetzt werden müssen. Nutzen Sie insbesondere bei großen, konsoldierten Datenquellen Filter, um die zu verarbeitenden Objekte von vorneherein auf ein sinnvolles Maß einzuschränken.
 - **Verfahrensweise bei ungültigen Bezügen**: Wenn hier eingestellt ist, dass alle Objekte geladen, aber ggf. deaktiviert werden sollen, werden deutlich mehr Daten in die Datenbank geschrieben, als letztendlich über GTFS-RT veröffentlicht werden. Das ist gut für Monitoring-Zwecke, erhöht aber gleichzeitig die Durchlaufzeit eines Datenupdates erheblich, wenn die Anzahl der zu verarbeitenden Objekte dadurch ansteigt.
+
+Durch Anwendung von {ref}`event basierten Datenquellen <h-datasources-time-vs-event-based>` und {ref}`differentiellen/inkrementellen Updates <h-datasources-differential-incremental-updates>` kann die Performance bei der Verarbeitung signifikant steigern.
 
 (h-datasources-general-mapping)=
 
