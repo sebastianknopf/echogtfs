@@ -362,6 +362,7 @@ const trips = (() => {
 
         if (stopEvent.hasFixedStopIdWarning) {
           warningMessages.push(window.i18n('trips.stop_event.fixed_stop_id.warning'));
+          hasWarningSeverityNoRealtimeData = true;
         }
 
         const warnings = warningMessages.length
