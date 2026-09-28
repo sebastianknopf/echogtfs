@@ -136,6 +136,7 @@ window.translations = {
     'trips.warnings.trip': 'Für diese Fahrt liegen Warnungen vor',
     'trips.stop_reference.warning': 'Halt konnte nicht gefunden werden',
     'trips.stop_event.implied.warning': 'Impliziter Zusatzhalt/Haltausfall',
+    'trips.stop_event.fixed_stop_id.warning': 'Halt-ID wurde auf den Soll-Halt korrigiert',
     'trips.realtime_data.warning': 'Fahrt enthält keine Echtzeitdaten',
     'trips.mock.view': 'Details für Linie {line} sind in dieser Vorschau noch nicht verfügbar.',
     'trips.status.activated': 'Fahrt auf Linie {line} wurde aktiviert.',
@@ -641,6 +642,10 @@ window.translations = {
     'adapter.sirilite.treat_unexpected_stop_as_added_stop.help_text': 'Behandelt unerwartete Stops in den Eingangsdaten als Zusatzhalt.',
     'adapter.sirilite.treat_missing_stop_as_canceled_stop.label': 'Fehlende Halte als Haltausfall behandeln',
     'adapter.sirilite.treat_missing_stop_as_canceled_stop.help_text': 'Behandelt fehlende Stops in den Eingangsdaten als Haltausfall.',
+    'adapter.sirilite.incorrect_stop_id_handling.label': 'Umgang mit fehlerhafter Halt-ID',
+    'adapter.sirilite.incorrect_stop_id_handling.help_text': 'Legt fest, wie bei abweichender Halt-ID auf Stop-Ebene verfahren wird.',
+    'adapter.sirilite.incorrect_stop_id_handling.option.IGNORE': 'Ignorieren',
+    'adapter.sirilite.incorrect_stop_id_handling.option.FIX_TO_NOMINAL_STOP_ID': 'Auf Soll-Halt-ID korrigieren',
 
     // SIRI-ET Adapter
     'adapter.siriet.endpoint.label': 'Endpoint URL',
@@ -681,6 +686,10 @@ window.translations = {
     'adapter.siriet.treat_unexpected_stop_as_added_stop.help_text': 'Treat unexpected stops in the input data as added stops.',
     'adapter.siriet.treat_missing_stop_as_canceled_stop.label': 'Treat missing stops as canceled',
     'adapter.siriet.treat_missing_stop_as_canceled_stop.help_text': 'Treat missing stops in the input data as canceled stops.',
+    'adapter.siriet.incorrect_stop_id_handling.label': 'Umgang mit fehlerhafter Halt-ID',
+    'adapter.siriet.incorrect_stop_id_handling.help_text': 'Legt fest, wie bei abweichender Halt-ID auf Stop-Ebene verfahren wird.',
+    'adapter.siriet.incorrect_stop_id_handling.option.IGNORE': 'Ignorieren',
+    'adapter.siriet.incorrect_stop_id_handling.option.FIX_TO_NOMINAL_STOP_ID': 'Auf Soll-Halt-ID korrigieren',
     
     // SIRI-SX Adapter
     'adapter.sirisx.endpoint.label': 'Endpoint URL',
@@ -851,6 +860,7 @@ window.translations = {
     'trips.warnings.trip': "There're warnings for this trip",
     'trips.stop_reference.warning': 'Stop could not be found',
     'trips.stop_event.implied.warning': 'Implicit additional/canceled stop',
+    'trips.stop_event.fixed_stop_id.warning': 'Stop ID was corrected to the nominal stop',
     'trips.realtime_data.warning': 'Trip contains no realtime data',
     'trips.mock.view': 'Details for line {line} are not available in this preview yet.',
     'trips.status.activated': 'Trip on line {line} has been activated.',
@@ -1356,6 +1366,10 @@ window.translations = {
     'adapter.sirilite.treat_unexpected_stop_as_added_stop.help_text': 'Treat unexpected stops in the input data as added stops.',
     'adapter.sirilite.treat_missing_stop_as_canceled_stop.label': 'Treat missing stops as skipped',
     'adapter.sirilite.treat_missing_stop_as_canceled_stop.help_text': 'Treat missing stops in the input data as skipped stops.',
+    'adapter.sirilite.incorrect_stop_id_handling.label': 'Handling for incorrect stop IDs',
+    'adapter.sirilite.incorrect_stop_id_handling.help_text': 'Defines how to handle differing stop IDs on stop level.',
+    'adapter.sirilite.incorrect_stop_id_handling.option.IGNORE': 'Ignore',
+    'adapter.sirilite.incorrect_stop_id_handling.option.FIX_TO_NOMINAL_STOP_ID': 'Fix to nominal stop ID',
 
     // SIRI-ET Adapter
     'adapter.siriet.endpoint.label': 'Endpoint URL',
@@ -1378,6 +1392,10 @@ window.translations = {
     'adapter.siriet.treat_unexpected_stop_as_added_stop.help_text': 'Treat unexpected stops in the input data as added stops.',
     'adapter.siriet.treat_missing_stop_as_canceled_stop.label': 'Treat missing stops as skipped',
     'adapter.siriet.treat_missing_stop_as_canceled_stop.help_text': 'Treat missing stops in the input data as skipped stops.',
+    'adapter.siriet.incorrect_stop_id_handling.label': 'Handling for incorrect stop IDs',
+    'adapter.siriet.incorrect_stop_id_handling.help_text': 'Defines how to handle differing stop IDs on stop level.',
+    'adapter.siriet.incorrect_stop_id_handling.option.IGNORE': 'Ignore',
+    'adapter.siriet.incorrect_stop_id_handling.option.FIX_TO_NOMINAL_STOP_ID': 'Fix to nominal stop ID',
     
     // SIRI-SX Adapter
     'adapter.sirisx.endpoint.label': 'Endpoint URL',

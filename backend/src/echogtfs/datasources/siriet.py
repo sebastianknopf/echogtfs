@@ -13,6 +13,7 @@ import httpx
 
 from echogtfs.datasources.base import DatasourceBase
 from echogtfs.datasources.transformers import SiriEtTripUpdatesTransformer
+from echogtfs.enum.system import IncorrectStopIdHandling
 
 logger = logging.getLogger("uvicorn")
 
@@ -77,6 +78,17 @@ class SiriEtDatasource(DatasourceBase):
             "help_text": "adapter.siriet.treat_missing_stop_as_canceled_stop.help_text",
         },
         {
+            "name": "incorrect_stop_id_handling",
+            "type": "enum",
+            "label": "adapter.siriet.incorrect_stop_id_handling.label",
+            "required": True,
+            "options": [
+                IncorrectStopIdHandling.IGNORE.value,
+                IncorrectStopIdHandling.FIX_TO_NOMINAL_STOP_ID.value,
+            ],
+            "help_text": "adapter.siriet.incorrect_stop_id_handling.help_text",
+        },
+        {
             "name": "filter",
             "type": "text",
             "label": "adapter.siriet.filter.label",
@@ -89,6 +101,7 @@ class SiriEtDatasource(DatasourceBase):
     def _validate_config(self) -> None:
         self.config.setdefault("treat_unexpected_stop_as_added_stop", False)
         self.config.setdefault("treat_missing_stop_as_canceled_stop", False)
+        self.config.setdefault("incorrect_stop_id_handling", IncorrectStopIdHandling.IGNORE.value)
 
         is_event_based = self._is_event_based_execution()
 
@@ -137,6 +150,15 @@ class SiriEtDatasource(DatasourceBase):
             if boolean_field in self.config and self.config[boolean_field] is not None:
                 if not isinstance(self.config[boolean_field], bool):
                     raise ValueError(f"'{boolean_field}' must be a boolean")
+
+        try:
+            IncorrectStopIdHandling(self.config.get("incorrect_stop_id_handling"))
+        except ValueError:
+            valid_values = [item.value for item in IncorrectStopIdHandling]
+            raise ValueError(
+                "'incorrect_stop_id_handling' must be one of: "
+                f"{', '.join(valid_values)}"
+            )
 
         if "filter" in self.config and self.config["filter"]:
             if not isinstance(self.config["filter"], str):
@@ -202,6 +224,9 @@ class SiriEtDatasource(DatasourceBase):
         self.config["treat_missing_stop_as_canceled_stop"] = bool(
             self.config.get("treat_missing_stop_as_canceled_stop", False)
         )
+        self.config["incorrect_stop_id_handling"] = IncorrectStopIdHandling(
+            self.config.get("incorrect_stop_id_handling", IncorrectStopIdHandling.IGNORE.value)
+        ).value
 
         dialect = SiriEtDialect(self.config["dialect"])
         if dialect == SiriEtDialect.SIRIET:

@@ -16,6 +16,7 @@ from echogtfs.datasources.transformers import (
     SiriSxSwissServiceAlertsTransformer,
     SiriVmVehiclePositionsTransformer,
 )
+from echogtfs.enum.system import IncorrectStopIdHandling
 
 logger = logging.getLogger("uvicorn")
 
@@ -70,6 +71,17 @@ class SiriLiteDatasource(DatasourceBase):
             "help_text": "adapter.sirilite.treat_missing_stop_as_canceled_stop.help_text",
         },
         {
+            "name": "incorrect_stop_id_handling",
+            "type": "enum",
+            "label": "adapter.sirilite.incorrect_stop_id_handling.label",
+            "required": True,
+            "options": [
+                IncorrectStopIdHandling.IGNORE.value,
+                IncorrectStopIdHandling.FIX_TO_NOMINAL_STOP_ID.value,
+            ],
+            "help_text": "adapter.sirilite.incorrect_stop_id_handling.help_text",
+        },
+        {
             "name": "filter",
             "type": "text",
             "label": "adapter.sirilite.filter.label",
@@ -82,6 +94,7 @@ class SiriLiteDatasource(DatasourceBase):
     def _validate_config(self) -> None:
         self.config.setdefault("treat_unexpected_stop_as_added_stop", False)
         self.config.setdefault("treat_missing_stop_as_canceled_stop", False)
+        self.config.setdefault("incorrect_stop_id_handling", IncorrectStopIdHandling.IGNORE.value)
 
         endpoint = self.config.get("endpoint")
         if not endpoint:
@@ -110,6 +123,15 @@ class SiriLiteDatasource(DatasourceBase):
             if boolean_field in self.config and self.config[boolean_field] is not None:
                 if not isinstance(self.config[boolean_field], bool):
                     raise ValueError(f"'{boolean_field}' must be a boolean")
+
+        try:
+            IncorrectStopIdHandling(self.config.get("incorrect_stop_id_handling"))
+        except ValueError:
+            valid_values = [item.value for item in IncorrectStopIdHandling]
+            raise ValueError(
+                "'incorrect_stop_id_handling' must be one of: "
+                f"{', '.join(valid_values)}"
+            )
 
         if "filter" in self.config and self.config["filter"]:
             if not isinstance(self.config["filter"], str):
@@ -144,6 +166,9 @@ class SiriLiteDatasource(DatasourceBase):
         self.config["treat_missing_stop_as_canceled_stop"] = bool(
             self.config.get("treat_missing_stop_as_canceled_stop", False)
         )
+        self.config["incorrect_stop_id_handling"] = IncorrectStopIdHandling(
+            self.config.get("incorrect_stop_id_handling", IncorrectStopIdHandling.IGNORE.value)
+        ).value
 
         dialect = SiriLiteDialect(self.config["dialect"])
         
