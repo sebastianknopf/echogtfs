@@ -15,7 +15,7 @@ from typing import Any
 from echogtfs.common.global_id import GlobalId
 from echogtfs.datasources.intf_datasource import DatasourceInterface
 from echogtfs.enum.gtfsrt import AssignmentType
-from echogtfs.enum.system import InvalidReferencePolicy
+from echogtfs.enum.system import IncorrectStopIdHandling, InvalidReferencePolicy
 from echogtfs.services.mapping.intf_identifier_mapping import IdentifierMappingInterface
 from echogtfs.services.caching.intf_caching_service import CachingServiceInterface
 from echogtfs.services.matching.intf_matching_service import MatchingServiceInterface
@@ -539,6 +539,7 @@ class DatasourceBase(DatasourceInterface):
         treat_unexpected_stop_as_added_stop: bool,
         treat_missing_stop_as_canceled_stop: bool,
         is_complete_stop_sequence: bool,
+        incorrect_stop_id_handling: IncorrectStopIdHandling = IncorrectStopIdHandling.IGNORE,
     ) -> list[dict[str, Any]]:
         """Apply nominal-stop propagation and merge rules for one trip-update stop-event list."""
         if not nominal_stop_times:
@@ -600,10 +601,65 @@ class DatasourceBase(DatasourceInterface):
             )
             realtime_stop_ids.add(nominal_stop_id)
 
+        if incorrect_stop_id_handling == IncorrectStopIdHandling.FIX_TO_NOMINAL_STOP_ID:
+            propagated_events = self._apply_stop_level_stop_id_correction(
+                propagated_events,
+                nominal_stop_times,
+            )
+
         if not is_complete_stop_sequence:
             return propagated_events
 
         return self._order_trip_update_stop_events(propagated_events, nominal_order)
+
+    def _apply_stop_level_stop_id_correction(
+        self,
+        stop_events: list[dict[str, Any]],
+        nominal_stop_times: list[Any],
+    ) -> list[dict[str, Any]]:
+        """Fix matched stop IDs at stop level without changing stop add/remove behavior."""
+        corrected_events = [dict(event) for event in stop_events]
+
+        remaining_event_indexes_by_reduced: dict[str, list[int]] = {}
+        for index, event in enumerate(corrected_events):
+            reduced_stop_id = self._normalize_stop_id_for_matching(event.get("stop_id"))
+            if not reduced_stop_id:
+                continue
+
+            remaining_event_indexes_by_reduced.setdefault(reduced_stop_id, []).append(index)
+
+        matched_event_indexes: set[int] = set()
+        for stop_time in nominal_stop_times:
+            nominal_full_stop_id = str(stop_time.stop_id)
+            nominal_reduced_stop_id = self._normalize_stop_id_for_matching(nominal_full_stop_id)
+            if not nominal_reduced_stop_id:
+                continue
+
+            candidate_indexes = remaining_event_indexes_by_reduced.get(nominal_reduced_stop_id) or []
+            matched_index = None
+            while candidate_indexes:
+                candidate_index = candidate_indexes.pop(0)
+                if candidate_index not in matched_event_indexes:
+                    matched_index = candidate_index
+                    break
+
+            if matched_index is None:
+                continue
+
+            matched_event_indexes.add(matched_index)
+            matched_event = corrected_events[matched_index]
+            transmitted_stop_id = matched_event.get("stop_id")
+            if transmitted_stop_id is None:
+                matched_event["stop_id"] = nominal_full_stop_id
+                matched_event.setdefault("original_stop_id", nominal_full_stop_id)
+                continue
+
+            transmitted_stop_id_str = str(transmitted_stop_id)
+            if transmitted_stop_id_str != nominal_full_stop_id:
+                matched_event.setdefault("original_stop_id", transmitted_stop_id_str)
+                matched_event["stop_id"] = nominal_full_stop_id
+
+        return corrected_events
 
     def _order_trip_update_stop_events(
         self,
@@ -1420,6 +1476,15 @@ class DatasourceBase(DatasourceInterface):
             self.config.get("treat_missing_stop_as_canceled_stop", False)
         )
 
+        incorrect_stop_id_handling = IncorrectStopIdHandling(
+            str(
+                self.config.get(
+                    "incorrect_stop_id_handling",
+                    IncorrectStopIdHandling.IGNORE.value,
+                )
+            )
+        )
+
         gtfs_entities = await self._load_gtfs_entities(gtfs_repository)
         nominal_trip_ids = gtfs_entities.get("trip", set())
         if self._matching_service is None:
@@ -1602,6 +1667,7 @@ class DatasourceBase(DatasourceInterface):
                         treat_unexpected_stop_as_added_stop=treat_unexpected_stop_as_added_stop,
                         treat_missing_stop_as_canceled_stop=treat_missing_stop_as_canceled_stop,
                         is_complete_stop_sequence=is_complete_stop_sequence,
+                        incorrect_stop_id_handling=incorrect_stop_id_handling,
                     )
 
                     for idx, event in enumerate(stop_events, start=1):

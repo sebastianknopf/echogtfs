@@ -17,7 +17,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-that-is-at-least-32-bytes-l
 
 from echogtfs.datasources.base import DatasourceBase
 from echogtfs.enum.gtfsrt import AssignmentType
-from echogtfs.enum.system import InvalidReferencePolicy
+from echogtfs.enum.system import IncorrectStopIdHandling, InvalidReferencePolicy
 
 
 class _TestDatasource(DatasourceBase):
@@ -398,6 +398,62 @@ class TestDatasourceBaseHelpers(unittest.TestCase):
             [event["departure_time"].minute for event in propagated],
             [5, 40],
         )
+
+    def test_propagate_trip_update_stop_events_fixes_stop_id_on_stop_level_and_preserves_original(self):
+        same_time = datetime(2026, 8, 1, 8, 0, 0, tzinfo=timezone.utc)
+        stop_events = [
+            {
+                "stop_id": "de:1:2:3",
+                "stop_sequence": "10",
+                "departure_time": same_time,
+                "schedule_relationship": "SCHEDULED",
+                "is_valid": True,
+            }
+        ]
+        nominal_stop_times = [
+            SimpleNamespace(stop_id="de:1:2:4", stop_sequence=1, arrival_time=None, departure_time=same_time),
+        ]
+
+        propagated = self.datasource._propagate_trip_update_stop_events(
+            stop_events,
+            nominal_stop_times,
+            treat_unexpected_stop_as_added_stop=False,
+            treat_missing_stop_as_canceled_stop=False,
+            is_complete_stop_sequence=True,
+            incorrect_stop_id_handling=IncorrectStopIdHandling.FIX_TO_NOMINAL_STOP_ID,
+        )
+
+        self.assertEqual(len(propagated), 1)
+        self.assertEqual(propagated[0]["stop_id"], "de:1:2:4")
+        self.assertEqual(propagated[0]["original_stop_id"], "de:1:2:3")
+
+    def test_propagate_trip_update_stop_events_does_not_fix_stop_id_when_handling_ignore(self):
+        same_time = datetime(2026, 8, 1, 8, 0, 0, tzinfo=timezone.utc)
+        stop_events = [
+            {
+                "stop_id": "de:1:2:3",
+                "stop_sequence": "10",
+                "departure_time": same_time,
+                "schedule_relationship": "SCHEDULED",
+                "is_valid": True,
+            }
+        ]
+        nominal_stop_times = [
+            SimpleNamespace(stop_id="de:1:2:4", stop_sequence=1, arrival_time=None, departure_time=same_time),
+        ]
+
+        propagated = self.datasource._propagate_trip_update_stop_events(
+            stop_events,
+            nominal_stop_times,
+            treat_unexpected_stop_as_added_stop=False,
+            treat_missing_stop_as_canceled_stop=False,
+            is_complete_stop_sequence=True,
+            incorrect_stop_id_handling=IncorrectStopIdHandling.IGNORE,
+        )
+
+        self.assertEqual(len(propagated), 1)
+        self.assertEqual(propagated[0]["stop_id"], "de:1:2:3")
+        self.assertNotIn("original_stop_id", propagated[0])
 
 
 class TestMergeIncrementalStopEvents(unittest.TestCase):
