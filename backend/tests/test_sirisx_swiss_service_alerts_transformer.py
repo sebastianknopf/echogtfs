@@ -144,3 +144,76 @@ class TestSiriSxSwissServiceAlertsTransformer(unittest.TestCase):
 
         records = transformer.transform({"root": root, "source_name": "sirisx-swiss"})
         self.assertEqual(records, [])
+
+    def test_transform_skips_closed_progress(self):
+        xml_payload = """
+        <Siri xmlns="http://www.siri.org.uk/siri">
+          <PtSituationElement>
+            <SituationNumber>SN-1</SituationNumber>
+            <ParticipantRef>P1</ParticipantRef>
+            <Progress>closed</Progress>
+            <PublicationWindow>
+              <StartTime>2026-01-01T00:00:00Z</StartTime>
+              <EndTime>2099-01-01T00:00:00Z</EndTime>
+            </PublicationWindow>
+            <PublishingActions>
+              <PublishingAction>
+                <PassengerInformationAction>
+                  <Perspective>general</Perspective>
+                  <TextualContent>
+                    <SummaryContent>
+                      <SummaryText xml:lang="de">Warnung</SummaryText>
+                    </SummaryContent>
+                  </TextualContent>
+                </PassengerInformationAction>
+              </PublishingAction>
+            </PublishingActions>
+          </PtSituationElement>
+        </Siri>
+        """
+        root = ET.fromstring(xml_payload)
+        transformer = SiriSxSwissServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filter_value="P1",
+        )
+
+        records = transformer.transform({"root": root, "source_name": "sirisx-swiss"})
+        self.assertEqual(records, [])
+
+    def test_transform_marks_closing_progress(self):
+        xml_payload = """
+        <Siri xmlns="http://www.siri.org.uk/siri">
+          <PtSituationElement>
+            <SituationNumber>SN-1</SituationNumber>
+            <ParticipantRef>P1</ParticipantRef>
+            <Progress>closing</Progress>
+            <PublicationWindow>
+              <StartTime>2026-01-01T00:00:00Z</StartTime>
+              <EndTime>2099-01-01T00:00:00Z</EndTime>
+            </PublicationWindow>
+            <PublishingActions>
+              <PublishingAction>
+                <PassengerInformationAction>
+                  <Perspective>general</Perspective>
+                  <TextualContent>
+                    <SummaryContent>
+                      <SummaryText xml:lang="de">Warnung</SummaryText>
+                    </SummaryContent>
+                  </TextualContent>
+                </PassengerInformationAction>
+              </PublishingAction>
+            </PublishingActions>
+          </PtSituationElement>
+        </Siri>
+        """
+        root = ET.fromstring(xml_payload)
+        transformer = SiriSxSwissServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filter_value="P1",
+        )
+
+        records = transformer.transform({"root": root, "source_name": "sirisx-swiss"})
+
+        self.assertEqual(len(records), 1)
+        self.assertTrue(records[0]["is_closing_alert"])
+        self.assertEqual(records[0]["effect"], "UNKNOWN_EFFECT")

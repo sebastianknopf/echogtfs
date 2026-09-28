@@ -47,6 +47,7 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         alerts = []
         filtered_out_of_window = 0
         filtered_by_participant = 0
+        filtered_closed = 0
         current_timestamp = int(time.time())
 
         try:
@@ -54,6 +55,11 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                 try:
                     if not self._matches_participant_filter(situation):
                         filtered_by_participant += 1
+                        continue
+
+                    progress = self._get_progress(situation)
+                    if progress == "closed":
+                        filtered_closed += 1
                         continue
 
                     if not self._is_in_publication_window(situation, current_timestamp):
@@ -64,6 +70,7 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                         situation,
                         source_name,
                         current_timestamp,
+                        progress,
                     )
 
                     if alert:
@@ -79,9 +86,10 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                     )
 
             logger.info(
-                "[SiriSxTransformer] Processed %s alerts (filtered: %s participant, %s window)",
+                "[SiriSxTransformer] Processed %s alerts (filtered: %s participant, %s closed, %s window)",
                 len(alerts),
                 filtered_by_participant,
+                filtered_closed,
                 filtered_out_of_window,
             )
 
@@ -97,6 +105,7 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         situation: ET.Element,
         source_name: str,
         current_timestamp: int,
+        progress: str | None,
     ) -> dict[str, Any] | None:
         situation_number_elem = situation.find("siri:SituationNumber", self._siri_ns)
         if situation_number_elem is None:
@@ -299,6 +308,7 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
 
         publishing_actions = situation.findall(".//siri:PublishingAction", self._siri_ns)
         informed_entities = self._extract_informed_entities(situation, publishing_actions)
+        is_closing_alert = progress == "closing"
 
         return {
             "id": alert_id,
@@ -306,10 +316,19 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
             "effect": "UNKNOWN_EFFECT",
             "severity_level": "UNKNOWN_SEVERITY",
             "is_active": True,
+            "is_closing_alert": is_closing_alert,
             "translations": translations,
             "active_periods": active_periods,
             "informed_entities": informed_entities,
         }
+
+    def _get_progress(self, situation: ET.Element) -> str | None:
+        progress_elem = situation.find("siri:Progress", self._siri_ns)
+        if progress_elem is None or not progress_elem.text:
+            return None
+
+        progress = progress_elem.text.strip().lower()
+        return progress or None
 
     def _strip_html(self, text: str) -> str:
         if not text:

@@ -101,3 +101,54 @@ class TestSiriSxServiceAlertsTransformer(unittest.TestCase):
 
         records = transformer.transform({"root": root, "source_name": "sx"})
         self.assertEqual(records, [])
+
+    def test_transform_skips_closed_progress(self):
+        xml_payload = """
+        <Siri xmlns="http://www.siri.org.uk/siri">
+          <PtSituationElement>
+            <SituationNumber>42</SituationNumber>
+            <ParticipantRef>P2</ParticipantRef>
+            <Progress>closed</Progress>
+            <PublicationWindow>
+              <StartTime>2026-01-01T00:00:00Z</StartTime>
+              <EndTime>2099-01-01T00:00:00Z</EndTime>
+            </PublicationWindow>
+            <Summary xml:lang="en">Line disruption</Summary>
+          </PtSituationElement>
+        </Siri>
+        """
+        root = ET.fromstring(xml_payload)
+        transformer = SiriSxServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filter_value="P2",
+        )
+
+        records = transformer.transform({"root": root, "source_name": "sx"})
+        self.assertEqual(records, [])
+
+    def test_transform_marks_closing_progress(self):
+        xml_payload = """
+        <Siri xmlns="http://www.siri.org.uk/siri">
+          <PtSituationElement>
+            <SituationNumber>42</SituationNumber>
+            <ParticipantRef>P2</ParticipantRef>
+            <Progress>closing</Progress>
+            <PublicationWindow>
+              <StartTime>2026-01-01T00:00:00Z</StartTime>
+              <EndTime>2099-01-01T00:00:00Z</EndTime>
+            </PublicationWindow>
+            <Summary xml:lang="en">Line disruption</Summary>
+          </PtSituationElement>
+        </Siri>
+        """
+        root = ET.fromstring(xml_payload)
+        transformer = SiriSxServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filter_value="P2",
+        )
+
+        records = transformer.transform({"root": root, "source_name": "sx"})
+
+        self.assertEqual(len(records), 1)
+        self.assertTrue(records[0]["is_closing_alert"])
+        self.assertEqual(records[0]["effect"], "UNKNOWN_EFFECT")
