@@ -37,6 +37,11 @@ class DatasourceSchedulerInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def wait_for_source_idle(self, source_id: int, timeout_seconds: float | None) -> bool:
+        """Wait until a source has no active run and return whether it became idle before timeout."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def close(self) -> None:
         """Stop datasource scheduling and drain worker processes."""
         raise NotImplementedError

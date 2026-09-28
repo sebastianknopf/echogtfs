@@ -450,6 +450,10 @@ const api = (() => {
       return request(`/sources/${id}/toggle-active`, { method: 'POST' });
     },
 
+    streamToggleSourceActive(id, onEvent) {
+      return streamRequest(`/sources/${id}/toggle-active`, { method: 'POST' }, onEvent);
+    },
+
     getSourceLogs(sourceId, limit = 100) {
       return request(`/sources/${sourceId}/logs?limit=${limit}`);
     },

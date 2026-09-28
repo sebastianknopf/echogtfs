@@ -7,6 +7,7 @@ const sources = (() => {
   let _adapterTypes = [];
   let _editingSourceId = null;
   const _runningSourceIds = new Set();
+  const _togglingSourceIds = new Set();
 
   // Source mapping management
   let _allMappings = [];
@@ -666,6 +667,7 @@ const sources = (() => {
       // Error badge if the last run had an error (4xx/5xx status code)
       const errorBadge = source.has_error ? `<span class="badge badge--error" title="${window.i18n('sources.badge.error')}">${window.i18n('sources.badge.error')}</span>` : '';
       const isRunning = _runningSourceIds.has(source.id);
+      const isToggling = _togglingSourceIds.has(source.id);
       const isEventBased = source.execution_type === 'event_based';
       const runTitle = !source.is_active
         ? window.i18n('sources.run.disabled')
@@ -704,8 +706,10 @@ const sources = (() => {
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
           </button>
           <button class="icon-btn ${source.is_active ? 'icon-btn--success' : 'icon-btn--warning'}" data-action="toggle" data-id="${source.id}"
-            title="${source.is_active ? window.i18n('common.deactivate') : window.i18n('common.activate')}" aria-label="${source.is_active ? window.i18n('common.deactivate') : window.i18n('common.activate')} ${ui.esc(source.name)}" data-ripple>
-            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42C17.99 7.86 19 9.81 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.59-5.41L6.17 5.17C4.23 6.82 3 9.26 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z"/></svg>
+            title="${isToggling ? window.i18n('intf.sources.toggle.running') : (source.is_active ? window.i18n('common.deactivate') : window.i18n('common.activate'))}" aria-label="${source.is_active ? window.i18n('common.deactivate') : window.i18n('common.activate')} ${ui.esc(source.name)}" data-ripple ${isToggling ? 'disabled' : ''}>
+            ${isToggling
+              ? '<span class="btn-spinner source-run-spinner" aria-hidden="true"></span>'
+              : '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42C17.99 7.86 19 9.81 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.59-5.41L6.17 5.17C4.23 6.82 3 9.26 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z"/></svg>'}
           </button>
         </div></td>`;
       tbody.appendChild(tr);
@@ -998,66 +1002,45 @@ const sources = (() => {
   }
 
   async function _toggleSource(sourceId) {
+    if (_togglingSourceIds.has(sourceId)) {
+      return;
+    }
+
     try {
-      const result = await api.toggleSourceActive(sourceId);
-      
-      // Update source in local array
-      const source = _sources.find(s => s.id === sourceId);
-      if (source) {
-        // Use result.is_active if available, otherwise toggle manually
-        source.is_active = result?.is_active !== undefined ? result.is_active : !source.is_active;
+      _togglingSourceIds.add(sourceId);
+      _renderSourcesList();
+
+      const announcedMessages = new Set();
+      let streamTimedOut = false;
+
+      await api.streamToggleSourceActive(sourceId, (event) => {
+        const messageKey = typeof event?.message === 'string' ? event.message : '';
+        if (!messageKey || announcedMessages.has(messageKey)) {
+          return;
+        }
+
+        announcedMessages.add(messageKey);
+
+        if (messageKey === 'intf.sources.toggle.timeout') {
+          streamTimedOut = true;
+          ui.toast(window.i18n(messageKey), 'error');
+          return;
+        }
+
+        if (window.i18n.hasTranslation(messageKey)) {
+          const isSuccess = messageKey === 'sources.activated' || messageKey === 'sources.deactivated';
+          ui.toast(window.i18n(messageKey), isSuccess ? 'success' : 'default');
+        }
+      });
+
+      if (streamTimedOut) {
+        return;
       }
-      
-      // Update DOM without full reload
-      const table = document.querySelector('#sources-content table');
-      if (table) {
-        const rows = table.querySelectorAll('tbody tr');
-        rows.forEach(row => {
-          const toggleBtn = row.querySelector(`[data-action="toggle"][data-id="${sourceId}"]`);
-          if (toggleBtn) {
-            const isActive = source.is_active;
-            
-            // Update row inactive class
-            row.classList.toggle('user-table__row--inactive', !isActive);
-            
-            // Update/add/remove inactive badge in actions cell
-            const actionsCell = row.cells[5]; // Last cell
-            if (actionsCell) {
-              const actionsDiv = actionsCell.querySelector('.user-table__actions');
-              if (actionsDiv) {
-                let inactiveBadge = actionsDiv.querySelector('.badge--system');
-                
-                if (!isActive && !inactiveBadge) {
-                  // Add inactive badge at the beginning
-                  const badge = document.createElement('span');
-                  badge.className = 'badge badge--system';
-                  badge.textContent = window.i18n('sources.badge.inactive');
-                  actionsDiv.insertBefore(badge, actionsDiv.firstChild);
-                } else if (isActive && inactiveBadge) {
-                  // Remove inactive badge
-                  inactiveBadge.remove();
-                }
-              }
-            }
-            
-            // Update toggle button
-            toggleBtn.classList.toggle('icon-btn--success', isActive);
-            toggleBtn.classList.toggle('icon-btn--warning', !isActive);
-            toggleBtn.title = isActive ? window.i18n('common.deactivate') : window.i18n('common.activate');
-            
-            // Update run button
-            const runBtn = row.querySelector(`[data-action="run"][data-id="${sourceId}"]`);
-            if (runBtn) {
-              runBtn.disabled = !isActive;
-              runBtn.title = isActive ? window.i18n('sources.run.title') : window.i18n('sources.run.disabled');
-            }
-          }
-        });
-      }
-      
-      ui.toast(source.is_active ? window.i18n('sources.activated') : window.i18n('sources.deactivated'), 'success');
     } catch (err) {
       ui.toast(err.message, 'error');
+    } finally {
+      _togglingSourceIds.delete(sourceId);
+      await _loadSources();
     }
   }
 
