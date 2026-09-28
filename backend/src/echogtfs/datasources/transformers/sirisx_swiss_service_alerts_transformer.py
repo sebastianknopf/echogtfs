@@ -165,7 +165,7 @@ class SiriSxSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         situation_number = situation_number_elem.text
         alert_id = self._make_unique_id(situation_number, source_name)
 
-        active_periods = []
+        validity_active_periods = []
         validity_periods = situation.findall("siri:ValidityPeriod", self._siri_ns)
         for validity_period in validity_periods:
             start_elem = validity_period.find("siri:StartTime", self._siri_ns)
@@ -189,7 +189,7 @@ class SiriSxSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                 except (ValueError, AttributeError):
                     pass
 
-            active_periods.append(
+            validity_active_periods.append(
                 {
                     "period_type": PeriodType.IMPACT_PERIOD,
                     "start_time": start_time,
@@ -197,6 +197,7 @@ class SiriSxSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                 }
             )
 
+        publication_active_periods = []
         publication_windows = situation.findall("siri:PublicationWindow", self._siri_ns)
         for pub_window in publication_windows:
             start_elem = pub_window.find("siri:StartTime", self._siri_ns)
@@ -221,7 +222,7 @@ class SiriSxSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                 except (ValueError, AttributeError):
                     pass
 
-            active_periods.append(
+            publication_active_periods.append(
                 {
                     "period_type": PeriodType.COMMUNICATION_PERIOD,
                     "start_time": start_time,
@@ -238,6 +239,20 @@ class SiriSxSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         severity_elem = situation.find("siri:Severity", self._siri_ns)
         alert_cause_elem = situation.find("siri:AlertCause", self._siri_ns)
         is_closing_alert = progress == "closing"
+
+        if is_closing_alert:
+            active_periods = []
+            if validity_active_periods:
+                last_validity_period = dict(validity_active_periods[-1])
+                last_validity_period["end_time"] = None
+                active_periods.append(last_validity_period)
+
+            if publication_active_periods:
+                last_publication_period = dict(publication_active_periods[-1])
+                last_publication_period["end_time"] = None
+                active_periods.append(last_publication_period)
+        else:
+            active_periods = validity_active_periods + publication_active_periods
 
         return {
             "id": alert_id,

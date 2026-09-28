@@ -55,6 +55,11 @@ Active periods are generated from:
 
 `StartTime` and `EndTime` are parsed to Unix timestamps. Parse errors keep `None` values.
 
+Closing-alert period behavior:
+
+- When `Progress = closing`, only the last `ValidityPeriod` and the last `PublicationWindow` are kept.
+- For those kept periods, `end_time` is forced to `None`.
+
 ## Translation Extraction Rules
 
 ### Source Selection

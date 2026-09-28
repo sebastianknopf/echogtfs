@@ -60,6 +60,11 @@ For both:
 - End dates with year `2500` are converted to `None`.
 - Parse failures keep the field as `None` and emit warnings.
 
+Closing-alert period behavior:
+
+- When `Progress = closing`, only the last `ValidityPeriod` and the last `PublicationWindow` are kept.
+- For those kept periods, `end_time` is forced to `None`.
+
 ## Translation Extraction Rules
 
 ### Primary Text Sources
