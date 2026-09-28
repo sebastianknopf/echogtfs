@@ -64,6 +64,7 @@ class _RepositoryStub:
         self.list_active_data_sources_with_cron = AsyncMock(return_value=[])
         self.get_data_source_by_id = AsyncMock(return_value=None)
         self.get_app_setting = AsyncMock(return_value=None)
+        self.set_app_setting = AsyncMock()
         self.update_data_source_last_run_at = AsyncMock(return_value=True)
         self.session = SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock())
 

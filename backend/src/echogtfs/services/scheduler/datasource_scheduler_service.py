@@ -37,6 +37,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("uvicorn")
 
+_SOURCE_RUN_STATUS_PREFIX = "datasource_run_status_"
+_SOURCE_RUN_STATUS_RUNNING = "running"
+_SOURCE_RUN_STATUS_IDLE = "idle"
+
 
 def _run_datasource_process(
     source_id: int,
@@ -264,21 +268,54 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
             self._running_source_ids.discard(source_id)
             self._run_state_condition.notify_all()
 
-    async def wait_for_source_idle(self, source_id: int, timeout_seconds: float | None) -> bool:
-        async def _wait_until_idle() -> None:
-            async with self._run_state_condition:
-                while source_id in self._running_source_ids:
-                    await self._run_state_condition.wait()
+    @staticmethod
+    def _source_run_status_key(source_id: int) -> str:
+        return f"{_SOURCE_RUN_STATUS_PREFIX}{source_id}"
 
+    async def _set_source_run_status(self, source_id: int, status_value: str) -> None:
         try:
-            if timeout_seconds is None:
-                await _wait_until_idle()
-            else:
-                await asyncio.wait_for(_wait_until_idle(), timeout=timeout_seconds)
+            await self._system_repository.set_app_setting(self._source_run_status_key(source_id), status_value)
+        except Exception:  # noqa: BLE001
+            logger.error(
+                "[DatasourceScheduler] Failed to persist run status '%s' for source %s",
+                status_value,
+                source_id,
+                exc_info=True,
+            )
 
-            return True
-        except TimeoutError:
-            return False
+    async def _is_source_running_in_shared_state(self, source_id: int) -> bool:
+        status_value = await self._system_repository.get_app_setting(self._source_run_status_key(source_id))
+        return status_value == _SOURCE_RUN_STATUS_RUNNING
+
+    async def _is_source_running_local(self, source_id: int) -> bool:
+        async with self._run_state_lock:
+            return source_id in self._running_source_ids
+
+    async def wait_for_source_idle(self, source_id: int, timeout_seconds: float | None) -> bool:
+        deadline = None if timeout_seconds is None else (asyncio.get_running_loop().time() + timeout_seconds)
+
+        while True:
+            local_running = await self._is_source_running_local(source_id)
+            shared_running = await self._is_source_running_in_shared_state(source_id)
+            if not local_running and not shared_running:
+                return True
+
+            if deadline is not None and asyncio.get_running_loop().time() >= deadline:
+                return False
+
+            if local_running:
+                remaining = None if deadline is None else max(0.0, deadline - asyncio.get_running_loop().time())
+                wait_timeout = 0.5 if remaining is None else min(0.5, remaining)
+
+                async with self._run_state_condition:
+                    if source_id in self._running_source_ids:
+                        try:
+                            await asyncio.wait_for(self._run_state_condition.wait(), timeout=wait_timeout)
+                        except TimeoutError:
+                            pass
+                continue
+
+            await asyncio.sleep(0.5)
 
     async def _is_gtfs_import_running(self) -> bool:
         status_value = await self._system_repository.get_app_setting(AppSetting.KEY_GTFS_IMPORT_STATUS)
@@ -408,6 +445,7 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
             return
 
         logger.info("[DatasourceScheduler] Starting import for data source ID %s", source_id)
+        await self._set_source_run_status(source_id, _SOURCE_RUN_STATUS_RUNNING)
 
         try:
             source = await self._system_repository.get_data_source_by_id(source_id)
@@ -452,6 +490,7 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
                         source_id,
                     )
         finally:
+            await self._set_source_run_status(source_id, _SOURCE_RUN_STATUS_IDLE)
             await self._mark_source_finished(source_id)
 
     async def run_push_task(
@@ -482,6 +521,7 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
             raise PushServiceError(status_code=409, detail="error.source_already_running")
 
         logger.info("[DatasourceScheduler] Starting push for data source ID %s ('%s')", source_id, source.name)
+        await self._set_source_run_status(source_id, _SOURCE_RUN_STATUS_RUNNING)
 
         try:
             stats = await self._run_datasource_push_in_process(source_id, payload, content_type)
@@ -515,6 +555,7 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
                     source_id,
                 )
 
+            await self._set_source_run_status(source_id, _SOURCE_RUN_STATUS_IDLE)
             await self._mark_source_finished(source_id)
 
     async def close(self) -> None:
