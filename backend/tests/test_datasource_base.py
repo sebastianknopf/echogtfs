@@ -877,6 +877,56 @@ class TestDatasourceBaseDeepSync(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(kwargs["is_active_on_create"])
         self.assertEqual(kwargs["informed_entities"], [])
 
+    async def test_sync_service_alert_records_keeps_effect_for_closing_alert(self):
+        repository = _SystemRepositoryStub()
+        realtime_repository = _RealtimeRepositoryStub()
+        gtfs_repository = _GtfsRepositoryStub()
+        datasource = _TestDatasource({})
+        datasource._identifier_mapping_service = SimpleNamespace(
+            initialize=AsyncMock(),
+            get_loaded_mapping_count=lambda: 0,
+            apply_mapping=lambda e: e,
+        )
+
+        def _apply_enrichment(alert_data, _adapter_type):
+            alert_data["cause"] = "ACCIDENT"
+            alert_data["effect"] = "DETOUR"
+
+        datasource._entity_enrichment_service = SimpleNamespace(
+            initialize=AsyncMock(),
+            get_loaded_enrichment_count=lambda: 1,
+            apply_enrichment=_apply_enrichment,
+        )
+
+        records = [
+            {
+                "id": "alert-1",
+                "cause": "UNKNOWN_CAUSE",
+                "effect": "UNKNOWN_EFFECT",
+                "severity_level": "UNKNOWN_SEVERITY",
+                "is_active": True,
+                "is_closing_alert": True,
+                "translations": [],
+                "active_periods": [],
+                "informed_entities": [{"agency_id": "a1", "route_id": None, "stop_id": None}],
+            }
+        ]
+
+        result = await datasource._sync_service_alert_records(
+            repository=repository,
+            realtime_repository=realtime_repository,
+            gtfs_repository=gtfs_repository,
+            source_id=2,
+            source_name="Demo",
+            records=records,
+        )
+
+        self.assertEqual(result, {"added": 1, "updated": 0, "deleted": 0})
+        realtime_repository.upsert_service_alert_from_sync.assert_awaited_once()
+        kwargs = realtime_repository.upsert_service_alert_from_sync.await_args.kwargs
+        self.assertEqual(kwargs["cause"], "ACCIDENT")
+        self.assertEqual(kwargs["effect"], "UNKNOWN_EFFECT")
+
     async def test_sync_trip_update_records_upserts_trip_updates(self):
         repository = _SystemRepositoryStub()
         realtime_repository = _RealtimeRepositoryStub()
