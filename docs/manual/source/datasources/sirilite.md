@@ -21,9 +21,9 @@ Die folgenden Parameter können in der Konfiguration der Datenquelle gesetzt wer
   - Ergebnis: Solche Halte werden im Importverlauf wie Zusatzhalte behandelt. Wenn die Option deaktiviert ist, werden unerwartete Halte in den Eingangsdaten verworfen.
 - **Fehlende Halte als ausgefallene Halte behandeln**:  _(nur wirksam bei SIRI-ET!)_ Aktiviert die Behandlung fehlender Halte als ausgefallene Halte.
   - Ergebnis: Fehlende Halte werden im Importverlauf wie ausgefallene Halte behandelt. Wenn die Option deaktiviert ist, werden fehlende Halte in den Eingangsdaten ignoriert.
-- **Incorrect stop ID handling**: _(only effective for the SIRI-ET dialect)_ Legt fest, wie fehlerhafte **Haltestellen**-IDs behandelt werden sollen.
-  - Option `IGNORE` (default): Die originalen, (nach dem Mapping) übermittelten Halt-IDs werden beibehalten.
-  - Option `FIX_TO_NOMINAL_STOP_ID`: Use the nominal stop ID for processing and downstream output while keeping the transmitted stop ID as original reference data.
+- **Umgang mit fehlerhafter Halt-ID**: _(nur relevant für SIRI-ET Dialekte)_ Legt fest, wie mit fehlerhaften Halt-IDs (z.B. vertauschten Steigen) umgegangen werden soll.
+  - Option **Ignorieren** (Standard): Die originale übermittelte Halt-ID (nach dem Mapping) wird beibehalten.
+  - Option **Auf Soll-Halt korrigieren**: Die übermittelte Halt-ID wird auf die Halt-ID aus dem Soll-Fahrplan korrigiert.
 - **Filter**: Optionaler Filter für Betreiberkennungen.
   - Ergebnis: Wenn ein Filter gesetzt ist, werden nur passende Betreibergruppen berücksichtigt. `*` wird als Wildcard behandelt und steht für beliebig viele beliebige Zeichen.
 
