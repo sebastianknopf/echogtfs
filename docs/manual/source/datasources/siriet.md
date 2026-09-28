@@ -23,6 +23,9 @@ Die folgenden Parameter können in der Konfiguration der Datenquelle gesetzt wer
   - Ergebnis: Solche Halte werden im Importverlauf wie Zusatzhalte behandelt. Wenn die Option deaktiviert ist, werden unerwartete Halte in den Eingangsdaten verworfen.
 - **Fehlende Halte als ausgefallene Halte behandeln**: Aktiviert die Behandlung fehlender Halte als ausgefallene Halte.
   - Ergebnis: Fehlende Halte werden im Importverlauf wie ausgefallene Halte behandelt. Wenn die Option deaktiviert ist, werden fehlende Halte in den Eingangsdaten ignoriert.
+- **Incorrect stop ID handling**: Defines how stop IDs are handled when they differ from the nominal stop ID.
+  - Option `IGNORE` (default): Keep the incoming stop ID as transmitted.
+  - Option `FIX_TO_NOMINAL_STOP_ID`: Use the nominal stop ID for processing and downstream output while keeping the transmitted stop ID as original reference data.
 - **Filter**: Optionaler Filter für Betreiberkennungen.
   - Ergebnis: Wenn ein Filter gesetzt ist, werden nur Fahrten aus passenden Betreiberreferenzen berücksichtigt. `*` wird als Wildcard behandelt und steht für beliebig viele beliebige Zeichen.
 

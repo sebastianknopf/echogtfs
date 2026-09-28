@@ -39,3 +39,10 @@ class DataSourceExecutionType(str, Enum):
 
     TIME_BASED = "time_based"  # Runs on a cron schedule
     EVENT_BASED = "event_based"  # Runs only when triggered via the push API
+
+
+class IncorrectStopIdHandling(str, Enum):
+    """How stop IDs that differ from the nominal stop ID are handled."""
+
+    IGNORE = "IGNORE"
+    FIX_TO_NOMINAL_STOP_ID = "FIX_TO_NOMINAL_STOP_ID"
