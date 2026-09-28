@@ -34,6 +34,10 @@ _ERR_SOURCE_NOT_FOUND = "error.source_not_found"
 _ERR_SOURCE_EVENT_BASED = "error.source_event_based"
 _ERR_SOURCE_STILL_RUNNING = "error.source_still_running"
 _DEACTIVATION_WAIT_TIMEOUT_SECONDS = 300.0
+_MSG_SOURCE_TOGGLE_RUNNING = "intf.sources.toggle.running"
+_MSG_SOURCE_TOGGLE_WAITING = "intf.sources.toggle.waiting"
+_MSG_SOURCE_TOGGLE_COMPLETED = "intf.sources.toggle.completed"
+_MSG_SOURCE_TOGGLE_TIMEOUT = "intf.sources.toggle.timeout"
 
 _Repo = Annotated[SystemRepositoryInterface, Depends(get_system_repository)]
 _RealtimeRepo = Annotated[RealtimeRepositoryInterface, Depends(get_realtime_repository)]
@@ -422,13 +426,13 @@ async def run_source_import(
     )
 
 
-@router.post("/{source_id}/toggle-active", response_model=DataSourceRead, include_in_schema=False)
+@router.post("/{source_id}/toggle-active", include_in_schema=False)
 async def toggle_source_active(
     source_id: int,
     _: CurrentPoweruser,
     repository: _Repo,
     realtime_repository: _RealtimeRepo,
-) -> DataSourceRead:
+) -> StreamingResponse:
     """
     Toggle the is_active flag of a data source (requires poweruser/admin).
     When deactivating, all alerts, trips, and vehicles from this source will be deleted.
@@ -437,31 +441,78 @@ async def toggle_source_active(
         Updated data source
     """
     source = await repository.get_data_source_by_id(source_id)
-    
-    if not source:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=_ERR_SOURCE_NOT_FOUND,
-        )
-    
-    old_status = source.is_active
-    source = await repository.toggle_data_source_active(source_id)
-    if source is None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
-    
-    # If deactivating, wait for an in-flight run to finish before deleting realtime objects.
-    if old_status and not source.is_active:
-        await _wait_and_delete_source_realtime_objects(source, realtime_repository)
-    
-    # Update cron job only for active sources here; deactivation path unschedules in helper.
-    if source.is_active and source.cron:
-        await get_datasource_scheduler_service().schedule_data_source_import(source.id, source.name, source.cron)
-    
-    source = await repository.get_data_source_by_id(source.id)
     if source is None:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
 
-    return await _enrich_source_with_error_flag(source, repository)
+    queue: ReportProgressQueue = ReportProgressQueue()
+
+    async def run_toggle_with_progress() -> None:
+        await queue.report_progress(progress=0.0, message=_MSG_SOURCE_TOGGLE_RUNNING)
+
+        try:
+            current_source = await repository.get_data_source_by_id(source_id)
+            if current_source is None:
+                await queue.report_progress(progress=100.0, message=_ERR_SOURCE_NOT_FOUND)
+                return
+
+            old_status = current_source.is_active
+            toggled_source = await repository.toggle_data_source_active(source_id)
+            if toggled_source is None:
+                await queue.report_progress(progress=100.0, message=_ERR_SOURCE_NOT_FOUND)
+                return
+
+            if old_status and not toggled_source.is_active:
+                await queue.report_progress(progress=20.0, message=_MSG_SOURCE_TOGGLE_WAITING)
+
+                try:
+                    await _wait_and_delete_source_realtime_objects(toggled_source, realtime_repository)
+                except HTTPException as exc:
+                    if exc.status_code == status.HTTP_409_CONFLICT and exc.detail == _ERR_SOURCE_STILL_RUNNING:
+                        await queue.report_progress(progress=100.0, message=_MSG_SOURCE_TOGGLE_TIMEOUT)
+                        return
+                    raise
+
+            if toggled_source.is_active and toggled_source.cron:
+                await get_datasource_scheduler_service().schedule_data_source_import(
+                    toggled_source.id,
+                    toggled_source.name,
+                    toggled_source.cron,
+                )
+
+            await queue.report_progress(progress=90.0, message=_MSG_SOURCE_TOGGLE_COMPLETED)
+
+            await queue.report_progress(
+                progress=100.0,
+                message="sources.activated" if toggled_source.is_active else "sources.deactivated",
+            )
+        except Exception:  # noqa: BLE001
+            logger.error("[Sources] Toggle active stream failed for source %s", source_id, exc_info=True)
+            await queue.report_progress(progress=100.0, message="error.server_500")
+
+    asyncio.create_task(run_toggle_with_progress())
+
+    async def stream():
+        async for event in queue:
+            event_name = event.get("event", "progress")
+            event_data = json.dumps(
+                {
+                    "progress": event.get("progress", 0.0),
+                    "message": event.get("message", ""),
+                }
+            )
+
+            yield f"event: {event_name}\ndata: {event_data}\n\n".encode("utf-8")
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        status_code=status.HTTP_200_OK,
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.post("/{source_id}/mappings/{entity_type}/import", include_in_schema=False)

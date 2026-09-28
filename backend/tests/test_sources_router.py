@@ -31,11 +31,17 @@ def _source(*, source_id: int, is_active: bool) -> SimpleNamespace:
 
 
 class TestSourcesRouterDeactivation(unittest.IsolatedAsyncioTestCase):
+    async def _collect_stream_text(self, response) -> str:
+        chunks: list[str] = []
+        async for chunk in response.body_iterator:
+            chunks.append(chunk.decode("utf-8"))
+        return "".join(chunks)
+
     async def test_toggle_source_active_waits_for_idle_then_deletes(self):
         source_before = _source(source_id=5, is_active=True)
         source_after = _source(source_id=5, is_active=False)
         repository = SimpleNamespace(
-            get_data_source_by_id=AsyncMock(side_effect=[source_before, source_after]),
+            get_data_source_by_id=AsyncMock(side_effect=[source_before, source_before]),
             toggle_data_source_active=AsyncMock(return_value=source_after),
         )
         realtime_repository = SimpleNamespace(
@@ -48,24 +54,24 @@ class TestSourcesRouterDeactivation(unittest.IsolatedAsyncioTestCase):
             wait_for_source_idle=AsyncMock(return_value=True),
         )
 
-        with patch("echogtfs.routers.sources.get_datasource_scheduler_service", return_value=scheduler), patch(
-            "echogtfs.routers.sources._enrich_source_with_error_flag",
-            AsyncMock(return_value={"ok": True}),
-        ):
-            result = await sources.toggle_source_active(5, None, repository, realtime_repository)
+        with patch("echogtfs.routers.sources.get_datasource_scheduler_service", return_value=scheduler):
+            response = await sources.toggle_source_active(5, None, repository, realtime_repository)
+            body_text = await self._collect_stream_text(response)
 
-        self.assertEqual(result, {"ok": True})
+        self.assertIn("intf.sources.toggle.running", body_text)
+        self.assertIn("intf.sources.toggle.waiting", body_text)
+        self.assertIn("sources.deactivated", body_text)
         scheduler.schedule_data_source_import.assert_awaited_once_with(5, "Alpha", None)
         scheduler.wait_for_source_idle.assert_awaited_once_with(5, timeout_seconds=300.0)
         realtime_repository.delete_alerts_for_data_source.assert_awaited_once_with(5)
         realtime_repository.delete_trips_for_data_source.assert_awaited_once_with(5)
         realtime_repository.delete_vehicles_for_data_source.assert_awaited_once_with(5)
 
-    async def test_toggle_source_active_returns_409_when_wait_times_out(self):
+    async def test_toggle_source_active_streams_timeout_when_wait_times_out(self):
         source_before = _source(source_id=5, is_active=True)
         source_after = _source(source_id=5, is_active=False)
         repository = SimpleNamespace(
-            get_data_source_by_id=AsyncMock(return_value=source_before),
+            get_data_source_by_id=AsyncMock(side_effect=[source_before, source_before]),
             toggle_data_source_active=AsyncMock(return_value=source_after),
         )
         realtime_repository = SimpleNamespace(
@@ -79,11 +85,10 @@ class TestSourcesRouterDeactivation(unittest.IsolatedAsyncioTestCase):
         )
 
         with patch("echogtfs.routers.sources.get_datasource_scheduler_service", return_value=scheduler):
-            with self.assertRaises(HTTPException) as ctx:
-                await sources.toggle_source_active(5, None, repository, realtime_repository)
+            response = await sources.toggle_source_active(5, None, repository, realtime_repository)
+            body_text = await self._collect_stream_text(response)
 
-        self.assertEqual(ctx.exception.status_code, 409)
-        self.assertEqual(ctx.exception.detail, "error.source_still_running")
+        self.assertIn("intf.sources.toggle.timeout", body_text)
         realtime_repository.delete_alerts_for_data_source.assert_not_awaited()
         realtime_repository.delete_trips_for_data_source.assert_not_awaited()
         realtime_repository.delete_vehicles_for_data_source.assert_not_awaited()
