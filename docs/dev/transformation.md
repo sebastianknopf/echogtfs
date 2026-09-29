@@ -178,6 +178,8 @@ Allowed data model:
             "stop_sequence": str,
             "arrival_time": str | datetime,
             "departure_time": str | datetime,
+            "scheduled_arrival_time": str | datetime | None,
+            "scheduled_departure_time": str | datetime | None,
             "schedule_relationship": str,
             "is_implied_schedule_relationship": bool,
             "is_valid": bool,
@@ -213,6 +215,8 @@ Processed stop_events[*] fields:
 - stop_sequence: passed to persistence model.
 - arrival_time: passed to persistence model.
 - departure_time: passed to persistence model.
+- scheduled_arrival_time: optional planned arrival time supplied by the transformer; passed to the persistence model and available for stop-event matching/propagation.
+- scheduled_departure_time: optional planned departure time supplied by the transformer; passed to the persistence model and used as a tie-breaker when repeated stop occurrences require disambiguation.
 - schedule_relationship: optional, default SCHEDULED in persistence layer.
 - is_implied_schedule_relationship: Indicates whether the schedule relationship was implied based on settings, optional, default False.
 - is_valid: optional, default True in persistence layer.
