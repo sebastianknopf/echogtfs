@@ -38,3 +38,7 @@ Die SIRI-Lite-Datenquelle verwendet die folgenden Dialekte:
 - **SIRI-SX**
 - **SIRI-SX Swiss**
 - **SIRI-ET**
+
+### Behandlung von Endmeldungen bei SIRI-SX Dialekten
+
+Siehe Informationen in der Beschreibung zur {ref}`SIRI-SX Datenquelle <h-datasources-sirisx-closing-alerts>`.

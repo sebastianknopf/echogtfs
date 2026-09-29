@@ -12,6 +12,7 @@
 2. Collect all `PtSituationElement` nodes; return empty list if none exist.
 3. For each situation:
 	 - Apply participant filter.
+	 - Skip situations where `Progress = closed`.
 	 - Apply publication-window filter.
 	 - Parse to one internal service-alert dictionary.
 4. Keep exceptions isolated per situation (error logged, processing continues).
@@ -30,8 +31,11 @@ Participant filter pattern behavior:
 - `*` matches any number of any characters.
 - Matching uses full-value regex matching (`re.fullmatch`) after escaping literals and replacing `*` with `.*`.
 2. Publication window check fails.
-3. `SituationNumber` is missing.
-4. Translation extraction yields no meaningful text.
+3. `Progress` equals `closed`.
+4. `SituationNumber` is missing.
+5. Translation extraction yields no meaningful text.
+
+When `Progress = closing`, the situation is still transformed. `effect` remains `UNKNOWN_EFFECT` and `is_closing_alert` is set to `True`.
 
 ## Publication Window Rules
 
@@ -50,6 +54,11 @@ Active periods are generated from:
 2. `PublicationWindow` entries with `period_type = COMMUNICATION_PERIOD`
 
 `StartTime` and `EndTime` are parsed to Unix timestamps. Parse errors keep `None` values.
+
+Closing-alert period behavior:
+
+- When `Progress = closing`, only the last `ValidityPeriod` and the last `PublicationWindow` are kept.
+- For those kept periods, `end_time` is forced to `None`.
 
 ## Translation Extraction Rules
 
@@ -138,6 +147,7 @@ Each output alert dictionary contains:
 - `effect`
 - `severity_level`
 - `is_active = True`
+- `is_closing_alert = True` when `Progress = closing`; otherwise `False`
 - `translations`
 - `active_periods`
 - `informed_entities`

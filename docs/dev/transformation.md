@@ -49,6 +49,7 @@ Allowed data model:
     "effect": str,
     "severity_level": str,
     "is_active": bool,
+    "is_closing_alert": bool,
     "translations": [
         {
             "language": str,
@@ -93,6 +94,7 @@ Processed top-level fields:
 - effect: required.
 - severity_level: required.
 - is_active: optional, used only for create path, default True.
+- is_closing_alert: optional, default False.
 - translations: optional list, default [].
 - active_periods: optional list, default [].
 - informed_entities: optional list, default [].

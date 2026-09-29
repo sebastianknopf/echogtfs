@@ -28,3 +28,12 @@ Die SIRI-SX-Datenquelle verwendet die folgenden Dialekte:
 
 - **SIRI-SX**
 - **SIRI-SX Swiss**
+
+(h-datasources-sirisx-closing-alerts)=
+
+### Behandlung von Endmeldungen
+
+Wenn eine Meldung mit `Progress=closing` wird von den Dialekten folgendermaßen verarbeitet:
+
+- Die Auswirkung wird fest auf `UNKNOWN_EFFECT` gesetzt. Dies hat zur Folge, dass die Meldung nach wie vor angezeigt wird und aktiv ist, aber basierend auf der Auswirkung beispielsweise keine Fahrt- oder Haltausfälle mehr implizit erzeugt werden. _Anreicherungen mit Bezug auf die Auswirkungen greifen in diesem Fall nicht mehr!_
+- Der jeweils letzte Gültigkeits- und Veröffentlichungszeitraum wird gespeichert und die "Gültig Bis" Information entfernt. Dadurch bleibt die Endmeldung solange bestehen bis sie durch die Datenquelle oder die Datenbereinigung gelöscht wird.

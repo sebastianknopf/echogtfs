@@ -1154,11 +1154,21 @@ class DatasourceBase(DatasourceInterface):
                 f"[{self.get_adapter_type()}] Applying {enrichment_count} enrichment rules to records"
             )
 
+            _missing_effect = object()
+
             for alert_data in alert_dicts:
+                is_closing_alert = bool(alert_data.get("is_closing_alert", False))
+                original_effect = alert_data.get("effect", _missing_effect)
                 self._entity_enrichment_service.apply_enrichment(
                     alert_data,
                     self.get_adapter_type(),
                 )
+
+                if is_closing_alert:
+                    if original_effect is _missing_effect:
+                        alert_data.pop("effect", None)
+                    else:
+                        alert_data["effect"] = original_effect
         
         # Load GTFS entities for validation
         gtfs_entities = await self._load_gtfs_entities(gtfs_repository)

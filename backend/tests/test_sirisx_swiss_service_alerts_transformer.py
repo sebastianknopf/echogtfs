@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from echogtfs.datasources.transformers.sirisx_swiss_service_alerts_transformer import (
     SiriSxSwissServiceAlertsTransformer,
 )
+from echogtfs.enum.gtfsrt import PeriodType
 
 
 class TestSiriSxSwissServiceAlertsTransformer(unittest.TestCase):
@@ -144,3 +145,100 @@ class TestSiriSxSwissServiceAlertsTransformer(unittest.TestCase):
 
         records = transformer.transform({"root": root, "source_name": "sirisx-swiss"})
         self.assertEqual(records, [])
+
+    def test_transform_skips_closed_progress(self):
+        xml_payload = """
+        <Siri xmlns="http://www.siri.org.uk/siri">
+          <PtSituationElement>
+            <SituationNumber>SN-1</SituationNumber>
+            <ParticipantRef>P1</ParticipantRef>
+            <Progress>closed</Progress>
+            <PublicationWindow>
+              <StartTime>2026-01-01T00:00:00Z</StartTime>
+              <EndTime>2099-01-01T00:00:00Z</EndTime>
+            </PublicationWindow>
+            <PublishingActions>
+              <PublishingAction>
+                <PassengerInformationAction>
+                  <Perspective>general</Perspective>
+                  <TextualContent>
+                    <SummaryContent>
+                      <SummaryText xml:lang="de">Warnung</SummaryText>
+                    </SummaryContent>
+                  </TextualContent>
+                </PassengerInformationAction>
+              </PublishingAction>
+            </PublishingActions>
+          </PtSituationElement>
+        </Siri>
+        """
+        root = ET.fromstring(xml_payload)
+        transformer = SiriSxSwissServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filter_value="P1",
+        )
+
+        records = transformer.transform({"root": root, "source_name": "sirisx-swiss"})
+        self.assertEqual(records, [])
+
+    def test_transform_marks_closing_progress(self):
+        xml_payload = """
+        <Siri xmlns="http://www.siri.org.uk/siri">
+          <PtSituationElement>
+            <SituationNumber>SN-1</SituationNumber>
+            <ParticipantRef>P1</ParticipantRef>
+            <Progress>closing</Progress>
+            <ValidityPeriod>
+              <StartTime>2026-01-01T00:00:00Z</StartTime>
+              <EndTime>2026-01-02T00:00:00Z</EndTime>
+            </ValidityPeriod>
+            <ValidityPeriod>
+              <StartTime>2026-01-03T00:00:00Z</StartTime>
+              <EndTime>2026-01-04T00:00:00Z</EndTime>
+            </ValidityPeriod>
+            <PublicationWindow>
+              <StartTime>2026-01-01T00:00:00Z</StartTime>
+              <EndTime>2026-01-02T00:00:00Z</EndTime>
+            </PublicationWindow>
+            <PublicationWindow>
+              <StartTime>2026-01-03T00:00:00Z</StartTime>
+              <EndTime>2099-01-01T00:00:00Z</EndTime>
+            </PublicationWindow>
+            <PublishingActions>
+              <PublishingAction>
+                <PassengerInformationAction>
+                  <Perspective>general</Perspective>
+                  <TextualContent>
+                    <SummaryContent>
+                      <SummaryText xml:lang="de">Warnung</SummaryText>
+                    </SummaryContent>
+                  </TextualContent>
+                </PassengerInformationAction>
+              </PublishingAction>
+            </PublishingActions>
+          </PtSituationElement>
+        </Siri>
+        """
+        root = ET.fromstring(xml_payload)
+        transformer = SiriSxSwissServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filter_value="P1",
+        )
+
+        records = transformer.transform({"root": root, "source_name": "sirisx-swiss"})
+
+        self.assertEqual(len(records), 1)
+        self.assertTrue(records[0]["is_closing_alert"])
+        self.assertEqual(records[0]["effect"], "UNKNOWN_EFFECT")
+        self.assertEqual(len(records[0]["active_periods"]), 2)
+
+        impact_period = records[0]["active_periods"][0]
+        communication_period = records[0]["active_periods"][1]
+
+        self.assertEqual(impact_period["period_type"], PeriodType.IMPACT_PERIOD)
+        self.assertEqual(impact_period["start_time"], 1767398400)
+        self.assertIsNone(impact_period["end_time"])
+
+        self.assertEqual(communication_period["period_type"], PeriodType.COMMUNICATION_PERIOD)
+        self.assertEqual(communication_period["start_time"], 1767398400)
+        self.assertIsNone(communication_period["end_time"])

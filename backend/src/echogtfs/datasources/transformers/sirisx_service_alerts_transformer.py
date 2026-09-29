@@ -47,6 +47,7 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         alerts = []
         filtered_out_of_window = 0
         filtered_by_participant = 0
+        filtered_closed = 0
         current_timestamp = int(time.time())
 
         try:
@@ -54,6 +55,11 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                 try:
                     if not self._matches_participant_filter(situation):
                         filtered_by_participant += 1
+                        continue
+
+                    progress = self._get_progress(situation)
+                    if progress == "closed":
+                        filtered_closed += 1
                         continue
 
                     if not self._is_in_publication_window(situation, current_timestamp):
@@ -64,6 +70,7 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                         situation,
                         source_name,
                         current_timestamp,
+                        progress,
                     )
 
                     if alert:
@@ -79,9 +86,10 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                     )
 
             logger.info(
-                "[SiriSxTransformer] Processed %s alerts (filtered: %s participant, %s window)",
+                "[SiriSxTransformer] Processed %s alerts (filtered: %s participant, %s closed, %s window)",
                 len(alerts),
                 filtered_by_participant,
+                filtered_closed,
                 filtered_out_of_window,
             )
 
@@ -97,6 +105,7 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         situation: ET.Element,
         source_name: str,
         current_timestamp: int,
+        progress: str | None,
     ) -> dict[str, Any] | None:
         situation_number_elem = situation.find("siri:SituationNumber", self._siri_ns)
         if situation_number_elem is None:
@@ -107,7 +116,7 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
 
         alert_id = self._make_unique_id(situation_number, source_name)
 
-        active_periods = []
+        validity_active_periods = []
         validity_periods = situation.findall("siri:ValidityPeriod", self._siri_ns)
         for validity_period in validity_periods:
             start_elem = validity_period.find("siri:StartTime", self._siri_ns)
@@ -135,7 +144,7 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                         f"[SiriSxTransformer] Failed to parse ValidityPeriod EndTime: {exc}"
                     )
 
-            active_periods.append(
+            validity_active_periods.append(
                 {
                     "period_type": PeriodType.IMPACT_PERIOD,
                     "start_time": start_time,
@@ -143,6 +152,7 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                 }
             )
 
+        publication_active_periods = []
         publication_windows = situation.findall("siri:PublicationWindow", self._siri_ns)
         for pub_window in publication_windows:
             start_elem = pub_window.find("siri:StartTime", self._siri_ns)
@@ -170,7 +180,7 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                         f"[SiriSxTransformer] Failed to parse PublicationWindow EndTime: {exc}"
                     )
 
-            active_periods.append(
+            publication_active_periods.append(
                 {
                     "period_type": PeriodType.COMMUNICATION_PERIOD,
                     "start_time": start_time,
@@ -299,6 +309,21 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
 
         publishing_actions = situation.findall(".//siri:PublishingAction", self._siri_ns)
         informed_entities = self._extract_informed_entities(situation, publishing_actions)
+        is_closing_alert = progress == "closing"
+
+        if is_closing_alert:
+            active_periods = []
+            if validity_active_periods:
+                last_validity_period = dict(validity_active_periods[-1])
+                last_validity_period["end_time"] = None
+                active_periods.append(last_validity_period)
+
+            if publication_active_periods:
+                last_publication_period = dict(publication_active_periods[-1])
+                last_publication_period["end_time"] = None
+                active_periods.append(last_publication_period)
+        else:
+            active_periods = validity_active_periods + publication_active_periods
 
         return {
             "id": alert_id,
@@ -306,10 +331,19 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
             "effect": "UNKNOWN_EFFECT",
             "severity_level": "UNKNOWN_SEVERITY",
             "is_active": True,
+            "is_closing_alert": is_closing_alert,
             "translations": translations,
             "active_periods": active_periods,
             "informed_entities": informed_entities,
         }
+
+    def _get_progress(self, situation: ET.Element) -> str | None:
+        progress_elem = situation.find("siri:Progress", self._siri_ns)
+        if progress_elem is None or not progress_elem.text:
+            return None
+
+        progress = progress_elem.text.strip().lower()
+        return progress or None
 
     def _strip_html(self, text: str) -> str:
         if not text:
