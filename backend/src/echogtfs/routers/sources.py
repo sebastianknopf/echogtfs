@@ -170,7 +170,7 @@ async def get_source(
     """
     source = await repository.get_data_source_by_id(source_id)
     if not source:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=_ERR_SOURCE_NOT_FOUND)
 
     return await _enrich_source_with_error_flag(source, repository)
 
@@ -232,7 +232,7 @@ async def list_source_logs(
     
     # Check if source exists
     if await repository.get_data_source_by_id(source_id) is None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=_ERR_SOURCE_NOT_FOUND)
 
     logs = await repository.list_data_source_logs(source_id, limit=limit)
     
@@ -384,7 +384,7 @@ async def run_source_import(
     # Check if source exists and is eligible for manual (time-based) execution
     source = await repository.get_data_source_by_id(source_id)
     if source is None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=_ERR_SOURCE_NOT_FOUND)
 
     if source.execution_type == DataSourceExecutionType.EVENT_BASED:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_ERR_SOURCE_EVENT_BASED)
@@ -442,7 +442,7 @@ async def toggle_source_active(
     """
     source = await repository.get_data_source_by_id(source_id)
     if source is None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=_ERR_SOURCE_NOT_FOUND)
 
     queue: ReportProgressQueue = ReportProgressQueue()
 
@@ -573,7 +573,7 @@ async def update_source(
     """
     source = await repository.get_data_source_by_id(source_id)
     if not source:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=_ERR_SOURCE_NOT_FOUND)
     
     # Update basic fields
     old_name = source.name
@@ -626,7 +626,7 @@ async def update_source(
     )
 
     if source is None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=_ERR_SOURCE_NOT_FOUND)
 
     if should_cleanup_on_deactivate and not source.is_active:
         await _wait_and_delete_source_realtime_objects(source, realtime_repository)
@@ -650,7 +650,7 @@ async def delete_source(
     """
     source = await repository.get_data_source_by_id(source_id)
     if not source:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_ERR_SOURCE_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=_ERR_SOURCE_NOT_FOUND)
     
     # Delete log files before deleting the data source
     # (DB entries will be cascade-deleted automatically)

@@ -228,7 +228,7 @@ async def get_alert(alert_id: UUID, repository: _Repo, gtfs_repository: _GtfsRep
     
     if not alert:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=_ERR_ALERT_NOT_FOUND,
         )
     
@@ -317,7 +317,7 @@ async def toggle_alert_active(
     
     if not alert:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=_ERR_ALERT_NOT_FOUND,
         )
     
@@ -341,7 +341,7 @@ async def update_alert(
     
     if not alert:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=_ERR_ALERT_NOT_FOUND,
         )
     
@@ -404,7 +404,7 @@ async def update_alert(
 
     if alert is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=_ERR_ALERT_NOT_FOUND,
         )
     
@@ -432,14 +432,14 @@ async def delete_alert(
     
     if not alert:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=_ERR_ALERT_NOT_FOUND,
         )
     
     # Check if alert is external (imported from data source)
     if alert.data_source_id is not None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=_ERR_CANNOT_DELETE_EXTERNAL,
         )
     

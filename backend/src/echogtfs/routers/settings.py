@@ -27,7 +27,7 @@ def _validate_minute_cron_expression(cron_expr: str) -> str:
 
     if len(normalized.split()) != 5:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=_ERR_CRON_MINUTE_ONLY,
         )
 
@@ -35,7 +35,7 @@ def _validate_minute_cron_expression(cron_expr: str) -> str:
         CronTrigger.from_crontab(normalized)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=_ERR_INVALID_CRON,
         ) from exc
 
