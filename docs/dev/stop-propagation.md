@@ -3,7 +3,7 @@
 ## Overview
 
 Trip updates can contain either a complete stop sequence or only a
-partial set of stop events. `DatasourceBase` handles these two cases
+partial set of stop events. `StopEventPropagationService`, orchestrated by `TripUpdateProcessingService`, handles these two cases
 differently.
 
 For a complete stop sequence, the incoming realtime stop events are
@@ -158,7 +158,7 @@ event["is_implied_schedule_relationship"] = True
 ```
 
 The relationship is considered implied because it is derived by
-`DatasourceBase`, not explicitly supplied by the transformer.
+`StopEventPropagationService`, not explicitly supplied by the transformer.
 
 ## Longest Common Subsequence Matching
 
@@ -316,7 +316,7 @@ The current missing-stop logic is ID-based. It builds a set of
 normalized realtime stop IDs and iterates over the nominal stop times.
 
 If a nominal normalized stop ID does not occur in the realtime set,
-`DatasourceBase` creates a synthetic event from the nominal GTFS stop
+`StopEventPropagationService` creates a synthetic event from the nominal GTFS stop
 time.
 
 The generated event contains the nominal stop ID, nominal sequence,
@@ -440,7 +440,7 @@ sequence and the resulting stop events are renumbered consecutively.
 
 ### No Existing Complete Sequence
 
-If no persisted complete sequence exists yet, `DatasourceBase` cannot
+If no persisted complete sequence exists yet, `TripUpdateProcessingService` cannot
 infer the true position of the partial events in the full trip.
 
 The incoming events are therefore kept as partial data and their
@@ -737,6 +737,8 @@ The relevant implementation is located in:
 ``` text
 backend/src/echogtfs/datasources/base.py
 ```
+
+All methods in the following table are implemented by `StopEventPropagationService`. The service is deliberately separate from `MatchingService`: `MatchingService` matches realtime trips to nominal trips, while stop-occurrence matching is an internal part of stop-event reconciliation and propagation.
 
 The main methods are:
 

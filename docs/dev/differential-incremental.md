@@ -14,7 +14,7 @@
 
 ## Trip Update Synchronization Flow
 
-`DatasourceBase._sync_trip_update_records` executes this order:
+`TripUpdateProcessingService.sync_records` executes this order:
 
 1. Read invalid-reference policy and `is_differential_updates` from the data source row.
 2. Initialize identifier mapping and load nominal GTFS entity IDs.
@@ -94,13 +94,13 @@ This keeps incremental prognosis consistent with each stop's own `scheduled_*` v
 2. Delete existing `StopEvent` rows for current `trip_id` (and previous `trip_id` if it changed).
 3. Insert all provided stop events with normalized defaults (`original_stop_id`, `is_implied_schedule_relationship`).
 
-The merge logic lives in `DatasourceBase`; the repository persists the already-resolved stop-event list atomically.
+The merge and delay-propagation logic lives in `StopEventPropagationService`, orchestrated by `TripUpdateProcessingService`; the repository persists the already-resolved stop-event list atomically.
 
 ## Differential Deletion Semantics
 
 Absence-based deletion of previously synced rows is disabled when a source is configured for differential updates.
 
-Applied in `DatasourceBase`:
+Applied during trip-update processing:
 
 - Trip updates: `trips_to_delete` is empty when `is_differential_updates` is true.
 - Vehicle positions: `vehicles_to_delete` is empty when `is_differential_updates` is true.

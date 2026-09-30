@@ -62,7 +62,7 @@ Password handling follows the same pattern as GTFS-RT credentials:
 - `_fetch_records_from_payload(payload, content_type)`
 - `sync_records_from_payload(payload, content_type, ...)`
 
-`DatasourceBase` provides shared sync orchestration and payload helpers. The scheduler injects `_execution_type` into adapter config before adapter construction.
+`DatasourceBase` provides the datasource-side payload and sync entry points. After fetching or receiving and transforming the payload, it delegates normalized realtime processing to `RealtimeProcessingDispatcherService`. The scheduler injects `_execution_type` into adapter config before adapter construction.
 
 Validation behavior:
 
