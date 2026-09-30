@@ -76,14 +76,14 @@ class _GtfsRepositoryStub:
 
 
 
+from echogtfs.services.caching import get_caching_service
+from echogtfs.services.enrichment.entity_enrichtment_service import EntityEnrichmentService
+from echogtfs.services.mapping.identifier_mapping_service import IdentifierMappingService
 
-class TestDatasourceBase(unittest.TestCase):
-    def setUp(self):
-        self.datasource = _TestDatasource({})
-
-    def test_make_unique_id_is_deterministic_for_non_uuid(self):
-        self.assertEqual(self.datasource._make_unique_id("alert-1", "src"), self.datasource._make_unique_id("alert-1", "src"))
-
-    def test_make_unique_id_keeps_uuid(self):
-        original = "f5d3f5ec-f6ca-4d16-9330-f6691a53b4c8"
-        self.assertEqual(str(self.datasource._make_unique_id(original, "src")), original)
+def make_processor(processor_type, config=None):
+    return processor_type(
+        config or {},
+        EntityEnrichmentService(),
+        IdentifierMappingService(),
+        get_caching_service(),
+    )
