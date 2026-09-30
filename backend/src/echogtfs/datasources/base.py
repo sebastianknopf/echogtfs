@@ -740,6 +740,11 @@ class DatasourceBase(DatasourceInterface):
 
         remaining_event_indexes_by_reduced: dict[str, list[int]] = {}
         for index, event in enumerate(corrected_events):
+            schedule_relationship = str(event.get("schedule_relationship") or "").upper()
+            is_implied_schedule_relationship = bool(event.get("is_implied_schedule_relationship", False))
+            if is_implied_schedule_relationship and schedule_relationship in {"ADDED", "SKIPPED"}:
+                continue
+
             reduced_stop_id = self._normalize_stop_id_for_matching(event.get("stop_id"))
             if not reduced_stop_id:
                 continue
