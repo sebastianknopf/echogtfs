@@ -522,6 +522,120 @@ class DatasourceBase(DatasourceInterface):
         except (AttributeError, TypeError, ValueError):
             return sys.maxsize
 
+    def _stop_event_nominal_departure_delta(
+        self,
+        event: dict[str, Any],
+        stop_time: Any,
+    ) -> float | None:
+        """Return the absolute planned-departure delta in seconds for one stop match."""
+        event_time = self._coerce_stop_time_for_sort(event.get("scheduled_departure_time"))
+        nominal_time = self._coerce_stop_time_for_sort(getattr(stop_time, "departure_time", None))
+        max_time = datetime.max.replace(tzinfo=timezone.utc)
+        if event_time == max_time or nominal_time == max_time:
+            return None
+
+        return abs((event_time - nominal_time).total_seconds())
+
+    def _match_realtime_stop_occurrences(
+        self,
+        stop_events: list[dict[str, Any]],
+        nominal_stop_times: list[Any],
+        *,
+        scheduled_time_tolerance_seconds: float = 120.0,
+    ) -> set[int]:
+        """Return realtime indexes belonging to the best ordered nominal-stop alignment.
+
+        Matching is a longest-common-subsequence alignment over normalized stop IDs,
+        so every nominal and realtime stop occurrence can be consumed at most once.
+        If several alignments contain the same number of stops, scheduled departure
+        times within ``scheduled_time_tolerance_seconds`` are used only as a
+        tie-breaker.
+        """
+        realtime_ids = [
+            self._normalize_stop_id_for_matching(event.get("stop_id"))
+            for event in stop_events
+        ]
+        nominal_ids = [
+            self._normalize_stop_id_for_matching(stop_time.stop_id)
+            for stop_time in nominal_stop_times
+        ]
+
+        realtime_count = len(stop_events)
+        nominal_count = len(nominal_stop_times)
+
+        # Score components, in priority order:
+        # 1. number of structurally matched stops (the LCS length),
+        # 2. number of matches whose scheduled departure is within tolerance,
+        # 3. smallest total departure-time delta among those time-supported matches.
+        dp: list[list[tuple[int, int, float]]] = [
+            [(0, 0, 0.0) for _ in range(nominal_count + 1)]
+            for _ in range(realtime_count + 1)
+        ]
+        trace: list[list[str | None]] = [
+            [None for _ in range(nominal_count + 1)]
+            for _ in range(realtime_count + 1)
+        ]
+
+        for realtime_index in range(1, realtime_count + 1):
+            trace[realtime_index][0] = "realtime"
+        for nominal_index in range(1, nominal_count + 1):
+            trace[0][nominal_index] = "nominal"
+
+        for realtime_index in range(1, realtime_count + 1):
+            for nominal_index in range(1, nominal_count + 1):
+                best_score = dp[realtime_index - 1][nominal_index]
+                best_action = "realtime"
+
+                nominal_skip_score = dp[realtime_index][nominal_index - 1]
+                if nominal_skip_score > best_score:
+                    best_score = nominal_skip_score
+                    best_action = "nominal"
+
+                realtime_stop_id = realtime_ids[realtime_index - 1]
+                nominal_stop_id = nominal_ids[nominal_index - 1]
+                if realtime_stop_id and realtime_stop_id == nominal_stop_id:
+                    previous_score = dp[realtime_index - 1][nominal_index - 1]
+                    delta = self._stop_event_nominal_departure_delta(
+                        stop_events[realtime_index - 1],
+                        nominal_stop_times[nominal_index - 1],
+                    )
+                    time_supported = (
+                        delta is not None
+                        and delta <= scheduled_time_tolerance_seconds
+                    )
+                    match_score = (
+                        previous_score[0] + 1,
+                        previous_score[1] + (1 if time_supported else 0),
+                        previous_score[2] - (delta if time_supported and delta is not None else 0.0),
+                    )
+
+                    # Prefer consuming a concrete occurrence when all score
+                    # components are equal. This keeps unique-stop sequences stable.
+                    if match_score >= best_score:
+                        best_score = match_score
+                        best_action = "match"
+
+                dp[realtime_index][nominal_index] = best_score
+                trace[realtime_index][nominal_index] = best_action
+
+        matched_realtime_indexes: set[int] = set()
+        realtime_index = realtime_count
+        nominal_index = nominal_count
+        while realtime_index > 0 or nominal_index > 0:
+            action = trace[realtime_index][nominal_index]
+            if action == "match":
+                matched_realtime_indexes.add(realtime_index - 1)
+                realtime_index -= 1
+                nominal_index -= 1
+            elif action == "realtime":
+                realtime_index -= 1
+            elif action == "nominal":
+                nominal_index -= 1
+            else:
+                break
+
+        return matched_realtime_indexes
+
     async def _run_cpu_bound(self, func: Any, *args: Any, **kwargs: Any) -> Any:
         """Run CPU-bound synchronous work in a worker thread.
 
@@ -563,9 +677,13 @@ class DatasourceBase(DatasourceInterface):
                 nominal_order.append(full_stop_id)
 
         if treat_unexpected_stop_as_added_stop:
-            for event in propagated_events:
+            matched_realtime_indexes = self._match_realtime_stop_occurrences(
+                propagated_events,
+                nominal_stop_times,
+            )
+            for index, event in enumerate(propagated_events):
                 stop_id = self._normalize_stop_id_for_matching(event.get("stop_id"))
-                if stop_id and stop_id not in nominal_stop_ids_for_matching:
+                if stop_id and index not in matched_realtime_indexes:
                     event["schedule_relationship"] = "ADDED"
                     event["is_implied_schedule_relationship"] = True
         else:
@@ -622,6 +740,11 @@ class DatasourceBase(DatasourceInterface):
 
         remaining_event_indexes_by_reduced: dict[str, list[int]] = {}
         for index, event in enumerate(corrected_events):
+            schedule_relationship = str(event.get("schedule_relationship") or "").upper()
+            is_implied_schedule_relationship = bool(event.get("is_implied_schedule_relationship", False))
+            if is_implied_schedule_relationship and schedule_relationship in {"ADDED", "SKIPPED"}:
+                continue
+
             reduced_stop_id = self._normalize_stop_id_for_matching(event.get("stop_id"))
             if not reduced_stop_id:
                 continue
