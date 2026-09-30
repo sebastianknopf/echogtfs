@@ -19,9 +19,6 @@ from echogtfs.services.realtime_processing.base import RealtimeProcessingService
 class TestRealtimeProcessingServiceBase(unittest.TestCase):
     def setUp(self):
         self.datasource = make_processor(RealtimeProcessingServiceBase)
-
-    def setUp(self):
-        self.datasource = _TestDatasource({})
     def test_make_unique_id_is_deterministic_for_non_uuid(self):
         value_a = self.datasource._make_unique_id("alert-1", "src")
         value_b = self.datasource._make_unique_id("alert-1", "src")

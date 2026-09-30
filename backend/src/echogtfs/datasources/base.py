@@ -1,6 +1,7 @@
 """Base datasource implementation for external data feeds."""
 
 from abc import abstractmethod
+import asyncio
 from collections.abc import Awaitable, Callable
 import logging
 import uuid
@@ -179,6 +180,10 @@ class DatasourceBase(DatasourceInterface):
                 f"[{self.get_adapter_type()}] Failed to log request: {exc}",
                 exc_info=True,
             )
+
+    async def _run_cpu_bound(self, func: Any, *args: Any, **kwargs: Any) -> Any:
+        """Run CPU-bound synchronous datasource work in a worker thread."""
+        return await asyncio.to_thread(func, *args, **kwargs)
 
     async def _parse_and_log_xml_payload(self, payload: bytes, content_type: str | None) -> ET.Element:
         """Decode, log, and parse an XML payload provided directly by the push API."""

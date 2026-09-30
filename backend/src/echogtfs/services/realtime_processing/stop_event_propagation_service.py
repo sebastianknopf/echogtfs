@@ -15,6 +15,14 @@ class StopEventPropagationService:
     """Matches and propagates stop events within an already identified trip."""
 
     @staticmethod
+    def _coerce_datetime(value: Any) -> datetime | None:
+        """Accept datetime input and return None for unsupported types."""
+        if isinstance(value, datetime):
+            return value
+
+        return None
+
+    @staticmethod
     def _coerce_stop_time_for_sort(value: Any) -> datetime:
         """Best-effort datetime conversion used only for stop-event merge ordering."""
         if isinstance(value, datetime):
