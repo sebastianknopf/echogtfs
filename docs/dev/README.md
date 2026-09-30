@@ -10,6 +10,7 @@ This directory contains technical documentation for the EchoGTFS system, intende
 - [push-api.md](push-api.md): Push endpoint authentication, execution flow, scheduler integration, and error/status mapping.
 - [differential-incremental.md](differential-incremental.md): End-to-end implementation of differential source sync and incremental trip-update merge/export semantics.
 - [matching.md](matching.md): Matching-service behavior for resolving external realtime trip IDs to nominal GTFS trips, including cache flow and fallback stages.
+- [stop-propagation.md](stop-propagation.md): Description of the stop propagation and stop event matching between delivered realtime stop events and nominal GTFS stop times.
 - [transformation.md](transformation.md): Transformer output contract and internal datasource record model for service alerts, trip updates, and vehicle positions.
 - [transformers/README.md](transformers/README.md): Index of implementation-oriented notes for the concrete transformers.
 - [localization.md](localization.md): Frontend i18n system, translation key conventions, language loading, and adding new languages.
