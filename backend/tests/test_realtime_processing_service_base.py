@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock
 
 from echogtfs.enum.gtfsrt import AssignmentType
 from echogtfs.enum.system import IncorrectStopIdHandling, InvalidReferencePolicy
-from _realtime_processing_test_support import _SystemRepositoryStub, _RealtimeRepositoryStub, _GtfsRepositoryStub, make_processor
-from echogtfs.services.realtime_processing.base import RealtimeProcessingServiceBase
+from _realtimeprocessing_test_support import _SystemRepositoryStub, _RealtimeRepositoryStub, _GtfsRepositoryStub, make_processor
+from echogtfs.services.realtimeprocessing.base import RealtimeProcessingServiceBase
 
 class TestRealtimeProcessingServiceBase(unittest.TestCase):
     def setUp(self):

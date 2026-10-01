@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock
 
 from echogtfs.enum.gtfsrt import AssignmentType
 from echogtfs.enum.system import IncorrectStopIdHandling, InvalidReferencePolicy
-from _realtime_processing_test_support import _SystemRepositoryStub, _RealtimeRepositoryStub, _GtfsRepositoryStub, make_processor
-from echogtfs.services.realtime_processing.vehicle_position_processing_service import VehiclePositionProcessingService
+from _realtimeprocessing_test_support import _SystemRepositoryStub, _RealtimeRepositoryStub, _GtfsRepositoryStub, make_processor
+from echogtfs.services.realtimeprocessing.vehicle_position_processing_service import VehiclePositionProcessingService
 
 class TestVehiclePositionProcessingService(unittest.IsolatedAsyncioTestCase):
     async def test_sync_vehicle_position_records_upserts_vehicle_positions(self):

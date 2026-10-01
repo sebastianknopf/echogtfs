@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock
 
 from echogtfs.enum.gtfsrt import AssignmentType
 from echogtfs.enum.system import IncorrectStopIdHandling, InvalidReferencePolicy
-from _realtime_processing_test_support import _SystemRepositoryStub, _RealtimeRepositoryStub, _GtfsRepositoryStub, make_processor
-from echogtfs.services.realtime_processing.stop_event_propagation_service import StopEventPropagationService
+from _realtimeprocessing_test_support import _SystemRepositoryStub, _RealtimeRepositoryStub, _GtfsRepositoryStub, make_processor
+from echogtfs.services.realtimeprocessing.stop_event_propagation_service import StopEventPropagationService
 
 class TestStopEventPropagationService(unittest.TestCase):
     def setUp(self):

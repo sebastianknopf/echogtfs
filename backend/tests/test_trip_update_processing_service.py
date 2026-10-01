@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock
 
 from echogtfs.enum.gtfsrt import AssignmentType
 from echogtfs.enum.system import IncorrectStopIdHandling, InvalidReferencePolicy
-from _realtime_processing_test_support import _SystemRepositoryStub, _RealtimeRepositoryStub, _GtfsRepositoryStub, make_processor
-from echogtfs.services.realtime_processing.trip_update_processing_service import TripUpdateProcessingService
+from _realtimeprocessing_test_support import _SystemRepositoryStub, _RealtimeRepositoryStub, _GtfsRepositoryStub, make_processor
+from echogtfs.services.realtimeprocessing.trip_update_processing_service import TripUpdateProcessingService
 
 class TestTripUpdateProcessingService(unittest.IsolatedAsyncioTestCase):
     async def test_sync_trip_update_records_upserts_trip_updates(self):

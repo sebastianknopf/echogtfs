@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock
 
 from echogtfs.enum.gtfsrt import AssignmentType
 from echogtfs.enum.system import IncorrectStopIdHandling, InvalidReferencePolicy
-from _realtime_processing_test_support import _SystemRepositoryStub, _RealtimeRepositoryStub, _GtfsRepositoryStub, make_processor
-from echogtfs.services.realtime_processing.service_alert_processing_service import ServiceAlertProcessingService
+from _realtimeprocessing_test_support import _SystemRepositoryStub, _RealtimeRepositoryStub, _GtfsRepositoryStub, make_processor
+from echogtfs.services.realtimeprocessing.service_alert_processing_service import ServiceAlertProcessingService
 
 class TestServiceAlertProcessingService(unittest.IsolatedAsyncioTestCase):
     async def test_sync_service_alert_records_applies_policy_and_upserts(self):

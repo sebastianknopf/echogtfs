@@ -16,7 +16,7 @@ from echogtfs.services.matching.intf_matching_service import MatchingServiceInte
 from echogtfs.services.caching import get_caching_service
 from echogtfs.services.database import get_system_repository
 from echogtfs.services.datalog import DatalogService
-from echogtfs.services.realtime_processing import RealtimeProcessingDispatcherService
+from echogtfs.services.realtimeprocessing import RealtimeProcessingDispatcherService
 from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
 from echogtfs.services.database.intf_realtime_repository import RealtimeRepositoryInterface
 from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface

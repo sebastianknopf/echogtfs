@@ -10,16 +10,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import _service_test_bootstrap  # noqa: F401
 
-from echogtfs.services.realtime_processing.realtime_processing_dispatcher_service import (
+from echogtfs.services.realtimeprocessing.realtimeprocessing_dispatcher_service import (
     RealtimeProcessingDispatcherService,
 )
-from _realtime_processing_test_support import (
+from _realtimeprocessing_test_support import (
     _GtfsRepositoryStub,
     _RealtimeRepositoryStub,
     _SystemRepositoryStub,
     make_processor,
 )
-from echogtfs.services.realtime_processing.service_alert_processing_service import (
+from echogtfs.services.realtimeprocessing.service_alert_processing_service import (
     ServiceAlertProcessingService,
 )
 
