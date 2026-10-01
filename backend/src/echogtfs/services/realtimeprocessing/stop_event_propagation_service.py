@@ -74,14 +74,14 @@ class StopEventPropagationService:
 
         return abs((event_time - nominal_time).total_seconds())
 
-    def _match_realtime_stop_occurrences(
+    def _align_stop_occurrences(
         self,
         stop_events: list[dict[str, Any]],
         nominal_stop_times: list[Any],
         *,
         scheduled_time_tolerance_seconds: float = 120.0,
-    ) -> set[int]:
-        """Return realtime indexes belonging to the best ordered nominal-stop alignment.
+    ) -> tuple[set[int], set[int]]:
+        """Return realtime and nominal indexes in the best ordered stop alignment.
 
         Matching is a longest-common-subsequence alignment over normalized stop IDs,
         so every nominal and realtime stop occurrence can be consumed at most once.
@@ -160,12 +160,14 @@ class StopEventPropagationService:
                 trace[realtime_index][nominal_index] = best_action
 
         matched_realtime_indexes: set[int] = set()
+        matched_nominal_indexes: set[int] = set()
         realtime_index = realtime_count
         nominal_index = nominal_count
         while realtime_index > 0 or nominal_index > 0:
             action = trace[realtime_index][nominal_index]
             if action == "match":
                 matched_realtime_indexes.add(realtime_index - 1)
+                matched_nominal_indexes.add(nominal_index - 1)
                 realtime_index -= 1
                 nominal_index -= 1
             elif action == "realtime":
@@ -175,6 +177,21 @@ class StopEventPropagationService:
             else:
                 break
 
+        return matched_realtime_indexes, matched_nominal_indexes
+
+    def _match_realtime_stop_occurrences(
+        self,
+        stop_events: list[dict[str, Any]],
+        nominal_stop_times: list[Any],
+        *,
+        scheduled_time_tolerance_seconds: float = 120.0,
+    ) -> set[int]:
+        """Return realtime indexes belonging to the best ordered nominal-stop alignment."""
+        matched_realtime_indexes, _ = self._align_stop_occurrences(
+            stop_events,
+            nominal_stop_times,
+            scheduled_time_tolerance_seconds=scheduled_time_tolerance_seconds,
+        )
         return matched_realtime_indexes
 
     def _propagate_trip_update_stop_events(
@@ -208,12 +225,13 @@ class StopEventPropagationService:
                 nominal_full_ids.add(full_stop_id)
                 nominal_order.append(full_stop_id)
 
+        matched_nominal_indexes: set[int] | None = None
         if treat_unexpected_stop_as_added_stop:
-            matched_realtime_indexes = self._match_realtime_stop_occurrences(
+            matched_realtime_indexes, matched_nominal_indexes = self._align_stop_occurrences(
                 propagated_events,
                 nominal_stop_times,
             )
-            
+
             for index, event in enumerate(propagated_events):
                 stop_id = self._normalize_stop_id_for_matching(event.get("stop_id"))
                 if stop_id and index not in matched_realtime_indexes:
@@ -227,15 +245,25 @@ class StopEventPropagationService:
                 in nominal_stop_ids_for_matching
             ]
 
-        realtime_stop_ids = {
-            self._normalize_stop_id_for_matching(event.get("stop_id"))
-            for event in propagated_events
-            if event.get("stop_id")
-        }
+        if matched_nominal_indexes is None:
+            # Preserve the legacy station-level semantics when unexpected-stop
+            # detection is disabled. Occurrence-aware missing-stop detection is
+            # intentionally coupled to the LCS alignment above; otherwise a
+            # single realtime station-level match could incorrectly synthesize
+            # additional platform-level nominal stops.
+            realtime_stop_ids = {
+                self._normalize_stop_id_for_matching(event.get("stop_id"))
+                for event in propagated_events
+                if event.get("stop_id")
+            }
+            matched_nominal_indexes = {
+                nominal_index
+                for nominal_index, stop_time in enumerate(nominal_stop_times)
+                if self._normalize_stop_id_for_matching(stop_time.stop_id) in realtime_stop_ids
+            }
 
-        for stop_time in nominal_stop_times:
-            nominal_stop_id = self._normalize_stop_id_for_matching(stop_time.stop_id)
-            if nominal_stop_id in realtime_stop_ids:
+        for nominal_index, stop_time in enumerate(nominal_stop_times):
+            if nominal_index in matched_nominal_indexes:
                 continue
 
             propagated_events.append(
@@ -250,8 +278,6 @@ class StopEventPropagationService:
                     "is_valid": True,
                 }
             )
-            
-            realtime_stop_ids.add(nominal_stop_id)
 
         if incorrect_stop_id_handling == IncorrectStopIdHandling.FIX_TO_NOMINAL_STOP_ID:
             propagated_events = self._apply_stop_level_stop_id_correction(
