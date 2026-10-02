@@ -283,16 +283,45 @@ valid occurrence unmatched when doing so provides no scoring advantage.
 
 ### LCS Result
 
-The traceback returns the indexes of realtime events that belong to the
-selected nominal alignment.
+The traceback returns both sides of the selected alignment:
 
-When `treat_unexpected_stop_as_added_stop` is enabled, every realtime
-event with a stop ID whose index is not part of that alignment is
-treated as an implicit `ADDED` stop.
+``` text
+matched_realtime_indexes
+matched_nominal_indexes
+```
 
-The LCS result is currently used for unexpected realtime occurrence
-detection. It does not replace the separate missing-stop logic described
-below.
+This makes the alignment symmetric. A realtime occurrence and a nominal
+occurrence are considered matched only when the LCS consumes that concrete
+occurrence pair.
+
+When `treat_unexpected_stop_as_added_stop` is enabled:
+
+-   every realtime event with a stop ID whose index is not part of
+    `matched_realtime_indexes` becomes an implied `ADDED` stop;
+-   every nominal stop-time occurrence whose index is not part of
+    `matched_nominal_indexes` is treated as a missing nominal occurrence and is
+    synthesized as `SKIPPED` or `NO_DATA`, depending on
+    `treat_missing_stop_as_canceled_stop`.
+
+Both decisions therefore come from the same occurrence-aware alignment. This
+is important for repeated stop IDs and ordering conflicts because the presence
+of the same stop ID elsewhere in the trip no longer hides an unmatched nominal
+occurrence.
+
+For example:
+
+``` text
+Nominal:   A -> B -> C -> D
+Realtime:  A -> C -> B -> D
+```
+
+If the selected LCS aligns `A -> C -> D`, the realtime `B` is outside the
+alignment and becomes `ADDED`. The nominal `B` is also outside the alignment
+and is synthesized as `SKIPPED` when missing-stop cancellation is enabled.
+
+This represents both sides of the deviation: the nominal occurrence was not
+served at its planned position, while a realtime occurrence of the same stop
+appeared elsewhere in the sequence.
 
 ## Behavior When Added Stop Detection Is Disabled
 
@@ -309,18 +338,20 @@ existing datasource flag and does not change the disabled behavior.
 
 ## Missing Nominal Stops
 
-After unexpected-stop handling, complete-sequence propagation checks
-whether nominal stop IDs are absent from the realtime events.
+Missing-stop propagation is occurrence-aware when
+`treat_unexpected_stop_as_added_stop` is enabled and the complete-sequence LCS
+path is used.
 
-The current missing-stop logic is ID-based. It builds a set of
-normalized realtime stop IDs and iterates over the nominal stop times.
+The service does not merely ask whether a normalized stop ID occurs somewhere
+in the realtime sequence. Instead, it uses the nominal side of the same LCS
+alignment that is used for `ADDED` detection.
 
-If a nominal normalized stop ID does not occur in the realtime set,
-`StopEventPropagationService` creates a synthetic event from the nominal GTFS stop
-time.
+Each nominal stop-time occurrence can be consumed at most once. A nominal
+occurrence whose index is absent from `matched_nominal_indexes` is synthesized
+from the nominal GTFS stop time.
 
-The generated event contains the nominal stop ID, nominal sequence,
-nominal arrival and departure times, and a valid reference marker.
+The generated event contains the nominal stop ID, nominal sequence, nominal
+arrival and departure times, and a valid reference marker.
 
 Its schedule relationship depends on
 `treat_missing_stop_as_canceled_stop`.
@@ -339,14 +370,59 @@ schedule_relationship = NO_DATA
 is_implied_schedule_relationship = false
 ```
 
-The `SKIPPED` relationship is therefore an implied cancellation derived
-from datasource configuration.
+The `SKIPPED` relationship is therefore an implied cancellation derived from
+datasource configuration.
 
-An important implementation detail is that missing-stop detection
-remains ID-based rather than occurrence-based. The LCS change affects
-unexpected realtime occurrences only. It does not currently cause a
-second nominal occurrence of an already-present stop ID to be
-synthesized when that particular occurrence is absent.
+### Repeated Nominal Occurrences
+
+Occurrence-aware missing-stop detection matters when a trip visits the same
+normalized stop more than once.
+
+``` text
+Nominal:   A -> B -> C -> B -> D
+Realtime:  A -> B -> C      -> D
+```
+
+A stop-ID set would report that `B` is present and would hide the missing
+second visit. The LCS alignment consumes only the realtime `B` occurrence that
+can be aligned with one nominal `B`. The other nominal `B` remains unmatched
+and is therefore synthesized as `SKIPPED` or `NO_DATA`.
+
+### Reordered Occurrences
+
+The same symmetric behavior applies to reordered stops:
+
+``` text
+Nominal:   A -> B -> C -> D
+Realtime:  A -> C -> B -> D
+```
+
+An occurrence that cannot participate in the selected ordered alignment can
+produce both sides of the deviation:
+
+``` text
+nominal unmatched occurrence  -> SKIPPED / NO_DATA
+realtime unmatched occurrence -> ADDED
+```
+
+This prevents a nominal stop-time occurrence from silently disappearing merely
+because the same normalized stop ID occurs elsewhere in the realtime trip.
+
+### Legacy Path Without Added-Stop Detection
+
+When `treat_unexpected_stop_as_added_stop` is disabled, LCS matching is not
+used and missing-stop detection intentionally retains the previous station-level
+semantics.
+
+The service builds the set of normalized realtime stop IDs and considers a
+nominal stop represented when its normalized stop ID occurs in that set. This
+preserves existing behavior for stop-level variants and prevents the
+occurrence-aware LCS change from altering datasources that have disabled
+`ADDED` detection.
+
+Consequently, the guarantee that every unmatched nominal occurrence is
+materialized applies to the complete-sequence LCS path, not to this legacy
+path.
 
 ## Stop ID Correction
 
@@ -619,16 +695,15 @@ relationships as follows.
                                                   added-stop handling is
                                                   enabled
 
-  `SKIPPED`               Complete-sequence       Nominal stop ID is
-                          propagation             missing and
-                                                  missing-stop
-                                                  cancellation handling
-                                                  is enabled
+  `SKIPPED`               Complete-sequence       Nominal occurrence is
+                          propagation             unmatched by the LCS and
+                                                  missing-stop cancellation
+                                                  handling is enabled
 
-  `NO_DATA`               Complete-sequence       Nominal stop ID is
-                          propagation             missing but
-                                                  cancellation handling
-                                                  is disabled
+  `NO_DATA`               Complete-sequence       Nominal occurrence is
+                          propagation             unmatched by the LCS but
+                                                  cancellation handling is
+                                                  disabled
 
   `SCHEDULED`             Incremental delay       Event receives a
                           propagation             propagated
@@ -690,7 +765,7 @@ occurrence and becomes `ADDED`.
 When added-stop handling is disabled, the existing nominal-ID filtering
 path removes `X`.
 
-### Missing Nominal Stop ID
+### Missing Nominal Stop Occurrence
 
 ``` text
 Nominal:
@@ -700,12 +775,32 @@ Realtime:
 A -> B -> D
 ```
 
-`C` is absent from the realtime stop-ID set.
+`C` is not part of the selected realtime/nominal alignment.
 
-With missing-stop cancellation enabled, a nominal event for `C` is
-inserted as `SKIPPED`.
+With missing-stop cancellation enabled, a nominal event for `C` is inserted as
+`SKIPPED`.
 
 Otherwise it is inserted as `NO_DATA`.
+
+The same rule applies when the missing occurrence uses a stop ID that is still
+present elsewhere in the trip.
+
+### Reordered Stop Producing Added And Skipped
+
+``` text
+Nominal:
+A -> B -> C -> D
+
+Realtime:
+A -> C -> B -> D
+```
+
+With added-stop handling enabled, the LCS selects the best ordered alignment.
+If the selected alignment is `A -> C -> D`, the realtime `B` becomes `ADDED`.
+The unmatched nominal `B` is synthesized as `SKIPPED` when missing-stop
+cancellation is enabled, or as `NO_DATA` otherwise.
+
+This keeps the realtime and nominal sides of the alignment consistent.
 
 ### Incremental Update
 
@@ -735,7 +830,7 @@ The persisted complete sequence is retained.
 The relevant implementation is located in:
 
 ``` text
-backend/src/echogtfs/datasources/base.py
+backend/src/echogtfs/services/realtimeprocessing/stop_event_propagation_service.py
 ```
 
 All methods in the following table are implemented by `StopEventPropagationService`. The service is deliberately separate from `MatchingService`: `MatchingService` matches realtime trips to nominal trips, while stop-occurrence matching is an internal part of stop-event reconciliation and propagation.
@@ -751,9 +846,12 @@ The main methods are:
   `_stop_event_nominal_departure_delta`    Calculate scheduled departure
                                            difference for an LCS candidate
 
-  `_match_realtime_stop_occurrences`       Perform occurrence-aware LCS
-                                           alignment with scheduled-time
-                                           tie-breaking
+  `_align_stop_occurrences`                Perform occurrence-aware LCS
+                                           alignment and return matched
+                                           indexes for both sides
+
+  `_match_realtime_stop_occurrences`       Compatibility helper returning the
+                                           matched realtime indexes
 
   `_propagate_trip_update_stop_events`     Coordinate complete stop-sequence
                                            propagation
@@ -797,8 +895,11 @@ In particular:
     an LCS alignment.
 -   Incremental event matching must continue to consume persisted
     candidates at most once.
--   Missing-stop propagation currently remains stop-ID based and should
-    not be assumed to have occurrence-level semantics.
+-   On the complete-sequence LCS path, missing-stop propagation must use
+    the nominal side of the same occurrence-aware alignment as `ADDED`
+    detection.
+-   When added-stop detection is disabled, the legacy station-level missing-stop
+    semantics must remain unchanged.
 -   Stop-ID correction should change identifiers without independently
     changing the number of events.
 -   Final `stop_sequence` values for a complete persisted sequence are
