@@ -6,6 +6,12 @@ Seen from GTFS-RT perspective, we have three _toplevel realtime entities_: `Serv
 
 This chapter describes the references between the internal realtime models and their implications regarding the validitiy flag.
 
+## Processing Architecture
+
+Realtime synchronization is separated from datasource-specific I/O. `DatasourceBase` forwards transformed payloads to `RealtimeProcessingDispatcherService`, which dispatches by top-level entity type to `ServiceAlertProcessingService`, `TripUpdateProcessingService`, or `VehiclePositionProcessingService`. Shared validation and processing helpers are provided by `RealtimeProcessingServiceBase`.
+
+`TripUpdateProcessingService` uses the existing `MatchingService` exclusively for realtime-trip to nominal-trip matching. Stop-event occurrence matching, complete-sequence reconciliation, incremental merging, and delay propagation are handled separately by `StopEventPropagationService`.
+
 ## ServiceAlerts
 
 The service alerts to not have implications or relations to other toplevel entities. Internally, the service alerts consist of:

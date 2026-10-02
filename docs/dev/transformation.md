@@ -2,7 +2,7 @@
 
 ## Transformer Contract
 
-Transformer output is consumed by DatasourceBase._fetch_records and normalized by DatasourceBase._normalize_fetched_payload.
+Transformer output is returned by `DatasourceBase._fetch_records`. `DatasourceBase` hands the payload to `RealtimeProcessingDispatcherService`, which normalizes the envelope and dispatches the records to the entity-specific processing service.
 
 A transformer must return this envelope shape:
 
@@ -17,7 +17,7 @@ A transformer must return this envelope shape:
 
 ## Sync Pipeline
 
-DatasourceBase expects dictionary records per record_type. These dictionaries are processed in this order:
+The realtime processing layer expects dictionary records per `record_type`. These dictionaries are processed in this order:
 
 Implementation notes for the concrete transformers are collected in [transformers/README.md](transformers/README.md). The most relevant notes are:
 
@@ -29,12 +29,13 @@ Implementation notes for the concrete transformers are collected in [transformer
 
 1. Fetch records from transformer.
 2. Normalize payload into (record_type, records).
-3. Initialize mapping/enrichment/matching dependencies.
-4. Apply identifier mapping where supported.
-5. For trip-related records, run matching only when derived trip_id is not in nominal GTFS trip IDs.
-6. Upsert into realtime tables.
+3. Dispatch to the matching entity-specific processing service.
+4. Apply identifier mapping and enrichment where supported.
+5. For trip-related records, run `MatchingService` only when the derived `trip_id` is not in nominal GTFS trip IDs.
+6. For Trip Updates, reconcile and propagate stop events through `StopEventPropagationService`.
+7. Upsert into realtime tables.
 
-Only fields listed below are consumed by DatasourceBase and/or RealtimeRepository for each record type.
+Only fields listed below are consumed by the realtime processing services and/or `RealtimeRepository` for each record type.
 
 The following structures describe the internal data model, which can be returned by a transformer to the data source implementation for further processing (mapping, matching, persistence).
 
@@ -82,7 +83,7 @@ Allowed data model:
 }
 ```
 
-DatasourceBase also writes these internal fields before persistence:
+The corresponding realtime processing service also writes these internal fields before persistence:
 
 - source: overwritten with the current data source name.
 - data_source_id: overwritten with the current data source id.
@@ -222,7 +223,7 @@ Processed stop_events[*] fields:
 - is_valid: optional, default True in persistence layer.
 - trip_id: optional input but explicitly removed and replaced with resolved trip_id before persistence.
 
-DatasourceBase mutates each stop event during processing:
+`TripUpdateProcessingService` and `StopEventPropagationService` mutate each stop event during processing:
 
 - `stop_id` is replaced with the mapped stop ID.
 - `original_stop_id` is set to the same value as `stop_id` during sync payload preparation.

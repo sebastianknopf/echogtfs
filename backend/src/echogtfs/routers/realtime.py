@@ -77,14 +77,14 @@ async def check_gtfs_rt_auth(request: Request) -> None:
         
         if provided_username != configured_username:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=_ERR_INVALID_CREDENTIALS,
                 headers={"WWW-Authenticate": "Basic"},
             )
         
         if not get_security_service().verify_password(password, hashed_password):
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=_ERR_INVALID_CREDENTIALS,
                 headers={"WWW-Authenticate": "Basic"},
             )
@@ -92,7 +92,7 @@ async def check_gtfs_rt_auth(request: Request) -> None:
         if isinstance(e, HTTPException):
             raise
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=_ERR_INVALID_CREDENTIALS,
             headers={"WWW-Authenticate": "Basic"},
         )

@@ -120,7 +120,9 @@ Most repositories hold a reference to open a separate database connection on dem
 
 ## External Data Sources
 
-External datasources live in `backend/src/echogtfs/datasources` and inherit from `DatasourceBase` (`base.py`). The `DatasourceBase` encapsulates all main logic for calling the mapping service, the enrichment service and the finally the matching if the entities could not be matched to a GTFS entity by ID.
+External datasources live in `backend/src/echogtfs/datasources` and inherit from `DatasourceBase` (`base.py`). `DatasourceBase` owns datasource-specific lifecycle concerns such as configuration validation, fetching or receiving payloads, request logging, parsing helpers, and starting realtime synchronization. It does not contain entity-specific realtime matching, validation, persistence, or stop-propagation logic.
+
+Normalized realtime records are handed to `RealtimeProcessingDispatcherService` in `backend/src/echogtfs/services/realtimeprocessing`. The dispatcher selects one of `ServiceAlertProcessingService`, `TripUpdateProcessingService`, or `VehiclePositionProcessingService` based on the record type and wraps processing in the realtime synchronization transaction. Shared processing helpers live in `RealtimeProcessingServiceBase`. Trip matching remains the responsibility of the existing `MatchingService`, while stop-event matching and propagation are encapsulated by `StopEventPropagationService` and used by `TripUpdateProcessingService`.
 
 The detailed runtime behavior for differential sources and incremental trip updates is documented in [differential-incremental.md](differential-incremental.md).
 
