@@ -16,7 +16,7 @@
 	 - Apply publication-window filter.
 	 - Parse to one internal service-alert dictionary.
 4. Keep exceptions isolated per situation (error logged, processing continues).
-5. Log transformed count and filter counters.
+5. Log transformed count and the total filtered count.
 6. Persist runtime in milliseconds.
 
 ## Filtering

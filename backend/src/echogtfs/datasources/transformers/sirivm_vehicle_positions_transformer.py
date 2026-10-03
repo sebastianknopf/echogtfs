@@ -37,14 +37,14 @@ class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
             return []
 
         positions: list[dict[str, Any]] = []
-        filtered_invalid = 0
+        filtered = 0
 
         try:
             for activity_index, activity in enumerate(activities, start=1):
                 try:
                     vehicle_position = self._parse_vehicle_activity(activity)
                     if vehicle_position is None:
-                        filtered_invalid += 1
+                        filtered += 1
                         continue
 
                     positions.append(vehicle_position)
@@ -62,9 +62,9 @@ class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
                     )
 
             logger.info(
-                "[SiriVmVehiclePositionsTransformer] Processed %s vehicle positions (filtered: %s invalid)",
+                "[SiriVmVehiclePositionsTransformer] Processed %s vehicle positions (filtered: %s)",
                 len(positions),
-                filtered_invalid,
+                filtered,
             )
 
             return positions

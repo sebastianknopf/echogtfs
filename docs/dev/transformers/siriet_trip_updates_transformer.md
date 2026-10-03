@@ -17,7 +17,7 @@
 4. Parse journey into an internal trip dictionary.
 5. Apply trip time-window filter.
 6. Append valid trip updates to output list.
-7. Log summary counters and store runtime in milliseconds.
+7. Log processed and total filtered counts, then store runtime in milliseconds.
 
 ## Filtering
 

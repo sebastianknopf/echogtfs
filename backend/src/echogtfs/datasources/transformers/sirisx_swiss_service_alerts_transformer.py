@@ -42,33 +42,34 @@ class SiriSxSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
             return []
 
         alerts = []
-        filtered_out_of_window = 0
-        filtered_by_participant = 0
-        filtered_closed = 0
+        filtered = 0
         current_timestamp = int(time.time())
 
         try:
             for situation_index, situation in enumerate(situations, start=1):
                 try:
                     if not self._matches_participant_filter(situation):
-                        filtered_by_participant += 1
+                        filtered += 1
                         continue
 
                     if not self._matches_line_filter(situation):
+                        filtered += 1
                         continue
 
                     progress = self._get_progress(situation)
                     if progress == "closed":
-                        filtered_closed += 1
+                        filtered += 1
                         continue
 
                     if not self._is_in_publication_window(situation, current_timestamp):
-                        filtered_out_of_window += 1
+                        filtered += 1
                         continue
 
                     alert = self._parse_situation(situation, source_name, progress)
                     if alert:
                         alerts.append(alert)
+                    else:
+                        filtered += 1
                 except Exception as exc:
                     logger.error(
                         f"[SiriSxSwissServiceAlertsTransformer] Error processing situation: {exc}",
@@ -76,11 +77,9 @@ class SiriSxSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                     )
 
             logger.info(
-                "[SiriSxSwissServiceAlertsTransformer] Processed %s alerts (filtered: %s participant, %s closed, %s window)",
+                "[SiriSxSwissServiceAlertsTransformer] Processed %s alerts (filtered: %s)",
                 len(alerts),
-                filtered_by_participant,
-                filtered_closed,
-                filtered_out_of_window,
+                filtered,
             )
 
             return alerts

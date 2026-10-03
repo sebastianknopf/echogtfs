@@ -16,7 +16,7 @@
 	 - Apply publication-window filter.
 	 - Parse situation into one internal alert dictionary.
 4. Keep parse failures isolated per situation (error is logged, loop continues).
-5. Log processing summary and store runtime in milliseconds.
+5. Log processed and total filtered counts, then store runtime in milliseconds.
 
 ## Filtering
 

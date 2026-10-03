@@ -19,7 +19,7 @@
 	- Apply time-window filtering.
 	- Build informed entities.
 	- Append the normalized alert record.
-5. Log filtered counts and transformed alert count.
+5. Log transformed alert count and the total filtered count.
 6. Always store runtime duration in milliseconds in `_runtime_duration_ms`.
 
 ## Filtering

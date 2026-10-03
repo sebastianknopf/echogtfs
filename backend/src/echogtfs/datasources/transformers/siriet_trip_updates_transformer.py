@@ -38,11 +38,7 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
             return []
 
         trips: list[dict[str, Any]] = []
-        filtered_unmonitored = 0
-        filtered_by_operator = 0
-        filtered_incomplete = 0
-        filtered_window = 0
-        filtered_invalid = 0
+        filtered = 0
 
         try:
             for journey_index, journey in enumerate(journeys, start=1):
@@ -53,18 +49,19 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
                     )
 
                     if not monitored:
-                        filtered_unmonitored += 1
+                        filtered += 1
                         continue
 
                     if not self._matches_operator_filter(journey):
-                        filtered_by_operator += 1
+                        filtered += 1
                         continue
 
                     if not self._matches_line_filter(journey):
+                        filtered += 1
                         continue
 
                     if not self._is_new_trip_valid(journey):
-                        filtered_incomplete += 1
+                        filtered += 1
                         logger.warning(
                             "[SiriEtTripUpdatesTransformer] Discarding NEW trip because IsCompleteStopSequence is not true."
                         )
@@ -73,11 +70,11 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
 
                     trip = self._parse_estimated_vehicle_journey(journey)
                     if trip is None:
-                        filtered_invalid += 1
+                        filtered += 1
                         continue
 
                     if not self._is_in_trip_window(trip):
-                        filtered_window += 1
+                        filtered += 1
                         continue
 
                     trips.append(trip)
@@ -93,13 +90,9 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
                     )
 
             logger.info(
-                "[SiriEtTripUpdatesTransformer] Processed %s trip updates (filtered: %s unmonitored, %s operator, %s incomplete, %s window, %s invalid)",
+                "[SiriEtTripUpdatesTransformer] Processed %s trip updates (filtered: %s)",
                 len(trips),
-                filtered_unmonitored,
-                filtered_by_operator,
-                filtered_incomplete,
-                filtered_window,
-                filtered_invalid,
+                filtered,
             )
 
             return trips

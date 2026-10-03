@@ -34,8 +34,7 @@ class GtfsRtServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         source_name = raw_data["source_name"]
 
         alerts = []
-        filtered_not_yet_valid = 0
-        filtered_expired = 0
+        filtered = 0
 
         try:
             for entity_index, entity in enumerate(feed.entity, start=1):
@@ -141,12 +140,12 @@ class GtfsRtServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                         earliest_start = min(start_times)
                         one_month = 30 * 24 * 60 * 60
                         if earliest_start > current_timestamp + one_month:
-                            filtered_not_yet_valid += 1
+                            filtered += 1
                             continue
 
                     end_times = [p["end_time"] for p in active_periods if p["end_time"] is not None]
                     if end_times and max(end_times) < current_timestamp:
-                        filtered_expired += 1
+                        filtered += 1
                         continue
 
                 informed_entities = []
@@ -181,6 +180,7 @@ class GtfsRtServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                     )
 
                 if not self._matches_line_filter(informed_entities):
+                    filtered += 1
                     continue
 
                 alerts.append(
@@ -196,16 +196,11 @@ class GtfsRtServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                     }
                 )
 
-            total_filtered = filtered_not_yet_valid + filtered_expired
-            if total_filtered > 0:
-                logger.info(
-                    "[GtfsRtTransformer] Filtered %s alerts: %s not yet valid, %s expired",
-                    total_filtered,
-                    filtered_not_yet_valid,
-                    filtered_expired,
-                )
-
-            logger.info("[GtfsRtTransformer] Transformed %s valid alerts", len(alerts))
+            logger.info(
+                "[GtfsRtTransformer] Processed %s alerts (filtered: %s)",
+                len(alerts),
+                filtered,
+            )
 
             return alerts
         finally:
