@@ -90,7 +90,7 @@ class SiriEtDatasource(DatasourceBase):
         },
         {
             "name": "filter",
-            "type": "text",
+            "type": "taglist",
             "label": "adapter.siriet.filter.label",
             "required": False,
             "placeholder": "adapter.siriet.filter.placeholder",

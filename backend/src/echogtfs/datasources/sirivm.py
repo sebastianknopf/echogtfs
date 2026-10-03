@@ -64,7 +64,7 @@ class SiriVmDatasource(DatasourceBase):
         },
         {
             "name": "filter",
-            "type": "text",
+            "type": "taglist",
             "label": "adapter.sirivm.filter.label",
             "required": False,
             "placeholder": "adapter.sirivm.filter.placeholder",

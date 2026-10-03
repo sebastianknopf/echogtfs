@@ -64,7 +64,7 @@ class SiriSxDatasource(DatasourceBase):
         },
         {
             "name": "filter",
-            "type": "text",
+            "type": "taglist",
             "label": "adapter.sirisx.filter.label",
             "required": False,
             "placeholder": "adapter.sirisx.filter.placeholder",

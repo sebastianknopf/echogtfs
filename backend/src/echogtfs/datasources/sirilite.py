@@ -83,7 +83,7 @@ class SiriLiteDatasource(DatasourceBase):
         },
         {
             "name": "filter",
-            "type": "text",
+            "type": "taglist",
             "label": "adapter.sirilite.filter.label",
             "required": False,
             "placeholder": "adapter.sirilite.filter.placeholder",
