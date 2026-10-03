@@ -329,6 +329,51 @@ class TestSiriVmVehiclePositionsTransformer(unittest.TestCase):
 
         self.assertFalse(transformer._matches_operator_filter(monitored_journey))
 
+    def test_line_filter_supports_wildcard(self) -> None:
+        transformer = SiriVmVehiclePositionsTransformer(filter_value="line/LINE-*")
+        monitored_call = """
+<siri:MonitoredCall>
+  <siri:StopPointRef>STOP_CURRENT</siri:StopPointRef>
+  <siri:VehicleAtStop>false</siri:VehicleAtStop>
+</siri:MonitoredCall>
+"""
+        payload = self._payload(
+            self._activity(
+                complete_sequence=False,
+                origin_ref="ORIGIN_REF",
+                destination_ref="DESTINATION_REF",
+                monitored_call=monitored_call,
+                line_ref="LINE-1",
+            )
+        )
+
+        result = transformer.transform({"root": ET.fromstring(payload)})
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["trip"]["route_id"], "LINE-1")
+
+    def test_line_filter_rejects_non_matching_wildcard(self) -> None:
+        transformer = SiriVmVehiclePositionsTransformer(filter_value="line/LINE-*")
+        monitored_call = """
+<siri:MonitoredCall>
+  <siri:StopPointRef>STOP_CURRENT</siri:StopPointRef>
+  <siri:VehicleAtStop>false</siri:VehicleAtStop>
+</siri:MonitoredCall>
+"""
+        payload = self._payload(
+            self._activity(
+                complete_sequence=False,
+                origin_ref="ORIGIN_REF",
+                destination_ref="DESTINATION_REF",
+                monitored_call=monitored_call,
+                line_ref="OTHER-1",
+            )
+        )
+
+        result = transformer.transform({"root": ET.fromstring(payload)})
+
+        self.assertEqual(result, [])
+
     @staticmethod
     def _iso(value: datetime) -> str:
         return value.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
@@ -351,6 +396,7 @@ class TestSiriVmVehiclePositionsTransformer(unittest.TestCase):
         previous_calls: str = "",
         onward_calls: str = "",
         operator_ref: str | None = None,
+        line_ref: str = "LINE_1",
     ) -> str:
         now = datetime.now(timezone.utc)
         valid_until = self._iso(now + timedelta(minutes=30))
@@ -364,7 +410,7 @@ class TestSiriVmVehiclePositionsTransformer(unittest.TestCase):
   <siri:RecordedAtTime>{recorded_at}</siri:RecordedAtTime>
   <siri:MonitoredVehicleJourney>
     <siri:Monitored>true</siri:Monitored>
-    <siri:LineRef>LINE_1</siri:LineRef>
+    <siri:LineRef>{line_ref}</siri:LineRef>
     {operator_ref_xml}
     <siri:FramedVehicleJourneyRef>
       <siri:DatedVehicleJourneyRef>TRIP_1</siri:DatedVehicleJourneyRef>

@@ -61,6 +61,9 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
                         filtered_by_operator += 1
                         continue
 
+                    if not self._matches_line_filter(journey):
+                        continue
+
                     if not self._is_new_trip_valid(journey):
                         filtered_incomplete += 1
                         logger.warning(
@@ -510,6 +513,17 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
             return False
 
         return any(self.identifier_matches(operator_ref, pattern) for pattern in allowed_patterns)
+
+    def _matches_line_filter(self, journey: ET.Element) -> bool:
+        allowed_patterns = self._filters["line"]
+        if not allowed_patterns:
+            return True
+
+        line_ref = self._get_text(journey.find("siri:LineRef", self._siri_ns))
+        if not line_ref:
+            return False
+
+        return any(self.identifier_matches(line_ref, pattern) for pattern in allowed_patterns)
 
     def _collect_all_calls(self, journey: ET.Element) -> list[ET.Element]:
         recorded_calls = journey.findall("siri:RecordedCalls/siri:RecordedCall", self._siri_ns)

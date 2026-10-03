@@ -98,6 +98,31 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
 
         self.assertFalse(transformer._matches_operator_filter(journey))
 
+    def test_line_filter_supports_wildcard(self) -> None:
+        transformer = SiriEtTripUpdatesTransformer(filter_value="line/LINE-*")
+        payload = self._build_payload(
+            extra_journey="false",
+            complete_sequence="false",
+            line_ref="LINE-1",
+        )
+
+        trips = transformer.transform({"root": payload})
+
+        self.assertEqual(len(trips), 1)
+        self.assertEqual(trips[0]["route_id"], "LINE-1")
+
+    def test_line_filter_rejects_non_matching_wildcard(self) -> None:
+        transformer = SiriEtTripUpdatesTransformer(filter_value="line/LINE-*")
+        payload = self._build_payload(
+            extra_journey="false",
+            complete_sequence="false",
+            line_ref="OTHER-1",
+        )
+
+        trips = transformer.transform({"root": payload})
+
+        self.assertEqual(trips, [])
+
     def test_recorded_call_uses_expected_times(self) -> None:
         expected_departure_time = datetime.now(timezone.utc) + timedelta(hours=1)
         payload = self._build_payload(
@@ -338,6 +363,7 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
         complete_sequence: str,
         cancellation: str | None = None,
         operator_ref: str = "OP1",
+        line_ref: str = "LINE1",
         recorded_call_times: tuple[str, str] | None = None,
         extra_call: str = "false",
     ) -> ET.Element:
@@ -351,7 +377,7 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
         <siri:OperatorRef>{operator_ref}</siri:OperatorRef>
     <siri:ExtraJourney>{extra_journey}</siri:ExtraJourney>
     <siri:IsCompleteStopSequence>{complete_sequence}</siri:IsCompleteStopSequence>
-    <siri:LineRef>LINE1</siri:LineRef>
+    <siri:LineRef>{line_ref}</siri:LineRef>
     <siri:FramedVehicleJourneyRef>
       <siri:DatedVehicleJourneyRef>TRIP1</siri:DatedVehicleJourneyRef>
       <siri:DataFrameRef>2026-08-08</siri:DataFrameRef>

@@ -110,6 +110,9 @@ class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
         if not self._matches_operator_filter(monitored_journey):
             return None
 
+        if not self._matches_line_filter(monitored_journey):
+            return None
+
         vehicle_status = self._get_text(
             monitored_journey.find("siri:VehicleStatus", self._siri_ns)
         )
@@ -333,6 +336,17 @@ class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
             return False
 
         return any(self.identifier_matches(operator_ref, pattern) for pattern in allowed_patterns)
+
+    def _matches_line_filter(self, monitored_journey: ET.Element) -> bool:
+        allowed_patterns = self._filters["line"]
+        if not allowed_patterns:
+            return True
+
+        line_ref = self._get_text(monitored_journey.find("siri:LineRef", self._siri_ns))
+        if not line_ref:
+            return False
+
+        return any(self.identifier_matches(line_ref, pattern) for pattern in allowed_patterns)
 
     @staticmethod
     def _get_text(element: ET.Element | None) -> str | None:
