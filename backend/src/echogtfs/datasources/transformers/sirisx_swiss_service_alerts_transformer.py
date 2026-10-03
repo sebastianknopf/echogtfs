@@ -55,6 +55,9 @@ class SiriSxSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                         filtered_by_participant += 1
                         continue
 
+                    if not self._matches_line_filter(situation):
+                        continue
+
                     progress = self._get_progress(situation)
                     if progress == "closed":
                         filtered_closed += 1
@@ -104,6 +107,25 @@ class SiriSxSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
             return False
 
         return any(self.identifier_matches(participant_ref, pattern) for pattern in allowed_patterns)
+
+    def _matches_line_filter(self, situation: ET.Element) -> bool:
+        allowed_patterns = self._filters["line"]
+        if not allowed_patterns:
+            return True
+
+        line_refs = [
+            line_ref.text.strip()
+            for line_ref in situation.findall(".//siri:LineRef", self._siri_ns)
+            if line_ref.text and line_ref.text.strip()
+        ]
+        if not line_refs:
+            return False
+
+        return any(
+            self.identifier_matches(line_ref, pattern)
+            for line_ref in line_refs
+            for pattern in allowed_patterns
+        )
 
     def _is_in_publication_window(self, situation: ET.Element, current_timestamp: int) -> bool:
         publication_windows = situation.findall("siri:PublicationWindow", self._siri_ns)

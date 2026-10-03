@@ -176,6 +176,63 @@ class TestSiriSxSwissServiceAlertsTransformer(unittest.TestCase):
 
         self.assertFalse(transformer._matches_participant_filter(situation))
 
+    def test_line_filter_matches_nested_line_reference(self):
+        transformer = SiriSxSwissServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filter_value="line/LINE-*",
+        )
+        situation = ET.fromstring(
+            """
+            <PtSituationElement xmlns="http://www.siri.org.uk/siri">
+              <Affects>
+                <AffectedNetwork>
+                  <AffectedLine>
+                    <LineRef>LINE-1</LineRef>
+                  </AffectedLine>
+                </AffectedNetwork>
+              </Affects>
+            </PtSituationElement>
+            """
+        )
+
+        self.assertTrue(transformer._matches_line_filter(situation))
+
+    def test_line_filter_rejects_non_matching_line_reference(self):
+        transformer = SiriSxSwissServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filter_value="line/LINE-*",
+        )
+        situation = ET.fromstring(
+            """
+            <PtSituationElement xmlns="http://www.siri.org.uk/siri">
+              <Affects>
+                <AffectedNetwork>
+                  <AffectedLine>
+                    <LineRef>OTHER-1</LineRef>
+                  </AffectedLine>
+                </AffectedNetwork>
+              </Affects>
+            </PtSituationElement>
+            """
+        )
+
+        self.assertFalse(transformer._matches_line_filter(situation))
+
+    def test_line_filter_rejects_situation_without_line_reference(self):
+        transformer = SiriSxSwissServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filter_value="line/LINE-*",
+        )
+        situation = ET.fromstring(
+            """
+            <PtSituationElement xmlns="http://www.siri.org.uk/siri">
+              <Affects />
+            </PtSituationElement>
+            """
+        )
+
+        self.assertFalse(transformer._matches_line_filter(situation))
+
     def test_transform_skips_closed_progress(self):
         xml_payload = """
         <Siri xmlns="http://www.siri.org.uk/siri">
