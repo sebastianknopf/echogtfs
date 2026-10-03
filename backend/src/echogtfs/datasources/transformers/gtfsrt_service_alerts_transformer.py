@@ -18,8 +18,12 @@ logger = logging.getLogger("uvicorn")
 class GtfsRtServiceAlertsTransformer(ServiceAlertsTransformerInterface):
     """Transforms parsed GTFS-RT feed entities into service-alert dictionaries."""
 
-    def __init__(self, make_unique_id: Callable[[str, str], Any]):
-        super().__init__({"filter": ""})
+    def __init__(
+        self,
+        make_unique_id: Callable[[str, str], Any],
+        filter_value: str | None = None,
+    ):
+        super().__init__({"filter": filter_value or ""})
         self._filters = self.get_filters()
         self._make_unique_id = make_unique_id
         self._runtime_duration_ms = 0.0
@@ -177,6 +181,9 @@ class GtfsRtServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                         }
                     )
 
+                if not self._matches_line_filter(informed_entities):
+                    continue
+
                 alerts.append(
                     {
                         "id": alert_id,
@@ -204,6 +211,25 @@ class GtfsRtServiceAlertsTransformer(ServiceAlertsTransformerInterface):
             return alerts
         finally:
             self._runtime_duration_ms = (perf_counter() - start_time) * 1000
+
+    def _matches_line_filter(self, informed_entities: list[dict[str, Any]]) -> bool:
+        allowed_patterns = self._filters["line"]
+        if not allowed_patterns:
+            return True
+
+        route_ids = [
+            entity["route_id"]
+            for entity in informed_entities
+            if entity.get("route_id")
+        ]
+        if not route_ids:
+            return False
+
+        return any(
+            self.identifier_matches(route_id, pattern)
+            for route_id in route_ids
+            for pattern in allowed_patterns
+        )
 
     def get_runtime_duration_ms(self) -> float:
         return float(self._runtime_duration_ms)
