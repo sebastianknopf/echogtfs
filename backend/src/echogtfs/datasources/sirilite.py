@@ -83,7 +83,7 @@ class SiriLiteDatasource(DatasourceBase):
         },
         {
             "name": "filter",
-            "type": "text",
+            "type": "taglist",
             "label": "adapter.sirilite.filter.label",
             "required": False,
             "placeholder": "adapter.sirilite.filter.placeholder",
@@ -159,7 +159,7 @@ class SiriLiteDatasource(DatasourceBase):
         request_headers: dict[str, str] | None,
     ) -> dict[str, Any]:
         source_name = self.config.get("_source_name", "sirilite")
-        filter_value = self.config.get("filter", "")
+        filters = self.get_filters()
         self.config["treat_unexpected_stop_as_added_stop"] = bool(
             self.config.get("treat_unexpected_stop_as_added_stop", False)
         )
@@ -175,25 +175,25 @@ class SiriLiteDatasource(DatasourceBase):
         if dialect == SiriLiteDialect.SIRISX:
             transformer = SiriSxServiceAlertsTransformer(
                 make_unique_id=self._make_unique_id,
-                filter_value=filter_value,
+                filters=filters,
             )
             record_type = "service_alerts"
 
         elif dialect == SiriLiteDialect.SIRISX_SWISS:
             transformer = SiriSxSwissServiceAlertsTransformer(
                 make_unique_id=self._make_unique_id,
-                filter_value=filter_value,
+                filters=filters,
             )
             record_type = "service_alerts"
 
         elif dialect == SiriLiteDialect.SIRIET:
             transformer = SiriEtTripUpdatesTransformer(
-                filter_value=filter_value,
+                filters=filters,
             )
             record_type = "trip_updates"
 
         elif dialect == SiriLiteDialect.SIRIVM:
-            transformer = SiriVmVehiclePositionsTransformer()
+            transformer = SiriVmVehiclePositionsTransformer(filters=filters)
             record_type = "vehicle_positions"
 
         else:

@@ -16,7 +16,13 @@
 	 - Apply publication-window filter.
 	 - Parse situation into one internal alert dictionary.
 4. Keep parse failures isolated per situation (error is logged, loop continues).
-5. Log processing summary and store runtime in milliseconds.
+5. Log processed and total filtered counts, then store runtime in milliseconds.
+
+## Filtering
+
+The datasource parses the configured filter, using commas or whitespace as separators, into the transformer's `line`, `operator`, and `legacy` pattern lists. Unprefixed values and `operator/` values filter `ParticipantRef`. `line/` values filter all nested `LineRef` elements found in the situation.
+
+`*` matches any number of characters, and matching covers the complete value. A situation with a configured line filter is kept only when at least one `LineRef` matches. Situations without any `LineRef`, or without a matching reference, are discarded.
 
 ## Situation-Level Filtering Rules
 

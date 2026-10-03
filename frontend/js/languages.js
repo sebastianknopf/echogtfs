@@ -132,7 +132,7 @@ window.translations = {
     'trips.empty.filter': 'Keine Fahrten entsprechen dem Filter.',
     'trips.error.load': 'Fehler beim Laden der Fahrten.',
     'trips.pagination.info': 'Seite {current} von {total} ({count} Fahrten)',
-    'trips.resolution.warning': 'Fahrt konnte keiner Soll-Fahrt zugeordnet werden',
+    'trips.resolution.warning': 'Fahrt weist Fehler auf',
     'trips.warnings.trip': 'Für diese Fahrt liegen Warnungen vor',
     'trips.stop_reference.warning': 'Halt konnte nicht gefunden werden',
     'trips.stop_event.implied.warning': 'Impliziter Zusatzhalt/Haltausfall',
@@ -621,6 +621,9 @@ window.translations = {
     'adapter.gtfsrt.dialect.label': 'Dialekt',
     'adapter.gtfsrt.dialect.help_text': 'GTFS-Realtime Implementierungsvariante',
     'adapter.gtfsrt.dialect.option.gtfsrt_servicealerts': 'GTFS-RT ServiceAlerts',
+    'adapter.gtfsrt.filter.label': 'Filter',
+    'adapter.gtfsrt.filter.placeholder': 'Optionaler Filter-Ausdruck',
+    'adapter.gtfsrt.filter.help_text': 'Filter zur Einschränkung der GTFS-RT ServiceAlerts',
     
     // SIRI-Lite Adapter
     'adapter.sirilite.endpoint.label': 'Endpoint URL',
@@ -856,7 +859,7 @@ window.translations = {
     'trips.empty.filter': 'No trips match the filter.',
     'trips.error.load': 'Error loading trips.',
     'trips.pagination.info': 'Page {current} of {total} ({count} trips)',
-    'trips.resolution.warning': 'Trip could not be matched to a nominal trip',
+    'trips.resolution.warning': 'Trip has errors',
     'trips.warnings.trip': "There're warnings for this trip",
     'trips.stop_reference.warning': 'Stop could not be found',
     'trips.stop_event.implied.warning': 'Implicit additional/canceled stop',
@@ -1345,6 +1348,9 @@ window.translations = {
     'adapter.gtfsrt.dialect.label': 'Dialect',
     'adapter.gtfsrt.dialect.help_text': 'GTFS-Realtime implementation variant',
     'adapter.gtfsrt.dialect.option.gtfsrt_servicealerts': 'GTFS-RT ServiceAlerts',
+    'adapter.gtfsrt.filter.label': 'Filter',
+    'adapter.gtfsrt.filter.placeholder': 'Optional filter expression',
+    'adapter.gtfsrt.filter.help_text': 'Filter to restrict GTFS-RT service alerts',
     
     // SIRI-Lite Adapter
     'adapter.sirilite.endpoint.label': 'Endpoint URL',

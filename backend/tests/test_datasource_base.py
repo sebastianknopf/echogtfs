@@ -87,3 +87,48 @@ class TestDatasourceBase(unittest.TestCase):
     def test_make_unique_id_keeps_uuid(self):
         original = "f5d3f5ec-f6ca-4d16-9330-f6691a53b4c8"
         self.assertEqual(str(self.datasource._make_unique_id(original, "src")), original)
+
+    def test_get_filters_returns_empty_filter_classes(self):
+        self.assertEqual(
+            self.datasource.get_filters(),
+            {"line": [], "operator": [], "legacy": []},
+        )
+
+    def test_get_filters_parses_comma_separated_values(self):
+        self.datasource.config["filter"] = "line/LINE-*,operator/OP-*,legacy-*"
+
+        self.assertEqual(
+            self.datasource.get_filters(),
+            {
+                "line": ["LINE-*"],
+                "operator": ["OP-*"],
+                "legacy": ["legacy-*"],
+            },
+        )
+
+    def test_get_filters_parses_whitespace_separated_values(self):
+        self.datasource.config["filter"] = "line/LINE-* operator/OP-* legacy-*"
+
+        self.assertEqual(
+            self.datasource.get_filters(),
+            {
+                "line": ["LINE-*"],
+                "operator": ["OP-*"],
+                "legacy": ["legacy-*"],
+            },
+        )
+
+    def test_get_filters_parses_mixed_separators_and_ignores_empty_values(self):
+        self.datasource.config["filter"] = (
+            " line/LINE-1,  operator/OP-1\tlegacy-1\n"
+            "line/LINE-2,,operator/OP-2 "
+        )
+
+        self.assertEqual(
+            self.datasource.get_filters(),
+            {
+                "line": ["LINE-1", "LINE-2"],
+                "operator": ["OP-1", "OP-2"],
+                "legacy": ["legacy-1"],
+            },
+        )

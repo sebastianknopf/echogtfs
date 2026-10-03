@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, timedelta, timezone
 from time import perf_counter
@@ -21,8 +20,8 @@ logger = logging.getLogger("uvicorn")
 class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
     """Transforms SIRI-ET XML payloads into trip-update dictionaries."""
 
-    def __init__(self, filter_value: str | None = None):
-        self._filter_value = (filter_value or "").strip()
+    def __init__(self, filters: dict[str, list[str]]):
+        super().__init__(filters)
         self._siri_ns = {"siri": "http://www.siri.org.uk/siri"}
         self._target_timezone = self._resolve_timezone(self._configured_timezone_name())
         self._runtime_duration_ms = 0.0
@@ -39,11 +38,7 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
             return []
 
         trips: list[dict[str, Any]] = []
-        filtered_unmonitored = 0
-        filtered_by_operator = 0
-        filtered_incomplete = 0
-        filtered_window = 0
-        filtered_invalid = 0
+        filtered = 0
 
         try:
             for journey_index, journey in enumerate(journeys, start=1):
@@ -54,15 +49,19 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
                     )
 
                     if not monitored:
-                        filtered_unmonitored += 1
+                        filtered += 1
                         continue
 
                     if not self._matches_operator_filter(journey):
-                        filtered_by_operator += 1
+                        filtered += 1
+                        continue
+
+                    if not self._matches_line_filter(journey):
+                        filtered += 1
                         continue
 
                     if not self._is_new_trip_valid(journey):
-                        filtered_incomplete += 1
+                        filtered += 1
                         logger.warning(
                             "[SiriEtTripUpdatesTransformer] Discarding NEW trip because IsCompleteStopSequence is not true."
                         )
@@ -71,11 +70,11 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
 
                     trip = self._parse_estimated_vehicle_journey(journey)
                     if trip is None:
-                        filtered_invalid += 1
+                        filtered += 1
                         continue
 
                     if not self._is_in_trip_window(trip):
-                        filtered_window += 1
+                        filtered += 1
                         continue
 
                     trips.append(trip)
@@ -91,13 +90,9 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
                     )
 
             logger.info(
-                "[SiriEtTripUpdatesTransformer] Processed %s trip updates (filtered: %s unmonitored, %s operator, %s incomplete, %s window, %s invalid)",
+                "[SiriEtTripUpdatesTransformer] Processed %s trip updates (filtered: %s)",
                 len(trips),
-                filtered_unmonitored,
-                filtered_by_operator,
-                filtered_incomplete,
-                filtered_window,
-                filtered_invalid,
+                filtered,
             )
 
             return trips
@@ -501,25 +496,26 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
         return value.astimezone(timezone.utc)
 
     def _matches_operator_filter(self, journey: ET.Element) -> bool:
-        if not self._filter_value:
+        allowed_patterns = self._filters["legacy"] + self._filters["operator"]
+        if not allowed_patterns:
             return True
-
-        allowed_patterns = [
-            operator.strip()
-            for operator in self._filter_value.split(",")
-            if operator.strip()
-        ]
 
         operator_ref = self._get_text(journey.find("siri:OperatorRef", self._siri_ns))
         if not operator_ref:
             return False
 
-        return any(self._wildcard_matches(pattern, operator_ref) for pattern in allowed_patterns)
+        return any(self.identifier_matches(operator_ref, pattern) for pattern in allowed_patterns)
 
-    @staticmethod
-    def _wildcard_matches(pattern: str, value: str) -> bool:
-        regex = re.escape(pattern).replace(r"\*", ".*")
-        return bool(re.fullmatch(regex, value))
+    def _matches_line_filter(self, journey: ET.Element) -> bool:
+        allowed_patterns = self._filters["line"]
+        if not allowed_patterns:
+            return True
+
+        line_ref = self._get_text(journey.find("siri:LineRef", self._siri_ns))
+        if not line_ref:
+            return False
+
+        return any(self.identifier_matches(line_ref, pattern) for pattern in allowed_patterns)
 
     def _collect_all_calls(self, journey: ET.Element) -> list[ET.Element]:
         recorded_calls = journey.findall("siri:RecordedCalls/siri:RecordedCall", self._siri_ns)

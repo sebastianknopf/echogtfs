@@ -47,7 +47,8 @@ class TestGtfsRtServiceAlertsTransformer(unittest.TestCase):
         feed.entity.append(expired_entity)
 
         transformer = GtfsRtServiceAlertsTransformer(
-            make_unique_id=lambda original, source: f"{source}-{original}"
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filters={"line": [], "operator": [], "legacy": []},
         )
         records = transformer.transform({"feed": feed, "source_name": "src"})
 
@@ -64,8 +65,58 @@ class TestGtfsRtServiceAlertsTransformer(unittest.TestCase):
         feed.entity.append(entity_without_alert)
 
         transformer = GtfsRtServiceAlertsTransformer(
-            make_unique_id=lambda original, source: f"{source}-{original}"
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filters={"line": [], "operator": [], "legacy": []},
         )
 
         records = transformer.transform({"feed": feed, "source_name": "src"})
         self.assertEqual(records, [])
+
+    def test_line_filter_keeps_alert_with_matching_informed_entity(self):
+        feed = self._feed_with_route_ids("R1", "R2")
+        transformer = GtfsRtServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filters={"line": ["R*"], "operator": [], "legacy": []},
+        )
+
+        records = transformer.transform({"feed": feed, "source_name": "src"})
+
+        self.assertEqual(len(records), 1)
+        self.assertEqual(
+            [entity["route_id"] for entity in records[0]["informed_entities"]],
+            ["R1", "R2"],
+        )
+
+    def test_line_filter_discards_alert_without_matching_informed_entity(self):
+        feed = self._feed_with_route_ids("R1", "R2")
+        transformer = GtfsRtServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filters={"line": ["X*"], "operator": [], "legacy": []},
+        )
+
+        records = transformer.transform({"feed": feed, "source_name": "src"})
+
+        self.assertEqual(records, [])
+
+    def test_line_filter_discards_alert_without_informed_entity_line(self):
+        feed = self._feed_with_route_ids()
+        transformer = GtfsRtServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filters={"line": ["R*"], "operator": [], "legacy": []},
+        )
+
+        records = transformer.transform({"feed": feed, "source_name": "src"})
+
+        self.assertEqual(records, [])
+
+    @staticmethod
+    def _feed_with_route_ids(*route_ids: str) -> gtfs_realtime_pb2.FeedMessage:
+        feed = gtfs_realtime_pb2.FeedMessage()
+        entity = gtfs_realtime_pb2.FeedEntity()
+        entity.id = "1"
+        alert = entity.alert
+        for route_id in route_ids:
+            informed_entity = alert.informed_entity.add()
+            informed_entity.route_id = route_id
+        feed.entity.append(entity)
+        return feed

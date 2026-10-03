@@ -17,7 +17,13 @@
 4. Parse journey into an internal trip dictionary.
 5. Apply trip time-window filter.
 6. Append valid trip updates to output list.
-7. Log summary counters and store runtime in milliseconds.
+7. Log processed and total filtered counts, then store runtime in milliseconds.
+
+## Filtering
+
+The datasource parses the configured filter, using commas or whitespace as separators, into the transformer's `line`, `operator`, and `legacy` pattern lists. Unprefixed values and `operator/` values filter `OperatorRef`. `line/` values filter `LineRef`.
+
+`*` matches any number of characters, and matching covers the complete value. A configured operator or line filter rejects a journey when the corresponding reference is missing or does not match any configured pattern.
 
 ## Journey-Level Filtering Rules
 

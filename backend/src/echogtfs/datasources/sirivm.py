@@ -64,7 +64,7 @@ class SiriVmDatasource(DatasourceBase):
         },
         {
             "name": "filter",
-            "type": "text",
+            "type": "taglist",
             "label": "adapter.sirivm.filter.label",
             "required": False,
             "placeholder": "adapter.sirivm.filter.placeholder",
@@ -191,7 +191,7 @@ class SiriVmDatasource(DatasourceBase):
         dialect = SiriVmDialect(self.config["dialect"])
         if dialect == SiriVmDialect.SIRIVM:
             transformer = SiriVmVehiclePositionsTransformer(
-                filter_value=self.config.get("filter"),
+                filters=self.get_filters(),
             )
         else:
             raise ValueError(f"Unknown SIRI-VM dialect: {dialect}")

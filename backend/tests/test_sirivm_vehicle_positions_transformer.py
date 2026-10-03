@@ -47,7 +47,9 @@ class TestSiriVmVehiclePositionsTransformer(unittest.TestCase):
         super().tearDownClass()
 
     def setUp(self) -> None:
-        self.transformer = SiriVmVehiclePositionsTransformer()
+        self.transformer = SiriVmVehiclePositionsTransformer(
+            filters={"operator": [], "line": [], "legacy": []}
+        )
 
     def test_complete_sequence_extracts_start_and_end_from_call_bounds(self) -> None:
         now = datetime.now(timezone.utc)
@@ -262,7 +264,7 @@ class TestSiriVmVehiclePositionsTransformer(unittest.TestCase):
         )
 
     def test_operator_filter_supports_wildcard(self) -> None:
-        transformer = SiriVmVehiclePositionsTransformer(filter_value="OP-*")
+        transformer = SiriVmVehiclePositionsTransformer(filters={"operator": ["OP-*"], "line": [], "legacy": []})
         monitored_call = """
 <siri:MonitoredCall>
   <siri:StopPointRef>STOP_CURRENT</siri:StopPointRef>
@@ -284,7 +286,7 @@ class TestSiriVmVehiclePositionsTransformer(unittest.TestCase):
         self.assertEqual(len(result), 1)
 
     def test_operator_filter_rejects_non_matching_wildcard(self) -> None:
-        transformer = SiriVmVehiclePositionsTransformer(filter_value="OP-*")
+        transformer = SiriVmVehiclePositionsTransformer(filters={"operator": ["OP-*"], "line": [], "legacy": []})
         monitored_call = """
 <siri:MonitoredCall>
   <siri:StopPointRef>STOP_CURRENT</siri:StopPointRef>
@@ -298,6 +300,75 @@ class TestSiriVmVehiclePositionsTransformer(unittest.TestCase):
                 destination_ref="DESTINATION_REF",
                 monitored_call=monitored_call,
                 operator_ref="AGENCY-1",
+            )
+        )
+
+        result = transformer.transform({"root": ET.fromstring(payload)})
+
+        self.assertEqual(result, [])
+
+    def test_legacy_operator_filter_supports_wildcard(self) -> None:
+        transformer = SiriVmVehiclePositionsTransformer(filters={"operator": [], "line": [], "legacy": ["OP-*"]})
+        monitored_journey = ET.fromstring(
+            """
+            <MonitoredVehicleJourney xmlns="http://www.siri.org.uk/siri">
+              <OperatorRef>OP-123</OperatorRef>
+            </MonitoredVehicleJourney>
+            """
+        )
+
+        self.assertTrue(transformer._matches_operator_filter(monitored_journey))
+
+    def test_legacy_operator_filter_rejects_non_matching_wildcard(self) -> None:
+        transformer = SiriVmVehiclePositionsTransformer(filters={"operator": [], "line": [], "legacy": ["OP-*"]})
+        monitored_journey = ET.fromstring(
+            """
+            <MonitoredVehicleJourney xmlns="http://www.siri.org.uk/siri">
+              <OperatorRef>AGENCY-1</OperatorRef>
+            </MonitoredVehicleJourney>
+            """
+        )
+
+        self.assertFalse(transformer._matches_operator_filter(monitored_journey))
+
+    def test_line_filter_supports_wildcard(self) -> None:
+        transformer = SiriVmVehiclePositionsTransformer(filters={"operator": [], "line": ["LINE-*"], "legacy": []})
+        monitored_call = """
+<siri:MonitoredCall>
+  <siri:StopPointRef>STOP_CURRENT</siri:StopPointRef>
+  <siri:VehicleAtStop>false</siri:VehicleAtStop>
+</siri:MonitoredCall>
+"""
+        payload = self._payload(
+            self._activity(
+                complete_sequence=False,
+                origin_ref="ORIGIN_REF",
+                destination_ref="DESTINATION_REF",
+                monitored_call=monitored_call,
+                line_ref="LINE-1",
+            )
+        )
+
+        result = transformer.transform({"root": ET.fromstring(payload)})
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["trip"]["route_id"], "LINE-1")
+
+    def test_line_filter_rejects_non_matching_wildcard(self) -> None:
+        transformer = SiriVmVehiclePositionsTransformer(filters={"operator": [], "line": ["LINE-*"], "legacy": []})
+        monitored_call = """
+<siri:MonitoredCall>
+  <siri:StopPointRef>STOP_CURRENT</siri:StopPointRef>
+  <siri:VehicleAtStop>false</siri:VehicleAtStop>
+</siri:MonitoredCall>
+"""
+        payload = self._payload(
+            self._activity(
+                complete_sequence=False,
+                origin_ref="ORIGIN_REF",
+                destination_ref="DESTINATION_REF",
+                monitored_call=monitored_call,
+                line_ref="OTHER-1",
             )
         )
 
@@ -327,6 +398,7 @@ class TestSiriVmVehiclePositionsTransformer(unittest.TestCase):
         previous_calls: str = "",
         onward_calls: str = "",
         operator_ref: str | None = None,
+        line_ref: str = "LINE_1",
     ) -> str:
         now = datetime.now(timezone.utc)
         valid_until = self._iso(now + timedelta(minutes=30))
@@ -340,7 +412,7 @@ class TestSiriVmVehiclePositionsTransformer(unittest.TestCase):
   <siri:RecordedAtTime>{recorded_at}</siri:RecordedAtTime>
   <siri:MonitoredVehicleJourney>
     <siri:Monitored>true</siri:Monitored>
-    <siri:LineRef>LINE_1</siri:LineRef>
+    <siri:LineRef>{line_ref}</siri:LineRef>
     {operator_ref_xml}
     <siri:FramedVehicleJourneyRef>
       <siri:DatedVehicleJourneyRef>TRIP_1</siri:DatedVehicleJourneyRef>

@@ -14,7 +14,9 @@ from echogtfs.datasources.transformers.siriet_trip_updates_transformer import (
 
 class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
     def setUp(self) -> None:
-        self.transformer = SiriEtTripUpdatesTransformer()
+        self.transformer = SiriEtTripUpdatesTransformer(
+            filters={"operator": [], "line": [], "legacy": []}
+        )
 
     def test_scheduled_trip_can_be_kept_when_stop_sequence_is_incomplete(self) -> None:
         payload = self._build_payload(extra_journey="false", complete_sequence="false")
@@ -51,7 +53,7 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
         self.assertEqual(trips[0]["schedule_relationship"], "CANCELED")
 
     def test_operator_filter_supports_wildcard(self) -> None:
-        transformer = SiriEtTripUpdatesTransformer(filter_value="OP-*")
+        transformer = SiriEtTripUpdatesTransformer(filters={"operator": ["OP-*"], "line": [], "legacy": []})
         payload = self._build_payload(
             extra_journey="false",
             complete_sequence="false",
@@ -63,11 +65,60 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
         self.assertEqual(len(trips), 1)
 
     def test_operator_filter_rejects_non_matching_wildcard(self) -> None:
-        transformer = SiriEtTripUpdatesTransformer(filter_value="OP-*")
+        transformer = SiriEtTripUpdatesTransformer(filters={"operator": ["OP-*"], "line": [], "legacy": []})
         payload = self._build_payload(
             extra_journey="false",
             complete_sequence="false",
             operator_ref="AGENCY-1",
+        )
+
+        trips = transformer.transform({"root": payload})
+
+        self.assertEqual(trips, [])
+
+    def test_legacy_operator_filter_supports_wildcard(self) -> None:
+        transformer = SiriEtTripUpdatesTransformer(filters={"operator": [], "line": [], "legacy": ["OP-*"]})
+        journey = ET.fromstring(
+            """
+            <EstimatedVehicleJourney xmlns="http://www.siri.org.uk/siri">
+              <OperatorRef>OP-ABC</OperatorRef>
+            </EstimatedVehicleJourney>
+            """
+        )
+
+        self.assertTrue(transformer._matches_operator_filter(journey))
+
+    def test_legacy_operator_filter_rejects_non_matching_wildcard(self) -> None:
+        transformer = SiriEtTripUpdatesTransformer(filters={"operator": [], "line": [], "legacy": ["OP-*"]})
+        journey = ET.fromstring(
+            """
+            <EstimatedVehicleJourney xmlns="http://www.siri.org.uk/siri">
+              <OperatorRef>AGENCY-1</OperatorRef>
+            </EstimatedVehicleJourney>
+            """
+        )
+
+        self.assertFalse(transformer._matches_operator_filter(journey))
+
+    def test_line_filter_supports_wildcard(self) -> None:
+        transformer = SiriEtTripUpdatesTransformer(filters={"operator": [], "line": ["LINE-*"], "legacy": []})
+        payload = self._build_payload(
+            extra_journey="false",
+            complete_sequence="false",
+            line_ref="LINE-1",
+        )
+
+        trips = transformer.transform({"root": payload})
+
+        self.assertEqual(len(trips), 1)
+        self.assertEqual(trips[0]["route_id"], "LINE-1")
+
+    def test_line_filter_rejects_non_matching_wildcard(self) -> None:
+        transformer = SiriEtTripUpdatesTransformer(filters={"operator": [], "line": ["LINE-*"], "legacy": []})
+        payload = self._build_payload(
+            extra_journey="false",
+            complete_sequence="false",
+            line_ref="OTHER-1",
         )
 
         trips = transformer.transform({"root": payload})
@@ -314,6 +365,7 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
         complete_sequence: str,
         cancellation: str | None = None,
         operator_ref: str = "OP1",
+        line_ref: str = "LINE1",
         recorded_call_times: tuple[str, str] | None = None,
         extra_call: str = "false",
     ) -> ET.Element:
@@ -327,7 +379,7 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
         <siri:OperatorRef>{operator_ref}</siri:OperatorRef>
     <siri:ExtraJourney>{extra_journey}</siri:ExtraJourney>
     <siri:IsCompleteStopSequence>{complete_sequence}</siri:IsCompleteStopSequence>
-    <siri:LineRef>LINE1</siri:LineRef>
+    <siri:LineRef>{line_ref}</siri:LineRef>
     <siri:FramedVehicleJourneyRef>
       <siri:DatedVehicleJourneyRef>TRIP1</siri:DatedVehicleJourneyRef>
       <siri:DataFrameRef>2026-08-08</siri:DataFrameRef>

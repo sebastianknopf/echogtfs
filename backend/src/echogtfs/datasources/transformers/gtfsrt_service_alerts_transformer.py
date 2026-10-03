@@ -18,7 +18,12 @@ logger = logging.getLogger("uvicorn")
 class GtfsRtServiceAlertsTransformer(ServiceAlertsTransformerInterface):
     """Transforms parsed GTFS-RT feed entities into service-alert dictionaries."""
 
-    def __init__(self, make_unique_id: Callable[[str, str], Any]):
+    def __init__(
+        self,
+        make_unique_id: Callable[[str, str], Any],
+        filters: dict[str, list[str]],
+    ):
+        super().__init__(filters)
         self._make_unique_id = make_unique_id
         self._runtime_duration_ms = 0.0
 
@@ -29,8 +34,7 @@ class GtfsRtServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         source_name = raw_data["source_name"]
 
         alerts = []
-        filtered_not_yet_valid = 0
-        filtered_expired = 0
+        filtered = 0
 
         try:
             for entity_index, entity in enumerate(feed.entity, start=1):
@@ -136,12 +140,12 @@ class GtfsRtServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                         earliest_start = min(start_times)
                         one_month = 30 * 24 * 60 * 60
                         if earliest_start > current_timestamp + one_month:
-                            filtered_not_yet_valid += 1
+                            filtered += 1
                             continue
 
                     end_times = [p["end_time"] for p in active_periods if p["end_time"] is not None]
                     if end_times and max(end_times) < current_timestamp:
-                        filtered_expired += 1
+                        filtered += 1
                         continue
 
                 informed_entities = []
@@ -175,6 +179,10 @@ class GtfsRtServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                         }
                     )
 
+                if not self._matches_line_filter(informed_entities):
+                    filtered += 1
+                    continue
+
                 alerts.append(
                     {
                         "id": alert_id,
@@ -188,20 +196,34 @@ class GtfsRtServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                     }
                 )
 
-            total_filtered = filtered_not_yet_valid + filtered_expired
-            if total_filtered > 0:
-                logger.info(
-                    "[GtfsRtTransformer] Filtered %s alerts: %s not yet valid, %s expired",
-                    total_filtered,
-                    filtered_not_yet_valid,
-                    filtered_expired,
-                )
-
-            logger.info("[GtfsRtTransformer] Transformed %s valid alerts", len(alerts))
+            logger.info(
+                "[GtfsRtTransformer] Processed %s alerts (filtered: %s)",
+                len(alerts),
+                filtered,
+            )
 
             return alerts
         finally:
             self._runtime_duration_ms = (perf_counter() - start_time) * 1000
+
+    def _matches_line_filter(self, informed_entities: list[dict[str, Any]]) -> bool:
+        allowed_patterns = self._filters["line"]
+        if not allowed_patterns:
+            return True
+
+        route_ids = [
+            entity["route_id"]
+            for entity in informed_entities
+            if entity.get("route_id")
+        ]
+        if not route_ids:
+            return False
+
+        return any(
+            self.identifier_matches(route_id, pattern)
+            for route_id in route_ids
+            for pattern in allowed_patterns
+        )
 
     def get_runtime_duration_ms(self) -> float:
         return float(self._runtime_duration_ms)

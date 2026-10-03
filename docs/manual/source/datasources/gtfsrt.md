@@ -18,6 +18,10 @@ Die folgenden Parameter können in der Konfiguration der Datenquelle gesetzt wer
   - Ergebnis: Je nach Auswahl werden Service Alerts, Trip Updates oder Fahrzeugpositionen verarbeitet.
 - **Token**: Optionales Zugriffstoken für geschützte Endpunkte.
   - Ergebnis: Wenn ein Token hinterlegt ist, wird er bei der Anfrage mitgesendet.
+  - **Filter**: Optionaler Filter für Linien.
+  - Ergebnis: Wenn ein Filter gesetzt ist, werden nur Meldungen mit mindestens einem passenden Bezug zu einer Linie berücksichtigt.
+
+Generelle Hinweise zur Verwendung von Filtern sind in der {ref}`Datenquellenübersicht <h-datasources-filters>` beschrieben.
 
 ## Verfügbare Dialekte
 

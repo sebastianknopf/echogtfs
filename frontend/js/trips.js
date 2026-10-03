@@ -326,9 +326,11 @@ const trips = (() => {
     const modalElement = document.getElementById('view-trip-modal');
     if (!titleElement || !contentElement || !modalElement) return;
 
-    const headerWarning = trip.hasOnlyNoDataStopEvents
-      ? ` <span class="view-item__warning view-item__warning--no-realtime-data" title="${ui.esc(window.i18n('trips.realtime_data.warning'))}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${WARNING_ICON_PATH}"/></svg></span>`
-      : '';
+    const headerWarning = !trip.isValid
+      ? ` <span class="view-item__warning" title="${ui.esc(window.i18n('trips.resolution.warning'))}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${WARNING_ICON_PATH}"/></svg></span>`
+      : trip.hasOnlyNoDataStopEvents
+        ? ` <span class="view-item__warning view-item__warning--no-realtime-data" title="${ui.esc(window.i18n('trips.realtime_data.warning'))}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${WARNING_ICON_PATH}"/></svg></span>`
+        : '';
     const modalTitle = window.i18n('trips.modal.view');
     const lineLabel = window.i18n('trips.field.line');
     const vehicleLabel = window.i18n('trips.view.vehicle');
@@ -366,7 +368,7 @@ const trips = (() => {
         }
 
         const warnings = warningMessages.length
-          ? `<span class="view-item__warning${hasWarningSeverityNoRealtimeData ? ' view-item__warning--no-realtime-data' : ''}" title="${ui.esc(warningMessages.join(' | '))}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${WARNING_ICON_PATH}"/></svg></span>`
+          ? `<span class="view-item__warning${!stopEvent.isValid ? '' : (hasWarningSeverityNoRealtimeData ? ' view-item__warning--no-realtime-data' : '')}" title="${ui.esc(warningMessages.join(' | '))}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${WARNING_ICON_PATH}"/></svg></span>`
           : '';
         const stopIdSuffix = (
           stopEvent.originalStopId

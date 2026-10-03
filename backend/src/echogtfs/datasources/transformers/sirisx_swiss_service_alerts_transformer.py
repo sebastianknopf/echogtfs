@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 import time
 from time import perf_counter
 import xml.etree.ElementTree as ET
@@ -24,10 +23,10 @@ class SiriSxSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
     def __init__(
         self,
         make_unique_id: Callable[[str, str], Any],
-        filter_value: str | None = None,
+        filters: dict[str, list[str]],
     ):
+        super().__init__(filters)
         self._make_unique_id = make_unique_id
-        self._filter_value = (filter_value or "").strip()
         self._siri_ns = {"siri": "http://www.siri.org.uk/siri"}
         self._runtime_duration_ms = 0.0
 
@@ -43,30 +42,34 @@ class SiriSxSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
             return []
 
         alerts = []
-        filtered_out_of_window = 0
-        filtered_by_participant = 0
-        filtered_closed = 0
+        filtered = 0
         current_timestamp = int(time.time())
 
         try:
             for situation_index, situation in enumerate(situations, start=1):
                 try:
                     if not self._matches_participant_filter(situation):
-                        filtered_by_participant += 1
+                        filtered += 1
+                        continue
+
+                    if not self._matches_line_filter(situation):
+                        filtered += 1
                         continue
 
                     progress = self._get_progress(situation)
                     if progress == "closed":
-                        filtered_closed += 1
+                        filtered += 1
                         continue
 
                     if not self._is_in_publication_window(situation, current_timestamp):
-                        filtered_out_of_window += 1
+                        filtered += 1
                         continue
 
                     alert = self._parse_situation(situation, source_name, progress)
                     if alert:
                         alerts.append(alert)
+                    else:
+                        filtered += 1
                 except Exception as exc:
                     logger.error(
                         f"[SiriSxSwissServiceAlertsTransformer] Error processing situation: {exc}",
@@ -74,11 +77,9 @@ class SiriSxSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                     )
 
             logger.info(
-                "[SiriSxSwissServiceAlertsTransformer] Processed %s alerts (filtered: %s participant, %s closed, %s window)",
+                "[SiriSxSwissServiceAlertsTransformer] Processed %s alerts (filtered: %s)",
                 len(alerts),
-                filtered_by_participant,
-                filtered_closed,
-                filtered_out_of_window,
+                filtered,
             )
 
             return alerts
@@ -89,14 +90,9 @@ class SiriSxSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         return float(self._runtime_duration_ms)
 
     def _matches_participant_filter(self, situation: ET.Element) -> bool:
-        if not self._filter_value:
+        allowed_patterns = self._filters["legacy"] + self._filters["operator"]
+        if not allowed_patterns:
             return True
-
-        allowed_patterns = [
-            participant.strip()
-            for participant in self._filter_value.split(",")
-            if participant.strip()
-        ]
 
         participant_ref_elem = situation.find("siri:ParticipantRef", self._siri_ns)
         participant_ref = (
@@ -108,12 +104,26 @@ class SiriSxSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         if not participant_ref:
             return False
 
-        return any(self._wildcard_matches(pattern, participant_ref) for pattern in allowed_patterns)
+        return any(self.identifier_matches(participant_ref, pattern) for pattern in allowed_patterns)
 
-    @staticmethod
-    def _wildcard_matches(pattern: str, value: str) -> bool:
-        regex = re.escape(pattern).replace(r"\*", ".*")
-        return bool(re.fullmatch(regex, value))
+    def _matches_line_filter(self, situation: ET.Element) -> bool:
+        allowed_patterns = self._filters["line"]
+        if not allowed_patterns:
+            return True
+
+        line_refs = [
+            line_ref.text.strip()
+            for line_ref in situation.findall(".//siri:LineRef", self._siri_ns)
+            if line_ref.text and line_ref.text.strip()
+        ]
+        if not line_refs:
+            return False
+
+        return any(
+            self.identifier_matches(line_ref, pattern)
+            for line_ref in line_refs
+            for pattern in allowed_patterns
+        )
 
     def _is_in_publication_window(self, situation: ET.Element, current_timestamp: int) -> bool:
         publication_windows = situation.findall("siri:PublicationWindow", self._siri_ns)

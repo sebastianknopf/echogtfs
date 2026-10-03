@@ -1168,6 +1168,91 @@ const sources = (() => {
           }
         });
       }
+      // Handle taglist fields as removable filter tags
+      else if (field.type === 'taglist') {
+        const initialTags = Array.isArray(value)
+          ? value.map(tag => String(tag).trim()).filter(Boolean)
+          : String(value || '').split(/[,\s]+/).map(tag => tag.trim()).filter(Boolean);
+        const hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = `config-${field.name}`;
+
+        const taglist = document.createElement('div');
+        taglist.className = 'taglist';
+        taglist.setAttribute('role', 'group');
+        taglist.setAttribute('aria-label', translatedLabel);
+        const tagsContainer = document.createElement('div');
+        tagsContainer.className = 'taglist__tags';
+        const tagInput = document.createElement('input');
+        tagInput.className = 'taglist__input';
+        tagInput.type = 'text';
+        tagInput.setAttribute('aria-label', translatedLabel);
+        taglist.appendChild(tagsContainer);
+        taglist.appendChild(tagInput);
+
+        const updateValue = () => {
+          hiddenInput.value = Array.from(tagsContainer.querySelectorAll('.taglist__tag-value'))
+            .map(tag => tag.textContent)
+            .join(',');
+          fieldDiv.classList.toggle('md-field--has-value', !!hiddenInput.value);
+        };
+        const addTags = rawValue => {
+          rawValue.split(/[,\s]+/).map(tag => tag.trim()).filter(Boolean).forEach(tagValue => {
+            const exists = Array.from(tagsContainer.querySelectorAll('.taglist__tag-value'))
+              .some(tag => tag.textContent === tagValue);
+            if (exists) return;
+            const tag = document.createElement('span');
+            tag.className = 'taglist__tag';
+            const tagText = document.createElement('span');
+            tagText.className = 'taglist__tag-value';
+            tagText.textContent = tagValue;
+            const removeButton = document.createElement('button');
+            removeButton.type = 'button';
+            removeButton.className = 'taglist__tag-remove';
+            removeButton.textContent = '×';
+            removeButton.setAttribute('aria-label', window.i18n('common.remove'));
+            removeButton.title = window.i18n('common.remove');
+            removeButton.addEventListener('click', () => {
+              tag.remove();
+              updateValue();
+            });
+            tag.appendChild(tagText);
+            tag.appendChild(removeButton);
+            tagsContainer.appendChild(tag);
+          });
+          updateValue();
+        };
+
+        addTags(initialTags.join(','));
+        tagInput.addEventListener('keydown', event => {
+          if (event.key === 'Enter' || event.key === ',' || event.key === ' ') {
+            event.preventDefault();
+            addTags(tagInput.value);
+            tagInput.value = '';
+          }
+        });
+        tagInput.addEventListener('blur', () => {
+          addTags(tagInput.value);
+          tagInput.value = '';
+        });
+
+        fieldDiv.innerHTML = '';
+        fieldDiv.appendChild(hiddenInput);
+        fieldDiv.appendChild(taglist);
+        const label = document.createElement('label');
+        label.className = 'md-field__label';
+        label.htmlFor = `config-${field.name}`;
+        label.textContent = translatedLabel;
+        fieldDiv.appendChild(label);
+        if (translatedHelpText) {
+          const helper = document.createElement('div');
+          helper.className = 'md-field__helper';
+          helper.textContent = translatedHelpText;
+          fieldDiv.appendChild(helper);
+        }
+        container.appendChild(fieldDiv);
+        return;
+      }
       // Handle textarea type
       else if (field.type === 'textarea') {
         fieldDiv.innerHTML = `

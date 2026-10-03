@@ -24,8 +24,11 @@ Die folgenden Parameter können in der Konfiguration der Datenquelle gesetzt wer
 - **Umgang mit fehlerhafter Halt-ID**: _(nur relevant für SIRI-ET Dialekte)_ Legt fest, wie mit fehlerhaften Halt-IDs (z.B. vertauschten Steigen) umgegangen werden soll.
   - Option **Ignorieren** (Standard): Die originale übermittelte Halt-ID (nach dem Mapping) wird beibehalten.
   - Option **Auf Soll-Halt korrigieren**: Die übermittelte Halt-ID wird auf die Halt-ID aus dem Soll-Fahrplan korrigiert.
-- **Filter**: Optionaler Filter für Betreiberkennungen.
-  - Ergebnis: Wenn ein Filter gesetzt ist, werden nur passende Betreibergruppen berücksichtigt. `*` wird als Wildcard behandelt und steht für beliebig viele beliebige Zeichen.
+- **Filter**: Optionaler Filter für Betreiberkennungen und Linien.
+  - Für Dialekt SIRI-SX und SIRI-SX Swiss: Wenn ein Filter gesetzt ist, werden nur Meldungen mit passenden Teilnehmerkennungen (=Betreiberkennungen) oder mindestens einem Bezug zu einer Linie berücksichtigt.
+  - Für Dialekt SIRI-ET und SIRI-VM: Wenn ein Filter gesetzt ist, werden nur Fahrten mit passenden Betreiberreferenzen oder Linien berücksichtigt.
+
+Generelle Hinweise zur Verwendung von Filtern sind in der {ref}`Datenquellenübersicht <h-datasources-filters>` beschrieben.
 
 ```{warning}
 In der aktuellen Umsetzungsvariante wird die Ausgabe von Zusatzhalten über GTFS-RT nicht unterstützt! Die hierzu notwendige [Erweiterung mit `TripModifications`](https://gtfs.org/documentation/realtime/reference/#message-tripmodifications) ist aktuell noch experimentell und [wird von GoogleTransit noch nicht unterstützt](https://developers.google.com/transit/gtfs-realtime/reference?hl=de).
@@ -38,6 +41,7 @@ Die SIRI-Lite-Datenquelle verwendet die folgenden Dialekte:
 - **SIRI-SX**
 - **SIRI-SX Swiss**
 - **SIRI-ET**
+- **SIRI-VM**
 
 ### Behandlung von Endmeldungen bei SIRI-SX Dialekten
 

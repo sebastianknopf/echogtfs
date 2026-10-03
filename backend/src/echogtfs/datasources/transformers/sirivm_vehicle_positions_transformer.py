@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import random
-import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from time import perf_counter
@@ -21,8 +20,8 @@ logger = logging.getLogger("uvicorn")
 class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
     """Transforms SIRI-VM XML payloads into vehicle-position dictionaries."""
 
-    def __init__(self, filter_value: str | None = None):
-        self._filter_value = (filter_value or "").strip()
+    def __init__(self, filters: dict[str, list[str]]):
+        super().__init__(filters)
         self._siri_ns = {"siri": "http://www.siri.org.uk/siri"}
         self._runtime_duration_ms = 0.0
 
@@ -38,14 +37,14 @@ class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
             return []
 
         positions: list[dict[str, Any]] = []
-        filtered_invalid = 0
+        filtered = 0
 
         try:
             for activity_index, activity in enumerate(activities, start=1):
                 try:
                     vehicle_position = self._parse_vehicle_activity(activity)
                     if vehicle_position is None:
-                        filtered_invalid += 1
+                        filtered += 1
                         continue
 
                     positions.append(vehicle_position)
@@ -63,9 +62,9 @@ class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
                     )
 
             logger.info(
-                "[SiriVmVehiclePositionsTransformer] Processed %s vehicle positions (filtered: %s invalid)",
+                "[SiriVmVehiclePositionsTransformer] Processed %s vehicle positions (filtered: %s)",
                 len(positions),
-                filtered_invalid,
+                filtered,
             )
 
             return positions
@@ -108,6 +107,9 @@ class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
             return None
 
         if not self._matches_operator_filter(monitored_journey):
+            return None
+
+        if not self._matches_line_filter(monitored_journey):
             return None
 
         vehicle_status = self._get_text(
@@ -324,25 +326,26 @@ class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
         return extracted
 
     def _matches_operator_filter(self, monitored_journey: ET.Element) -> bool:
-        if not self._filter_value:
+        allowed_patterns = self._filters["legacy"] + self._filters["operator"]
+        if not allowed_patterns:
             return True
-
-        allowed_patterns = [
-            pattern.strip()
-            for pattern in self._filter_value.split(",")
-            if pattern.strip()
-        ]
 
         operator_ref = self._get_text(monitored_journey.find("siri:OperatorRef", self._siri_ns))
         if not operator_ref:
             return False
 
-        return any(self._wildcard_matches(pattern, operator_ref) for pattern in allowed_patterns)
+        return any(self.identifier_matches(operator_ref, pattern) for pattern in allowed_patterns)
 
-    @staticmethod
-    def _wildcard_matches(pattern: str, value: str) -> bool:
-        regex = re.escape(pattern).replace(r"\*", ".*")
-        return bool(re.fullmatch(regex, value))
+    def _matches_line_filter(self, monitored_journey: ET.Element) -> bool:
+        allowed_patterns = self._filters["line"]
+        if not allowed_patterns:
+            return True
+
+        line_ref = self._get_text(monitored_journey.find("siri:LineRef", self._siri_ns))
+        if not line_ref:
+            return False
+
+        return any(self.identifier_matches(line_ref, pattern) for pattern in allowed_patterns)
 
     @staticmethod
     def _get_text(element: ET.Element | None) -> str | None:

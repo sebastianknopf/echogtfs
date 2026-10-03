@@ -64,7 +64,7 @@ class SiriSxDatasource(DatasourceBase):
         },
         {
             "name": "filter",
-            "type": "text",
+            "type": "taglist",
             "label": "adapter.sirisx.filter.label",
             "required": False,
             "placeholder": "adapter.sirisx.filter.placeholder",
@@ -176,7 +176,7 @@ class SiriSxDatasource(DatasourceBase):
         if dialect == SiriSxDialect.SIRISX:
             transformer = SiriSxServiceAlertsTransformer(
                 make_unique_id=self._make_unique_id,
-                filter_value=self.config.get("filter", ""),
+                filters=self.get_filters(),
             )
         else:
             raise ValueError(f"Unknown SIRI-SX dialect: {dialect}")
