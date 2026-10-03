@@ -89,7 +89,8 @@ class SiriSxSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         return float(self._runtime_duration_ms)
 
     def _matches_participant_filter(self, situation: ET.Element) -> bool:
-        if not self._filters["legacy"]:
+        allowed_patterns = self._filters["legacy"] + self._filters["operator"]
+        if not allowed_patterns:
             return True
 
         participant_ref_elem = situation.find("siri:ParticipantRef", self._siri_ns)
@@ -102,7 +103,7 @@ class SiriSxSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         if not participant_ref:
             return False
 
-        return any(self.identifier_matches(participant_ref, pattern) for pattern in self._filters["legacy"])
+        return any(self.identifier_matches(participant_ref, pattern) for pattern in allowed_patterns)
 
     def _is_in_publication_window(self, situation: ET.Element, current_timestamp: int) -> bool:
         publication_windows = situation.findall("siri:PublicationWindow", self._siri_ns)

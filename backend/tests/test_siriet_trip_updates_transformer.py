@@ -51,7 +51,7 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
         self.assertEqual(trips[0]["schedule_relationship"], "CANCELED")
 
     def test_operator_filter_supports_wildcard(self) -> None:
-        transformer = SiriEtTripUpdatesTransformer(filter_value="OP-*")
+        transformer = SiriEtTripUpdatesTransformer(filter_value="operator/OP-*")
         payload = self._build_payload(
             extra_journey="false",
             complete_sequence="false",
@@ -63,7 +63,7 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
         self.assertEqual(len(trips), 1)
 
     def test_operator_filter_rejects_non_matching_wildcard(self) -> None:
-        transformer = SiriEtTripUpdatesTransformer(filter_value="OP-*")
+        transformer = SiriEtTripUpdatesTransformer(filter_value="operator/OP-*")
         payload = self._build_payload(
             extra_journey="false",
             complete_sequence="false",
@@ -73,6 +73,30 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
         trips = transformer.transform({"root": payload})
 
         self.assertEqual(trips, [])
+
+    def test_legacy_operator_filter_supports_wildcard(self) -> None:
+        transformer = SiriEtTripUpdatesTransformer(filter_value="OP-*")
+        journey = ET.fromstring(
+            """
+            <EstimatedVehicleJourney xmlns="http://www.siri.org.uk/siri">
+              <OperatorRef>OP-ABC</OperatorRef>
+            </EstimatedVehicleJourney>
+            """
+        )
+
+        self.assertTrue(transformer._matches_operator_filter(journey))
+
+    def test_legacy_operator_filter_rejects_non_matching_wildcard(self) -> None:
+        transformer = SiriEtTripUpdatesTransformer(filter_value="OP-*")
+        journey = ET.fromstring(
+            """
+            <EstimatedVehicleJourney xmlns="http://www.siri.org.uk/siri">
+              <OperatorRef>AGENCY-1</OperatorRef>
+            </EstimatedVehicleJourney>
+            """
+        )
+
+        self.assertFalse(transformer._matches_operator_filter(journey))
 
     def test_recorded_call_uses_expected_times(self) -> None:
         expected_departure_time = datetime.now(timezone.utc) + timedelta(hours=1)

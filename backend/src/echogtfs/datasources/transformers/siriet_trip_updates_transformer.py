@@ -501,14 +501,15 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
         return value.astimezone(timezone.utc)
 
     def _matches_operator_filter(self, journey: ET.Element) -> bool:
-        if not self._filters["legacy"]:
+        allowed_patterns = self._filters["legacy"] + self._filters["operator"]
+        if not allowed_patterns:
             return True
 
         operator_ref = self._get_text(journey.find("siri:OperatorRef", self._siri_ns))
         if not operator_ref:
             return False
 
-        return any(self.identifier_matches(operator_ref, pattern) for pattern in self._filters["legacy"])
+        return any(self.identifier_matches(operator_ref, pattern) for pattern in allowed_patterns)
 
     def _collect_all_calls(self, journey: ET.Element) -> list[ET.Element]:
         recorded_calls = journey.findall("siri:RecordedCalls/siri:RecordedCall", self._siri_ns)

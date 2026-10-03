@@ -262,7 +262,7 @@ class TestSiriVmVehiclePositionsTransformer(unittest.TestCase):
         )
 
     def test_operator_filter_supports_wildcard(self) -> None:
-        transformer = SiriVmVehiclePositionsTransformer(filter_value="OP-*")
+        transformer = SiriVmVehiclePositionsTransformer(filter_value="operator/OP-*")
         monitored_call = """
 <siri:MonitoredCall>
   <siri:StopPointRef>STOP_CURRENT</siri:StopPointRef>
@@ -284,7 +284,7 @@ class TestSiriVmVehiclePositionsTransformer(unittest.TestCase):
         self.assertEqual(len(result), 1)
 
     def test_operator_filter_rejects_non_matching_wildcard(self) -> None:
-        transformer = SiriVmVehiclePositionsTransformer(filter_value="OP-*")
+        transformer = SiriVmVehiclePositionsTransformer(filter_value="operator/OP-*")
         monitored_call = """
 <siri:MonitoredCall>
   <siri:StopPointRef>STOP_CURRENT</siri:StopPointRef>
@@ -304,6 +304,30 @@ class TestSiriVmVehiclePositionsTransformer(unittest.TestCase):
         result = transformer.transform({"root": ET.fromstring(payload)})
 
         self.assertEqual(result, [])
+
+    def test_legacy_operator_filter_supports_wildcard(self) -> None:
+        transformer = SiriVmVehiclePositionsTransformer(filter_value="OP-*")
+        monitored_journey = ET.fromstring(
+            """
+            <MonitoredVehicleJourney xmlns="http://www.siri.org.uk/siri">
+              <OperatorRef>OP-123</OperatorRef>
+            </MonitoredVehicleJourney>
+            """
+        )
+
+        self.assertTrue(transformer._matches_operator_filter(monitored_journey))
+
+    def test_legacy_operator_filter_rejects_non_matching_wildcard(self) -> None:
+        transformer = SiriVmVehiclePositionsTransformer(filter_value="OP-*")
+        monitored_journey = ET.fromstring(
+            """
+            <MonitoredVehicleJourney xmlns="http://www.siri.org.uk/siri">
+              <OperatorRef>AGENCY-1</OperatorRef>
+            </MonitoredVehicleJourney>
+            """
+        )
+
+        self.assertFalse(transformer._matches_operator_filter(monitored_journey))
 
     @staticmethod
     def _iso(value: datetime) -> str:

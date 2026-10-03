@@ -324,14 +324,15 @@ class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
         return extracted
 
     def _matches_operator_filter(self, monitored_journey: ET.Element) -> bool:
-        if not self._filters["legacy"]:
+        allowed_patterns = self._filters["legacy"] + self._filters["operator"]
+        if not allowed_patterns:
             return True
 
         operator_ref = self._get_text(monitored_journey.find("siri:OperatorRef", self._siri_ns))
         if not operator_ref:
             return False
 
-        return any(self.identifier_matches(operator_ref, pattern) for pattern in self._filters["legacy"])
+        return any(self.identifier_matches(operator_ref, pattern) for pattern in allowed_patterns)
 
     @staticmethod
     def _get_text(element: ET.Element | None) -> str | None:

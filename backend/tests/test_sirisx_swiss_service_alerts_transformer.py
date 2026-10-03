@@ -106,7 +106,7 @@ class TestSiriSxSwissServiceAlertsTransformer(unittest.TestCase):
         root = ET.fromstring(xml_payload)
         transformer = SiriSxSwissServiceAlertsTransformer(
             make_unique_id=lambda original, source: f"{source}-{original}",
-            filter_value="P1-*",
+            filter_value="operator/P1-*",
         )
 
         records = transformer.transform({"root": root, "source_name": "sirisx-swiss"})
@@ -140,11 +140,41 @@ class TestSiriSxSwissServiceAlertsTransformer(unittest.TestCase):
         root = ET.fromstring(xml_payload)
         transformer = SiriSxSwissServiceAlertsTransformer(
             make_unique_id=lambda original, source: f"{source}-{original}",
-            filter_value="P1-*",
+            filter_value="operator/P1-*",
         )
 
         records = transformer.transform({"root": root, "source_name": "sirisx-swiss"})
         self.assertEqual(records, [])
+
+    def test_legacy_participant_filter_supports_wildcard(self):
+        transformer = SiriSxSwissServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filter_value="P1-*",
+        )
+        situation = ET.fromstring(
+            """
+            <PtSituationElement xmlns="http://www.siri.org.uk/siri">
+              <ParticipantRef>P1-ABC</ParticipantRef>
+            </PtSituationElement>
+            """
+        )
+
+        self.assertTrue(transformer._matches_participant_filter(situation))
+
+    def test_legacy_participant_filter_rejects_non_matching_wildcard(self):
+        transformer = SiriSxSwissServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filter_value="P1-*",
+        )
+        situation = ET.fromstring(
+            """
+            <PtSituationElement xmlns="http://www.siri.org.uk/siri">
+              <ParticipantRef>X1-ABC</ParticipantRef>
+            </PtSituationElement>
+            """
+        )
+
+        self.assertFalse(transformer._matches_participant_filter(situation))
 
     def test_transform_skips_closed_progress(self):
         xml_payload = """

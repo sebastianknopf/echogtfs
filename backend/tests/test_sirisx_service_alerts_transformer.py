@@ -74,7 +74,7 @@ class TestSiriSxServiceAlertsTransformer(unittest.TestCase):
         root = ET.fromstring(xml_payload)
         transformer = SiriSxServiceAlertsTransformer(
             make_unique_id=lambda original, source: f"{source}-{original}",
-            filter_value="P2-*",
+            filter_value="operator/P2-*",
         )
 
         records = transformer.transform({"root": root, "source_name": "sx"})
@@ -97,11 +97,41 @@ class TestSiriSxServiceAlertsTransformer(unittest.TestCase):
         root = ET.fromstring(xml_payload)
         transformer = SiriSxServiceAlertsTransformer(
             make_unique_id=lambda original, source: f"{source}-{original}",
-            filter_value="P2-*",
+            filter_value="operator/P2-*",
         )
 
         records = transformer.transform({"root": root, "source_name": "sx"})
         self.assertEqual(records, [])
+
+    def test_legacy_participant_filter_supports_wildcard(self):
+        transformer = SiriSxServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filter_value="P2-*",
+        )
+        situation = ET.fromstring(
+            """
+            <PtSituationElement xmlns="http://www.siri.org.uk/siri">
+              <ParticipantRef>P2-ABC</ParticipantRef>
+            </PtSituationElement>
+            """
+        )
+
+        self.assertTrue(transformer._matches_participant_filter(situation))
+
+    def test_legacy_participant_filter_rejects_non_matching_wildcard(self):
+        transformer = SiriSxServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filter_value="P2-*",
+        )
+        situation = ET.fromstring(
+            """
+            <PtSituationElement xmlns="http://www.siri.org.uk/siri">
+              <ParticipantRef>X2-ABC</ParticipantRef>
+            </PtSituationElement>
+            """
+        )
+
+        self.assertFalse(transformer._matches_participant_filter(situation))
 
     def test_transform_skips_closed_progress(self):
         xml_payload = """
