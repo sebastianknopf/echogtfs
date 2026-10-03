@@ -63,6 +63,14 @@ class GtfsRealtimeDatasource(DatasourceBase):
             "options": ["gtfsrt-servicealerts"],
             "help_text": "adapter.gtfsrt.dialect.help_text",
         },
+        {
+            "name": "filter",
+            "type": "taglist",
+            "label": "adapter.gtfsrt.filter.label",
+            "required": False,
+            "placeholder": "adapter.gtfsrt.filter.placeholder",
+            "help_text": "adapter.gtfsrt.filter.help_text",
+        },
     ]
 
     def get_datasource_type(self) -> str:
@@ -92,6 +100,10 @@ class GtfsRealtimeDatasource(DatasourceBase):
         if "token" in self.config and self.config["token"] is not None:
             if not isinstance(self.config["token"], str):
                 raise ValueError("'token' must be a string")
+
+        if "filter" in self.config and self.config["filter"]:
+            if not isinstance(self.config["filter"], str):
+                raise ValueError("'filter' must be a string")
 
     async def _fetch_records(self) -> dict[str, Any]:
         """Fetch GTFS-RT feed and transform entities into internal alert dicts."""

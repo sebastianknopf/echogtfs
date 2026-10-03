@@ -621,6 +621,9 @@ window.translations = {
     'adapter.gtfsrt.dialect.label': 'Dialekt',
     'adapter.gtfsrt.dialect.help_text': 'GTFS-Realtime Implementierungsvariante',
     'adapter.gtfsrt.dialect.option.gtfsrt_servicealerts': 'GTFS-RT ServiceAlerts',
+    'adapter.gtfsrt.filter.label': 'Filter',
+    'adapter.gtfsrt.filter.placeholder': 'Optionaler Filter-Ausdruck',
+    'adapter.gtfsrt.filter.help_text': 'Filter zur Einschränkung der GTFS-RT ServiceAlerts',
     
     // SIRI-Lite Adapter
     'adapter.sirilite.endpoint.label': 'Endpoint URL',
@@ -1345,6 +1348,9 @@ window.translations = {
     'adapter.gtfsrt.dialect.label': 'Dialect',
     'adapter.gtfsrt.dialect.help_text': 'GTFS-Realtime implementation variant',
     'adapter.gtfsrt.dialect.option.gtfsrt_servicealerts': 'GTFS-RT ServiceAlerts',
+    'adapter.gtfsrt.filter.label': 'Filter',
+    'adapter.gtfsrt.filter.placeholder': 'Optional filter expression',
+    'adapter.gtfsrt.filter.help_text': 'Filter to restrict GTFS-RT service alerts',
     
     // SIRI-Lite Adapter
     'adapter.sirilite.endpoint.label': 'Endpoint URL',
