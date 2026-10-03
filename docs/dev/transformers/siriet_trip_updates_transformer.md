@@ -19,6 +19,12 @@
 6. Append valid trip updates to output list.
 7. Log summary counters and store runtime in milliseconds.
 
+## Filtering
+
+Filters are comma-separated. Unprefixed values and `operator/` values filter `OperatorRef`. `line/` values filter `LineRef`.
+
+`*` matches any number of characters, and matching covers the complete value. A configured operator or line filter rejects a journey when the corresponding reference is missing or does not match any configured pattern.
+
 ## Journey-Level Filtering Rules
 
 A journey is skipped when any of these conditions is met.

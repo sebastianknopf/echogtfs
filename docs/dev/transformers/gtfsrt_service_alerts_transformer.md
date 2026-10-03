@@ -22,6 +22,12 @@
 5. Log filtered counts and transformed alert count.
 6. Always store runtime duration in milliseconds in `_runtime_duration_ms`.
 
+## Filtering
+
+The optional comma-separated `filter_value` supports `line/` patterns. Matching uses full-value wildcard matching, where `*` matches any number of characters.
+
+An alert is kept when at least one `informed_entities[].route_id` matches a configured `line/` pattern. Alerts with no route ID in their informed entities, or with no matching route ID, are discarded.
+
 ## Enumeration Mapping Rules
 
 - `cause`:

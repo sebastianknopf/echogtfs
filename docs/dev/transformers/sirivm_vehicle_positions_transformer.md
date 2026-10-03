@@ -19,6 +19,12 @@
 4. Return the list of parsed vehicle-position dictionaries.
 5. Always store elapsed runtime in milliseconds in `_runtime_duration_ms` (via `finally`).
 
+## Filtering
+
+Filters are comma-separated. Unprefixed values and `operator/` values filter `OperatorRef`. `line/` values filter `LineRef`.
+
+`*` matches any number of characters, and matching covers the complete value. A configured operator or line filter rejects an activity when the corresponding reference is missing or does not match any configured pattern.
+
 ## Activity-Level Filtering Rules
 
 A `VehicleActivity` is discarded (`None`) when any of these conditions is true.

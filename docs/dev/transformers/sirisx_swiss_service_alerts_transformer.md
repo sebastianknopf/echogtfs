@@ -19,6 +19,12 @@
 5. Log transformed count and filter counters.
 6. Persist runtime in milliseconds.
 
+## Filtering
+
+Filters are comma-separated. Unprefixed values and `operator/` values filter `ParticipantRef`. `line/` values filter all nested `LineRef` elements found in the situation.
+
+`*` matches any number of characters, and matching covers the complete value. A situation with a configured line filter is kept only when at least one `LineRef` matches. Situations without any `LineRef`, or without a matching reference, are discarded.
+
 ## Situation-Level Filtering Rules
 
 A situation is skipped when any of these conditions is met.
