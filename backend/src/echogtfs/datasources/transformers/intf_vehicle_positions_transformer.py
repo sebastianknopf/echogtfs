@@ -5,8 +5,10 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
+from echogtfs.datasources.transformers.base import TransformerBase
 
-class VehiclePositionsTransformerInterface(ABC):
+
+class VehiclePositionsTransformerInterface(TransformerBase, ABC):
     """Transforms raw datasource payloads into vehicle-position dictionaries."""
 
     @abstractmethod
