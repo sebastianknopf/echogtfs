@@ -25,10 +25,9 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
     def __init__(
         self,
         make_unique_id: Callable[[str, str], Any],
-        filter_value: str | None = None,
+        filters: dict[str, list[str]],
     ):
-        super().__init__({"filter": filter_value or ""})
-        self._filters = self.get_filters()
+        super().__init__(filters)
         self._make_unique_id = make_unique_id
         self._siri_ns = {"siri": "http://www.siri.org.uk/siri"}
         self._runtime_duration_ms = 0.0

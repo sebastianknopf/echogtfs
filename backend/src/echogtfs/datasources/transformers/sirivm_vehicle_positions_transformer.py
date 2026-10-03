@@ -20,9 +20,8 @@ logger = logging.getLogger("uvicorn")
 class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
     """Transforms SIRI-VM XML payloads into vehicle-position dictionaries."""
 
-    def __init__(self, filter_value: str | None = None):
-        super().__init__({"filter": filter_value or ""})
-        self._filters = self.get_filters()
+    def __init__(self, filters: dict[str, list[str]]):
+        super().__init__(filters)
         self._siri_ns = {"siri": "http://www.siri.org.uk/siri"}
         self._runtime_duration_ms = 0.0
 

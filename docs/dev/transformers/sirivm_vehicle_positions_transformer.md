@@ -21,7 +21,7 @@
 
 ## Filtering
 
-Filters are comma-separated. Unprefixed values and `operator/` values filter `OperatorRef`. `line/` values filter `LineRef`.
+The datasource parses the configured filter into the transformer's `line`, `operator`, and `legacy` pattern lists. Unprefixed values and `operator/` values filter `OperatorRef`. `line/` values filter `LineRef`.
 
 `*` matches any number of characters, and matching covers the complete value. A configured operator or line filter rejects an activity when the corresponding reference is missing or does not match any configured pattern.
 

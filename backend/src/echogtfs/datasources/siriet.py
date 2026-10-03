@@ -231,7 +231,7 @@ class SiriEtDatasource(DatasourceBase):
         dialect = SiriEtDialect(self.config["dialect"])
         if dialect == SiriEtDialect.SIRIET:
             transformer = SiriEtTripUpdatesTransformer(
-                filter_value=self.config.get("filter", ""),
+                filters=self.get_filters(),
             )
         else:
             raise ValueError(f"Unknown SIRI-ET dialect: {dialect}")

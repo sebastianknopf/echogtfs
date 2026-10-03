@@ -195,7 +195,10 @@ class GtfsRealtimeDatasource(DatasourceBase):
         )
 
         if dialect == GtfsRtDialect.GTFSRT_SERVICEALERTS:
-            transformer = GtfsRtServiceAlertsTransformer(make_unique_id=self._make_unique_id)
+            transformer = GtfsRtServiceAlertsTransformer(
+                make_unique_id=self._make_unique_id,
+                filters=self.get_filters(),
+            )
         else:
             raise ValueError(f"Unknown GTFS-RT dialect: {dialect}")
 
