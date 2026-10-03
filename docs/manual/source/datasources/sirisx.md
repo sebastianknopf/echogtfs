@@ -19,8 +19,10 @@ Die folgenden Parameter können in der Konfiguration der Datenquelle gesetzt wer
 - **Methode**: Auswahl zwischen "request/response" und "publish/subscribe".
   - Ergebnis: Derzeit wird "request/response" unterstützt. "publish/subscribe" ist noch nicht verfügbar.
 - **Dialekt**: Die zu verwendende SIRI-SX-Implementierungsvariante.
-- **Filter**: Optionaler Filter für Betreiberkennungen.
-  - Ergebnis: Wenn ein Filter gesetzt ist, werden nur Meldungen aus passenden Betreiberreferenzen berücksichtigt. `*` wird als Wildcard behandelt und steht für beliebig viele beliebige Zeichen.
+- **Filter**: Optionaler Filter für Teilnehmerkennungen und Linien.
+  - Ergebnis: Wenn ein Filter gesetzt ist, werden nur Meldungen mit passenden Teilnehmerkennungen oder mindestens einem Bezug zu einer Linie berücksichtigt.
+
+Generelle Hinweise zur Verwendung von Filtern sind in der {ref}`Datenquellenübersicht <h-datasources-filters>` beschrieben.
 
 ## Verfügbare Dialekte
 

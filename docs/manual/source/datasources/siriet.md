@@ -26,8 +26,10 @@ Die folgenden Parameter können in der Konfiguration der Datenquelle gesetzt wer
 - **Umgang mit fehlerhafter Halt-ID**: Legt fest, wie mit fehlerhaften Halt-IDs (z.B. vertauschten Steigen) umgegangen werden soll.
   - Option **Ignorieren** (Standard): Die originale übermittelte Halt-ID (nach dem Mapping) wird beibehalten.
   - Option **Auf Soll-Halt korrigieren**: Die übermittelte Halt-ID wird auf die Halt-ID aus dem Soll-Fahrplan korrigiert.
-- **Filter**: Optionaler Filter für Betreiberkennungen.
-  - Ergebnis: Wenn ein Filter gesetzt ist, werden nur Fahrten aus passenden Betreiberreferenzen berücksichtigt. `*` wird als Wildcard behandelt und steht für beliebig viele beliebige Zeichen.
+- **Filter**: Optionaler Filter für Betreiberkennungen und Linien.
+  - Ergebnis: Wenn ein Filter gesetzt ist, werden nur Fahrten mit passenden Betreiberreferenzen oder Linien berücksichtigt.
+
+Generelle Hinweise zur Verwendung von Filtern sind in der {ref}`Datenquellenübersicht <h-datasources-filters>` beschrieben.
 
 ## Planmäßige Ankunfts- und Abfahrtszeiten
 

@@ -49,6 +49,23 @@ Für jede Datenquelle können außerdem sogenannte **Mappings** und **Anreicheru
 
 Bestätigen Sie den Dialog mit Klick auf "Speichern". Im Anschluss wird die Datenquelle in der Übersicht angezeigt und kann sofort verwendet werden.
 
+(h-datasources-filters)=
+
+## Filter
+
+Die meisten Datenquellen unterstützen Filter, um die zu verarbeitenden Daten möglichst früh einzuschränken. Hierzu können im Feld **Filter** in der Datenquellenkonfiguration Filterausdrücke in sogenannten Filterklassen angegeben werden. Folgende Filterklassen sind aktuell verfügbar:
+
+- `operator`: Schränkt Daten basierend auf Betreiber- und Teilnehmerkennungen ein
+- `line`: Schränkt Daten basierend auf der verwendeten Linienkennung ein
+
+Bei der Eingabe wird folgende Syntax verwendet: `[Filterklasse]/[Filterausdruck]`
+
+Die Filterausdrücke **innerhalb einer Filterklasse** mit logisch ODER behandelt, Filterausrücke **aus verschiedenen Filterklassen** werden mit logisch UND behandelt.
+
+In allen Filterausdrücken kann das Zeichen `*` als Wildcard für "beliebig viele Zeichen" eingesetzt werden, um beispielsweise auf bestimmte Linien einschränken zu können, ohne dabei explizit alle Linien anzugeben. Je nach Datenquellentyp werden die Filter auf Client- oder Serverseite berücksichtigt.
+
+_Die genauen Regeln zur Unterstützung von Filtern sind in der Beschreibung der jeweiligen Datenquelle enthalten. Nicht alle Datenquellen unterstützen automatisch alle Filterklassen._
+
 (h-datasources-time-vs-event-based)=
 
 ## Zeit- und Eventbasierte Ausführung
@@ -92,6 +109,8 @@ Die Datenquellen sind darauf ausgerichtet, Massendaten zu verarbeiten. Entscheid
 
 - **Anzahl der zu verarbeitetenden Objekte**: Insbesondere Datenquellen, die Prognosedaten verarbeiten, haben eine vergleichsweise hohe Last auf der Datenbank, da in kurzer Zeit eine Vielzahl von Objekten ersetzt werden müssen. Nutzen Sie insbesondere bei großen, konsoldierten Datenquellen Filter, um die zu verarbeitenden Objekte von vorneherein auf ein sinnvolles Maß einzuschränken.
 - **Verfahrensweise bei ungültigen Bezügen**: Wenn hier eingestellt ist, dass alle Objekte geladen, aber ggf. deaktiviert werden sollen, werden deutlich mehr Daten in die Datenbank geschrieben, als letztendlich über GTFS-RT veröffentlicht werden. Das ist gut für Monitoring-Zwecke, erhöht aber gleichzeitig die Durchlaufzeit eines Datenupdates erheblich, wenn die Anzahl der zu verarbeitenden Objekte dadurch ansteigt.
+
+Weitere Performancesteigerungen lassen sich durch gezieltes Einsetzen von Filtern erreichen. Die Filter werden dabei - je nach Datenquelle und verwendetem Dialekt - client- oder bereits serverseitig berücksichtigt.
 
 Durch Anwendung von {ref}`event basierten Datenquellen <h-datasources-time-vs-event-based>` und {ref}`differentiellen/inkrementellen Updates <h-datasources-differential-incremental-updates>` kann die Performance bei der Verarbeitung signifikant steigern.
 

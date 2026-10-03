@@ -19,8 +19,10 @@ Die folgenden Parameter kannst du in der Konfiguration der Datenquelle setzen:
 - **Methode**: Auswahl zwischen "request/response" und "publish/subscribe".
   - Ergebnis: Derzeit wird "request/response" unterstützt. "publish/subscribe" ist noch nicht verfügbar.
 - **Dialekt**: Die zu verwendende SIRI-VM-Implementierungsvariante.
-- **Filter**: Optionaler Filter für Betreiberkennungen.
-  - Ergebnis: Wenn ein Filter gesetzt ist, werden nur Fahrzeugpositionen aus passenden Betreiberreferenzen berücksichtigt. `*` wird als Wildcard behandelt und steht für beliebig viele beliebige Zeichen.
+- **Filter**: Optionaler Filter für Betreiberkennungen und Linien.
+  - Ergebnis: Wenn ein Filter gesetzt ist, werden nur Fahrzeugpositionen mit passenden Betreiberreferenzen oder Linien berücksichtigt.
+
+Generelle Hinweise zur Verwendung von Filtern sind in der {ref}`Datenquellenübersicht <h-datasources-filters>` beschrieben.
 
 ## Verfügbare Dialekte
 
