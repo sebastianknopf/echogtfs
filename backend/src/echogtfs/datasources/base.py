@@ -4,6 +4,7 @@ from abc import abstractmethod
 import asyncio
 from collections.abc import Awaitable, Callable
 import logging
+import re
 import uuid
 import xml.etree.ElementTree as ET
 from time import perf_counter
@@ -64,7 +65,7 @@ class DatasourceBase(DatasourceInterface):
         if not configured_filter:
             return filters
 
-        for filter_value in configured_filter.split(","):
+        for filter_value in re.split(r"[,\s]+", configured_filter.strip()):
             filter_value = filter_value.strip()
             
             matched_prefix = False

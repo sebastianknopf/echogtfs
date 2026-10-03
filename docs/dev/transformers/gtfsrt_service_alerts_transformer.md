@@ -24,7 +24,7 @@
 
 ## Filtering
 
-The datasource parses the configured filter into the transformer's filter mapping. The mapping can contain `line`, `operator`, and `legacy` pattern lists. GTFS-RT currently uses only `line` patterns. Matching uses full-value wildcard matching, where `*` matches any number of characters.
+The datasource parses the configured filter, using commas or whitespace as separators, into the transformer's filter mapping. The mapping can contain `line`, `operator`, and `legacy` pattern lists. GTFS-RT currently uses only `line` patterns. Matching uses full-value wildcard matching, where `*` matches any number of characters.
 
 An alert is kept when at least one `informed_entities[].route_id` matches a configured `line/` pattern. Alerts with no route ID in their informed entities, or with no matching route ID, are discarded.
 
