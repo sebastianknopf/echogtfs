@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 import xml.etree.ElementTree as ET
 from datetime import date, datetime, timedelta, timezone
 from time import perf_counter
@@ -22,7 +21,8 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
     """Transforms SIRI-ET XML payloads into trip-update dictionaries."""
 
     def __init__(self, filter_value: str | None = None):
-        self._filter_value = (filter_value or "").strip()
+        super().__init__({"filter": filter_value or ""})
+        self._filters = self.get_filters()
         self._siri_ns = {"siri": "http://www.siri.org.uk/siri"}
         self._target_timezone = self._resolve_timezone(self._configured_timezone_name())
         self._runtime_duration_ms = 0.0
@@ -501,25 +501,14 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
         return value.astimezone(timezone.utc)
 
     def _matches_operator_filter(self, journey: ET.Element) -> bool:
-        if not self._filter_value:
+        if not self._filters["legacy"]:
             return True
-
-        allowed_patterns = [
-            operator.strip()
-            for operator in self._filter_value.split(",")
-            if operator.strip()
-        ]
 
         operator_ref = self._get_text(journey.find("siri:OperatorRef", self._siri_ns))
         if not operator_ref:
             return False
 
-        return any(self._wildcard_matches(pattern, operator_ref) for pattern in allowed_patterns)
-
-    @staticmethod
-    def _wildcard_matches(pattern: str, value: str) -> bool:
-        regex = re.escape(pattern).replace(r"\*", ".*")
-        return bool(re.fullmatch(regex, value))
+        return any(self.identifier_matches(operator_ref, pattern) for pattern in self._filters["legacy"])
 
     def _collect_all_calls(self, journey: ET.Element) -> list[ET.Element]:
         recorded_calls = journey.findall("siri:RecordedCalls/siri:RecordedCall", self._siri_ns)

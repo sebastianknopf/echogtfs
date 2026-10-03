@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 import time
 from time import perf_counter
 import xml.etree.ElementTree as ET
@@ -26,8 +25,9 @@ class SiriSxSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         make_unique_id: Callable[[str, str], Any],
         filter_value: str | None = None,
     ):
+        super().__init__({"filter": filter_value or ""})
+        self._filters = self.get_filters()
         self._make_unique_id = make_unique_id
-        self._filter_value = (filter_value or "").strip()
         self._siri_ns = {"siri": "http://www.siri.org.uk/siri"}
         self._runtime_duration_ms = 0.0
 
@@ -89,14 +89,8 @@ class SiriSxSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         return float(self._runtime_duration_ms)
 
     def _matches_participant_filter(self, situation: ET.Element) -> bool:
-        if not self._filter_value:
+        if not self._filters["legacy"]:
             return True
-
-        allowed_patterns = [
-            participant.strip()
-            for participant in self._filter_value.split(",")
-            if participant.strip()
-        ]
 
         participant_ref_elem = situation.find("siri:ParticipantRef", self._siri_ns)
         participant_ref = (
@@ -108,12 +102,7 @@ class SiriSxSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         if not participant_ref:
             return False
 
-        return any(self._wildcard_matches(pattern, participant_ref) for pattern in allowed_patterns)
-
-    @staticmethod
-    def _wildcard_matches(pattern: str, value: str) -> bool:
-        regex = re.escape(pattern).replace(r"\*", ".*")
-        return bool(re.fullmatch(regex, value))
+        return any(self.identifier_matches(participant_ref, pattern) for pattern in self._filters["legacy"])
 
     def _is_in_publication_window(self, situation: ET.Element, current_timestamp: int) -> bool:
         publication_windows = situation.findall("siri:PublicationWindow", self._siri_ns)

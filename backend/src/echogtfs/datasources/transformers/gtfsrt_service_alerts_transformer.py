@@ -19,6 +19,8 @@ class GtfsRtServiceAlertsTransformer(ServiceAlertsTransformerInterface):
     """Transforms parsed GTFS-RT feed entities into service-alert dictionaries."""
 
     def __init__(self, make_unique_id: Callable[[str, str], Any]):
+        super().__init__({"filter": ""})
+        self._filters = self.get_filters()
         self._make_unique_id = make_unique_id
         self._runtime_duration_ms = 0.0
 

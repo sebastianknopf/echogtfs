@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import random
-import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from time import perf_counter
@@ -22,7 +21,8 @@ class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
     """Transforms SIRI-VM XML payloads into vehicle-position dictionaries."""
 
     def __init__(self, filter_value: str | None = None):
-        self._filter_value = (filter_value or "").strip()
+        super().__init__({"filter": filter_value or ""})
+        self._filters = self.get_filters()
         self._siri_ns = {"siri": "http://www.siri.org.uk/siri"}
         self._runtime_duration_ms = 0.0
 
@@ -324,25 +324,14 @@ class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
         return extracted
 
     def _matches_operator_filter(self, monitored_journey: ET.Element) -> bool:
-        if not self._filter_value:
+        if not self._filters["legacy"]:
             return True
-
-        allowed_patterns = [
-            pattern.strip()
-            for pattern in self._filter_value.split(",")
-            if pattern.strip()
-        ]
 
         operator_ref = self._get_text(monitored_journey.find("siri:OperatorRef", self._siri_ns))
         if not operator_ref:
             return False
 
-        return any(self._wildcard_matches(pattern, operator_ref) for pattern in allowed_patterns)
-
-    @staticmethod
-    def _wildcard_matches(pattern: str, value: str) -> bool:
-        regex = re.escape(pattern).replace(r"\*", ".*")
-        return bool(re.fullmatch(regex, value))
+        return any(self.identifier_matches(operator_ref, pattern) for pattern in self._filters["legacy"])
 
     @staticmethod
     def _get_text(element: ET.Element | None) -> str | None:
