@@ -47,7 +47,8 @@ class TestGtfsRtServiceAlertsTransformer(unittest.TestCase):
         feed.entity.append(expired_entity)
 
         transformer = GtfsRtServiceAlertsTransformer(
-            make_unique_id=lambda original, source: f"{source}-{original}"
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filters={"line": [], "operator": [], "legacy": []},
         )
         records = transformer.transform({"feed": feed, "source_name": "src"})
 
@@ -64,7 +65,8 @@ class TestGtfsRtServiceAlertsTransformer(unittest.TestCase):
         feed.entity.append(entity_without_alert)
 
         transformer = GtfsRtServiceAlertsTransformer(
-            make_unique_id=lambda original, source: f"{source}-{original}"
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filters={"line": [], "operator": [], "legacy": []},
         )
 
         records = transformer.transform({"feed": feed, "source_name": "src"})
@@ -74,7 +76,7 @@ class TestGtfsRtServiceAlertsTransformer(unittest.TestCase):
         feed = self._feed_with_route_ids("R1", "R2")
         transformer = GtfsRtServiceAlertsTransformer(
             make_unique_id=lambda original, source: f"{source}-{original}",
-            filter_value="line/R*",
+            filters={"line": ["R*"], "operator": [], "legacy": []},
         )
 
         records = transformer.transform({"feed": feed, "source_name": "src"})
@@ -89,7 +91,7 @@ class TestGtfsRtServiceAlertsTransformer(unittest.TestCase):
         feed = self._feed_with_route_ids("R1", "R2")
         transformer = GtfsRtServiceAlertsTransformer(
             make_unique_id=lambda original, source: f"{source}-{original}",
-            filter_value="line/X*",
+            filters={"line": ["X*"], "operator": [], "legacy": []},
         )
 
         records = transformer.transform({"feed": feed, "source_name": "src"})
@@ -100,7 +102,7 @@ class TestGtfsRtServiceAlertsTransformer(unittest.TestCase):
         feed = self._feed_with_route_ids()
         transformer = GtfsRtServiceAlertsTransformer(
             make_unique_id=lambda original, source: f"{source}-{original}",
-            filter_value="line/R*",
+            filters={"line": ["R*"], "operator": [], "legacy": []},
         )
 
         records = transformer.transform({"feed": feed, "source_name": "src"})

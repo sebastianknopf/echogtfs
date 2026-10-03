@@ -14,7 +14,9 @@ from echogtfs.datasources.transformers.siriet_trip_updates_transformer import (
 
 class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
     def setUp(self) -> None:
-        self.transformer = SiriEtTripUpdatesTransformer()
+        self.transformer = SiriEtTripUpdatesTransformer(
+            filters={"operator": [], "line": [], "legacy": []}
+        )
 
     def test_scheduled_trip_can_be_kept_when_stop_sequence_is_incomplete(self) -> None:
         payload = self._build_payload(extra_journey="false", complete_sequence="false")
@@ -51,7 +53,7 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
         self.assertEqual(trips[0]["schedule_relationship"], "CANCELED")
 
     def test_operator_filter_supports_wildcard(self) -> None:
-        transformer = SiriEtTripUpdatesTransformer(filter_value="operator/OP-*")
+        transformer = SiriEtTripUpdatesTransformer(filters={"operator": ["OP-*"], "line": [], "legacy": []})
         payload = self._build_payload(
             extra_journey="false",
             complete_sequence="false",
@@ -63,7 +65,7 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
         self.assertEqual(len(trips), 1)
 
     def test_operator_filter_rejects_non_matching_wildcard(self) -> None:
-        transformer = SiriEtTripUpdatesTransformer(filter_value="operator/OP-*")
+        transformer = SiriEtTripUpdatesTransformer(filters={"operator": ["OP-*"], "line": [], "legacy": []})
         payload = self._build_payload(
             extra_journey="false",
             complete_sequence="false",
@@ -75,7 +77,7 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
         self.assertEqual(trips, [])
 
     def test_legacy_operator_filter_supports_wildcard(self) -> None:
-        transformer = SiriEtTripUpdatesTransformer(filter_value="OP-*")
+        transformer = SiriEtTripUpdatesTransformer(filters={"operator": [], "line": [], "legacy": ["OP-*"]})
         journey = ET.fromstring(
             """
             <EstimatedVehicleJourney xmlns="http://www.siri.org.uk/siri">
@@ -87,7 +89,7 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
         self.assertTrue(transformer._matches_operator_filter(journey))
 
     def test_legacy_operator_filter_rejects_non_matching_wildcard(self) -> None:
-        transformer = SiriEtTripUpdatesTransformer(filter_value="OP-*")
+        transformer = SiriEtTripUpdatesTransformer(filters={"operator": [], "line": [], "legacy": ["OP-*"]})
         journey = ET.fromstring(
             """
             <EstimatedVehicleJourney xmlns="http://www.siri.org.uk/siri">
@@ -99,7 +101,7 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
         self.assertFalse(transformer._matches_operator_filter(journey))
 
     def test_line_filter_supports_wildcard(self) -> None:
-        transformer = SiriEtTripUpdatesTransformer(filter_value="line/LINE-*")
+        transformer = SiriEtTripUpdatesTransformer(filters={"operator": [], "line": ["LINE-*"], "legacy": []})
         payload = self._build_payload(
             extra_journey="false",
             complete_sequence="false",
@@ -112,7 +114,7 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
         self.assertEqual(trips[0]["route_id"], "LINE-1")
 
     def test_line_filter_rejects_non_matching_wildcard(self) -> None:
-        transformer = SiriEtTripUpdatesTransformer(filter_value="line/LINE-*")
+        transformer = SiriEtTripUpdatesTransformer(filters={"operator": [], "line": ["LINE-*"], "legacy": []})
         payload = self._build_payload(
             extra_journey="false",
             complete_sequence="false",

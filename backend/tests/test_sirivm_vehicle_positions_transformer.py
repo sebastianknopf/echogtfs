@@ -47,7 +47,9 @@ class TestSiriVmVehiclePositionsTransformer(unittest.TestCase):
         super().tearDownClass()
 
     def setUp(self) -> None:
-        self.transformer = SiriVmVehiclePositionsTransformer()
+        self.transformer = SiriVmVehiclePositionsTransformer(
+            filters={"operator": [], "line": [], "legacy": []}
+        )
 
     def test_complete_sequence_extracts_start_and_end_from_call_bounds(self) -> None:
         now = datetime.now(timezone.utc)
@@ -262,7 +264,7 @@ class TestSiriVmVehiclePositionsTransformer(unittest.TestCase):
         )
 
     def test_operator_filter_supports_wildcard(self) -> None:
-        transformer = SiriVmVehiclePositionsTransformer(filter_value="operator/OP-*")
+        transformer = SiriVmVehiclePositionsTransformer(filters={"operator": ["OP-*"], "line": [], "legacy": []})
         monitored_call = """
 <siri:MonitoredCall>
   <siri:StopPointRef>STOP_CURRENT</siri:StopPointRef>
@@ -284,7 +286,7 @@ class TestSiriVmVehiclePositionsTransformer(unittest.TestCase):
         self.assertEqual(len(result), 1)
 
     def test_operator_filter_rejects_non_matching_wildcard(self) -> None:
-        transformer = SiriVmVehiclePositionsTransformer(filter_value="operator/OP-*")
+        transformer = SiriVmVehiclePositionsTransformer(filters={"operator": ["OP-*"], "line": [], "legacy": []})
         monitored_call = """
 <siri:MonitoredCall>
   <siri:StopPointRef>STOP_CURRENT</siri:StopPointRef>
@@ -306,7 +308,7 @@ class TestSiriVmVehiclePositionsTransformer(unittest.TestCase):
         self.assertEqual(result, [])
 
     def test_legacy_operator_filter_supports_wildcard(self) -> None:
-        transformer = SiriVmVehiclePositionsTransformer(filter_value="OP-*")
+        transformer = SiriVmVehiclePositionsTransformer(filters={"operator": [], "line": [], "legacy": ["OP-*"]})
         monitored_journey = ET.fromstring(
             """
             <MonitoredVehicleJourney xmlns="http://www.siri.org.uk/siri">
@@ -318,7 +320,7 @@ class TestSiriVmVehiclePositionsTransformer(unittest.TestCase):
         self.assertTrue(transformer._matches_operator_filter(monitored_journey))
 
     def test_legacy_operator_filter_rejects_non_matching_wildcard(self) -> None:
-        transformer = SiriVmVehiclePositionsTransformer(filter_value="OP-*")
+        transformer = SiriVmVehiclePositionsTransformer(filters={"operator": [], "line": [], "legacy": ["OP-*"]})
         monitored_journey = ET.fromstring(
             """
             <MonitoredVehicleJourney xmlns="http://www.siri.org.uk/siri">
@@ -330,7 +332,7 @@ class TestSiriVmVehiclePositionsTransformer(unittest.TestCase):
         self.assertFalse(transformer._matches_operator_filter(monitored_journey))
 
     def test_line_filter_supports_wildcard(self) -> None:
-        transformer = SiriVmVehiclePositionsTransformer(filter_value="line/LINE-*")
+        transformer = SiriVmVehiclePositionsTransformer(filters={"operator": [], "line": ["LINE-*"], "legacy": []})
         monitored_call = """
 <siri:MonitoredCall>
   <siri:StopPointRef>STOP_CURRENT</siri:StopPointRef>
@@ -353,7 +355,7 @@ class TestSiriVmVehiclePositionsTransformer(unittest.TestCase):
         self.assertEqual(result[0]["trip"]["route_id"], "LINE-1")
 
     def test_line_filter_rejects_non_matching_wildcard(self) -> None:
-        transformer = SiriVmVehiclePositionsTransformer(filter_value="line/LINE-*")
+        transformer = SiriVmVehiclePositionsTransformer(filters={"operator": [], "line": ["LINE-*"], "legacy": []})
         monitored_call = """
 <siri:MonitoredCall>
   <siri:StopPointRef>STOP_CURRENT</siri:StopPointRef>

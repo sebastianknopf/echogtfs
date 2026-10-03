@@ -58,7 +58,7 @@ class TestSiriSxSwissServiceAlertsTransformer(unittest.TestCase):
         root = ET.fromstring(xml_payload)
         transformer = SiriSxSwissServiceAlertsTransformer(
             make_unique_id=lambda original, source: f"{source}-{original}",
-            filter_value="P1",
+            filters={"operator": [], "line": [], "legacy": ["P1"]},
         )
 
         records = transformer.transform({"root": root, "source_name": "sirisx-swiss"})
@@ -72,7 +72,7 @@ class TestSiriSxSwissServiceAlertsTransformer(unittest.TestCase):
         root = ET.fromstring("<Siri xmlns=\"http://www.siri.org.uk/siri\"></Siri>")
         transformer = SiriSxSwissServiceAlertsTransformer(
             make_unique_id=lambda original, source: f"{source}-{original}",
-            filter_value="P1",
+            filters={"operator": [], "line": [], "legacy": ["P1"]},
         )
 
         records = transformer.transform({"root": root, "source_name": "sirisx-swiss"})
@@ -106,7 +106,7 @@ class TestSiriSxSwissServiceAlertsTransformer(unittest.TestCase):
         root = ET.fromstring(xml_payload)
         transformer = SiriSxSwissServiceAlertsTransformer(
             make_unique_id=lambda original, source: f"{source}-{original}",
-            filter_value="operator/P1-*",
+            filters={"operator": ["P1-*"], "line": [], "legacy": []},
         )
 
         records = transformer.transform({"root": root, "source_name": "sirisx-swiss"})
@@ -140,7 +140,7 @@ class TestSiriSxSwissServiceAlertsTransformer(unittest.TestCase):
         root = ET.fromstring(xml_payload)
         transformer = SiriSxSwissServiceAlertsTransformer(
             make_unique_id=lambda original, source: f"{source}-{original}",
-            filter_value="operator/P1-*",
+            filters={"operator": ["P1-*"], "line": [], "legacy": []},
         )
 
         records = transformer.transform({"root": root, "source_name": "sirisx-swiss"})
@@ -149,7 +149,7 @@ class TestSiriSxSwissServiceAlertsTransformer(unittest.TestCase):
     def test_legacy_participant_filter_supports_wildcard(self):
         transformer = SiriSxSwissServiceAlertsTransformer(
             make_unique_id=lambda original, source: f"{source}-{original}",
-            filter_value="P1-*",
+            filters={"operator": [], "line": [], "legacy": ["P1-*"]},
         )
         situation = ET.fromstring(
             """
@@ -164,7 +164,7 @@ class TestSiriSxSwissServiceAlertsTransformer(unittest.TestCase):
     def test_legacy_participant_filter_rejects_non_matching_wildcard(self):
         transformer = SiriSxSwissServiceAlertsTransformer(
             make_unique_id=lambda original, source: f"{source}-{original}",
-            filter_value="P1-*",
+            filters={"operator": [], "line": [], "legacy": ["P1-*"]},
         )
         situation = ET.fromstring(
             """
@@ -179,7 +179,7 @@ class TestSiriSxSwissServiceAlertsTransformer(unittest.TestCase):
     def test_line_filter_matches_nested_line_reference(self):
         transformer = SiriSxSwissServiceAlertsTransformer(
             make_unique_id=lambda original, source: f"{source}-{original}",
-            filter_value="line/LINE-*",
+            filters={"operator": [], "line": ["LINE-*"], "legacy": []},
         )
         situation = ET.fromstring(
             """
@@ -200,7 +200,7 @@ class TestSiriSxSwissServiceAlertsTransformer(unittest.TestCase):
     def test_line_filter_rejects_non_matching_line_reference(self):
         transformer = SiriSxSwissServiceAlertsTransformer(
             make_unique_id=lambda original, source: f"{source}-{original}",
-            filter_value="line/LINE-*",
+            filters={"operator": [], "line": ["LINE-*"], "legacy": []},
         )
         situation = ET.fromstring(
             """
@@ -221,7 +221,7 @@ class TestSiriSxSwissServiceAlertsTransformer(unittest.TestCase):
     def test_line_filter_rejects_situation_without_line_reference(self):
         transformer = SiriSxSwissServiceAlertsTransformer(
             make_unique_id=lambda original, source: f"{source}-{original}",
-            filter_value="line/LINE-*",
+            filters={"operator": [], "line": ["LINE-*"], "legacy": []},
         )
         situation = ET.fromstring(
             """
@@ -262,7 +262,7 @@ class TestSiriSxSwissServiceAlertsTransformer(unittest.TestCase):
         root = ET.fromstring(xml_payload)
         transformer = SiriSxSwissServiceAlertsTransformer(
             make_unique_id=lambda original, source: f"{source}-{original}",
-            filter_value="P1",
+            filters={"operator": [], "line": [], "legacy": ["P1"]},
         )
 
         records = transformer.transform({"root": root, "source_name": "sirisx-swiss"})
@@ -309,7 +309,7 @@ class TestSiriSxSwissServiceAlertsTransformer(unittest.TestCase):
         root = ET.fromstring(xml_payload)
         transformer = SiriSxSwissServiceAlertsTransformer(
             make_unique_id=lambda original, source: f"{source}-{original}",
-            filter_value="P1",
+            filters={"operator": [], "line": [], "legacy": ["P1"]},
         )
 
         records = transformer.transform({"root": root, "source_name": "sirisx-swiss"})
