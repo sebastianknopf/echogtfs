@@ -104,6 +104,38 @@ class SiriSubscriptionService(SiriSubscriptionServiceInterface):
 
         return True
 
+    async def get_subscription_status(self, datasource_id: int) -> bool:
+        """Return whether a subscription is currently active."""
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(
+                    f"{self._SIRI_CONSUMER_API_URL}/subscriptions/{datasource_id}",
+                )
+        except httpx.HTTPError as exc:
+            logger.error("[SiriSubscription] Failed to get status for datasource %s: %s", datasource_id, exc)
+            return False
+
+        if response.status_code != httpx.codes.OK:
+            logger.error(
+                "[SiriSubscription] Status for datasource %s returned HTTP %s: %s",
+                datasource_id,
+                response.status_code,
+                response.text,
+            )
+            return False
+
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            logger.error(
+                "[SiriSubscription] Invalid status response for datasource %s: %s",
+                datasource_id,
+                exc,
+            )
+            return False
+
+        return isinstance(payload, dict) and payload.get("status") == "active"
+
     async def restart_subscription(
         self,
         datasource_id: int,

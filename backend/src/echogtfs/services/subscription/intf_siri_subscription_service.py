@@ -23,6 +23,11 @@ class SiriSubscriptionServiceInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def get_subscription_status(self, datasource_id: int) -> bool:
+        """Return whether a datasource subscription is currently active."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def restart_subscription(
         self,
         datasource_id: int,
