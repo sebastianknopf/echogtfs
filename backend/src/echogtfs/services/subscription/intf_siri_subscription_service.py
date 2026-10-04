@@ -11,7 +11,6 @@ class SiriSubscriptionServiceInterface(ABC):
     async def start_subscription(
         self,
         datasource_id: int,
-        datasource_type: str,
         config: dict[str, Any],
     ) -> bool:
         """Create and activate a subscription for a SIRI datasource."""
@@ -31,7 +30,6 @@ class SiriSubscriptionServiceInterface(ABC):
     async def restart_subscription(
         self,
         datasource_id: int,
-        datasource_type: str,
         config: dict[str, Any] | None,
     ) -> bool:
         """Restart or recreate a SIRI subscription."""
