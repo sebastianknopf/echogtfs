@@ -1078,6 +1078,25 @@ body {
   margin-left: 0;
 }
 
+.dashboard-service-status__value {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.dashboard-service-status__title {
+  font-size: 1.75rem;
+  line-height: 1.25;
+  white-space: normal;
+}
+
+.dashboard-service-status.is-ok .dashboard-service-status__value {
+  color: #1a5c35;
+}
+
+.dashboard-service-status.is-disrupted .dashboard-service-status__value {
+  color: var(--md-error);
+}
+
 .dashboard-endpoints-list {
   display: flex;
   flex-direction: column;

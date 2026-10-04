@@ -405,6 +405,10 @@ const api = (() => {
       return request('/dashboard/');
     },
 
+    getSiriHealth() {
+      return request('/service/siri/health');
+    },
+
     // Data sources
     getSources() {
       return request('/sources/');
