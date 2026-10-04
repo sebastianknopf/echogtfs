@@ -500,6 +500,25 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
         content_type: str | None,
     ) -> dict[str, int]:
         """Execute one datasource push synchronously and return the sync result counts."""
+        return await self._run_push_task(source_id, payload, content_type, require_event_based=True)
+
+    async def run_internal_push_task(
+        self,
+        source_id: int,
+        payload: bytes,
+        content_type: str | None,
+    ) -> dict[str, int]:
+        """Execute one datasource synchronously without requiring event-based execution."""
+        return await self._run_push_task(source_id, payload, content_type, require_event_based=False)
+
+    async def _run_push_task(
+        self,
+        source_id: int,
+        payload: bytes,
+        content_type: str | None,
+        *,
+        require_event_based: bool,
+    ) -> dict[str, int]:
         if self._closing:
             raise PushServiceError(status_code=503, detail="error.scheduler_closing")
 
@@ -510,7 +529,7 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
         if not source.is_active:
             raise PushServiceError(status_code=403, detail="error.source_not_active")
 
-        if source.execution_type != DataSourceExecutionType.EVENT_BASED:
+        if require_event_based and source.execution_type != DataSourceExecutionType.EVENT_BASED:
             raise PushServiceError(status_code=403, detail="error.source_not_event_based")
 
         if await self._is_gtfs_import_running():

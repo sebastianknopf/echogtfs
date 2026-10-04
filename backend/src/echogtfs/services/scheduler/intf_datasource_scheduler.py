@@ -37,6 +37,16 @@ class DatasourceSchedulerInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def run_internal_push_task(
+        self,
+        source_id: int,
+        payload: bytes,
+        content_type: str | None,
+    ) -> dict[str, int]:
+        """Execute one datasource run synchronously without requiring event-based execution."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def wait_for_source_idle(self, source_id: int, timeout_seconds: float | None) -> bool:
         """Wait until a source has no active run and return whether it became idle before timeout."""
         raise NotImplementedError

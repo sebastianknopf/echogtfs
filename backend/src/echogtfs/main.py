@@ -37,6 +37,7 @@ from echogtfs.routers.systemcopy import router as systemcopy_router
 from echogtfs.routers.sources import router as sources_router
 from echogtfs.routers.users import router as users_router
 from echogtfs.routers.push import router as push_router
+from echogtfs.routers.internal_execute import router as internal_execute_router
 from echogtfs._version import __version__
 
 logger = logging.getLogger("uvicorn.error")
@@ -152,3 +153,4 @@ app.include_router(gtfs_router,         prefix="/api/gtfs",         tags=["gtfs"
 app.include_router(systemcopy_router,   prefix="/api/systemcopy",   tags=["systemcopy"])
 app.include_router(realtime_router,     prefix="/api",              tags=["realtime"])
 app.include_router(push_router,         prefix="/api/push",         tags=["push"])
+app.include_router(internal_execute_router, prefix="/internal/execute", include_in_schema=False)
