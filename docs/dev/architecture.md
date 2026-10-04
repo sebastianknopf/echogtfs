@@ -12,6 +12,7 @@ The application is composed of three Docker containers defined in `docker-compos
 - `frontend`: NGINX web server that serves the static single-page application and reverse-proxies `/api` requests to the backend. Exposed on the host at the port defined by `FRONTEND_PORT` (default 80).
 - `database`: PostgreSQL 16. Accessible only to the backend container.
 - `redis`: Redis service used for caching and event streaming inside the application.
+- `siricomservice`: SIRI consumer communication service for running SIRI service communication with external SIRI services.
 
 All runtime configuration is injected via environment variables. The canonical source of variable names is `.env.example`.
 
@@ -73,6 +74,7 @@ Each router file under `routers/` maps to a URL prefix registered in `main.py`:
 | `systemcopy.py` | `/api/systemcopy` | Superuser system configuration export and import |
 | `realtime.py` | `/api` | Public GTFS-RT feed output in protobuf or JSON format |
 | `push.py` | `/api/push` | Public push endpoint for synchronous event-based datasource execution |
+| `internal_execute.py` | `/internal/execute` | Internal endpoint to execute data sources forcefully. **Only for internal usage inside the EchoGTFS network, NOT exposed to the external API via frontend.** |
 
 The API routers are meant to have as less logic as possible and only do the I/O networking stuff, mainly communication to the frontend, but also provision of GTFS-RT data.
 
@@ -83,6 +85,7 @@ Services are meant to encapsulate all the logic which is not a) direct database 
 Most services are instantiated when they're used in the code. Some special services are meant to be single-instance services used globally around the whole python process. These services are currently:
 
 - `SecurityService` (related for security related issues)
+- `SiriSubscriptionService` (related for any subscription issues to the siricomservice)
 - `CachingService` (abstraction layer for redis access)
 - `DatasourceSchedulerService` (responsible for scheduling datasources by their cron job)
 

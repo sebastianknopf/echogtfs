@@ -21,6 +21,7 @@ from echogtfs.services.database import (
 )
 from echogtfs.services.scheduler import DatasourceSchedulerService, set_datasource_scheduler_service
 from echogtfs.services.security import SecurityService, get_security_service, set_security_service
+from echogtfs.services.subscription import SiriSubscriptionService, set_siri_subscription_service
 from echogtfs.services.caching import CachingService, set_caching_service
 from echogtfs.routers.alerts import router as alerts_router
 from echogtfs.routers.auth import router as auth_router
@@ -66,6 +67,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # intialize single-instance services
     set_security_service(SecurityService(system_repository))
+    set_siri_subscription_service(SiriSubscriptionService())
     caching_service = CachingService(settings.redis_url)
 
     await caching_service.initialize()
