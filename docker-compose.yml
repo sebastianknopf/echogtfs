@@ -30,8 +30,6 @@ services:
   siricomservice:
     image: sebastianknopf/siriconsumer:0.1.1
     restart: unless-stopped
-    environment:
-      SIRI_STATUS_ENABLED: ${SIRI_STATUS_ENABLED:-false}
     volumes:
       - siricomserviceapp:/app
       - siricomservicelogs:/var/log/siri
@@ -76,6 +74,8 @@ services:
     ports:
       - "${FRONTEND_PORT:-80}:80"
       - "${SIRI_PORT:-8080}:8080"
+    environment:
+      SIRI_STATUS_ENABLED: ${SIRI_STATUS_ENABLED:-false}
     depends_on:
       - backend
       - siricomservice
