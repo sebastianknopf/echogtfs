@@ -115,6 +115,22 @@ class TestDatasourceSchedulerService(unittest.IsolatedAsyncioTestCase):
         service._run_datasource_in_process.assert_awaited_once_with(7)
         repository.update_data_source_last_run_at.assert_awaited_once()
 
+    async def test_run_import_task_skips_subscription_datasource(self):
+        repository = _RepositoryStub()
+        realtime_repository = SimpleNamespace()
+        gtfs_repository = SimpleNamespace()
+        repository.get_data_source_by_id.return_value = _DataSourceStub(id=12, name="Subscribed")
+        service = DatasourceSchedulerService(repository, realtime_repository, gtfs_repository)
+        service._source_requires_subscription = Mock(return_value=True)
+        service._run_datasource_in_process = AsyncMock()
+
+        with patch.object(scheduler_module.logger, "warning") as warning_mock:
+            await service.run_import_task(12)
+
+        service._run_datasource_in_process.assert_not_awaited()
+        repository.update_data_source_last_run_at.assert_not_awaited()
+        warning_mock.assert_called_once()
+
     async def test_run_import_task_skips_when_gtfs_import_is_running(self):
         repository = _RepositoryStub()
         realtime_repository = SimpleNamespace()
@@ -230,6 +246,43 @@ class TestDatasourceSchedulerService(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(ctx.exception.status_code, 403)
         self.assertEqual(ctx.exception.detail, "error.source_not_event_based")
+
+    async def test_run_push_task_raises_403_when_subscription_datasource(self):
+        repository = _RepositoryStub()
+        repository.get_data_source_by_id.return_value = _DataSourceStub(
+            id=13, name="Subscribed", execution_type="event_based"
+        )
+        service = DatasourceSchedulerService(repository, SimpleNamespace(), SimpleNamespace())
+        service._source_requires_subscription = Mock(return_value=True)
+        service._run_datasource_push_in_process = AsyncMock()
+
+        with self.assertRaises(PushServiceError) as ctx:
+            await service.run_push_task(13, b"payload", None)
+
+        self.assertEqual(ctx.exception.status_code, 403)
+        self.assertEqual(ctx.exception.detail, "error.source_subscription_only")
+        service._run_datasource_push_in_process.assert_not_awaited()
+        repository.update_data_source_last_run_at.assert_not_awaited()
+
+    async def test_run_internal_push_task_allows_subscription_datasource(self):
+        repository = _RepositoryStub()
+        repository.get_data_source_by_id.return_value = _DataSourceStub(
+            id=14, name="Subscribed", execution_type="time_based"
+        )
+        service = DatasourceSchedulerService(repository, SimpleNamespace(), SimpleNamespace())
+        service._source_requires_subscription = Mock(return_value=True)
+        service._run_datasource_push_in_process = AsyncMock(
+            return_value={"added": 1, "updated": 0, "deleted": 0}
+        )
+
+        stats = await service.run_internal_push_task(14, b"payload", "application/xml")
+
+        self.assertEqual(stats, {"added": 1, "updated": 0, "deleted": 0})
+        service._run_datasource_push_in_process.assert_awaited_once_with(
+            14,
+            b"payload",
+            "application/xml",
+        )
 
     async def test_run_push_task_raises_409_when_gtfs_import_running(self):
         repository = _RepositoryStub()

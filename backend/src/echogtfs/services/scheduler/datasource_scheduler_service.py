@@ -14,12 +14,14 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from echogtfs.common.config import settings
+from echogtfs.datasources.base import DatasourceBase
 from echogtfs.enum.system import DataSourceExecutionType
-from echogtfs.services.database.models import AppSetting
+from echogtfs.services.database.models import AppSetting, DataSource
 from echogtfs.services.scheduler.intf_datasource_scheduler import DatasourceSchedulerInterface
 from echogtfs.services.scheduler.push_service_error import PushServiceError
 
-from echogtfs.datasources import get_datasource
+from echogtfs.datasources import DATASOURCE_REGISTRY, get_datasource
+from echogtfs.datasources.subscription_datasource_base import SubscriptionDatasourceBase
 from echogtfs.services.caching import CachingService, set_caching_service
 from echogtfs.services.database import (
     GtfsRepository,
@@ -322,6 +324,23 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
         return status_value == "running"
 
     @staticmethod
+    def _get_datasource(source: DataSource) -> DatasourceBase:
+        """Build a datasource instance from a persisted data source."""
+        config = json.loads(source.config)
+        config["_execution_type"] = source.execution_type
+        return get_datasource(source.type, config)
+
+    @classmethod
+    def _source_requires_subscription(cls, source: DataSource) -> bool:
+        """Return whether a datasource is managed through a subscription."""
+        datasource_class = DATASOURCE_REGISTRY.get(source.type.lower())
+        if datasource_class is None or not issubclass(datasource_class, SubscriptionDatasourceBase):
+            return False
+
+        datasource = cls._get_datasource(source)
+        return datasource.is_subscription_required()
+
+    @staticmethod
     def _resolve_scheduler_timezone() -> ZoneInfo:
         timezone_name = os.getenv("TIMEZONE", "UTC").strip() or "UTC"
 
@@ -435,6 +454,27 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
 
             return
 
+        source = await self._system_repository.get_data_source_by_id(source_id)
+        if source is None:
+            logger.error("[DatasourceScheduler] Data source %s not found", source_id)
+            return
+
+        if not source.is_active:
+            logger.info(
+                "[DatasourceScheduler] Data source '%s' is inactive, skipping import",
+                source.name,
+            )
+            return
+
+        if self._source_requires_subscription(source):
+            logger.warning(
+                "[DatasourceScheduler] Skipping time-based import for subscription-managed "
+                "data source '%s' (ID: %s)",
+                source.name,
+                source.id,
+            )
+            return
+
         is_marked = await self._try_mark_source_running(source_id)
         if not is_marked:
             logger.info(
@@ -448,20 +488,6 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
         await self._set_source_run_status(source_id, _SOURCE_RUN_STATUS_RUNNING)
 
         try:
-            source = await self._system_repository.get_data_source_by_id(source_id)
-            if source is None:
-                logger.error("[DatasourceScheduler] Data source %s not found", source_id)
-
-                return
-
-            if not source.is_active:
-                logger.info(
-                    "[DatasourceScheduler] Data source '%s' is inactive, skipping import",
-                    source.name,
-                )
-                
-                return
-
             try:
                 stats = await self._run_datasource_in_process(source.id)
 
@@ -531,6 +557,9 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
 
         if require_event_based and source.execution_type != DataSourceExecutionType.EVENT_BASED:
             raise PushServiceError(status_code=403, detail="error.source_not_event_based")
+
+        if require_event_based and self._source_requires_subscription(source):
+            raise PushServiceError(status_code=403, detail="error.source_subscription_only")
 
         if await self._is_gtfs_import_running():
             raise PushServiceError(status_code=409, detail="error.gtfs_import_running")
