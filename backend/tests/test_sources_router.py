@@ -27,7 +27,14 @@ from echogtfs.validation.schemas import DataSourceUpdate
 
 
 def _source(*, source_id: int, is_active: bool) -> SimpleNamespace:
-    return SimpleNamespace(id=source_id, name="Alpha", is_active=is_active, cron="*/5 * * * *")
+    return SimpleNamespace(
+        id=source_id,
+        name="Alpha",
+        type="dummy",
+        config="{}",
+        is_active=is_active,
+        cron="*/5 * * * *",
+    )
 
 
 class TestSourcesRouterDeactivation(unittest.IsolatedAsyncioTestCase):
