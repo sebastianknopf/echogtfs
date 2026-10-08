@@ -11,7 +11,7 @@ from typing import Any
 
 import httpx
 
-from echogtfs.datasources.base import DatasourceBase
+from echogtfs.datasources.subscription_datasource_base import SubscriptionDatasourceBase
 from echogtfs.datasources.transformers import SiriEtTripUpdatesTransformer
 from echogtfs.enum.system import IncorrectStopIdHandling
 
@@ -27,7 +27,7 @@ class SiriEtDialect(str, Enum):
     SIRIET = "siriet"
 
 
-class SiriEtDatasource(DatasourceBase):
+class SiriEtDatasource(SubscriptionDatasourceBase):
     """Datasource implementation for SIRI-ET feeds."""
 
     CONFIG_SCHEMA: list[dict[str, Any]] = [
@@ -326,3 +326,11 @@ class SiriEtDatasource(DatasourceBase):
             )
 
             raise ValueError(f"Failed to parse SIRI-ET XML: {exc}") from exc
+
+    def is_subscription_required(self) -> bool:
+        """Return whether this datasource requires an active subscription."""
+        return False
+
+    def get_subscription_params(self) -> dict[str, Any]:
+        """Return the parameters required to configure the subscription."""
+        return {}

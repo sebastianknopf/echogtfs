@@ -11,7 +11,7 @@ from typing import Any
 
 import httpx
 
-from echogtfs.datasources.base import DatasourceBase
+from echogtfs.datasources.subscription_datasource_base import SubscriptionDatasourceBase
 from echogtfs.datasources.transformers import SiriVmVehiclePositionsTransformer
 
 logger = logging.getLogger("uvicorn")
@@ -26,7 +26,7 @@ class SiriVmDialect(str, Enum):
     SIRIVM = "sirivm"
 
 
-class SiriVmDatasource(DatasourceBase):
+class SiriVmDatasource(SubscriptionDatasourceBase):
     """Datasource implementation for SIRI-VM feeds."""
 
     CONFIG_SCHEMA: list[dict[str, Any]] = [
@@ -286,3 +286,11 @@ class SiriVmDatasource(DatasourceBase):
             )
 
             raise ValueError(f"Failed to parse SIRI-VM XML: {exc}") from exc
+
+    def is_subscription_required(self) -> bool:
+        """Return whether this datasource requires an active subscription."""
+        return False
+
+    def get_subscription_params(self) -> dict[str, Any]:
+        """Return the parameters required to configure the subscription."""
+        return {}
