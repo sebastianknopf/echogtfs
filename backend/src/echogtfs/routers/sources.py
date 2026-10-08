@@ -23,9 +23,11 @@ from echogtfs.validation.schemas import DataSourceCreate, DataSourceRead, DataSo
 from echogtfs.common.security import CurrentPoweruser
 from echogtfs.common.report_progress_queue import ReportProgressQueue
 from echogtfs.datasources import DATASOURCE_REGISTRY
+from echogtfs.datasources.subscription_datasource_base import SubscriptionDatasourceBase
 from echogtfs.enum.system import DataSourceExecutionType
 from echogtfs.services.datalog import DatalogService
 from echogtfs.services.mapping import MappingExportService, MappingImportService, MappingServiceError
+from echogtfs.services.subscription import get_siri_subscription_service
 
 router = APIRouter()
 logger = logging.getLogger("uvicorn")
@@ -41,6 +43,66 @@ _MSG_SOURCE_TOGGLE_TIMEOUT = "intf.sources.toggle.timeout"
 
 _Repo = Annotated[SystemRepositoryInterface, Depends(get_system_repository)]
 _RealtimeRepo = Annotated[RealtimeRepositoryInterface, Depends(get_realtime_repository)]
+
+
+def _get_subscription_datasource(source_type: str, config: str) -> SubscriptionDatasourceBase | None:
+    """Create a subscription datasource when the configured type supports subscriptions."""
+    datasource_class = DATASOURCE_REGISTRY.get(source_type.lower())
+    if datasource_class is None or not issubclass(datasource_class, SubscriptionDatasourceBase):
+        return None
+
+    try:
+        parsed_config = json.loads(config)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Data source configuration must be valid JSON",
+        ) from exc
+
+    if not isinstance(parsed_config, dict):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Data source configuration must be a JSON object",
+        )
+
+    datasource = datasource_class(parsed_config)
+    return datasource if datasource.is_subscription_required() else None
+
+
+async def _start_source_subscription(source: DataSource) -> None:
+    """Start the subscription for an active, subscription-managed datasource."""
+    datasource = _get_subscription_datasource(source.type, source.config)
+    if datasource is None:
+        return
+
+    started = await get_siri_subscription_service().start_subscription(
+        source.id,
+        datasource.get_subscription_params(),
+    )
+
+    if not started:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Could not start subscription for data source {source.id}",
+        )
+
+
+async def _stop_source_subscription(source: DataSource) -> None:
+    """Terminate the subscription for an active, subscription-managed datasource."""
+    if not source.is_active:
+        return
+
+    datasource = _get_subscription_datasource(source.type, source.config)
+    if datasource is None:
+        return
+
+    stopped = await get_siri_subscription_service().stop_subscription(source.id)
+    
+    if not stopped:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Could not stop subscription for data source {source.id}",
+        )
 
 
 async def _enrich_source_with_error_flag(source: DataSource, repository: SystemRepositoryInterface) -> DataSourceRead:
@@ -360,6 +422,9 @@ async def create_source(
             for enrichment_data in source_data.enrichments
         ],
     )
+
+    if source.is_active:
+        await _start_source_subscription(source)
     
     # Schedule cron job if active and cron expression is set
     if source.is_active and source.cron:
@@ -456,6 +521,9 @@ async def toggle_source_active(
                 return
 
             old_status = current_source.is_active
+            if old_status:
+                await _stop_source_subscription(current_source)
+
             toggled_source = await repository.toggle_data_source_active(source_id)
             if toggled_source is None:
                 await queue.report_progress(progress=100.0, message=_ERR_SOURCE_NOT_FOUND)
@@ -471,6 +539,8 @@ async def toggle_source_active(
                         await queue.report_progress(progress=100.0, message=_MSG_SOURCE_TOGGLE_TIMEOUT)
                         return
                     raise
+            elif toggled_source.is_active:
+                await _start_source_subscription(toggled_source)
 
             if toggled_source.is_active and toggled_source.cron:
                 await get_datasource_scheduler_service().schedule_data_source_import(
@@ -582,8 +652,10 @@ async def update_source(
         if await repository.data_source_name_exists(source_data.name, exclude_id=source_id):
             raise HTTPException(status_code=400, detail="Data source with this name already exists")
         await realtime_repository.update_service_alert_source_name(old_name, source_data.name)
-    
+
     should_cleanup_on_deactivate = source_data.is_active is False
+    if source.is_active:
+        await _stop_source_subscription(source)
 
     source = await repository.update_data_source(
         source_id,
@@ -628,6 +700,9 @@ async def update_source(
     if source is None:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=_ERR_SOURCE_NOT_FOUND)
 
+    if source.is_active:
+        await _start_source_subscription(source)
+
     if should_cleanup_on_deactivate and not source.is_active:
         await _wait_and_delete_source_realtime_objects(source, realtime_repository)
     elif source.is_active and source.cron:
@@ -651,6 +726,8 @@ async def delete_source(
     source = await repository.get_data_source_by_id(source_id)
     if not source:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=_ERR_SOURCE_NOT_FOUND)
+
+    await _stop_source_subscription(source)
     
     # Delete log files before deleting the data source
     # (DB entries will be cascade-deleted automatically)
