@@ -30,8 +30,8 @@ class MatchingServiceInterface(ABC):
         describes why no trip was assigned. When is_complete_stop_sequence is False,
         start/end anchor matching is skipped since incomplete sequences don't reliably
         carry valid first/last stops; matching then relies on the cached ID and
-        intermediate-stop fallback only. intermediate_stop_sample_size sets the minimum
-        number of intermediate stops considered before random-sampling down; callers
-        with fewer available candidates simply use all of them.
+        intermediate-stop fallback only. intermediate_stop_sample_size sets the maximum
+        number of intermediate stops considered; more candidates are randomly sampled
+        down to this size, fewer are all used.
         """
         raise NotImplementedError

@@ -19,6 +19,8 @@ match(
     scheduled_start_stop_id: str | None = None,
     scheduled_end_stop_id: str | None = None,
     scheduled_intermediate_stops: list[tuple[str, datetime]] | None = None,
+    is_complete_stop_sequence: bool = True,
+    intermediate_stop_sample_size: int = 3,
 ) -> tuple[str | None, AssignmentType]:
 ```
 
@@ -31,7 +33,7 @@ The `AssignentType` is returned for a technical description of the matching resu
 After the cache lookup and route precondition, matching proceeds in this order:
 
 1. Start/end anchor matching.
-2. Intermediate-stop fallback, only when both scheduled anchor times are absent.
+2. Intermediate-stop fallback, when anchor matching was skipped or did not return exactly one trip.
 
 The service caches a result only after either matching stage returns exactly one trip ID.
 
@@ -51,7 +53,7 @@ Before intermediate-stop matching, each anchor is validated and normalized:
 - Entries whose time is not a `datetime` are discarded.
 - Remaining stop IDs are reduced with `GlobalId.level(..., 3)`.
 
-If all supplied intermediate anchors are discarded, fallback matching is not attempted.
+If all supplied intermediate anchors are discarded, fallback matching is not attempted. If more anchors remain than `intermediate_stop_sample_size` (default 3), that many are drawn at random with `random.sample(...)`; otherwise all remaining anchors are used. `TripUpdateProcessingService.MAX_INTERMEDIATE_STOP_SAMPLE_SIZE` (3) defines the limit for trip updates.
 
 ## Start/End Anchor Matching
 
@@ -69,12 +71,11 @@ The stage succeeds only when the repository returns exactly one trip ID. On succ
 
 ## Intermediate-Stop Fallback
 
-Fallback matching runs only when the start/stop matching fails and `scheduled_intermediate_stops` is non-empty
-- At least one intermediate anchor remains after normalization.
+Fallback matching runs when start/end matching was skipped or failed and at least one intermediate anchor remains after normalization.
 
 The service first requests route-scoped candidate IDs with `find_trip_ids_by_match_properties(...)`, passing `route_id` and the supplied `operation_day_date`. If no candidates are returned, fallback fails.
 
-For each candidate, the service loads the trip and its stop times with `get_gtfs_trip_with_stop_times(...)`. A candidate matches only when every normalized intermediate anchor matches at least one stop time:
+For each candidate, the service loads the trip and its stop times with `get_gtfs_trip_with_stop_times(...)`. A candidate matches only when every sampled intermediate anchor (at most three) matches at least one stop time:
 
 1. The trip must have a non-empty `stop_times` list.
 2. The stop time must have a string `stop_id` and a non-null `departure_time`.
