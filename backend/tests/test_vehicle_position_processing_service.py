@@ -226,10 +226,17 @@ class TestVehiclePositionProcessingService(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(match_kwargs["scheduled_end_time"])
         self.assertEqual(match_kwargs["scheduled_start_stop_id"], "s1")
         self.assertEqual(match_kwargs["scheduled_end_stop_id"], "s1")
+        self.assertTrue(match_kwargs["is_complete_stop_sequence"])
+        self.assertEqual(
+            match_kwargs["intermediate_stop_sample_size"],
+            VehiclePositionProcessingService.MAX_INTERMEDIATE_STOP_SAMPLE_SIZE,
+        )
+        self.assertEqual(VehiclePositionProcessingService.MAX_INTERMEDIATE_STOP_SAMPLE_SIZE, 3)
         datasource._caching_service.put_trip_id.assert_awaited_once_with(
             "external-trip-1",
             "matched-trip-1",
         )
+
     async def test_sync_vehicle_position_records_keeps_matched_vehicle_from_previous_run(self):
         repository = _SystemRepositoryStub()
         realtime_repository = _RealtimeRepositoryStub()
