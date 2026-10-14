@@ -19,6 +19,8 @@ from .stop_event_propagation_service import StopEventPropagationService
 
 
 class TripUpdateProcessingService(RealtimeProcessingServiceBase):
+    MAX_INTERMEDIATE_STOP_SAMPLE_SIZE = 3
+
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
         self._stop_event_propagation_service = StopEventPropagationService()
@@ -224,7 +226,7 @@ class TripUpdateProcessingService(RealtimeProcessingServiceBase):
                     ),
                     scheduled_intermediate_stops=scheduled_intermediate_stops,
                     is_complete_stop_sequence=is_complete_stop_sequence,
-                    intermediate_stop_sample_size=max(3, len(record.get("stop_events") or [])),
+                    intermediate_stop_sample_size=self.MAX_INTERMEDIATE_STOP_SAMPLE_SIZE,
                 )
 
                 if matched_trip_id is not None:

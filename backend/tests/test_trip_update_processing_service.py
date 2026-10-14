@@ -137,6 +137,11 @@ class TestTripUpdateProcessingService(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result, {"added": 1, "updated": 0, "deleted": 0})
         datasource._matching_service.match.assert_awaited_once()
+        self.assertEqual(
+            datasource._matching_service.match.await_args.kwargs["intermediate_stop_sample_size"],
+            TripUpdateProcessingService.MAX_INTERMEDIATE_STOP_SAMPLE_SIZE,
+        )
+        self.assertEqual(TripUpdateProcessingService.MAX_INTERMEDIATE_STOP_SAMPLE_SIZE, 3)
         realtime_repository.delete_trips_by_trip_ids.assert_awaited_once_with(["external-trip-1"])
         kwargs = realtime_repository.update_trip_update_from_sync.await_args.kwargs
         self.assertEqual(kwargs["trip_id"], "matched-trip-1")

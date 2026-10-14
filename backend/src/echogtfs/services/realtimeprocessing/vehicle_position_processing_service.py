@@ -18,6 +18,7 @@ from .base import RealtimeProcessingServiceBase
 
 
 class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
+    MAX_INTERMEDIATE_STOP_SAMPLE_SIZE = 3
 
     @staticmethod
     def _extract_vehicle_trip_payload(record: dict[str, Any]) -> dict[str, Any]:
@@ -224,6 +225,10 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
                         else None
                     ),
                     scheduled_intermediate_stops=scheduled_intermediate_stops,
+                    is_complete_stop_sequence=bool(
+                        record.get("is_complete_stop_sequence", scheduled_start_time is not None)
+                    ),
+                    intermediate_stop_sample_size=self.MAX_INTERMEDIATE_STOP_SAMPLE_SIZE,
                 )
 
                 if matched_trip_id is not None:

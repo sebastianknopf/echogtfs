@@ -237,6 +237,29 @@ class TestMatchingService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(repository.get_gtfs_trip_with_stop_times.await_count, 2)
         caching_service.put_trip_id.assert_not_awaited()
 
+    async def test_match_intermediate_fallback_samples_at_most_requested_stops(self):
+        stops = [(f"stop{i}", datetime(2026, 1, 1, 8, i, 0, tzinfo=UTC)) for i in range(10)]
+        service = MatchingService(SimpleNamespace(), SimpleNamespace(get_trip_id=AsyncMock(return_value=None)))
+        service._match_by_intermediate_stops = AsyncMock(return_value=(None, False))
+
+        await service.match(
+            trip_id="x",
+            route_id="R1",
+            scheduled_intermediate_stops=stops,
+            intermediate_stop_sample_size=3,
+        )
+        sampled = service._match_by_intermediate_stops.await_args.kwargs["scheduled_intermediate_stops"]
+        self.assertEqual(len(sampled), 3)
+
+        await service.match(
+            trip_id="x",
+            route_id="R1",
+            scheduled_intermediate_stops=stops[:2],
+            intermediate_stop_sample_size=3,
+        )
+        sampled = service._match_by_intermediate_stops.await_args.kwargs["scheduled_intermediate_stops"]
+        self.assertEqual(len(sampled), 2)
+
     async def test_match_does_not_use_intermediate_fallback_when_start_time_exists(self):
         repository = SimpleNamespace(
             find_trip_ids_by_match_properties=AsyncMock(return_value=None),
