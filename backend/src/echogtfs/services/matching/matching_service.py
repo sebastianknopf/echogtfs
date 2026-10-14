@@ -81,7 +81,7 @@ class MatchingService(MatchingServiceInterface):
             scheduled_intermediate_stops or []
         )
 
-        sample_size = max(3, intermediate_stop_sample_size)
+        sample_size = max(1, intermediate_stop_sample_size)
         if len(reduced_intermediate_stops) > sample_size:
             reduced_intermediate_stops = random.sample(reduced_intermediate_stops, sample_size)
 

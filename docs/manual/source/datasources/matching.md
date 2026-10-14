@@ -45,7 +45,7 @@ In diesem Fall werden maximal 3 zufällig gewählte Zwischenhalte (Haltestelle +
 
 - Die Haltestelle muss zur Fahrt passen.
 - Die Zeit muss innerhalb einer 120-Sekunden-Toleranz um die geplante Abfahrtszeit liegen.
-- Alle angegebenen Zwischenhalte müssen zur gleichen Fahrt passen.
+- Alle gewählten Zwischenhalte müssen zur gleichen Fahrt passen.
 
 ## Auswirkungen auf den Betrieb
 
