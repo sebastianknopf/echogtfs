@@ -6,3 +6,6 @@ class PushServiceError(Exception):
 
         self.status_code = status_code
         self.detail = detail
+
+    def __reduce__(self):
+        return (self.__class__, (self.status_code, self.detail))
