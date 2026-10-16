@@ -12,12 +12,12 @@ Die Datenquelle verarbeitet die eingehenden Fahrzeugpositionen automatisch und s
 
 Die folgenden Parameter kannst du in der Konfiguration der Datenquelle setzen:
 
-- **Endpoint URL**: URL des SIRI-VM-Endpunkts.
-  - Ergebnis: Beim Ausführen wird diese URL per HTTP-POST abgefragt.
+- **Endpunkt**: Die URL des SIRI-VM-Endpoints, von dem die Daten abgerufen werden.
+  - Ergebnis: Die Datenquelle fragt diesen Endpunkt beim Ausführen ab und verarbeitet die gelieferten Meldungen.
+- **Consumer-Endpunkt**: Optionale URL, unter der ein Consumer für abonnementbasierte Datenquellen erreichbar ist.
 - **Participant Reference**: Leitstellenkennung für die Anfrage.
   - Ergebnis: Der Wert wird in der SIRI-Anfrage als Requestor Ref verwendet und kann zusätzlich per Platzhalter im Endpunkt genutzt werden.
-- **Methode**: Auswahl zwischen "request/response" und "publish/subscribe".
-  - Ergebnis: Derzeit wird "request/response" unterstützt. "publish/subscribe" ist noch nicht verfügbar.
+
 - **Dialekt**: Die zu verwendende SIRI-VM-Implementierungsvariante.
 - **Filter**: Optionaler Filter für Betreiberkennungen und Linien.
   - Ergebnis: Wenn ein Filter gesetzt ist, werden nur Fahrzeugpositionen mit passenden Betreiberreferenzen oder Linien berücksichtigt.

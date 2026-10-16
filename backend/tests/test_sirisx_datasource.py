@@ -46,19 +46,6 @@ class TestSirisxDatasource(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["record_type"], "service_alerts")
         self.assertEqual(payload["records"], [{"id": "c"}])
 
-    async def test_publish_subscribe_not_supported(self):
-        datasource = SiriSxDatasource(
-            {
-                "endpoint": "https://x/{participantRef}",
-                "participantref": "P1",
-                "method": "publish/subscribe",
-                "dialect": "sirisx",
-            }
-        )
-
-        with self.assertRaises(NotImplementedError):
-            await datasource._fetch_and_parse_xml()
-
     async def test_fetch_records_raises_when_transform_fails(self):
         datasource = SiriSxDatasource(
             {

@@ -18,11 +18,6 @@ from echogtfs.enum.system import IncorrectStopIdHandling
 logger = logging.getLogger("uvicorn")
 
 
-class SiriEtMethod(str, Enum):
-    REQUEST_RESPONSE = "request/response"
-    PUBLISH_SUBSCRIBE = "publish/subscribe"
-
-
 class SiriEtDialect(str, Enum):
     SIRIET = "siriet"
 
@@ -40,20 +35,20 @@ class SiriEtDatasource(SubscriptionDatasourceBase):
             "help_text": "adapter.siriet.endpoint.help_text",
         },
         {
+            "name": "consumerendpoint",
+            "type": "url",
+            "label": "adapter.siriet.consumerendpoint.label",
+            "required": False,
+            "placeholder": "adapter.siriet.consumerendpoint.placeholder",
+            "help_text": "adapter.siriet.consumerendpoint.help_text",
+        },
+        {
             "name": "participantref",
             "type": "text",
             "label": "adapter.siriet.participantref.label",
             "required": True,
             "placeholder": "adapter.siriet.participantref.placeholder",
             "help_text": "adapter.siriet.participantref.help_text",
-        },
-        {
-            "name": "method",
-            "type": "enum",
-            "label": "adapter.siriet.method.label",
-            "required": True,
-            "options": ["request/response", "publish/subscribe"],
-            "help_text": "adapter.siriet.method.help_text",
         },
         {
             "name": "dialect",
@@ -118,19 +113,6 @@ class SiriEtDatasource(SubscriptionDatasourceBase):
                 raise ValueError("SiriEt datasource requires 'participantref' in config")
         elif not isinstance(participantref, str):
             raise ValueError("'participantref' must be a string")
-
-        method = self.config.get("method")
-        if not method:
-            if not is_event_based:
-                raise ValueError("SiriEt datasource requires 'method' in config")
-        else:
-            try:
-                SiriEtMethod(method)
-            except ValueError:
-                valid_methods = [method.value for method in SiriEtMethod]
-                raise ValueError(
-                    f"Invalid method '{self.config['method']}'. Valid options: {', '.join(valid_methods)}"
-                )
 
         if "dialect" not in self.config:
             raise ValueError("SiriEt datasource requires 'dialect' in config")
@@ -263,11 +245,6 @@ class SiriEtDatasource(SubscriptionDatasourceBase):
         }
 
     async def _fetch_and_parse_xml(self) -> ET.Element:
-        if self.config.get("method") == SiriEtMethod.PUBLISH_SUBSCRIBE.value:
-            raise NotImplementedError(
-                "Method 'publish/subscribe' is not yet supported. Please use 'request/response' instead."
-            )
-
         endpoint_url = self._resolve_placeholders(self.config["endpoint"])
         xml_payload = self._build_request_xml()
 
@@ -329,4 +306,23 @@ class SiriEtDatasource(SubscriptionDatasourceBase):
 
     def get_subscription_params(self) -> dict[str, Any]:
         """Return the parameters required to configure the subscription."""
-        return {}
+        return {
+            "provider_url": self.config.get("endpoint"),
+            "profile": "default",
+            "version": "default",
+            "service": "ET",
+            "delivery_mode": "direct",
+            "requestor_ref": self.config.get("participantref"),
+            "subscriber_ref": self.config.get("participantref"),
+            "logging": False,
+            "consumer_address": self.config.get("consumerendpoint"),
+            "preview_interval": "PT2H",
+            "initial_termination_time": "2999-12-31T23:59:00Z",
+            "incremental_updates": True,
+            "change_before_updates": "PT30S",
+            "heartbeat": {
+                "enabled": True,
+                "timeout_seconds": 180,
+                "check_status_enabled": False,
+            },
+        }
