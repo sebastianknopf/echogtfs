@@ -40,6 +40,7 @@ from echogtfs.routers.users import router as users_router
 from echogtfs.routers.push import router as push_router
 from echogtfs.routers.internal_execute import router as internal_execute_router
 from echogtfs.routers.service import router as service_router
+from echogtfs.routers.capabilities import router as capabilities_router
 from echogtfs._version import __version__
 
 logger = logging.getLogger("uvicorn.error")
@@ -155,6 +156,7 @@ app.include_router(settings_router,     prefix="/api/settings",     tags=["setti
 app.include_router(gtfs_router,         prefix="/api/gtfs",         tags=["gtfs"])
 app.include_router(systemcopy_router,   prefix="/api/systemcopy",   tags=["systemcopy"])
 app.include_router(service_router,      prefix="/api/service/siri", include_in_schema=False)
+app.include_router(capabilities_router, prefix="/api/capabilities", include_in_schema=False)
 app.include_router(push_router,         prefix="/api/push",         tags=["push"])
 app.include_router(realtime_router,     prefix="/api",              tags=["realtime"])
 
