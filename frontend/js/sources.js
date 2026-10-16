@@ -762,7 +762,11 @@ const sources = (() => {
     _toggleCronFieldVisibility();
     ui.el('source-is-active').checked = is_active;
     ui.el('source-log-dumps').checked = !!log_dumps;
-    ui.el('source-is-differential-updates').checked = !!is_differential_updates;
+    const differentialInput = ui.el('source-is-differential-updates');
+    differentialInput.disabled = false;
+    delete differentialInput.dataset.previousValue;
+    differentialInput.checked = !!is_differential_updates;
+    _syncDifferentialUpdatesLock();
     ui.el('source-invalid-reference-policy').value = invalid_reference_policy || 'not_specified';
     
     // Initialize mappings
@@ -808,7 +812,26 @@ const sources = (() => {
     ui.el('source-modal').hidden = true;
   }
   
+  // Subscription-based sources always use differential updates
+  function _syncDifferentialUpdatesLock() {
+    const input = ui.el('source-is-differential-updates');
+    if (!input) return;
+    const locked = ui.el('source-execution-type').value === 'subscription_based';
+    if (locked) {
+      if (!input.disabled) {
+        input.dataset.previousValue = input.checked ? '1' : '0';
+      }
+      input.checked = true;
+      input.disabled = true;
+    } else if (input.disabled) {
+      input.disabled = false;
+      input.checked = input.dataset.previousValue === '1';
+      delete input.dataset.previousValue;
+    }
+  }
+
   function _toggleCronFieldVisibility() {
+    _syncDifferentialUpdatesLock();
     const executionType = ui.el('source-execution-type').value;
     ui.el('source-cron-field').hidden = executionType !== 'time_based';
   }
