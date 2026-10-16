@@ -32,6 +32,7 @@ def _source(*, source_id: int, is_active: bool) -> SimpleNamespace:
         name="Alpha",
         type="dummy",
         config="{}",
+        execution_type="time_based",
         is_active=is_active,
         cron="*/5 * * * *",
     )
