@@ -1078,6 +1078,12 @@ body {
   margin-left: 0;
 }
 
+.dashboard-services-empty {
+  text-align: center;
+  margin: 0;
+  padding: 16px 0;
+}
+
 .dashboard-service-status__value {
   font-size: 1.25rem;
   font-weight: 600;

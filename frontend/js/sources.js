@@ -6,6 +6,7 @@ const sources = (() => {
   let _sources = [];
   let _adapterTypes = [];
   let _editingSourceId = null;
+  let _siriServiceAvailable = false;
   const _runningSourceIds = new Set();
   const _togglingSourceIds = new Set();
 
@@ -758,6 +759,13 @@ const sources = (() => {
     _renderConfigFields(type, configObj);
     
     ui.el('source-cron').value = cron || '';
+    // Keep the option for existing subscription-based sources so their type stays visible
+    const subscriptionOption = ui.el('source-execution-type').querySelector('option[value="subscription_based"]');
+    if (subscriptionOption) {
+      const unavailable = !_siriServiceAvailable && execution_type !== 'subscription_based';
+      subscriptionOption.disabled = unavailable;
+      subscriptionOption.hidden = unavailable;
+    }
     ui.el('source-execution-type').value = execution_type || 'time_based';
     _toggleCronFieldVisibility();
     ui.el('source-is-active').checked = is_active;
@@ -1669,6 +1677,12 @@ const sources = (() => {
   }
 
   async function load() {
+    try {
+      const capabilities = await api.getCapabilities();
+      _siriServiceAvailable = Array.isArray(capabilities) && capabilities.includes('siricomservice');
+    } catch (e) {
+      _siriServiceAvailable = false;
+    }
     await _loadSources();
   }
 

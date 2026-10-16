@@ -52,6 +52,7 @@ const dashboard = (() => {
     siriHealth: false,
   };
   let _pollTimer = null;
+  let _siriServiceAvailable = false;
 
   function _isPanelActive() {
     const panel = document.querySelector('.panel[data-panel="dashboard"]');
@@ -173,6 +174,17 @@ const dashboard = (() => {
   }
 
   function _renderServiceStatus() {
+    if (!_siriServiceAvailable) {
+      return `
+        <section class="dashboard-section dashboard-section--full">
+          <div class="dashboard-section__header">
+            <h3 class="dashboard-section__title" data-i18n="dashboard.section.services">${window.i18n('dashboard.section.services')}</h3>
+          </div>
+          <p class="dashboard-services-empty" data-i18n="dashboard.services.none">${window.i18n('dashboard.services.none')}</p>
+        </section>
+      `;
+    }
+
     const statusKey = _dashboardData.siriHealth
       ? 'dashboard.service_status.ok'
       : 'dashboard.service_status.disrupted';
@@ -238,10 +250,19 @@ const dashboard = (() => {
     }
   }
 
+  async function _loadCapabilities() {
+    try {
+      const capabilities = await api.getCapabilities();
+      _siriServiceAvailable = Array.isArray(capabilities) && capabilities.includes('siricomservice');
+    } catch (e) {
+      _siriServiceAvailable = false;
+    }
+  }
+
   async function _loadDashboardData(render = true) {
     const [dashboardResult, siriHealthResult] = await Promise.allSettled([
       api.getDashboard(),
-      api.getSiriHealth(),
+      _siriServiceAvailable ? api.getSiriHealth() : Promise.reject(new Error('siricomservice unavailable')),
     ]);
 
     _dashboardData.siriHealth = siriHealthResult.status === 'fulfilled';
@@ -300,6 +321,7 @@ const dashboard = (() => {
   }
 
   async function load() {
+    await _loadCapabilities();
     await _loadDashboardData(true);
   }
 
