@@ -86,6 +86,8 @@ window.translations = {
     'topbar.profile.change_password': 'Passwort ändern',
     'topbar.logout.title': 'Abmelden',
     'topbar.logout.label': 'Abmelden',
+    'topbar.menu.title': 'Menü',
+    'topbar.menu.label': 'Navigationsmenü öffnen oder schließen',
     
     // === ALERTS PANEL ===
     'alerts.title': 'Meldungen',
@@ -817,6 +819,8 @@ window.translations = {
     'topbar.profile.change_password': 'Change password',
     'topbar.logout.title': 'Sign Out',
     'topbar.logout.label': 'Sign Out',
+    'topbar.menu.title': 'Menu',
+    'topbar.menu.label': 'Open or close navigation menu',
     
     // === ALERTS PANEL ===
     'alerts.title': 'Alerts',

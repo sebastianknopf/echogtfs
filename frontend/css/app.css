@@ -2407,10 +2407,6 @@ body {
 
 /* -- Responsive -------------------------------------------------------------- */
 @media (max-width: 599px) {
-  .sidebar { width: 60px; padding: 8px 4px; }
-  .sidebar__main, .sidebar__bottom { padding: 0; }
-  .nav-item { justify-content: center; padding: 0; height: 44px; border-radius: var(--md-shape-m); }
-  .nav-item__label { display: none; }
   .panel { padding: 12px; }
   .panel[data-panel="vehicles"] #vehicles-content {
     padding: 12px;
@@ -2427,4 +2423,76 @@ body {
   .alert-period-item__fields {
     grid-template-columns: 1fr;
   }
+}
+
+/* -- Mobile navigation & responsive layout ----------------------------------- */
+/* Elements below are hidden on desktop; the layout above 768px is unchanged */
+.top-app-bar__menu-btn,
+.sidebar-backdrop { display: none; }
+
+/* Allow the flex child to shrink instead of overflowing the viewport */
+.main-content { min-width: 0; }
+
+@media (max-width: 768px) {
+  /* Top bar */
+  .top-app-bar { height: 56px; padding: 0 4px 0 4px; gap: 4px; }
+  .top-app-bar__menu-btn { display: inline-flex; }
+  .top-app-bar__title { font-size: 1.125rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .top-app-bar__username { display: none; }
+
+  /* Sidebar becomes an off-canvas drawer toggled by the hamburger button */
+  .sidebar {
+    position: fixed;
+    top: 56px;
+    bottom: 0;
+    left: 0;
+    z-index: 95;
+    width: min(280px, 85vw);
+    transform: translateX(-100%);
+    visibility: hidden;
+    box-shadow: none;
+    transition: transform .25s var(--md-easing), visibility .25s, box-shadow .25s;
+  }
+  .is-nav-open .sidebar {
+    transform: translateX(0);
+    visibility: visible;
+    box-shadow: var(--md-elev-4);
+  }
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 56px 0 0 0;
+    z-index: 94;
+    background: rgba(0,0,0,.45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s var(--md-easing);
+  }
+  .is-nav-open .sidebar-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Panels and cards */
+  .panel { padding: 12px; }
+  .md-card__header { padding: 16px 16px 0; }
+  .md-card__content { padding: 12px 16px; overflow-x: auto; }
+  .user-list-header { flex-wrap: wrap; padding: 16px 16px 12px; gap: 12px; }
+  .user-list-header .md-card__title { flex: 1 1 100%; }
+  .user-list-header > .md-field--inline { flex: 1 1 100%; width: 100%; }
+  .user-list-header > .md-btn:first-of-type { margin-left: 0; }
+  .alert-list-item { padding: 16px; }
+  .user-card { padding: 16px; }
+  .dashboard-stat-grid { grid-template-columns: 1fr; }
+  .vehicle-map-sheet { width: calc(100% - 24px); }
+  .color-picker-field { min-width: 0; }
+
+  /* Modals */
+  .modal { padding: 8px; }
+  .modal__header { padding: 16px 16px 0; }
+  .modal__tabs { padding: 0 8px; overflow-x: auto; margin-top: 12px; }
+  .modal__body { padding: 16px; }
+  .modal__error-container { padding: 0 16px; }
+  .modal-form-row { grid-template-columns: 1fr; }
+  .modal__panel { max-height: calc(100vh - 16px); overflow-y: auto; }
 }
