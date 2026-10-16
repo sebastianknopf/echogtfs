@@ -29,6 +29,8 @@ services:
 
   siricomservice:
     image: sebastianknopf/siriconsumer:0.2.0
+    profiles:
+      - siripubsub
     restart: unless-stopped
     volumes:
       - siricomserviceapp:/app
@@ -78,7 +80,6 @@ services:
       SIRI_STATUS_ENABLED: ${SIRI_STATUS_ENABLED:-false}
     depends_on:
       - backend
-      - siricomservice
 
 volumes:
   pgsqldata:
