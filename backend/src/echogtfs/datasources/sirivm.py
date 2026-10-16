@@ -17,11 +17,6 @@ from echogtfs.datasources.transformers import SiriVmVehiclePositionsTransformer
 logger = logging.getLogger("uvicorn")
 
 
-class SiriVmMethod(str, Enum):
-    REQUEST_RESPONSE = "request/response"
-    PUBLISH_SUBSCRIBE = "publish/subscribe"
-
-
 class SiriVmDialect(str, Enum):
     SIRIVM = "sirivm"
 
@@ -53,14 +48,6 @@ class SiriVmDatasource(SubscriptionDatasourceBase):
             "required": True,
             "placeholder": "adapter.sirivm.participantref.placeholder",
             "help_text": "adapter.sirivm.participantref.help_text",
-        },
-        {
-            "name": "method",
-            "type": "enum",
-            "label": "adapter.sirivm.method.label",
-            "required": True,
-            "options": ["request/response", "publish/subscribe"],
-            "help_text": "adapter.sirivm.method.help_text",
         },
         {
             "name": "dialect",
@@ -96,19 +83,6 @@ class SiriVmDatasource(SubscriptionDatasourceBase):
                 raise ValueError("SiriVm datasource requires 'participantref' in config")
         elif not isinstance(participantref, str):
             raise ValueError("'participantref' must be a string")
-
-        method = self.config.get("method")
-        if not method:
-            if not is_event_based:
-                raise ValueError("SiriVm datasource requires 'method' in config")
-        else:
-            try:
-                SiriVmMethod(method)
-            except ValueError:
-                valid_methods = [method.value for method in SiriVmMethod]
-                raise ValueError(
-                    f"Invalid method '{self.config['method']}'. Valid options: {', '.join(valid_methods)}"
-                )
 
         if "dialect" not in self.config:
             raise ValueError("SiriVm datasource requires 'dialect' in config")
@@ -231,11 +205,6 @@ class SiriVmDatasource(SubscriptionDatasourceBase):
         }
 
     async def _fetch_and_parse_xml(self) -> ET.Element:
-        if self.config.get("method") == SiriVmMethod.PUBLISH_SUBSCRIBE.value:
-            raise NotImplementedError(
-                "Method 'publish/subscribe' is not yet supported. Please use 'request/response' instead."
-            )
-
         endpoint_url = self._resolve_placeholders(self.config["endpoint"])
         xml_payload = self._build_request_xml()
 
@@ -294,10 +263,6 @@ class SiriVmDatasource(SubscriptionDatasourceBase):
             )
 
             raise ValueError(f"Failed to parse SIRI-VM XML: {exc}") from exc
-
-    def is_subscription_required(self) -> bool:
-        """Return whether this datasource requires an active subscription."""
-        return self.config.get("method") == SiriVmMethod.PUBLISH_SUBSCRIBE.value
 
     def get_subscription_params(self) -> dict[str, Any]:
         """Return the parameters required to configure the subscription."""

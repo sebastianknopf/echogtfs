@@ -45,17 +45,17 @@ _Repo = Annotated[SystemRepositoryInterface, Depends(get_system_repository)]
 _RealtimeRepo = Annotated[RealtimeRepositoryInterface, Depends(get_realtime_repository)]
 
 
-def _get_subscription_datasource(
-    source_type: str,
-    config: str,
-) -> SubscriptionDatasourceBase | None:
-    """Create a subscription datasource when the configured type supports subscriptions."""
-    datasource_class = DATASOURCE_REGISTRY.get(source_type.lower())
+def _get_subscription_datasource(source: DataSource) -> SubscriptionDatasourceBase | None:
+    """Create a subscription datasource when the source is subscription-based."""
+    if source.execution_type != DataSourceExecutionType.SUBSCRIPTION_BASED:
+        return None
+
+    datasource_class = DATASOURCE_REGISTRY.get(source.type.lower())
     if datasource_class is None or not issubclass(datasource_class, SubscriptionDatasourceBase):
         return None
 
     try:
-        parsed_config = json.loads(config)
+        parsed_config = json.loads(source.config)
     except json.JSONDecodeError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -68,13 +68,12 @@ def _get_subscription_datasource(
             detail="Data source configuration must be a JSON object",
         )
 
-    datasource = datasource_class(parsed_config)
-    return datasource if datasource.is_subscription_required() else None
+    return datasource_class(parsed_config)
 
 
 async def _start_source_subscription(source: DataSource) -> None:
-    """Start the subscription for an active, subscription-managed datasource."""
-    datasource = _get_subscription_datasource(source.type, source.config)
+    """Start the subscription for an active, subscription-based datasource."""
+    datasource = _get_subscription_datasource(source)
     if datasource is None:
         return
 
@@ -95,7 +94,7 @@ async def _stop_source_subscription(source: DataSource) -> None:
     if not source.is_active:
         return
 
-    datasource = _get_subscription_datasource(source.type, source.config)
+    datasource = _get_subscription_datasource(source)
     if datasource is None:
         return
 
@@ -454,7 +453,10 @@ async def run_source_import(
     if source is None:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=_ERR_SOURCE_NOT_FOUND)
 
-    if source.execution_type == DataSourceExecutionType.EVENT_BASED:
+    if source.execution_type in (
+        DataSourceExecutionType.EVENT_BASED,
+        DataSourceExecutionType.SUBSCRIPTION_BASED,
+    ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_ERR_SOURCE_EVENT_BASED)
 
     # Trigger import task asynchronously

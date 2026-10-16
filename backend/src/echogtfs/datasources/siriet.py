@@ -327,10 +327,6 @@ class SiriEtDatasource(SubscriptionDatasourceBase):
 
             raise ValueError(f"Failed to parse SIRI-ET XML: {exc}") from exc
 
-    def is_subscription_required(self) -> bool:
-        """Return whether this datasource requires an active subscription."""
-        return False
-
     def get_subscription_params(self) -> dict[str, Any]:
         """Return the parameters required to configure the subscription."""
         return {}

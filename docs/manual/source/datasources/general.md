@@ -36,7 +36,7 @@ Für jede Datenquelle können folgende Informationen gepflegt werden:
 - **Name**: _eindeutige Bezeichnung_ innerhalb des Systems für die Datenquelle
 - **Adapter**: Typ der Datenquelle (GTFS-RT, SIRI-Lite, SIRI-...)
 - **Endpunkt-URL**: URL, von der die Daten bei der Ausführung der Datenquelle abgerufen werden. Optional bei eventbasierten Datenquellen, je nach verwendetem Adapter-Typ
-- **Ausführungsart**: Ausführungsart der Datenquelle. Zeitbasiert = über Cron-Ausdruck, Eventbasiert = über {ref}`h-push-api-push-api`
+- **Ausführungsart**: Ausführungsart der Datenquelle. Zeitbasiert = über Cron-Ausdruck, Eventbasiert = über {ref}`h-push-api-push-api`, Abobasiert = über ein vom Dienst verwaltetes Abonnement
 - **Cron-Ausdruck**: Cron-Ausdruck zur Angabe der gewünschten Ausführungsintervalle. Nur relevant bei zeitbasierter Ausführung
 - **Verfahrensweise bei ungültigen Bezügen**: Angabe zum Umgang mit Objekten mit ungültigen Bezügen
 - **Aktiv**: Aktivierung oder Deaktivierung der Datenquelle

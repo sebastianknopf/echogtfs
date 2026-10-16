@@ -81,5 +81,6 @@ Push-triggered adapter logs are written through `DatalogService` into `sys_data_
 
 `POST /api/sources/{source_id}/run` is restricted to time-based sources.
 
-- Event-based sources return `403` (`error.source_event_based`) on manual run attempts.
-- Frontend hides the run button for event-based sources.
+- Event-based and subscription-based sources return `403` (`error.source_event_based`) on manual run attempts.
+- Frontend hides the run button for both types.
+- `subscription_based` sources are rejected by the public push API (`error.source_not_event_based`); they are only fed via `/internal/execute/datasource/{id}` by the managed subscription.

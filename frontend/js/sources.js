@@ -644,9 +644,7 @@ const sources = (() => {
         tr.classList.add('user-table__row--inactive');
       }
       
-      const executionTypeText = source.execution_type === 'event_based'
-        ? window.i18n('source.execution_type.event_based')
-        : window.i18n('source.execution_type.time_based');
+      const executionTypeText = window.i18n(`source.execution_type.${source.execution_type || 'time_based'}`);
       const lastRunText = source.last_run_at 
         ? (() => {
             const lastRunDate = new Date(source.last_run_at);
@@ -668,14 +666,14 @@ const sources = (() => {
       const errorBadge = source.has_error ? `<span class="badge badge--error" title="${window.i18n('sources.badge.error')}">${window.i18n('sources.badge.error')}</span>` : '';
       const isRunning = _runningSourceIds.has(source.id);
       const isToggling = _togglingSourceIds.has(source.id);
-      const isEventBased = source.execution_type === 'event_based';
+      const isPushOnly = source.execution_type === 'event_based' || source.execution_type === 'subscription_based';
       const runTitle = !source.is_active
         ? window.i18n('sources.run.disabled')
         : (isRunning ? window.i18n('sources.run.running') : window.i18n('sources.run.title'));
       const runIcon = isRunning
         ? '<span class="btn-spinner source-run-spinner" aria-hidden="true"></span>'
         : '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
-      const runButton = isEventBased ? '' : `
+      const runButton = isPushOnly ? '' : `
           <button class="icon-btn" data-action="run" data-id="${source.id}"
             title="${runTitle}" 
             aria-label="${window.i18n('sources.run.title')} ${ui.esc(source.name)}" 
@@ -812,7 +810,7 @@ const sources = (() => {
   
   function _toggleCronFieldVisibility() {
     const executionType = ui.el('source-execution-type').value;
-    ui.el('source-cron-field').hidden = executionType === 'event_based';
+    ui.el('source-cron-field').hidden = executionType !== 'time_based';
   }
   
   function _setSourceModalBusy(busy) {
@@ -957,7 +955,7 @@ const sources = (() => {
         name, 
         type, 
         config: JSON.stringify(config), 
-        cron: executionType === 'event_based' ? null : (cron || null),
+        cron: executionType !== 'time_based' ? null : (cron || null),
         execution_type: executionType,
         is_active: isActive,
         log_dumps: logDumps,
