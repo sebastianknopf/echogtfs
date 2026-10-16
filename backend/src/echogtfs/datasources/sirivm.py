@@ -39,6 +39,14 @@ class SiriVmDatasource(SubscriptionDatasourceBase):
             "help_text": "adapter.sirivm.endpoint.help_text",
         },
         {
+            "name": "consumerendpoint",
+            "type": "url",
+            "label": "adapter.sirivm.consumerendpoint.label",
+            "required": False,
+            "placeholder": "adapter.sirivm.consumerendpoint.placeholder",
+            "help_text": "adapter.sirivm.consumerendpoint.help_text",
+        },
+        {
             "name": "participantref",
             "type": "text",
             "label": "adapter.sirivm.participantref.label",
@@ -289,8 +297,27 @@ class SiriVmDatasource(SubscriptionDatasourceBase):
 
     def is_subscription_required(self) -> bool:
         """Return whether this datasource requires an active subscription."""
-        return False
+        return self.config.get("method") == SiriVmMethod.PUBLISH_SUBSCRIBE.value
 
     def get_subscription_params(self) -> dict[str, Any]:
         """Return the parameters required to configure the subscription."""
-        return {}
+        return {
+            "provider_url": self.config.get("endpoint"),
+            "profile": "default",
+            "version": "default",
+            "service": "VM",
+            "delivery_mode": "direct",
+            "requestor_ref": self.config.get("participantref"),
+            "subscriber_ref": self.config.get("participantref"),
+            "logging": False,
+            "consumer_address": self.config.get("consumerendpoint"),
+            "preview_interval": "PT2H",
+            "initial_termination_time": "2999-12-31T23:59:00Z",
+            "incremental_updates": True,
+            "change_before_updates": "PT30S",
+            "heartbeat": {
+                "enabled": True,
+                "timeout_seconds": 180,
+                "check_status_enabled": False,
+            },
+        }

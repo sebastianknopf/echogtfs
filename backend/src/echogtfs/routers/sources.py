@@ -45,7 +45,10 @@ _Repo = Annotated[SystemRepositoryInterface, Depends(get_system_repository)]
 _RealtimeRepo = Annotated[RealtimeRepositoryInterface, Depends(get_realtime_repository)]
 
 
-def _get_subscription_datasource(source_type: str, config: str) -> SubscriptionDatasourceBase | None:
+def _get_subscription_datasource(
+    source_type: str,
+    config: str,
+) -> SubscriptionDatasourceBase | None:
     """Create a subscription datasource when the configured type supports subscriptions."""
     datasource_class = DATASOURCE_REGISTRY.get(source_type.lower())
     if datasource_class is None or not issubclass(datasource_class, SubscriptionDatasourceBase):
