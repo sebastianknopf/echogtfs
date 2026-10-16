@@ -29,7 +29,7 @@ class SiriSubscriptionService(SiriSubscriptionServiceInterface):
             "delivery_mode": "direct",
             "sink": {
                 "type": "http",
-                "url": f"http://backend/internal/execute/datasource/{datasource_id}",
+                "url": f"http://backend:8000/internal/execute/datasource/{datasource_id}",
                 "max_concurrency": 1,
             },
         }
