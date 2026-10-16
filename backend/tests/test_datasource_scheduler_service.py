@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import pickle
 import sys
 import unittest
 from contextlib import asynccontextmanager
@@ -205,7 +206,9 @@ class TestDatasourceSchedulerService(unittest.IsolatedAsyncioTestCase):
         stats = await service.run_push_task(7, b"payload", "application/xml")
 
         self.assertEqual(stats, {"added": 1, "updated": 2, "deleted": 3})
-        service._run_datasource_push_in_process.assert_awaited_once_with(7, b"payload", "application/xml")
+        service._run_datasource_push_in_process.assert_awaited_once_with(
+            7, b"payload", "application/xml", require_event_based=True
+        )
         repository.update_data_source_last_run_at.assert_awaited_once()
         self.assertNotIn(7, service._running_source_ids)
 
@@ -282,7 +285,14 @@ class TestDatasourceSchedulerService(unittest.IsolatedAsyncioTestCase):
             14,
             b"payload",
             "application/xml",
+            require_event_based=False,
         )
+
+    def test_push_service_error_survives_pickling(self):
+        error = pickle.loads(pickle.dumps(PushServiceError(status_code=403, detail="error.source_not_active")))
+
+        self.assertEqual(error.status_code, 403)
+        self.assertEqual(error.detail, "error.source_not_active")
 
     async def test_run_push_task_raises_409_when_gtfs_import_running(self):
         repository = _RepositoryStub()
