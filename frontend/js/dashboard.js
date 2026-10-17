@@ -265,7 +265,7 @@ const dashboard = (() => {
       _siriServiceAvailable ? api.getSiriHealth() : Promise.reject(new Error('siricomservice unavailable')),
     ]);
 
-    _dashboardData.siriHealth = siriHealthResult.status === 'fulfilled';
+    _dashboardData.siriHealth = siriHealthResult.status === 'fulfilled' && siriHealthResult.value === true;
 
     if (dashboardResult.status === 'fulfilled') {
       _setDashboardData(dashboardResult.value);

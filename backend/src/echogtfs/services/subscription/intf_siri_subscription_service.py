@@ -8,6 +8,16 @@ class SiriSubscriptionServiceInterface(ABC):
     """Manage SIRI subscriptions in the SIRI communication service."""
 
     @abstractmethod
+    async def is_subscription_service_running(self) -> bool:
+        """Return whether the SIRI communication service is running."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def is_subscription_service_available(self) -> bool:
+        """Return whether the SIRI communication service is ready to accept work."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def start_subscription(
         self,
         datasource_id: int,

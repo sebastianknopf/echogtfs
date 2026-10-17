@@ -13,7 +13,26 @@ logger = logging.getLogger("uvicorn")
 class SiriSubscriptionService(SiriSubscriptionServiceInterface):
     """Synchronous-as-awaited client for the SIRI consumer subscription API."""
 
-    _SIRI_CONSUMER_API_URL = "http://siricomservice:8080/api"
+    _SIRI_CONSUMER_BASE_URL = "http://siricomservice:8080"
+    _SIRI_CONSUMER_API_URL = f"{_SIRI_CONSUMER_BASE_URL}/api"
+
+    async def _is_service_healthy(self, endpoint: str) -> bool:
+        try:
+            async with httpx.AsyncClient(timeout=5.0, follow_redirects=False) as client:
+                response = await client.get(f"{self._SIRI_CONSUMER_BASE_URL}/health/{endpoint}")
+        except httpx.HTTPError as exc:
+            logger.warning("[SiriSubscription] Service health check failed: %s", exc)
+            return False
+
+        return response.status_code == httpx.codes.OK
+
+    async def is_subscription_service_running(self) -> bool:
+        """Return whether the SIRI communication service is running."""
+        return await self._is_service_healthy("live")
+
+    async def is_subscription_service_available(self) -> bool:
+        """Return whether the SIRI communication service is ready to accept work."""
+        return await self._is_service_healthy("ready")
 
     def _build_subscription_config(
         self,
