@@ -634,6 +634,7 @@ const sources = (() => {
         <th data-i18n="sources.table.type">${window.i18n('sources.table.type')}</th>
         <th data-i18n="sources.table.execution_type">${window.i18n('sources.table.execution_type')}</th>
         <th data-i18n="sources.table.lastrun">${window.i18n('sources.table.lastrun')}</th>
+        ${_siriServiceAvailable ? `<th data-i18n="sources.table.subscription_status">${window.i18n('sources.table.subscription_status')}</th>` : ''}
         <th></th>
       </tr></thead>
       <tbody></tbody>`;
@@ -646,6 +647,9 @@ const sources = (() => {
       }
       
       const executionTypeText = window.i18n(`source.execution_type.${source.execution_type || 'time_based'}`);
+      const subscriptionStatus = source.execution_type === 'subscription_based'
+        ? `<span class="badge ${source.subscription_status ? 'badge--success' : 'badge--error'}">${window.i18n(source.subscription_status ? 'sources.badge.subscription.ok' : 'sources.badge.subscription.error')}</span>`
+        : '';
       const lastRunText = source.last_run_at 
         ? (() => {
             const lastRunDate = new Date(source.last_run_at);
@@ -688,6 +692,7 @@ const sources = (() => {
         <td>${ui.esc(source.type)}</td>
         <td>${ui.esc(executionTypeText)}</td>
         <td>${ui.esc(lastRunText)}</td>
+        ${_siriServiceAvailable ? `<td>${subscriptionStatus}</td>` : ''}
         <td><div class="user-table__actions">
           ${inactiveBadge}
           ${errorBadge}

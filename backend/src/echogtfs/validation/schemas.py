@@ -273,6 +273,7 @@ class DataSourceRead(BaseModel):
     mappings: list[DataSourceMappingRead]
     enrichments: list[DataSourceEnrichmentRead]
     has_error: bool = False
+    subscription_status: bool = False
     model_config = {"from_attributes": True}
 
 

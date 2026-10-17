@@ -129,6 +129,10 @@ async def _enrich_source_with_error_flag(source: DataSource, repository: SystemR
     if last_log and last_log.status_code:
         # 4xx and 5xx status codes indicate errors
         has_error = last_log.status_code >= 400
+
+    subscription_status = False
+    if source.execution_type == DataSourceExecutionType.SUBSCRIPTION_BASED:
+        subscription_status = await get_siri_subscription_service().get_subscription_status(source.id)
     
     # Convert to schema
     source_dict = {
@@ -148,6 +152,7 @@ async def _enrich_source_with_error_flag(source: DataSource, repository: SystemR
         "mappings": source.mappings,
         "enrichments": source.enrichments,
         "has_error": has_error,
+        "subscription_status": subscription_status,
     }
     
     return DataSourceRead.model_validate(source_dict)
