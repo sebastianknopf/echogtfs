@@ -20,11 +20,20 @@ The service uses `http://siricomservice:8080` on the Compose network. Its manage
    - `delivery_mode` is `direct`.
    - The HTTP sink targets `http://backend:8000/internal/execute/datasource/{source_id}` with `max_concurrency: 1`.
 4. The service creates the subscription. Incoming payloads are delivered to the internal push endpoint, then processed synchronously through the normal datasource pipeline.
-5. Deactivation and deletion stop the subscription before continuing with their remaining datasource operations. Updates stop the previous subscription before persisting the update, then start a subscription with the updated configuration if the source remains active.
+5. Subscription operation failure handling depends on the source action. See [Operation Failure Handling](#operation-failure-handling).
 
 Datasource-specific parameters include the provider URL, participant reference, optional consumer address, service type, and SIRI subscription timing and heartbeat settings. The datasource implementations set `logging` to `false`. The service's enforced sink settings take precedence over any overlapping datasource parameters.
 
-Create, stop, status, and restart operations are awaited. The service treats the consumer API's expected success statuses as success (`201` for create, `204` for delete, and `200` for status/restart); a non-success status or an HTTP error is reported as failure. Subscription start, stop, and restart requests have no client timeout. Health and subscription-status requests use a 15-second timeout.
+## Operation Failure Handling
+
+`SiriSubscriptionService` awaits consumer requests and reports unsuccessful HTTP statuses or HTTP errors as failures. The `sources.py` router applies different policies depending on the action:
+
+- Creating or updating a datasource treats subscription failures as API errors. Creation persists the datasource before requesting its subscription, so a start failure does not roll back the record. Update stops the existing subscription before persisting changes, then starts the updated subscription if the datasource remains active. If that start fails, the API reports an error; the already-persisted update is not rolled back.
+- The dedicated activate/deactivate action proceeds with the status change even if starting or stopping the subscription fails. Failed service results are logged by `SiriSubscriptionService`; exceptions are logged by the router. Deactivation still waits for active datasource processing to finish before cleaning up realtime objects.
+- Deleting a datasource proceeds even if stopping its subscription fails. Service failures and router-caught exceptions are logged.
+
+The service treats the consumer API's expected success statuses as success (`201` for create, `204` for delete, and `200` for status/restart); other statuses and HTTP errors are reported as failures. Subscription start, stop, and restart requests have no client timeout. Health and subscription-status requests use a 15-second timeout.
+
 ## Discovery and Health
 
 The backend exposes two authenticated checks through `SiriSubscriptionService`:

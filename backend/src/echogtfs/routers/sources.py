@@ -532,7 +532,13 @@ async def toggle_source_active(
 
             old_status = current_source.is_active
             if old_status:
-                await _stop_source_subscription(current_source)
+                try:
+                    await _stop_source_subscription(current_source)
+                except Exception:
+                    logger.exception(
+                        "[Sources] Failed to stop SIRI subscription for data source %s; proceeding with deactivation",
+                        source_id,
+                    )
 
             toggled_source = await repository.toggle_data_source_active(source_id)
             if toggled_source is None:
@@ -550,7 +556,13 @@ async def toggle_source_active(
                         return
                     raise
             elif toggled_source.is_active:
-                await _start_source_subscription(toggled_source)
+                try:
+                    await _start_source_subscription(toggled_source)
+                except Exception:
+                    logger.exception(
+                        "[Sources] Failed to start SIRI subscription for data source %s; proceeding with activation",
+                        source_id,
+                    )
 
             if toggled_source.is_active and toggled_source.cron:
                 await get_datasource_scheduler_service().schedule_data_source_import(
@@ -735,7 +747,14 @@ async def delete_source(
     if not source:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=_ERR_SOURCE_NOT_FOUND)
 
-    await _stop_source_subscription(source)
+    if source.execution_type == DataSourceExecutionType.SUBSCRIPTION_BASED:
+        try:
+            await get_siri_subscription_service().stop_subscription(source.id)
+        except Exception:
+            logger.exception(
+                "[Sources] Failed to stop SIRI subscription for data source %s; proceeding with deletion",
+                source.id,
+            )
     
     # Delete log files before deleting the data source
     # (DB entries will be cascade-deleted automatically)
