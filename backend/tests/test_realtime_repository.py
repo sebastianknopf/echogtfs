@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from echogtfs.services.database.models import DataSource, ServiceAlert
 from echogtfs.services.database.realtime_repository import RealtimeRepository
 
 
@@ -90,14 +91,11 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         session.execute.assert_awaited_once()
         session.commit.assert_awaited_once()
 
-    async def test_update_service_alert_source_name_commits(self):
-        session = SimpleNamespace(execute=AsyncMock(), commit=AsyncMock())
-        repository = self._make_repository(session)
+    def test_service_alert_source_name_is_derived_from_data_source(self):
+        data_source = DataSource(id=7, name="Current name", type="dummy")
+        alert = ServiceAlert(data_source_id=7, source="Stale snapshot", data_source=data_source)
 
-        await repository.update_service_alert_source_name("old", "new")
-
-        session.execute.assert_awaited_once()
-        session.commit.assert_awaited_once()
+        self.assertEqual(alert.data_source_name, "Current name")
 
     async def test_get_realtime_service_alerts_returns_loaded_alerts(self):
         alert = SimpleNamespace(id="a1")
