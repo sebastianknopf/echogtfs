@@ -41,7 +41,7 @@ class TestSiriSubscriptionService(unittest.IsolatedAsyncioTestCase):
             "echogtfs.services.subscription.siri_subscription_service.httpx.AsyncClient",
             return_value=self.client_context,
         )
-        self.client_patcher.start()
+        self.async_client_factory = self.client_patcher.start()
         self.addCleanup(self.client_patcher.stop)
 
     async def test_health_checks_use_live_and_ready_endpoints(self) -> None:
@@ -59,6 +59,29 @@ class TestSiriSubscriptionService(unittest.IsolatedAsyncioTestCase):
                 "http://siricomservice:8080/health/live",
                 "http://siricomservice:8080/health/ready",
             ],
+        )
+
+    async def test_health_and_subscription_status_requests_use_15_second_timeouts(self) -> None:
+        self.client.get.side_effect = [
+            httpx.Response(httpx.codes.OK),
+            httpx.Response(httpx.codes.OK, json={"status": "active"}),
+        ]
+        self.client.post.side_effect = [
+            httpx.Response(httpx.codes.CREATED),
+            httpx.Response(httpx.codes.OK),
+        ]
+        self.client.delete.return_value = httpx.Response(httpx.codes.NO_CONTENT)
+
+        await self.service.is_subscription_service_running()
+        await self.service.start_subscription(1, {})
+        await self.service.stop_subscription(1)
+        await self.service.get_subscription_status(1)
+        await self.service.restart_subscription(1, None)
+
+        self.assertEqual(self.async_client_factory.call_count, 5)
+        self.assertEqual(
+            [call.kwargs.get("timeout") for call in self.async_client_factory.call_args_list],
+            [15.0, None, None, 15.0, None],
         )
 
     async def test_health_check_returns_false_for_non_200_and_http_error(self) -> None:

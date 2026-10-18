@@ -18,7 +18,7 @@ class SiriSubscriptionService(SiriSubscriptionServiceInterface):
 
     async def _is_service_healthy(self, endpoint: str) -> bool:
         try:
-            async with httpx.AsyncClient(timeout=5.0, follow_redirects=False) as client:
+            async with httpx.AsyncClient(timeout=15.0, follow_redirects=False) as client:
                 response = await client.get(f"{self._SIRI_CONSUMER_BASE_URL}/health/{endpoint}")
         except httpx.HTTPError as exc:
             logger.warning("[SiriSubscription] Service health check failed: %s", exc)
@@ -66,7 +66,7 @@ class SiriSubscriptionService(SiriSubscriptionServiceInterface):
             return False
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=None) as client:
                 response = await client.post(
                     f"{self._SIRI_CONSUMER_API_URL}/subscriptions",
                     json=subscription_config,
@@ -90,7 +90,7 @@ class SiriSubscriptionService(SiriSubscriptionServiceInterface):
     async def stop_subscription(self, datasource_id: int) -> bool:
         """Force-terminate and remove a subscription without spooling."""
         try:
-            async with httpx.AsyncClient(timeout=300.0) as client:
+            async with httpx.AsyncClient(timeout=None) as client:
                 response = await client.delete(
                     f"{self._SIRI_CONSUMER_API_URL}/subscriptions/{datasource_id}?force&spool=false",
                 )
@@ -113,7 +113,7 @@ class SiriSubscriptionService(SiriSubscriptionServiceInterface):
     async def get_subscription_status(self, datasource_id: int) -> bool:
         """Return whether a subscription is currently active."""
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=15.0) as client:
                 response = await client.get(
                     f"{self._SIRI_CONSUMER_API_URL}/subscriptions/{datasource_id}",
                 )
@@ -157,7 +157,7 @@ class SiriSubscriptionService(SiriSubscriptionServiceInterface):
             return await self.start_subscription(datasource_id, config)
 
         try:
-            async with httpx.AsyncClient(timeout=300.0) as client:
+            async with httpx.AsyncClient(timeout=None) as client:
                 response = await client.post(
                     f"{self._SIRI_CONSUMER_API_URL}/subscriptions/{datasource_id}/restart",
                 )
