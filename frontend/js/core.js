@@ -1604,7 +1604,7 @@ const ui = (() => {
         </div>
         <div class="view-item">
           <div class="view-item__label" data-i18n="alert.view.source">${window.i18n('alert.view.source')}</div>
-          <div class="view-item__content">${alert.source === 'echogtfs' ? window.i18n('alert.view.source.internal') : esc(alert.source)}</div>
+          <div class="view-item__content">${alert.source === 'echogtfs' ? window.i18n('alert.view.source.internal') : esc(alert.data_source_name || alert.source)}</div>
         </div>
       </div>
       <div class="view-section">

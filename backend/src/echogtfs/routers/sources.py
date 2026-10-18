@@ -656,12 +656,10 @@ async def update_source(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=_ERR_SOURCE_NOT_FOUND)
     
     # Update basic fields
-    old_name = source.name
     if source_data.name is not None:
         # Check if new name conflicts with another source
         if await repository.data_source_name_exists(source_data.name, exclude_id=source_id):
             raise HTTPException(status_code=400, detail="Data source with this name already exists")
-        await realtime_repository.update_service_alert_source_name(old_name, source_data.name)
 
     should_cleanup_on_deactivate = source_data.is_active is False
     if source.is_active:

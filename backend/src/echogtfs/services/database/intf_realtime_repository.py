@@ -41,11 +41,6 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def update_service_alert_source_name(self, old_name: str, new_name: str) -> None:
-        """Rename service alert source text from old_name to new_name."""
-        raise NotImplementedError
-
-    @abstractmethod
     async def get_realtime_service_alerts(self) -> list[ServiceAlert]:
         """Return active realtime service alerts with all required relationships."""
         raise NotImplementedError

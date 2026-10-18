@@ -172,6 +172,33 @@ class TestSourcesRouterDeactivation(unittest.IsolatedAsyncioTestCase):
         realtime_repository.delete_trips_for_data_source.assert_not_awaited()
         realtime_repository.delete_vehicles_for_data_source.assert_not_awaited()
 
+    async def test_update_source_does_not_mutate_when_subscription_stop_fails(self):
+        source_before = _source(source_id=7, is_active=True)
+        source_before.execution_type = "subscription_based"
+        repository = SimpleNamespace(
+            get_data_source_by_id=AsyncMock(return_value=source_before),
+            data_source_name_exists=AsyncMock(return_value=False),
+            update_data_source=AsyncMock(),
+        )
+        realtime_repository = SimpleNamespace(
+            update_service_alert_source_name=AsyncMock(),
+        )
+        stop_error = HTTPException(status_code=502, detail="subscription stop failed")
+
+        with patch("echogtfs.routers.sources._stop_source_subscription", AsyncMock(side_effect=stop_error)):
+            with self.assertRaises(HTTPException) as ctx:
+                await sources.update_source(
+                    7,
+                    DataSourceUpdate(name="Renamed"),
+                    None,
+                    repository,
+                    realtime_repository,
+                )
+
+        self.assertIs(ctx.exception, stop_error)
+        realtime_repository.update_service_alert_source_name.assert_not_awaited()
+        repository.update_data_source.assert_not_awaited()
+
 
 if __name__ == "__main__":
     unittest.main()
