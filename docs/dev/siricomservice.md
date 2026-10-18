@@ -53,6 +53,6 @@ docker compose --profile siripubsub up -d
 
 Without that profile, Compose does not start the service. The backend can still start; capability discovery then omits `siricomservice`.
 
-The frontend NGINX server on port `8080` proxies SIRI communication paths to the consumer, resolving its hostname lazily so NGINX can start when the profile is disabled. It always returns `404` for `/api` and `/api/...` on that listener. The `/status` page is also blocked unless `SIRI_STATUS_ENABLED=true`. Other paths continue to proxy to the consumer.
+The frontend NGINX server on port `8080` resolves the consumer hostname lazily so NGINX can start when the profile is disabled. When `SIRI_STATUS_ENABLED=true`, it proxies all paths, including `/api` and `/api/...`, which the `/status` page needs for its controls, including subscription termination. When the setting is disabled, NGINX returns `404` for `/status`, `/api`, and `/api/...`.
 
-The consumer management API is therefore reachable to the backend over the private Compose network, but not through the frontend's SIRI listener. The subscription callback is likewise internal and unauthenticated; its safety depends on keeping the backend port and `/internal/...` route inaccessible to untrusted clients.
+The subscription callback of the core backend container remains internal and unauthenticated; its safety depends on keeping the backend port and `/internal/...` route inaccessible to untrusted clients.

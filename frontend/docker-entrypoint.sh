@@ -10,15 +10,15 @@ fi
 awk -v enabled="$enabled" '
     /# SIRI_STATUS_ACCESS_BLOCK_START/ {
         in_block = 1
-        print "    location = /api {"
-        print "        return 404;"
-        print "    }"
-        print ""
-        print "    location ^~ /api/ {"
-        print "        return 404;"
-        print "    }"
-        print ""
         if (!enabled) {
+            print "    location = /api {"
+            print "        return 404;"
+            print "    }"
+            print ""
+            print "    location ^~ /api/ {"
+            print "        return 404;"
+            print "    }"
+            print ""
             print "    location = /status {"
             print "        return 404;"
             print "    }"
