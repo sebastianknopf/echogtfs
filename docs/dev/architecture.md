@@ -2,17 +2,17 @@
 
 ## Overview
 
-EchoGTFS is a self-hosted, containerized web application for creating and managing GTFS-Realtime data. It combines a manually authored data with an automated import pipeline that can pull data from external data sources (GTFS-RT feeds, SIRI SX, SIRI Lite). The resulting data are published as a standards-compliant GTFS-Realtime feed.
+EchoGTFS is a self-hosted, containerized web application for creating and managing GTFS-Realtime data. It combines manually authored and imported data and publishes the result as a standards-compliant GTFS-Realtime feed.
 
 ## Container Layout
 
-The application is composed of three Docker containers defined in `docker-compose.yml`:
+The application is composed of four core Docker services and one optional service defined in `docker-compose.yml`:
 
 - `backend`: Python/FastAPI HTTP service, port 8000 (internal only).
 - `frontend`: NGINX web server that serves the static single-page application and reverse-proxies `/api` requests to the backend. Exposed on the host at the port defined by `FRONTEND_PORT` (default 80).
 - `database`: PostgreSQL 16. Accessible only to the backend container.
 - `redis`: Redis service used for caching and event streaming inside the application.
-- `siricomservice`: SIRI consumer communication service for running SIRI service communication with external SIRI services.
+- `siricomservice`: Optional SIRI consumer communication service for managed SIRI subscriptions. Compose starts it only when the `siripubsub` profile is enabled.
 
 All runtime configuration is injected via environment variables. The canonical source of variable names is `.env.example`.
 
@@ -35,7 +35,7 @@ echogtfs/
 - Pydantic / pydantic-settings: Data validation and environment configuration
 - PyJWT + bcrypt: Token creation and password hashing
 - slowapi: Rate limiting (wraps limits library)
-- APScheduler: Cron-based job scheduling for GTFS imports and data source polling
+- APScheduler: Cron-based job scheduling for GTFS imports and scheduled jobs
 - httpx: Async HTTP client used by adapters
 - google.protobuf: Protobuf serialization for GTFS-RT output (locally compiled with `protoc`)
 
@@ -52,7 +52,6 @@ echogtfs/
 4. If the `sys_users` table is empty, a first superuser is created from `FIRST_SUPERUSER*` environment variables.
 5. Scheduled jobs are configured:
    - `GtfsImportService.schedule_from_settings`: Reads the `gtfs_cron` key from the `app_settings` table and registers a GTFS Static feed import job.
-   - `DatasourceSchedulerService.schedule_all_data_sources`: Queries all active `DataSource` rows whose `cron` column is set and registers one polling job per data source. Cron expressions are stored per data source in the `data_sources` table, not in `app_settings`.
    - `CleanupService.schedule_from_settings`: Reads cleanup configuration from `app_settings` and registers the alert expiry cleanup job.
 6. FastAPI app starts accepting requests.
 
@@ -67,14 +66,16 @@ Each router file under `routers/` maps to a URL prefix registered in `main.py`:
 | `alerts.py` | `/api/alerts` | ServiceAlert CRUD |
 | `trips.py` | `/api/trips` | Authenticated realtime trip listing and activation control |
 | `vehicles.py` | `/api/vehicles` | Authenticated realtime vehicle listing and activation control |
-| `sources.py` | `/api/sources` | External data source CRUD and manual trigger |
+| `sources.py` | `/api/sources` | See [datasources.md](datasources.md) |
 | `users.py` | `/api/users` | User management (superuser only) |
 | `settings.py` | `/api/settings` | Application settings key-value store |
 | `gtfs.py` | `/api/gtfs` | GTFS Static feed management and entity lookup |
 | `systemcopy.py` | `/api/systemcopy` | Superuser system configuration export and import |
 | `realtime.py` | `/api` | Public GTFS-RT feed output in protobuf or JSON format |
-| `push.py` | `/api/push` | Public push endpoint for synchronous event-based datasource execution |
-| `internal_execute.py` | `/internal/execute` | Internal endpoint to execute data sources forcefully. **Only for internal usage inside the EchoGTFS network, NOT exposed to the external API via frontend.** |
+| `push.py` | `/api/push` | See [push-api.md](push-api.md) |
+| `internal_execute.py` | `/internal/execute` | See [internal-push-api.md](internal-push-api.md) |
+| `service.py` | `/api/service/siri` | Authenticated SIRI service liveness check |
+| `capabilities.py` | `/api/capabilities` | Authenticated capability discovery, including optional service readiness |
 
 The API routers are meant to have as less logic as possible and only do the I/O networking stuff, mainly communication to the frontend, but also provision of GTFS-RT data.
 
@@ -85,9 +86,8 @@ Services are meant to encapsulate all the logic which is not a) direct database 
 Most services are instantiated when they're used in the code. Some special services are meant to be single-instance services used globally around the whole python process. These services are currently:
 
 - `SecurityService` (related for security related issues)
-- `SiriSubscriptionService` (related for any subscription issues to the siricomservice)
+- `SiriSubscriptionService` (consumer API client for subscription lifecycle, status, readiness, and liveness)
 - `CachingService` (abstraction layer for redis access)
-- `DatasourceSchedulerService` (responsible for scheduling datasources by their cron job)
 
 The single instance services are initialized in the `main.py` module during the startup sequence of the application and also used across other modules and services.
 
@@ -95,7 +95,7 @@ Other services initialized in `main.py` are:
 
 - `AlembicMigrationService` (responsible for running the Alembic migrations)
 - `GtfsImportService` (responsible for loading and updating the GTFS static nominal data)
-- `CleanupService` (responsible for cleanup of **internal** deprecated GTFS-RT entities and datasource logs)
+- `CleanupService` (responsible for scheduled cleanup tasks)
 
 Those services are not designed as single-instance service but only used by `main.py`.
 
@@ -119,66 +119,11 @@ There're several repositories for structured database access. The repositories a
 
 Each repository has an interface defined for testing purposes.
 
-Most repositories hold a reference to open a separate database connection on demand for each query. The `RealtimeRepository` uses a slightly different pattern for synchronisation: The data source implementation which calls the sync methods of the `RealtimeRepository` opens a transation outside the repository, does all the syncing stuff and finally commits the changes. This way, the realtime updates become atomic for the GTFS-RT endpoints.
+Most repositories hold a reference to open a separate database connection on demand for each query. Realtime synchronization and its transaction boundaries are described in [datasources.md](datasources.md).
 
-## External Data Sources
+## Data Sources
 
-External datasources live in `backend/src/echogtfs/datasources` and inherit from `DatasourceBase` (`base.py`). `DatasourceBase` owns datasource-specific lifecycle concerns such as configuration validation, fetching or receiving payloads, request logging, parsing helpers, and starting realtime synchronization. It does not contain entity-specific realtime matching, validation, persistence, or stop-propagation logic.
-
-Normalized realtime records are handed to `RealtimeProcessingDispatcherService` in `backend/src/echogtfs/services/realtimeprocessing`. The dispatcher selects one of `ServiceAlertProcessingService`, `TripUpdateProcessingService`, or `VehiclePositionProcessingService` based on the record type and wraps processing in the realtime synchronization transaction. Shared processing helpers live in `RealtimeProcessingServiceBase`. Trip matching remains the responsibility of the existing `MatchingService`, while stop-event matching and propagation are encapsulated by `StopEventPropagationService` and used by `TripUpdateProcessingService`.
-
-The detailed runtime behavior for differential sources and incremental trip updates is documented in [differential-incremental.md](differential-incremental.md).
-
-The specific datasource implementation encapsulates source related specifics like request / response patterns, content and I/O handling, and datasource related parameters.
-
-For reading and parsing the external data, the transformers are implemented in `backend/src/echogtfs/datasources/transformers`. There's one transformer interface for each GTFS-RT entity and several specific transformer implementations. The transformers are kept as generic as possible, however, proprietary transformers may be required to include arbitrary data.
-
-Compared to other cron-based tasks (e.g. GTFS import, cleanup), the datasources **can be defined with a second based cron expression with 6 places** like this:
-
-`*/30 * * * * *`
-
-This cron expression would run the datasource every 30 seconds (on ':00 and on ':30).
-
-The scheduler service ensures that each data source can **only have no concurrent runs** to avoid inconsistences. This means, that if a data source run takes longer than the cron expression would run the data source, the run is skipped.
-
-### Data Source Workers
-
-The `DatasourceSchedulerService` checks for the configured cron expressions and runs the data sources independently form the main event loop. This is to avoid blocking behaviour of the frontend and other parts of the application. Each data source run is executed in a separate process in the process pool.
-
-To configure the maximum number of workers for data sources, set the desired value in the environment variable `DATASOURCE_PROCESS_POOL_SIZE`. Default value is `2`.
-
-Push-specific authentication, request flow, and status mapping are documented in `docs/dev/push-api.md`.
-
-### Data Source Deactivation and Run Coordination
-
-Deactivation in `sources.py` is coordinated with active scheduler runs to prevent data from being reinserted after cleanup.
-
-#### Runtime Flow (Deactivation)
-
-1. The source is switched to inactive in the database.
-2. The source cron job is removed from the scheduler.
-3. The router calls `wait_for_source_idle(source_id, timeout_seconds=300.0)`.
-4. If the source is still running after timeout, the API returns `409` with `error.source_still_running` and does not delete realtime objects.
-5. If the source is idle, realtime alerts, trips, and vehicles of that source are deleted.
-
-#### Scheduler State Model
-
-- `DatasourceSchedulerService` tracks active source runs in `_running_source_ids`.
-- `run_import_task(...)` and `run_push_task(...)` add the source to this set when execution starts.
-- Both tasks remove the source from this set in `finally` via `_mark_source_finished(...)`.
-- `wait_for_source_idle(...)` waits on an async condition until the source ID is no longer in `_running_source_ids`.
-
-#### Scope of Coordination
-
-- The waiting behavior applies to time-based runs triggered by cron (`run_import_task(...)`).
-- The same waiting behavior applies to event-based runs triggered by push (`run_push_task(...)`).
-- No extra final run is triggered during deactivation. The logic only waits for an already running execution to finish.
-
-#### Deactivation Coordination Values
-
-| Name | Default | Meaning |
-|---|---|---|
-| `_DEACTIVATION_WAIT_TIMEOUT_SECONDS` | `300.0` | Maximum wait time for a running source execution to finish before returning `409`. |
+Data source behavior and its integration with the rest of the system are documented in [datasources.md](datasources.md).
 
 ## GTFS-Realtime Feed
 
@@ -217,6 +162,6 @@ The monitoring API is designed to open access of EchoGTFS backend to external mo
 
 - The API **always provides access to the current status of the system**, there's no overview over historical conflicts and status values
 - The API provides access to the **conflicts within the system**, conflicts in the incoming base data are currently **not monitored** and available
-- For finding the conflicts in the system, the data sources need to be configured to **not discard invalid entities or references**, but **disable the corresponding objects**. By discarding invalid objects or references, the never become visible for the monitoring.
+- Configuration that determines which invalid entities are visible to monitoring is described in [datasources.md](datasources.md).
 
 The statistics are completely computed by the `RealtimeRepository`. Most of the conflict detection work is also done in the `RealtimeRepository`, however, packaging and final checks on the conflicts as well as uniquifying them is done in the separate `ConflictExportService` class and then handed to the API endpoint.

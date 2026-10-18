@@ -5,9 +5,12 @@ This directory contains technical documentation for the EchoGTFS system, intende
 ## Contents
 
 - [architecture.md](architecture.md): Overall system architecture, component responsibilities, data flow, and technology stack.
+- [datasources.md](datasources.md): Data source purpose, transformer and processing architecture, base classes, execution modes, scheduling, and run coordination.
+- [siricomservice.md](siricomservice.md): SIRI consumer integration, subscription lifecycle, health discovery, and network routing.
 - [authentication.md](authentication.md): Authentication and authorization model, JWT lifecycle, sliding sessions, and role system.
 - [realtime.md](realtime.md): Relations and implications bewteen realtime models in exports and internal handling.
 - [push-api.md](push-api.md): Push endpoint authentication, execution flow, scheduler integration, and error/status mapping.
+- [internal-push-api.md](internal-push-api.md): Internal unauthenticated datasource execution endpoint and its network boundary.
 - [differential-incremental.md](differential-incremental.md): End-to-end implementation of differential source sync and incremental trip-update merge/export semantics.
 - [matching.md](matching.md): Matching-service behavior for resolving external realtime trip IDs to nominal GTFS trips, including cache flow and fallback stages.
 - [stop-propagation.md](stop-propagation.md): Description of the stop propagation and stop event matching between delivered realtime stop events and nominal GTFS stop times.
