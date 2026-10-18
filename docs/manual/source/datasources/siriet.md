@@ -42,8 +42,20 @@ Aus demselben Grund wird auch die Startzeit der Fahrt (`start_time`) nur dann au
 In der aktuellen Umsetzungsvariante wird die Ausgabe von Zusatzhalten über GTFS-RT nicht unterstützt! Die hierzu notwendige [Erweiterung mit `TripModifications`](https://gtfs.org/documentation/realtime/reference/#message-tripmodifications) ist aktuell noch experimentell und [wird von GoogleTransit noch nicht unterstützt](https://developers.google.com/transit/gtfs-realtime/reference?hl=de).
 ```
 
+## Verfügbare Ausführungsarten
+
+Die SIRI-ET-Datenquelle unterstützt folgende Ausführungsarten:
+
+- Zeitbasiert
+- Eventbasiert
+- Abobasiert
+
+```{note}
+In der abobasierten Ausführung unterstützt die SIRI-ET-Datenquelle derzeit nur den Betriebsmodus `DirectDelivery`! Der Betriebsmodus `FetchedDelivery` ist aktuell noch nicht implementiert.
+```
+
 ## Verfügbare Dialekte
 
 Die SIRI-ET-Datenquelle verwendet den folgenden Dialekte:
 
-- **SIRI-ET** (Standard)
+- **SIRI-ET**

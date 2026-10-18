@@ -34,6 +34,13 @@ Generelle Hinweise zur Verwendung von Filtern sind in der {ref}`Datenquellenübe
 In der aktuellen Umsetzungsvariante wird die Ausgabe von Zusatzhalten über GTFS-RT nicht unterstützt! Die hierzu notwendige [Erweiterung mit `TripModifications`](https://gtfs.org/documentation/realtime/reference/#message-tripmodifications) ist aktuell noch experimentell und [wird von GoogleTransit noch nicht unterstützt](https://developers.google.com/transit/gtfs-realtime/reference?hl=de).
 ```
 
+## Verfügbare Ausführungsarten
+
+Die SIRI-Lite-Datenquelle unterstützt folgende Ausführungsarten:
+
+- Zeitbasiert
+- Eventbasiert
+
 ## Verfügbare Dialekte
 
 Die SIRI-Lite-Datenquelle verwendet die folgenden Dialekte:

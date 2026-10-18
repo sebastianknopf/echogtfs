@@ -68,11 +68,13 @@ _Die genauen Regeln zur Unterstützung von Filtern sind in der Beschreibung der 
 
 (h-datasources-time-vs-event-based)=
 
-## Zeit- und Eventbasierte Ausführung
+## Zeit- und Event- und Abobasierte Ausführung
 
 Standardmäßig werden Datenquellen zeitbasiert ausgeführt. Dabei werden sie vom internen Scheduler zu regelmäßgen, über den Cron-Ausdruck definierten Zeitpunkten ausgeführt. Die Daten werden dabei von EchoGTFS vom Quellsystem abgefragt.
 
 Bei besonders zeitkritischen Datenquellen (z.B. Fahrzeugpositionen) besteht alternativ die Möglichkeit, die Datenquelle eventbasiert auszuführen. Dabei werden die Daten aktiv vom Quellsystem an den Endpunkt der {ref}`h-push-api-push-api` für die jeweilige Datenquelle übermittelt und die Datenquelle unmittelbar ausgeführt.
+
+Alternativ bietet EchoGTFS auch die Nutzung sogenannter abobasierten Datenquellen an. Dabei wird ein Abo an einer SIRI-Datenquelle (oder einer anderen Datenquelle) eingerichtet und die Nutzdaten an die jeweilige Datenquelle zur Verarbeitung übergeben. Damit abobasierte Datenquellen genutzt werden können, müssen je nach Datenquelle zusätzliche Kommunikationsdienste gestartet werden. Weitere Informationen dazu finden Sie {ref}`in der Installationsanleitung <h-installation-additional-services>`. Beachten Sie bitte außerdem, dass bei der Verwendung von abobasierten Datenquellen je Datenquelle {ref}`mindestens zwei Worker-Prozesse <h-installation-setup-envs>` vorgehalten werden sollten.
 
 (h-datasources-differential-incremental-updates)=
 

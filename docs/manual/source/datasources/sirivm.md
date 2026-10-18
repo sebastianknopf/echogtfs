@@ -24,6 +24,18 @@ Die folgenden Parameter kannst du in der Konfiguration der Datenquelle setzen:
 
 Generelle Hinweise zur Verwendung von Filtern sind in der {ref}`Datenquellenübersicht <h-datasources-filters>` beschrieben.
 
+## Verfügbare Ausführungsarten
+
+Die SIRI-VM-Datenquelle unterstützt folgende Ausführungsarten:
+
+- Zeitbasiert
+- Eventbasiert
+- Abobasiert
+
+```{note}
+In der abobasierten Ausführung unterstützt die SIRI-VM-Datenquelle derzeit nur den Betriebsmodus `DirectDelivery`! Der Betriebsmodus `FetchedDelivery` ist aktuell noch nicht implementiert.
+```
+
 ## Verfügbare Dialekte
 
 Die SIRI-VM-Datenquelle verwendet aktuell den folgenden Dialekt:

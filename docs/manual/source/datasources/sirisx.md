@@ -23,6 +23,18 @@ Die folgenden Parameter können in der Konfiguration der Datenquelle gesetzt wer
 
 Generelle Hinweise zur Verwendung von Filtern sind in der {ref}`Datenquellenübersicht <h-datasources-filters>` beschrieben.
 
+## Verfügbare Ausführungsarten
+
+Die SIRI-SX-Datenquelle unterstützt folgende Ausführungsarten:
+
+- Zeitbasiert
+- Eventbasiert
+- Abobasiert
+
+```{note}
+In der abobasierten Ausführung unterstützt die SIRI-SX-Datenquelle derzeit nur den Betriebsmodus `DirectDelivery`! Der Betriebsmodus `FetchedDelivery` ist aktuell noch nicht implementiert.
+```
+
 ## Verfügbare Dialekte
 
 Die SIRI-SX-Datenquelle verwendet die folgenden Dialekte:
