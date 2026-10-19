@@ -14,15 +14,26 @@ Die folgenden Parameter können in der Konfiguration der Datenquelle gesetzt wer
 
 - **Endpunkt**: Die URL des SIRI-SX-Endpoints, von dem die Daten abgerufen werden.
   - Ergebnis: Die Datenquelle fragt diesen Endpunkt beim Ausführen ab und verarbeitet die gelieferten Meldungen.
+- **Consumer-Endpunkt**: Optionale URL, unter der ein Consumer für abonnementbasierte Datenquellen erreichbar ist.
 - **Leitstellenkennung**: Die vereinbarte Leitstellenkennung des anfragenden Systems.
   - Ergebnis: Diese Angabe wird in die Anfrage übernommen und hilft, die Anforderung eindeutig zuzuordnen.
-- **Methode**: Auswahl zwischen "request/response" und "publish/subscribe".
-  - Ergebnis: Derzeit wird "request/response" unterstützt. "publish/subscribe" ist noch nicht verfügbar.
 - **Dialekt**: Die zu verwendende SIRI-SX-Implementierungsvariante.
 - **Filter**: Optionaler Filter für Teilnehmerkennungen und Linien.
   - Ergebnis: Wenn ein Filter gesetzt ist, werden nur Meldungen mit passenden Teilnehmerkennungen oder mindestens einem Bezug zu einer Linie berücksichtigt.
 
 Generelle Hinweise zur Verwendung von Filtern sind in der {ref}`Datenquellenübersicht <h-datasources-filters>` beschrieben.
+
+## Verfügbare Ausführungsarten
+
+Die SIRI-SX-Datenquelle unterstützt folgende Ausführungsarten:
+
+- Zeitbasiert
+- Eventbasiert
+- Abobasiert
+
+```{note}
+In der abobasierten Ausführung unterstützt die SIRI-SX-Datenquelle derzeit nur den Betriebsmodus `DirectDelivery`! Der Betriebsmodus `FetchedDelivery` ist aktuell noch nicht implementiert.
+```
 
 ## Verfügbare Dialekte
 

@@ -62,13 +62,6 @@ Password handling follows the same pattern as GTFS-RT credentials:
 - `_fetch_records_from_payload(payload, content_type)`
 - `sync_records_from_payload(payload, content_type, ...)`
 
-`DatasourceBase` provides the datasource-side payload and sync entry points. After fetching or receiving and transforming the payload, it delegates normalized realtime processing to `RealtimeProcessingDispatcherService`. The scheduler injects `_execution_type` into adapter config before adapter construction.
-
-Validation behavior:
-
-- For `time_based` sources, polling-specific fields (for example endpoint URLs) remain required.
-- For `event_based` sources, polling-specific fields are optional.
-
 ## Logging Behavior
 
 Push-triggered adapter logs are written through `DatalogService` into `sys_data_source_logs`.
@@ -76,10 +69,3 @@ Push-triggered adapter logs are written through `DatalogService` into `sys_data_
 - `request_url` for push-triggered entries is stored as `""`.
 - `request_headers` can contain pushed `Content-Type`.
 - `response_content` dump follows `DataSource.log_dumps`.
-
-## Relation to Manual Run Endpoint
-
-`POST /api/sources/{source_id}/run` is restricted to time-based sources.
-
-- Event-based sources return `403` (`error.source_event_based`) on manual run attempts.
-- Frontend hides the run button for event-based sources.

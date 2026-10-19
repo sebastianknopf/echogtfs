@@ -48,14 +48,6 @@ class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
 
             return int(result.rowcount or 0)
 
-    async def update_service_alert_source_name(self, old_name: str, new_name: str) -> None:
-        """Rename service alert source text."""
-        stmt = update(ServiceAlert).where(ServiceAlert.source == old_name).values(source=new_name)
-
-        async with self.get_session() as db:
-            await db.execute(stmt)
-            await self.commit(db)
-
     async def get_realtime_service_alerts(self) -> list[ServiceAlert]:
         """Return active realtime alerts with relationships needed for GTFS-RT export."""
         stmt = (

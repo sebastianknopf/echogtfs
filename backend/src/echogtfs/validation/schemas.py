@@ -226,9 +226,9 @@ class DataSourceCreate(BaseModel):
     enrichments: list[DataSourceEnrichmentCreate] = []
 
     @model_validator(mode='after')
-    def clear_cron_for_event_based(self):
-        """Event-based sources are never cron-scheduled."""
-        if self.execution_type == DataSourceExecutionType.EVENT_BASED:
+    def clear_cron_for_non_time_based(self):
+        """Event-based and subscription-based sources are never cron-scheduled."""
+        if self.execution_type in (DataSourceExecutionType.EVENT_BASED, DataSourceExecutionType.SUBSCRIPTION_BASED):
             self.cron = None
         return self
 
@@ -248,9 +248,9 @@ class DataSourceUpdate(BaseModel):
     enrichments: list[DataSourceEnrichmentCreate] | None = None
 
     @model_validator(mode='after')
-    def clear_cron_for_event_based(self):
-        """Event-based sources are never cron-scheduled."""
-        if self.execution_type == DataSourceExecutionType.EVENT_BASED:
+    def clear_cron_for_non_time_based(self):
+        """Event-based and subscription-based sources are never cron-scheduled."""
+        if self.execution_type in (DataSourceExecutionType.EVENT_BASED, DataSourceExecutionType.SUBSCRIPTION_BASED):
             self.cron = None
         return self
 
@@ -273,6 +273,7 @@ class DataSourceRead(BaseModel):
     mappings: list[DataSourceMappingRead]
     enrichments: list[DataSourceEnrichmentRead]
     has_error: bool = False
+    subscription_status: bool = False
     model_config = {"from_attributes": True}
 
 

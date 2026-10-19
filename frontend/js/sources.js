@@ -6,6 +6,7 @@ const sources = (() => {
   let _sources = [];
   let _adapterTypes = [];
   let _editingSourceId = null;
+  let _siriServiceAvailable = false;
   const _runningSourceIds = new Set();
   const _togglingSourceIds = new Set();
 
@@ -633,6 +634,7 @@ const sources = (() => {
         <th data-i18n="sources.table.type">${window.i18n('sources.table.type')}</th>
         <th data-i18n="sources.table.execution_type">${window.i18n('sources.table.execution_type')}</th>
         <th data-i18n="sources.table.lastrun">${window.i18n('sources.table.lastrun')}</th>
+        ${_siriServiceAvailable ? `<th data-i18n="sources.table.subscription_status">${window.i18n('sources.table.subscription_status')}</th>` : ''}
         <th></th>
       </tr></thead>
       <tbody></tbody>`;
@@ -644,9 +646,10 @@ const sources = (() => {
         tr.classList.add('user-table__row--inactive');
       }
       
-      const executionTypeText = source.execution_type === 'event_based'
-        ? window.i18n('source.execution_type.event_based')
-        : window.i18n('source.execution_type.time_based');
+      const executionTypeText = window.i18n(`source.execution_type.${source.execution_type || 'time_based'}`);
+      const subscriptionStatus = source.execution_type === 'subscription_based'
+        ? `<span class="badge ${source.subscription_status ? 'badge--success' : 'badge--error'}">${window.i18n(source.subscription_status ? 'sources.badge.subscription.ok' : 'sources.badge.subscription.error')}</span>`
+        : '';
       const lastRunText = source.last_run_at 
         ? (() => {
             const lastRunDate = new Date(source.last_run_at);
@@ -668,14 +671,14 @@ const sources = (() => {
       const errorBadge = source.has_error ? `<span class="badge badge--error" title="${window.i18n('sources.badge.error')}">${window.i18n('sources.badge.error')}</span>` : '';
       const isRunning = _runningSourceIds.has(source.id);
       const isToggling = _togglingSourceIds.has(source.id);
-      const isEventBased = source.execution_type === 'event_based';
+      const isPushOnly = source.execution_type === 'event_based' || source.execution_type === 'subscription_based';
       const runTitle = !source.is_active
         ? window.i18n('sources.run.disabled')
         : (isRunning ? window.i18n('sources.run.running') : window.i18n('sources.run.title'));
       const runIcon = isRunning
         ? '<span class="btn-spinner source-run-spinner" aria-hidden="true"></span>'
         : '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
-      const runButton = isEventBased ? '' : `
+      const runButton = isPushOnly ? '' : `
           <button class="icon-btn" data-action="run" data-id="${source.id}"
             title="${runTitle}" 
             aria-label="${window.i18n('sources.run.title')} ${ui.esc(source.name)}" 
@@ -689,6 +692,7 @@ const sources = (() => {
         <td>${ui.esc(source.type)}</td>
         <td>${ui.esc(executionTypeText)}</td>
         <td>${ui.esc(lastRunText)}</td>
+        ${_siriServiceAvailable ? `<td>${subscriptionStatus}</td>` : ''}
         <td><div class="user-table__actions">
           ${inactiveBadge}
           ${errorBadge}
@@ -760,11 +764,22 @@ const sources = (() => {
     _renderConfigFields(type, configObj);
     
     ui.el('source-cron').value = cron || '';
+    // Keep the option for existing subscription-based sources so their type stays visible
+    const subscriptionOption = ui.el('source-execution-type').querySelector('option[value="subscription_based"]');
+    if (subscriptionOption) {
+      const unavailable = !_siriServiceAvailable && execution_type !== 'subscription_based';
+      subscriptionOption.disabled = unavailable;
+      subscriptionOption.hidden = unavailable;
+    }
     ui.el('source-execution-type').value = execution_type || 'time_based';
     _toggleCronFieldVisibility();
     ui.el('source-is-active').checked = is_active;
     ui.el('source-log-dumps').checked = !!log_dumps;
-    ui.el('source-is-differential-updates').checked = !!is_differential_updates;
+    const differentialInput = ui.el('source-is-differential-updates');
+    differentialInput.disabled = false;
+    delete differentialInput.dataset.previousValue;
+    differentialInput.checked = !!is_differential_updates;
+    _syncDifferentialUpdatesLock();
     ui.el('source-invalid-reference-policy').value = invalid_reference_policy || 'not_specified';
     
     // Initialize mappings
@@ -810,9 +825,28 @@ const sources = (() => {
     ui.el('source-modal').hidden = true;
   }
   
+  // Subscription-based sources always use differential updates
+  function _syncDifferentialUpdatesLock() {
+    const input = ui.el('source-is-differential-updates');
+    if (!input) return;
+    const locked = ui.el('source-execution-type').value === 'subscription_based';
+    if (locked) {
+      if (!input.disabled) {
+        input.dataset.previousValue = input.checked ? '1' : '0';
+      }
+      input.checked = true;
+      input.disabled = true;
+    } else if (input.disabled) {
+      input.disabled = false;
+      input.checked = input.dataset.previousValue === '1';
+      delete input.dataset.previousValue;
+    }
+  }
+
   function _toggleCronFieldVisibility() {
+    _syncDifferentialUpdatesLock();
     const executionType = ui.el('source-execution-type').value;
-    ui.el('source-cron-field').hidden = executionType === 'event_based';
+    ui.el('source-cron-field').hidden = executionType !== 'time_based';
   }
   
   function _setSourceModalBusy(busy) {
@@ -957,7 +991,7 @@ const sources = (() => {
         name, 
         type, 
         config: JSON.stringify(config), 
-        cron: executionType === 'event_based' ? null : (cron || null),
+        cron: executionType !== 'time_based' ? null : (cron || null),
         execution_type: executionType,
         is_active: isActive,
         log_dumps: logDumps,
@@ -1648,6 +1682,12 @@ const sources = (() => {
   }
 
   async function load() {
+    try {
+      const capabilities = await api.getCapabilities();
+      _siriServiceAvailable = Array.isArray(capabilities) && capabilities.includes('siricomservice');
+    } catch (e) {
+      _siriServiceAvailable = false;
+    }
     await _loadSources();
   }
 

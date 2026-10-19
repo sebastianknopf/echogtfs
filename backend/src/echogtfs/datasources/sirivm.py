@@ -11,22 +11,17 @@ from typing import Any
 
 import httpx
 
-from echogtfs.datasources.base import DatasourceBase
+from echogtfs.datasources.subscription_datasource_base import SubscriptionDatasourceBase
 from echogtfs.datasources.transformers import SiriVmVehiclePositionsTransformer
 
 logger = logging.getLogger("uvicorn")
-
-
-class SiriVmMethod(str, Enum):
-    REQUEST_RESPONSE = "request/response"
-    PUBLISH_SUBSCRIBE = "publish/subscribe"
 
 
 class SiriVmDialect(str, Enum):
     SIRIVM = "sirivm"
 
 
-class SiriVmDatasource(DatasourceBase):
+class SiriVmDatasource(SubscriptionDatasourceBase):
     """Datasource implementation for SIRI-VM feeds."""
 
     CONFIG_SCHEMA: list[dict[str, Any]] = [
@@ -39,20 +34,20 @@ class SiriVmDatasource(DatasourceBase):
             "help_text": "adapter.sirivm.endpoint.help_text",
         },
         {
+            "name": "consumerendpoint",
+            "type": "url",
+            "label": "adapter.sirivm.consumerendpoint.label",
+            "required": False,
+            "placeholder": "adapter.sirivm.consumerendpoint.placeholder",
+            "help_text": "adapter.sirivm.consumerendpoint.help_text",
+        },
+        {
             "name": "participantref",
             "type": "text",
             "label": "adapter.sirivm.participantref.label",
             "required": True,
             "placeholder": "adapter.sirivm.participantref.placeholder",
             "help_text": "adapter.sirivm.participantref.help_text",
-        },
-        {
-            "name": "method",
-            "type": "enum",
-            "label": "adapter.sirivm.method.label",
-            "required": True,
-            "options": ["request/response", "publish/subscribe"],
-            "help_text": "adapter.sirivm.method.help_text",
         },
         {
             "name": "dialect",
@@ -88,19 +83,6 @@ class SiriVmDatasource(DatasourceBase):
                 raise ValueError("SiriVm datasource requires 'participantref' in config")
         elif not isinstance(participantref, str):
             raise ValueError("'participantref' must be a string")
-
-        method = self.config.get("method")
-        if not method:
-            if not is_event_based:
-                raise ValueError("SiriVm datasource requires 'method' in config")
-        else:
-            try:
-                SiriVmMethod(method)
-            except ValueError:
-                valid_methods = [method.value for method in SiriVmMethod]
-                raise ValueError(
-                    f"Invalid method '{self.config['method']}'. Valid options: {', '.join(valid_methods)}"
-                )
 
         if "dialect" not in self.config:
             raise ValueError("SiriVm datasource requires 'dialect' in config")
@@ -223,11 +205,6 @@ class SiriVmDatasource(DatasourceBase):
         }
 
     async def _fetch_and_parse_xml(self) -> ET.Element:
-        if self.config.get("method") == SiriVmMethod.PUBLISH_SUBSCRIBE.value:
-            raise NotImplementedError(
-                "Method 'publish/subscribe' is not yet supported. Please use 'request/response' instead."
-            )
-
         endpoint_url = self._resolve_placeholders(self.config["endpoint"])
         xml_payload = self._build_request_xml()
 
@@ -286,3 +263,26 @@ class SiriVmDatasource(DatasourceBase):
             )
 
             raise ValueError(f"Failed to parse SIRI-VM XML: {exc}") from exc
+
+    def get_subscription_params(self) -> dict[str, Any]:
+        """Return the parameters required to configure the subscription."""
+        return {
+            "provider_url": self.config.get("endpoint"),
+            "profile": "default",
+            "version": "default",
+            "service": "VM",
+            "delivery_mode": "direct",
+            "requestor_ref": self.config.get("participantref"),
+            "subscriber_ref": self.config.get("participantref"),
+            "logging": False,
+            "consumer_address": self.config.get("consumerendpoint"),
+            "preview_interval": "PT2H",
+            "initial_termination_time": "2999-12-31T23:59:00Z",
+            "incremental_updates": True,
+            "change_before_updates": "PT30S",
+            "heartbeat": {
+                "enabled": True,
+                "timeout_seconds": 180,
+                "check_status_enabled": False,
+            },
+        }

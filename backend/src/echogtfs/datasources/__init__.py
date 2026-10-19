@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from echogtfs.datasources.base import DatasourceBase
+from echogtfs.datasources.subscription_datasource_base import SubscriptionDatasourceBase
 from echogtfs.datasources.gtfsrt import GtfsRealtimeDatasource
 from echogtfs.datasources.siriet import SiriEtDatasource
 from echogtfs.datasources.sirilite import SiriLiteDatasource
@@ -13,6 +14,7 @@ from echogtfs.datasources.sirisx import SiriSxDatasource
 
 __all__ = [
     "DatasourceBase",
+    "SubscriptionDatasourceBase",
     "GtfsRealtimeDatasource",
     "SiriEtDatasource",
     "SiriLiteDatasource",

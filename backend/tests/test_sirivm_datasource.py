@@ -38,17 +38,6 @@ class TestSirivmDatasource(unittest.IsolatedAsyncioTestCase):
         cls._logger_error_patcher.stop()
         super().tearDownClass()
 
-    def test_validate_config_rejects_invalid_method(self):
-        with self.assertRaises(ValueError):
-            SiriVmDatasource(
-                {
-                    "endpoint": "https://x/{participantRef}",
-                    "participantref": "P1",
-                    "method": "invalid",
-                    "dialect": "sirivm",
-                }
-            )
-
     def test_validate_config_rejects_invalid_dialect(self):
         with self.assertRaises(ValueError):
             SiriVmDatasource(
@@ -141,19 +130,6 @@ class TestSirivmDatasource(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["record_type"], "vehicle_positions")
         self.assertEqual(payload["records"], [{"id": "v"}])
         self.assertEqual(payload["_transform_runtime_ms"], 9.75)
-
-    async def test_publish_subscribe_not_supported(self):
-        datasource = SiriVmDatasource(
-            {
-                "endpoint": "https://x/{participantRef}",
-                "participantref": "P1",
-                "method": "publish/subscribe",
-                "dialect": "sirivm",
-            }
-        )
-
-        with self.assertRaises(NotImplementedError):
-            await datasource._fetch_and_parse_xml()
 
     async def test_fetch_records_raises_when_transform_fails(self):
         datasource = SiriVmDatasource(

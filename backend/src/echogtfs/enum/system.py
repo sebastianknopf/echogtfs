@@ -39,6 +39,7 @@ class DataSourceExecutionType(str, Enum):
 
     TIME_BASED = "time_based"  # Runs on a cron schedule
     EVENT_BASED = "event_based"  # Runs only when triggered via the push API
+    SUBSCRIPTION_BASED = "subscription_based"  # Runs only when a managed subscription delivers data
 
 
 class IncorrectStopIdHandling(str, Enum):

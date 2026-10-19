@@ -15,3 +15,11 @@ Prüfen Sie, ob die Behandlung von unerwarteten / fehlenden Haltestellen als Zus
  **Eine Haltestellen-ID wird als ungültig, aber nicht als Zusatzhalt angezeigt, obwohl die Behandlung von unerwarteten / fehlenden Haltestellen-IDs als Zusatzhalt / Haltausfall in der Datenquelle aktiviert ist**
 
 Wenn es sich bei der Haltestellen-ID um eine globale Haltestellen-ID (im Sinne von DHID, SLOID, ...) handelt, wird bei der Überprüfung nur der Anteil _bis zur Haltestellenebene_ herangezogen. Das bedeutet, dass die Haltestelle selbst nicht als Zusatzhalt interpretiert wird, gleichzeitig die _vollständige Haltestellen-ID_ dennoch nicht im statischen GTFS-Feed fehlen kann und daher als ungültig eingestuft wird. Dasselbe gilt sinngemäß für die Erkennung von Haltausfällen aufgrund einer vermeintlich fehlenden Haltestelle im Fahrtverlauf.
+
+**Beim Einrichten einer Datenquelle kann keine abobasierte Ausführung ausgewählt werden**
+
+Die abobasierte Ausführung einer Datenquelle ist nur bei bestimmten Datenquellen möglich. Außerdem muss der SIRI-Kommunikationsdienst gestartet worden sein. Siehe hierzu {ref}`h-installation-additional-services`.
+
+**Der Abostatus bei einer abonnementbasierten Datenquelle wird nicht angezeigt**
+
+Der Abostatus wird nur angezeigt, wenn der SIRI-Kommunikationsdienst gestartet wurde. Siehe hierzu {ref}`h-installation-additional-services`.

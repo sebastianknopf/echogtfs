@@ -38,11 +38,40 @@ git checkout 1.1.0
 
 Kopieren Sie die Datei `.env.example` und benennen Sie diese um zu `.env`. Öffnen Sie die Datei und legen Sie folgende Umbebungsvariablen fest:
 
-`TIMEZONE`: Zeitzone, in der Sie die EchoGTFS-Instanz betreiben (z.B. `Europe/Berlin`)
-`SECRET_KEY`: 32-stelliger zufälliger Schlüssel zur Authentifizierung und Authentisierung im Frontend
-`FIRST_SUPERUSER`, `FIRST_SUPERUSER_EMAIL`, `FIRST_SUPERUSER_PASSWORD`: Initiale Zugangsdaten, mit denen Sie sich erstmalig bei EchoGTFS anmelden
+- `TIMEZONE`: Zeitzone, in der Sie die EchoGTFS-Instanz betreiben (z.B. `Europe/Berlin`)
+- `SECRET_KEY`: 32-stelliger zufälliger Schlüssel zur Authentifizierung und Authentisierung im Frontend
+- `FIRST_SUPERUSER`, `FIRST_SUPERUSER_EMAIL`, `FIRST_SUPERUSER_PASSWORD`: Initiale Zugangsdaten, mit denen Sie sich erstmalig bei EchoGTFS anmelden
 
-`DOCS_ENABLED`: Option, um den für den externen Zugriff vorgesehenen Anteil der API zu veröffentlichen. Weitere Informationen im Abschnitt {ref}`h-monitoring-api-monitoring-api`
+- `DOCS_ENABLED`: Option, um den für den externen Zugriff vorgesehenen Anteil der API zu veröffentlichen. Weitere Informationen im Abschnitt {ref}`h-monitoring-api-monitoring-api`
+
+### Weitere Umgebungsvariablen
+
+Neben den eingangs erklärten Umgebungsvariablen gibt es noch weitere Umgebungsvariablen, die bei Bedarf angepasst werden können: 
+
+- `FRONTEND_PORT`: Port unter dem das Frontend und die API auf dem Host erreichbar ist. Default ist `80`.
+- `DATASOURCE_PROCESS_POOL_SIZE`: Anzahl der Worker-Prozesse im Backend, die zum Ausführen der Datenquellen genutzt werden. Default ist `2`. Je mehr Datenquellen parallel laufen können, desto höher sollte die Anzahl der Worker-Prozesse sein.
+- `GLOBAL_ID_PATTERN`: Regulärer Ausdruck auf dessen Basis geprüft wird, ob es sich bei einer ID um eine globale ID handelt. Default ist `^[A-Za-z]+:[^:\s]+:[^:\s]+(?::[^:\s]*)*$` (entspricht dem Pattern der DHID, DTID, DFID).
+
+(h-installation-additional-services)=
+
+## Zusätzliche Dienste
+
+EchoGTFS bietet zusätzliche Dienste, um Datenquellen bspw. über SIRI Publish/Subscribe anbinden zu können. Diese zusätzlichen Dienste werden **nicht automatisch mit gestartet**, sondern müssen beim Start über ein Profil aktiviert werden. Aktuell stehen folgende Profile zur Verfügung:
+
+- `siripubsub`: SIRI-Kommunikationsdienst zum Betrieb mit SIRI Publish/Subscribe
+
+### SIRI-Kommunikationsdienst
+
+Der SIRI-Kommunikationsdienst ermöglich die Anbindung von Datenquellen mittels SIRI Publish/Subscribe Pattern. Der SIRI-Kommunikationsdienst bietet einen Endpunkt, über den Anfragen von SIRI-Producern entgegengenommen werden können. Er wird über das Profil `siripubsub` aktiviert und bietet folgende  zusätzlichen Umbebungsvariablen:
+
+- `SIRI_PORT`: Port für die eingehenden Anfragen vom SIRI-Producer an den SIRI-Kommunikationsdienst. Default ist `8080`.
+- `SIRI_STATUS_ENABLED`: Wenn auf `true` gesetzt, wird über den SIRI-Port unter der Adresse `/status` der aktuelle Status des SIRI-Kommunikationsdienstes angezeigt. Default ist `false`.
+
+```{warning}
+Die Statusanzeige des SIRI-Kommunikationsdienstes sollte in keinem Fall über das öffentliche Netzwerk erreichbar sein, sondern ggf. durch einen ReverseProxy auf das interne Netz beschränkt werden! Über die Statusanzeige und die damit einhergehenden Schnittstellen besteht auch die Möglichkeit, festgefahrende Abonnements manuell zu löschen.
+
+**Die Pfade `/status` und `/api/...` müssen vor Zugriffen von außerhalb des Netzwerks geschützt werden.**
+```
 
 (h-installation-startup)=
 
@@ -51,8 +80,10 @@ Kopieren Sie die Datei `.env.example` und benennen Sie diese um zu `.env`. Öffn
 Wenn soweit alle Konfigurationen vorgenommen sind, starten Sie EchoGTFS, indem Sie folgendes Kommando im Projektverzeichnis ausführen:
 
 ```shell
-docker compose up -d --build
+docker compose [--profile <profile1>, --profile <profile2>] up -d --build
 ```
+
+Die Angabe von Profilen ist dabei optional und dient dem Start zusätzlicher Dienste.
 
 Dieser Vorgang kann einige Minuten dauern. Nach erfolgreichem Start sollte die Konsole etwa folgenden Text zeigen:
 

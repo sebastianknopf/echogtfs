@@ -14,10 +14,9 @@ Die folgenden Parameter können in der Konfiguration der Datenquelle gesetzt wer
 
 - **Endpunkt**: Die URL des SIRI-ET-Endpoints, von dem die Daten abgerufen werden.
   - Ergebnis: Die Datenquelle fragt diesen Endpunkt beim Ausführen ab und verarbeitet die gelieferten Fahrtdaten.
+- **Consumer-Endpunkt**: Optionale URL, unter der ein Consumer für abonnementbasierte Datenquellen erreichbar ist.
 - **Leitstellenkennung**: Die vereinbarte Leitstellenkennung des anfragenden Systems.
   - Ergebnis: Diese Angabe wird in die Anfrage übernommen und hilft, die Anforderung eindeutig zuzuordnen.
-- **Methode**: Auswahl zwischen "request/response" und "publish/subscribe".
-  - Ergebnis: Derzeit wird "request/response" unterstützt. "publish/subscribe" ist noch nicht verfügbar.
 - **Dialekt**: Die zu verwendente SIRI-ET Implementierungsvariante.
 - **Ungeplante Halte als Zusatzhalte behandeln**: Aktiviert die Behandlung von unerwarteten Halten als zusätzliche Halte.
   - Ergebnis: Solche Halte werden im Importverlauf wie Zusatzhalte behandelt. Wenn die Option deaktiviert ist, werden unerwartete Halte in den Eingangsdaten verworfen.
@@ -43,8 +42,20 @@ Aus demselben Grund wird auch die Startzeit der Fahrt (`start_time`) nur dann au
 In der aktuellen Umsetzungsvariante wird die Ausgabe von Zusatzhalten über GTFS-RT nicht unterstützt! Die hierzu notwendige [Erweiterung mit `TripModifications`](https://gtfs.org/documentation/realtime/reference/#message-tripmodifications) ist aktuell noch experimentell und [wird von GoogleTransit noch nicht unterstützt](https://developers.google.com/transit/gtfs-realtime/reference?hl=de).
 ```
 
+## Verfügbare Ausführungsarten
+
+Die SIRI-ET-Datenquelle unterstützt folgende Ausführungsarten:
+
+- Zeitbasiert
+- Eventbasiert
+- Abobasiert
+
+```{note}
+In der abobasierten Ausführung unterstützt die SIRI-ET-Datenquelle derzeit nur den Betriebsmodus `DirectDelivery`! Der Betriebsmodus `FetchedDelivery` ist aktuell noch nicht implementiert.
+```
+
 ## Verfügbare Dialekte
 
 Die SIRI-ET-Datenquelle verwendet den folgenden Dialekte:
 
-- **SIRI-ET** (Standard)
+- **SIRI-ET**

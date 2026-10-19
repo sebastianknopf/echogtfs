@@ -21,6 +21,7 @@ from echogtfs.services.database import (
 )
 from echogtfs.services.scheduler import DatasourceSchedulerService, set_datasource_scheduler_service
 from echogtfs.services.security import SecurityService, get_security_service, set_security_service
+from echogtfs.services.subscription import SiriSubscriptionService, set_siri_subscription_service
 from echogtfs.services.caching import CachingService, set_caching_service
 from echogtfs.routers.alerts import router as alerts_router
 from echogtfs.routers.auth import router as auth_router
@@ -37,6 +38,9 @@ from echogtfs.routers.systemcopy import router as systemcopy_router
 from echogtfs.routers.sources import router as sources_router
 from echogtfs.routers.users import router as users_router
 from echogtfs.routers.push import router as push_router
+from echogtfs.routers.internal_execute import router as internal_execute_router
+from echogtfs.routers.service import router as service_router
+from echogtfs.routers.capabilities import router as capabilities_router
 from echogtfs._version import __version__
 
 logger = logging.getLogger("uvicorn.error")
@@ -64,6 +68,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # intialize single-instance services
     set_security_service(SecurityService(system_repository))
+    set_siri_subscription_service(SiriSubscriptionService())
     caching_service = CachingService(settings.redis_url)
 
     await caching_service.initialize()
@@ -150,5 +155,9 @@ app.include_router(users_router,        prefix="/api/users",        tags=["users
 app.include_router(settings_router,     prefix="/api/settings",     tags=["settings"])
 app.include_router(gtfs_router,         prefix="/api/gtfs",         tags=["gtfs"])
 app.include_router(systemcopy_router,   prefix="/api/systemcopy",   tags=["systemcopy"])
-app.include_router(realtime_router,     prefix="/api",              tags=["realtime"])
+app.include_router(service_router,      prefix="/api/service/siri", include_in_schema=False)
+app.include_router(capabilities_router, prefix="/api/capabilities", include_in_schema=False)
 app.include_router(push_router,         prefix="/api/push",         tags=["push"])
+app.include_router(realtime_router,     prefix="/api",              tags=["realtime"])
+
+app.include_router(internal_execute_router, prefix="/internal/execute", include_in_schema=False)

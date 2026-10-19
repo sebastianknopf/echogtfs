@@ -516,6 +516,36 @@ async function loadPublicAppSettings() {
   }
 }
 
+// Mobile navigation drawer (hamburger menu); only visible below the CSS breakpoint
+const mobileNav = (() => {
+  const OPEN_CLASS = 'is-nav-open';
+  const DESKTOP_QUERY = window.matchMedia('(min-width: 769px)');
+
+  function setOpen(open) {
+    document.body.classList.toggle(OPEN_CLASS, open);
+    document.getElementById('menu-btn')?.setAttribute('aria-expanded', String(open));
+  }
+
+  function init() {
+    document.getElementById('menu-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setOpen(!document.body.classList.contains(OPEN_CLASS));
+    });
+    document.getElementById('sidebar-backdrop')?.addEventListener('click', () => setOpen(false));
+    document.getElementById('main-nav')?.addEventListener('click', (e) => {
+      if (e.target.closest('.nav-item')) setOpen(false);
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') setOpen(false);
+    });
+    DESKTOP_QUERY.addEventListener('change', (e) => {
+      if (e.matches) setOpen(false);
+    });
+  }
+
+  return { init };
+})();
+
 document.addEventListener('DOMContentLoaded', async () => {
   // Load theme and language from backend settings first (before any UI is shown)
   await loadPublicAppSettings();
@@ -525,6 +555,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Initialize language selector
   languageSelector.init();
+
+  mobileNav.init();
 
   // Login
   document.getElementById('login-form')?.addEventListener('submit', app.handleLogin);

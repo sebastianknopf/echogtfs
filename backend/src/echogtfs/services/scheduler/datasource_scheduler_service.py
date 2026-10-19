@@ -15,7 +15,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from echogtfs.common.config import settings
 from echogtfs.enum.system import DataSourceExecutionType
-from echogtfs.services.database.models import AppSetting
+from echogtfs.services.database.models import AppSetting, DataSource
 from echogtfs.services.scheduler.intf_datasource_scheduler import DatasourceSchedulerInterface
 from echogtfs.services.scheduler.push_service_error import PushServiceError
 
@@ -104,10 +104,13 @@ def _run_datasource_push_process(
     database_url: str,
     redis_url: str,
     debug: bool,
+    require_event_based: bool = True,
 ) -> dict[str, int]:
     """Run one datasource push in a child process with child-local resources."""
     return asyncio.run(
-        _run_datasource_push_process_async(source_id, payload, content_type, database_url, redis_url, debug)
+        _run_datasource_push_process_async(
+            source_id, payload, content_type, database_url, redis_url, debug, require_event_based
+        )
     )
 
 
@@ -118,6 +121,7 @@ async def _run_datasource_push_process_async(
     database_url: str,
     redis_url: str,
     debug: bool,
+    require_event_based: bool = True,
 ) -> dict[str, int]:
     system_repository = SystemRepository(database_url, debug)
     gtfs_repository = GtfsRepository(database_url, debug)
@@ -142,7 +146,7 @@ async def _run_datasource_push_process_async(
         if not source.is_active:
             raise PushServiceError(status_code=403, detail="error.source_not_active")
 
-        if source.execution_type != DataSourceExecutionType.EVENT_BASED:
+        if require_event_based and source.execution_type != DataSourceExecutionType.EVENT_BASED:
             raise PushServiceError(status_code=403, detail="error.source_not_event_based")
 
         config = json.loads(source.config)
@@ -241,6 +245,8 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
         source_id: int,
         payload: bytes,
         content_type: str | None,
+        *,
+        require_event_based: bool = True,
     ) -> dict[str, int]:
         loop = asyncio.get_running_loop()
 
@@ -253,6 +259,7 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
             settings.database_url,
             settings.redis_url,
             settings.debug,
+            require_event_based,
         )
 
     async def _try_mark_source_running(self, source_id: int) -> bool:
@@ -435,6 +442,27 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
 
             return
 
+        source = await self._system_repository.get_data_source_by_id(source_id)
+        if source is None:
+            logger.error("[DatasourceScheduler] Data source %s not found", source_id)
+            return
+
+        if not source.is_active:
+            logger.info(
+                "[DatasourceScheduler] Data source '%s' is inactive, skipping import",
+                source.name,
+            )
+            return
+
+        if source.execution_type == DataSourceExecutionType.SUBSCRIPTION_BASED:
+            logger.warning(
+                "[DatasourceScheduler] Skipping time-based import for subscription-based "
+                "data source '%s' (ID: %s)",
+                source.name,
+                source.id,
+            )
+            return
+
         is_marked = await self._try_mark_source_running(source_id)
         if not is_marked:
             logger.info(
@@ -448,20 +476,6 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
         await self._set_source_run_status(source_id, _SOURCE_RUN_STATUS_RUNNING)
 
         try:
-            source = await self._system_repository.get_data_source_by_id(source_id)
-            if source is None:
-                logger.error("[DatasourceScheduler] Data source %s not found", source_id)
-
-                return
-
-            if not source.is_active:
-                logger.info(
-                    "[DatasourceScheduler] Data source '%s' is inactive, skipping import",
-                    source.name,
-                )
-                
-                return
-
             try:
                 stats = await self._run_datasource_in_process(source.id)
 
@@ -500,6 +514,25 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
         content_type: str | None,
     ) -> dict[str, int]:
         """Execute one datasource push synchronously and return the sync result counts."""
+        return await self._run_push_task(source_id, payload, content_type, require_event_based=True)
+
+    async def run_internal_push_task(
+        self,
+        source_id: int,
+        payload: bytes,
+        content_type: str | None,
+    ) -> dict[str, int]:
+        """Execute one datasource synchronously without requiring event-based execution."""
+        return await self._run_push_task(source_id, payload, content_type, require_event_based=False)
+
+    async def _run_push_task(
+        self,
+        source_id: int,
+        payload: bytes,
+        content_type: str | None,
+        *,
+        require_event_based: bool,
+    ) -> dict[str, int]:
         if self._closing:
             raise PushServiceError(status_code=503, detail="error.scheduler_closing")
 
@@ -510,7 +543,7 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
         if not source.is_active:
             raise PushServiceError(status_code=403, detail="error.source_not_active")
 
-        if source.execution_type != DataSourceExecutionType.EVENT_BASED:
+        if require_event_based and source.execution_type != DataSourceExecutionType.EVENT_BASED:
             raise PushServiceError(status_code=403, detail="error.source_not_event_based")
 
         if await self._is_gtfs_import_running():
@@ -524,7 +557,9 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
         await self._set_source_run_status(source_id, _SOURCE_RUN_STATUS_RUNNING)
 
         try:
-            stats = await self._run_datasource_push_in_process(source_id, payload, content_type)
+            stats = await self._run_datasource_push_in_process(
+                source_id, payload, content_type, require_event_based=require_event_based
+            )
 
             logger.info(
                 "[DatasourceScheduler] Push task completed for '%s': created=%s, updated=%s, deleted=%s",

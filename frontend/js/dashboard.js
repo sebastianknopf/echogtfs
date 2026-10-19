@@ -49,8 +49,10 @@ const dashboard = (() => {
       trip_updates: { path: 'realtime/trip-updates.pbf', url: `${window.location.origin}/api/realtime/trip-updates.pbf` },
       vehicle_positions: { path: 'realtime/vehicle-positions.pbf', url: `${window.location.origin}/api/realtime/vehicle-positions.pbf` },
     },
+    siriHealth: false,
   };
   let _pollTimer = null;
+  let _siriServiceAvailable = false;
 
   function _isPanelActive() {
     const panel = document.querySelector('.panel[data-panel="dashboard"]');
@@ -171,6 +173,50 @@ const dashboard = (() => {
     }).join('');
   }
 
+  function _renderServiceStatus() {
+    if (!_siriServiceAvailable) {
+      return `
+        <section class="dashboard-section dashboard-section--full">
+          <div class="dashboard-section__header">
+            <h3 class="dashboard-section__title" data-i18n="dashboard.section.services">${window.i18n('dashboard.section.services')}</h3>
+          </div>
+          <p class="dashboard-services-empty" data-i18n="dashboard.services.none">${window.i18n('dashboard.services.none')}</p>
+        </section>
+      `;
+    }
+
+    const statusKey = _dashboardData.siriHealth
+      ? 'dashboard.service_status.ok'
+      : 'dashboard.service_status.disrupted';
+    const statusClass = _dashboardData.siriHealth ? 'is-ok' : 'is-disrupted';
+
+    return `
+      <section class="dashboard-section dashboard-section--full">
+        <div class="dashboard-section__header">
+          <h3 class="dashboard-section__title" data-i18n="dashboard.section.services">${window.i18n('dashboard.section.services')}</h3>
+        </div>
+        <div class="dashboard-stat-grid">
+          <article class="dashboard-stat dashboard-service-status ${statusClass}">
+            <div class="dashboard-stat__header">
+              <span class="dashboard-stat__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/>
+                  <path d="M12 17h.01M9.5 9a2.5 2.5 0 1 1 4.32 1.73c-.9.9-1.82 1.34-1.82 2.77" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2" transform="translate(0 1)"/>
+                </svg>
+              </span>
+              <h3 class="dashboard-stat__headline">
+                <span class="dashboard-stat__headline-label dashboard-service-status__title" data-i18n="dashboard.card.siri">${window.i18n('dashboard.card.siri')}</span>
+              </h3>
+            </div>
+            <div class="dashboard-stat__value-wrap">
+              <div class="dashboard-service-status__value" data-i18n="${statusKey}">${window.i18n(statusKey)}</div>
+            </div>
+          </article>
+        </div>
+      </section>
+    `;
+  }
+
   async function _copyText(text) {
     if (navigator.clipboard && window.isSecureContext) {
       await navigator.clipboard.writeText(text);
@@ -204,19 +250,35 @@ const dashboard = (() => {
     }
   }
 
-  async function _loadDashboardData(render = true) {
+  async function _loadCapabilities() {
     try {
-      const payload = await api.getDashboard();
-      _setDashboardData(payload);
+      const capabilities = await api.getCapabilities();
+      _siriServiceAvailable = Array.isArray(capabilities) && capabilities.includes('siricomservice');
+    } catch (e) {
+      _siriServiceAvailable = false;
+    }
+  }
+
+  async function _loadDashboardData(render = true) {
+    const [dashboardResult, siriHealthResult] = await Promise.allSettled([
+      api.getDashboard(),
+      _siriServiceAvailable ? api.getSiriHealth() : Promise.reject(new Error('siricomservice unavailable')),
+    ]);
+
+    _dashboardData.siriHealth = siriHealthResult.status === 'fulfilled' && siriHealthResult.value === true;
+
+    if (dashboardResult.status === 'fulfilled') {
+      _setDashboardData(dashboardResult.value);
       if (render) {
         _render();
       }
-    } catch (error) {
-      if (render) {
-        const container = _getContent();
-        if (container) {
-          container.innerHTML = `<div class="panel__placeholder">${window.i18n('error.request_failed')}</div>`;
-        }
+      return;
+    }
+
+    if (render) {
+      const container = _getContent();
+      if (container) {
+        container.innerHTML = `<div class="panel__placeholder">${window.i18n('error.request_failed')}</div>`;
       }
     }
   }
@@ -244,6 +306,8 @@ const dashboard = (() => {
             ${_renderEndpoints()}
           </div>
         </section>
+
+        ${_renderServiceStatus()}
       </div>
     `;
 
@@ -257,6 +321,7 @@ const dashboard = (() => {
   }
 
   async function load() {
+    await _loadCapabilities();
     await _loadDashboardData(true);
   }
 

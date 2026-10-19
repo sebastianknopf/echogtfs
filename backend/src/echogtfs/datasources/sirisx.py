@@ -11,22 +11,17 @@ from typing import Any
 
 import httpx
 
-from echogtfs.datasources.base import DatasourceBase
+from echogtfs.datasources.subscription_datasource_base import SubscriptionDatasourceBase
 from echogtfs.datasources.transformers import SiriSxServiceAlertsTransformer
 
 logger = logging.getLogger("uvicorn")
-
-
-class SiriSxMethod(str, Enum):
-    REQUEST_RESPONSE = "request/response"
-    PUBLISH_SUBSCRIBE = "publish/subscribe"
 
 
 class SiriSxDialect(str, Enum):
     SIRISX = "sirisx"
 
 
-class SiriSxDatasource(DatasourceBase):
+class SiriSxDatasource(SubscriptionDatasourceBase):
     """Datasource implementation for SIRI-SX feeds."""
 
     CONFIG_SCHEMA: list[dict[str, Any]] = [
@@ -39,20 +34,20 @@ class SiriSxDatasource(DatasourceBase):
             "help_text": "adapter.sirisx.endpoint.help_text",
         },
         {
+            "name": "consumerendpoint",
+            "type": "url",
+            "label": "adapter.sirisx.consumerendpoint.label",
+            "required": False,
+            "placeholder": "adapter.sirisx.consumerendpoint.placeholder",
+            "help_text": "adapter.sirisx.consumerendpoint.help_text",
+        },
+        {
             "name": "participantref",
             "type": "text",
             "label": "adapter.sirisx.participantref.label",
             "required": True,
             "placeholder": "adapter.sirisx.participantref.placeholder",
             "help_text": "adapter.sirisx.participantref.help_text",
-        },
-        {
-            "name": "method",
-            "type": "enum",
-            "label": "adapter.sirisx.method.label",
-            "required": True,
-            "options": ["request/response", "publish/subscribe"],
-            "help_text": "adapter.sirisx.method.help_text",
         },
         {
             "name": "dialect",
@@ -88,19 +83,6 @@ class SiriSxDatasource(DatasourceBase):
                 raise ValueError("SiriSx datasource requires 'participantref' in config")
         elif not isinstance(participantref, str):
             raise ValueError("'participantref' must be a string")
-
-        method = self.config.get("method")
-        if not method:
-            if not is_event_based:
-                raise ValueError("SiriSx datasource requires 'method' in config")
-        else:
-            try:
-                SiriSxMethod(method)
-            except ValueError:
-                valid_methods = [method.value for method in SiriSxMethod]
-                raise ValueError(
-                    f"Invalid method '{self.config['method']}'. Valid options: {', '.join(valid_methods)}"
-                )
 
         if "dialect" not in self.config:
             raise ValueError("SiriSx datasource requires 'dialect' in config")
@@ -208,11 +190,6 @@ class SiriSxDatasource(DatasourceBase):
         }
     
     async def _fetch_and_parse_xml(self) -> ET.Element:
-        if self.config.get("method") == SiriSxMethod.PUBLISH_SUBSCRIBE.value:
-            raise NotImplementedError(
-                "Method 'publish/subscribe' is not yet supported. Please use 'request/response' instead."
-            )
-
         endpoint_url = self._resolve_placeholders(self.config["endpoint"])
         xml_payload = self._build_request_xml()
 
@@ -271,3 +248,26 @@ class SiriSxDatasource(DatasourceBase):
             )
 
             raise ValueError(f"Failed to parse SIRI-SX XML: {exc}") from exc
+
+    def get_subscription_params(self) -> dict[str, Any]:
+        """Return the parameters required to configure the subscription."""
+        return {
+            "provider_url": self.config.get("endpoint"),
+            "profile": "default",
+            "version": "default",
+            "service": "SX",
+            "delivery_mode": "direct",
+            "requestor_ref": self.config.get("participantref"),
+            "subscriber_ref": self.config.get("participantref"),
+            "logging": False,
+            "consumer_address": self.config.get("consumerendpoint"),
+            "preview_interval": "PT2H",
+            "initial_termination_time": "2999-12-31T23:59:00Z",
+            "incremental_updates": True,
+            "change_before_updates": "PT30S",
+            "heartbeat": {
+                "enabled": True,
+                "timeout_seconds": 180,
+                "check_status_enabled": False,
+            },
+        }
