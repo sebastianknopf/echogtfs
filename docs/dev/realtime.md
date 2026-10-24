@@ -16,10 +16,10 @@ Realtime synchronization is separated from datasource-specific I/O. `DatasourceB
 
 The service alerts to not have implications or relations to other toplevel entities. Internally, the service alerts consist of:
 
-- a table for alert definition (entrypoint for `GtfsRealtimeServiceAlertsExportService`)
-- a table for validity periods related to the alerts
-- a table for informed entities related to the alerts
-- a table for translations related to the alerts
+- a service alert document in `realtime_service_alerts` (entrypoint for `GtfsRealtimeServiceAlertsExportService`) with embedded:
+  - validity periods
+  - informed entities
+  - translations
 
 ### Validity Flag
 
@@ -34,8 +34,9 @@ The `GtfsRealtimeServiceAlertsExportService` exports all service alerts which ar
 
 The trip updates may have implications on the vehicle positions. Internally, the trip updates consist of:
 
-- a table for realtime trips (entrypoint for `GtfsRealtimeTripUpdatesExportService`)
-- a table for stop events related to the trip
+- a trip update document in `realtime_trip_updates` (entrypoint for `GtfsRealtimeTripUpdatesExportService`) with embedded stop events
+
+The trip update documents carry no vehicle data. The trip update export attaches the vehicle position of the same matched `trip_id` from `realtime_vehicle_positions` within the same snapshot.
 
 Detailed behavior for partial stop sequences, incremental merge propagation, and export rules is documented in [differential-incremental.md](differential-incremental.md).
 
@@ -59,15 +60,19 @@ If a trip contains no stop events, the trip is not exported at all, **besides th
 
 The vehicle positions may have implications on the vehicle position. Internall, the vehicle positions consist of:
 
-- a table for actual vehicle position information (entrypoint for `GtfsRealtimeVehiclePositionsExportService`)
+- a vehicle position document in `realtime_vehicle_positions` (entrypoint for `GtfsRealtimeVehiclePositionsExportService`) with an embedded trip descriptor
+
+A vehicle position has no assignment type and no validity flag of its own. Both belong to the embedded trip descriptor.
 
 ### Relations
 
 - a vehicle position **must not live without a trip** object
 
+The storage layout, indices, and snapshot behavior of the three collections are documented in [realtime-storage.md](realtime-storage.md).
+
 ### Validity Flag
 
-- a vehicle is considered as valid, when the referenced referenced trip is valid; see trip validity for reference
+- a vehicle is considered as valid, when the embedded trip descriptor is valid (`is_trip_valid` and `is_route_valid`); this is the same rule as for trips, see trip validity for reference
 
 ### Implications
 
