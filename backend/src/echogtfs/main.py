@@ -62,7 +62,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await gtfs_repository.initialize()
     set_gtfs_repository(gtfs_repository)
 
-    realtime_repository = RealtimeRepository(settings.database_url, settings.debug)
+    realtime_repository = RealtimeRepository(settings.database_url, settings.debug, settings.mongo_url, settings.mongo_database)
     await realtime_repository.initialize()
     set_realtime_repository(realtime_repository)
 

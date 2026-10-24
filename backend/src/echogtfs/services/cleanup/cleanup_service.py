@@ -179,7 +179,7 @@ class CleanupService:
         return count
 
     async def _delete_expired_trips(self) -> int:
-        """Purge stop events of trips not updated within the configured max age, deleting the trip itself when no vehicle remains."""
+        """Delete trip updates not updated within the configured max age."""
         max_age_value = await self._repository.get_app_setting(AppSetting.KEY_CLEANUP_EXPIRED_TRIPS_MAX_AGE)
         max_age_minutes = int(max_age_value) if max_age_value is not None else 120
         cutoff = datetime.now(UTC) - timedelta(minutes=max_age_minutes)
@@ -189,27 +189,14 @@ class CleanupService:
             logger.info("[Cleanup] No trips older than %s minutes found", max_age_minutes)
             return 0
 
-        await self._realtime_repository.delete_stop_events_for_trip_ids(trip_ids)
+        deleted_count = await self._realtime_repository.delete_trips_by_trip_ids(trip_ids)
 
-        trip_ids_with_vehicle = await self._realtime_repository.list_trip_ids_with_vehicle(trip_ids)
-        trip_ids_to_delete = [trip_id for trip_id in trip_ids if trip_id not in trip_ids_with_vehicle]
-
-        deleted_count = 0
-        if trip_ids_to_delete:
-            deleted_count = await self._realtime_repository.delete_trips_by_trip_ids(trip_ids_to_delete)
-
-        logger.info(
-            "[Cleanup] Purged stop events for %s trips older than %s minutes (%s trips deleted, %s kept alive by an active vehicle)",
-            len(trip_ids),
-            max_age_minutes,
-            deleted_count,
-            len(trip_ids) - len(trip_ids_to_delete),
-        )
+        logger.info("[Cleanup] Deleted %s trips older than %s minutes", deleted_count, max_age_minutes)
 
         return deleted_count
 
     async def _delete_expired_vehicles(self) -> int:
-        """Delete vehicle positions not updated within the configured max age, deleting the trip too when no stop events remain."""
+        """Delete vehicle positions not updated within the configured max age."""
         max_age_value = await self._repository.get_app_setting(AppSetting.KEY_CLEANUP_EXPIRED_VEHICLES_MAX_AGE)
         max_age_minutes = int(max_age_value) if max_age_value is not None else 5
         cutoff = datetime.now(UTC) - timedelta(minutes=max_age_minutes)
@@ -219,21 +206,8 @@ class CleanupService:
             logger.info("[Cleanup] No vehicles older than %s minutes found", max_age_minutes)
             return 0
 
-        vehicle_ids = [vehicle.id for vehicle in vehicles]
-        trip_ids = [vehicle.trip_id for vehicle in vehicles if vehicle.trip_id]
+        deleted_count = await self._realtime_repository.delete_vehicles_by_ids([vehicle.id for vehicle in vehicles])
 
-        deleted_count = await self._realtime_repository.delete_vehicles_by_ids(vehicle_ids)
-
-        if trip_ids:
-            trip_ids_with_stop_events = await self._realtime_repository.list_trip_ids_with_stop_events(trip_ids)
-            trip_ids_to_delete = [trip_id for trip_id in trip_ids if trip_id not in trip_ids_with_stop_events]
-            if trip_ids_to_delete:
-                await self._realtime_repository.delete_trips_by_trip_ids(trip_ids_to_delete)
-
-        logger.info(
-            "[Cleanup] Deleted %s vehicles older than %s minutes",
-            deleted_count,
-            max_age_minutes,
-        )
+        logger.info("[Cleanup] Deleted %s vehicles older than %s minutes", deleted_count, max_age_minutes)
 
         return deleted_count
