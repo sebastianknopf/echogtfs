@@ -175,7 +175,6 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
             cause=doc.get("cause"),
             effect=doc.get("effect"),
             severity_level=doc.get("severity_level"),
-            source=doc.get("source", "echogtfs"),
             is_active=bool(doc.get("is_active", True)),
             created_at=doc.get("created_at"),
             updated_at=doc.get("updated_at"),
@@ -250,7 +249,6 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         trip = TripUpdate(
             id=uuid.UUID(doc["_id"]),
             data_source_id=doc.get("data_source_id"),
-            source=doc.get("source", "echogtfs"),
             trip_id=doc["trip_id"],
             original_trip_id=doc.get("original_trip_id"),
             scheduled_start_stop_id=doc.get("scheduled_start_stop_id"),
@@ -285,7 +283,6 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         return VehiclePosition(
             id=uuid.UUID(doc["_id"]),
             data_source_id=doc.get("data_source_id"),
-            source=doc.get("source", "echogtfs"),
             vehicle_id=doc.get("vehicle_id"),
             vehicle_label=doc.get("vehicle_label"),
             vehicle_license_plate=doc.get("vehicle_license_plate"),
@@ -573,7 +570,6 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
             "cause": self._text(cause),
             "effect": self._text(effect),
             "severity_level": self._text(severity_level),
-            "source": "echogtfs",
             "is_active": is_active,
             "created_at": now,
             "updated_at": now,
@@ -663,7 +659,6 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         *,
         alert_id: uuid.UUID,
         source_id: int,
-        source_name: str,
         cause: str,
         effect: str,
         severity_level: str,
@@ -676,7 +671,6 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         now = self._now()
         fields = {
             "data_source_id": source_id,
-            "source": source_name,
             "cause": self._text(cause),
             "effect": self._text(effect),
             "severity_level": self._text(severity_level),
@@ -905,7 +899,6 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         *,
         trip_uuid: uuid.UUID,
         source_id: int,
-        source_name: str,
         trip_id: str,
         start_time: str | None,
         start_date: str,
@@ -934,7 +927,6 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
 
         fields: dict[str, Any] = {
             "data_source_id": source_id,
-            "source": source_name,
             "trip_id": trip_id,
             "original_trip_id": original_trip_id,
             "scheduled_start_stop_id": scheduled_start_stop_id,
@@ -1078,7 +1070,6 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         *,
         vehicle_uuid: uuid.UUID,
         source_id: int,
-        source_name: str,
         trip_id: str,
         trip_original_trip_id: str | None,
         trip_start_time: str,
@@ -1110,7 +1101,6 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         now = self._now()
         fields: dict[str, Any] = {
             "data_source_id": source_id,
-            "source": source_name,
             "vehicle_id": vehicle_id,
             "vehicle_label": vehicle_label,
             "vehicle_license_plate": vehicle_license_plate,

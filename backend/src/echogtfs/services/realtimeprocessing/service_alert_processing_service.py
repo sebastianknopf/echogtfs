@@ -138,8 +138,6 @@ class ServiceAlertProcessingService(RealtimeProcessingServiceBase):
         for alert_data in alert_dicts:
             alert_id = alert_data["id"]
             
-            # Override source with data source name
-            alert_data["source"] = source_name
             alert_data["data_source_id"] = source_id
             
             # Extract nested data
@@ -302,7 +300,6 @@ class ServiceAlertProcessingService(RealtimeProcessingServiceBase):
                 await realtime_repository.upsert_service_alert_from_sync(
                     alert_id=alert_id,
                     source_id=source_id,
-                    source_name=source_name,
                     cause=alert_data["cause"],
                     effect=alert_data["effect"],
                     severity_level=alert_data["severity_level"],
@@ -325,7 +322,6 @@ class ServiceAlertProcessingService(RealtimeProcessingServiceBase):
                 await realtime_repository.upsert_service_alert_from_sync(
                     alert_id=alert_id,
                     source_id=source_id,
-                    source_name=source_name,
                     cause=alert_data["cause"],
                     effect=alert_data["effect"],
                     severity_level=alert_data["severity_level"],

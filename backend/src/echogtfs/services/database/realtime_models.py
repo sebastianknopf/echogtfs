@@ -50,7 +50,6 @@ class ServiceAlert:
     cause: str
     effect: str
     severity_level: str
-    source: str
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -80,7 +79,6 @@ class StopEvent:
 class TripUpdate:
     id: uuid.UUID
     data_source_id: int | None
-    source: str
     trip_id: str
     original_trip_id: str | None
     scheduled_start_stop_id: str | None
@@ -130,7 +128,6 @@ class VehicleTripDescriptor:
 class VehiclePosition:
     id: uuid.UUID
     data_source_id: int | None
-    source: str
     vehicle_id: str
     vehicle_label: str | None
     vehicle_license_plate: str | None

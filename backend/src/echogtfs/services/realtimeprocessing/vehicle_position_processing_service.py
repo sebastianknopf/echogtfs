@@ -265,7 +265,6 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
             await realtime_repository.update_vehicle_position_from_sync(
                 vehicle_uuid=vehicle_uuid,
                 source_id=source_id,
-                source_name=source_name,
                 trip_id=trip_payload["trip_id"],
                 trip_original_trip_id=derived_trip_id,
                 trip_start_time=trip_payload["start_time"],

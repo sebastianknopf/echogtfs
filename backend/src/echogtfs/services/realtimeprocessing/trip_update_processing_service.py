@@ -345,7 +345,6 @@ class TripUpdateProcessingService(RealtimeProcessingServiceBase):
             await realtime_repository.update_trip_update_from_sync(
                 trip_uuid=persisted_trip_uuid,
                 source_id=source_id,
-                source_name=source_name,
                 trip_id=resolved_trip_id,
                 start_time=persist_start_time,
                 start_date=str(record["start_date"]),

@@ -302,7 +302,7 @@ const trips = (() => {
       scheduledStartStopName,
       scheduledEndStopName,
       hasScheduledDisplayData,
-      sourceName: item.data_source_name || item.source || window.i18n('alerts.badge.external'),
+      sourceName: item.data_source_name || window.i18n('alerts.badge.external'),
       isInternal: !item.data_source_id,
       isActive: Boolean(item.is_active),
       isValid,
