@@ -52,6 +52,9 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
             "scheduled_intermediate_stops": payload.get(
                 "scheduled_intermediate_stops", record.get("scheduled_intermediate_stops")
             ),
+            "is_complete_stop_sequence": bool(
+                payload.get("is_complete_stop_sequence", record.get("is_complete_stop_sequence", True))
+            ),
         }
 
     async def sync_records(
@@ -182,7 +185,7 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
                     route_id=trip_payload["route_id"] or None,
                     operation_day_date=self._parse_operation_day(trip_payload.get("start_date")),
                     **match_inputs,
-                    is_complete_stop_sequence=bool(record.get("is_complete_stop_sequence", True)),
+                    is_complete_stop_sequence=trip_payload["is_complete_stop_sequence"],
                     intermediate_stop_sample_size=self.MAX_INTERMEDIATE_STOP_SAMPLE_SIZE,
                 )
 

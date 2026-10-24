@@ -282,6 +282,7 @@ Allowed data model:
         "is_active": bool,
         "is_trip_valid": bool,
         "is_route_valid": bool,
+        "is_complete_stop_sequence": bool,
         "scheduled_start_stop_id": str | None,
         "scheduled_start_time": datetime | None,
         "scheduled_end_stop_id": str | None,
@@ -338,6 +339,7 @@ Trip payload processing rules:
 - mapped `route_id` replaces the original route ID in the normalized trip payload.
 - trip.scheduled_start_stop_id, trip.scheduled_start_time, trip.scheduled_end_stop_id, and trip.scheduled_end_time are nullable, passed to matching and persisted in the trip descriptor (stop IDs after mapping).
 - trip.scheduled_intermediate_stops is an optional list of `(stop_id, datetime)` tuples for additional scheduled anchors.
+- trip.is_complete_stop_sequence is an optional boolean, default True. If true, matching first uses the start/end anchors; otherwise only the intermediate stops are used. A flat top-level `is_complete_stop_sequence` is accepted as fallback.
 
 Derived matching inputs for vehicle_positions:
 
@@ -345,7 +347,8 @@ Derived matching inputs for vehicle_positions:
 - scheduled_end_time: taken from transformer field trip.scheduled_end_time and coerced to datetime, or None.
 - scheduled_start_stop_id: taken from transformer field trip.scheduled_start_stop_id, mapped via stop mapping, or None.
 - scheduled_end_stop_id: taken from transformer field trip.scheduled_end_stop_id, mapped via stop mapping, or None.
-- scheduled_intermediate_stops: optional mapped list of `(stop_id, datetime)` tuples from vehicle payload, or trip payload fallback.
+- scheduled_intermediate_stops: optional mapped list of `(stop_id, datetime)` tuples from the trip payload, or the flat vehicle payload as fallback.
+- The matching cycle (cached ID, start/end anchors, intermediate-stop fallback, assignment types) is the same as for trip_updates.
 
 Intermediate fallback matching for vehicle_positions:
 

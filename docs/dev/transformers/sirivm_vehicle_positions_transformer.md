@@ -112,7 +112,8 @@ Each parsed record contains both nested and top-level scheduled fields.
   - `trip_id`, `start_time`, `start_date`, `route_id`
   - `schedule_relationship = "SCHEDULED"`
   - `assignment_type = "ASSIGNED"`
-  - `is_active = True`, `is_valid = True`
+  - `is_active = True`, 
+  - `is_complete_stop_sequence`,
   - `scheduled_start_stop_id`, `scheduled_start_time`
   - `scheduled_end_stop_id`, `scheduled_end_time`
   - `scheduled_intermediate_stops`
