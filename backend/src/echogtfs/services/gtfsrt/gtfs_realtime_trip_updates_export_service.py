@@ -11,7 +11,8 @@ from echogtfs import gtfs_realtime_pb2
 from echogtfs.enum.gtfsrt import WheelchairAccessible
 from echogtfs.services.database.intf_realtime_repository import RealtimeRepositoryInterface
 from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
-from echogtfs.services.database.models import AppSetting, StopEvent, Trip
+from echogtfs.services.database.models import AppSetting
+from echogtfs.services.database.realtime_models import StopEvent, TripUpdate
 from echogtfs.services.gtfsrt.intf_gtfs_realtime_export import GtfsRealtimeExportInterface
 
 
@@ -46,7 +47,7 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
 
         return json.dumps(feed_dict, indent=2).encode("utf-8")
 
-    async def _load_trips(self) -> list[Trip]:
+    async def _load_trips(self) -> list[TripUpdate]:
         """Load active Trip entities with their stop events and vehicle relations."""
         trips = list(await self._repository.get_realtime_trips())
         exclude_value = await self._system_repository.get_app_setting(
@@ -108,14 +109,14 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
 
         return normalized
 
-    def _has_realtime_stop_event(self, trip_model: Trip) -> bool:
+    def _has_realtime_stop_event(self, trip_model: TripUpdate) -> bool:
         return any(
             self._schedule_relationship_text(stop_event.schedule_relationship)
             in {"SCHEDULED", "SKIPPED"}
             for stop_event in trip_model.stop_events
         )
 
-    def _is_canceled_trip(self, trip_model: Trip) -> bool:
+    def _is_canceled_trip(self, trip_model: TripUpdate) -> bool:
         return self._schedule_relationship_text(trip_model.schedule_relationship) == "CANCELED"
 
     # GTFS-RT StopTimeUpdate only defines these relationships; anything else is not exposed.
@@ -140,7 +141,7 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
     @classmethod
     def _exportable_stop_events(
         cls,
-        trip_model: Trip,
+        trip_model: TripUpdate,
         *,
         allow_added_stops: bool,
     ) -> list[StopEvent]:
@@ -237,7 +238,7 @@ class GtfsRealtimeTripUpdatesExportService(GtfsRealtimeExportInterface):
         except ValueError:
             return value
 
-    def _build_feed_message(self, trips: list[Trip]) -> gtfs_realtime_pb2.FeedMessage:
+    def _build_feed_message(self, trips: list[TripUpdate]) -> gtfs_realtime_pb2.FeedMessage:
         """Build GTFS-RT FeedMessage from Trip models."""
         feed = gtfs_realtime_pb2.FeedMessage()
 

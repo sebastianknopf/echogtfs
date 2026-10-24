@@ -8,7 +8,7 @@ from google.protobuf.json_format import MessageToDict
 from echogtfs import gtfs_realtime_pb2
 from echogtfs.enum.gtfsrt import PeriodType
 from echogtfs.services.database.intf_realtime_repository import RealtimeRepositoryInterface
-from echogtfs.services.database.models import ServiceAlert
+from echogtfs.services.database.realtime_models import ServiceAlert
 from echogtfs.services.gtfsrt.intf_gtfs_realtime_export import GtfsRealtimeExportInterface
 
 

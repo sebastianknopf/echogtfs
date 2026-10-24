@@ -29,8 +29,8 @@ class TestSqlAlchemyRepository(unittest.IsolatedAsyncioTestCase):
             def __call__(self):
                 return _FakeSession()
 
-        with patch("echogtfs.services.database.postgre_base.create_async_engine", return_value=fake_engine), patch(
-            "echogtfs.services.database.postgre_base.async_sessionmaker", return_value=_Factory()
+        with patch("echogtfs.services.database.postgres_base.create_async_engine", return_value=fake_engine), patch(
+            "echogtfs.services.database.postgres_base.async_sessionmaker", return_value=_Factory()
         ):
             repository = SystemRepository("sqlite+aiosqlite://")
             await repository.initialize()

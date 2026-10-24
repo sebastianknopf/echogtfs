@@ -8,9 +8,9 @@ from sqlalchemy.orm import selectinload
 
 from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
 from echogtfs.services.database.models import GtfsAgency, GtfsRoute, GtfsStop, GtfsStopTime, GtfsTrip
-from echogtfs.services.database.postgre_base import PostgreRepositoryBase
+from echogtfs.services.database.postgres_base import PostgresRepositoryBase
 
-class GtfsRepository(PostgreRepositoryBase, GtfsRepositoryInterface):
+class GtfsRepository(PostgresRepositoryBase, GtfsRepositoryInterface):
     """SQLAlchemy repository for GTFS static-table operations."""
 
     _instance: GtfsRepository | None = None

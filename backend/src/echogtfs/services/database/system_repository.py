@@ -16,10 +16,10 @@ from echogtfs.services.database.models import (
     DataSourceMapping,
     User,
 )
-from echogtfs.services.database.postgre_base import PostgreRepositoryBase
+from echogtfs.services.database.postgres_base import PostgresRepositoryBase
 
 
-class SystemRepository(PostgreRepositoryBase, SystemRepositoryInterface):
+class SystemRepository(PostgresRepositoryBase, SystemRepositoryInterface):
     """SQLAlchemy-based repository for database access."""
 
     async def get_app_setting(self, key: str) -> str | None:

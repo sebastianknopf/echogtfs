@@ -34,8 +34,8 @@ class TestGtfsRepository(unittest.IsolatedAsyncioTestCase):
             def __call__(self):
                 return _FakeSession()
 
-        with patch("echogtfs.services.database.postgre_base.create_async_engine", return_value=fake_engine), patch(
-            "echogtfs.services.database.postgre_base.async_sessionmaker", return_value=_Factory()
+        with patch("echogtfs.services.database.postgres_base.create_async_engine", return_value=fake_engine), patch(
+            "echogtfs.services.database.postgres_base.async_sessionmaker", return_value=_Factory()
         ):
             repository = GtfsRepository("sqlite+aiosqlite://")
             await repository.initialize()
@@ -44,8 +44,8 @@ class TestGtfsRepository(unittest.IsolatedAsyncioTestCase):
         fake_engine.dispose.assert_awaited_once()
 
     async def test_repository_is_single_instance(self):
-        with patch("echogtfs.services.database.postgre_base.create_async_engine"), patch(
-            "echogtfs.services.database.postgre_base.async_sessionmaker"
+        with patch("echogtfs.services.database.postgres_base.create_async_engine"), patch(
+            "echogtfs.services.database.postgres_base.async_sessionmaker"
         ):
             first = GtfsRepository("sqlite+aiosqlite://")
             second = GtfsRepository("sqlite+aiosqlite://")
@@ -72,8 +72,8 @@ class TestGtfsRepository(unittest.IsolatedAsyncioTestCase):
             def __call__(self):
                 return fake_session
 
-        with patch("echogtfs.services.database.postgre_base.create_async_engine", return_value=fake_engine), patch(
-            "echogtfs.services.database.postgre_base.async_sessionmaker", return_value=_Factory()
+        with patch("echogtfs.services.database.postgres_base.create_async_engine", return_value=fake_engine), patch(
+            "echogtfs.services.database.postgres_base.async_sessionmaker", return_value=_Factory()
         ):
             repository = GtfsRepository("sqlite+aiosqlite://")
             await repository.clear_gtfs_static_data()
@@ -141,8 +141,8 @@ class TestGtfsRepository(unittest.IsolatedAsyncioTestCase):
             def __call__(self):
                 return fake_session
 
-        with patch("echogtfs.services.database.postgre_base.create_async_engine", return_value=fake_engine), patch(
-            "echogtfs.services.database.postgre_base.async_sessionmaker", return_value=_Factory()
+        with patch("echogtfs.services.database.postgres_base.create_async_engine", return_value=fake_engine), patch(
+            "echogtfs.services.database.postgres_base.async_sessionmaker", return_value=_Factory()
         ):
             repository = GtfsRepository("sqlite+aiosqlite://")
             result = await repository.list_gtfs_object_statistics()
@@ -189,8 +189,8 @@ class TestGtfsRepository(unittest.IsolatedAsyncioTestCase):
             def __call__(self):
                 return fake_session
 
-        with patch("echogtfs.services.database.postgre_base.create_async_engine", return_value=fake_engine), patch(
-            "echogtfs.services.database.postgre_base.async_sessionmaker", return_value=_Factory()
+        with patch("echogtfs.services.database.postgres_base.create_async_engine", return_value=fake_engine), patch(
+            "echogtfs.services.database.postgres_base.async_sessionmaker", return_value=_Factory()
         ):
             repository = GtfsRepository("sqlite+aiosqlite://")
             result = await repository.list_gtfs_operation_day_dates()

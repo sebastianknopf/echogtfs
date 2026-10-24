@@ -19,7 +19,7 @@ from echogtfs.services.database.mongo_indexes import (
     VEHICLE_POSITIONS_COLLECTION,
     realtime_index_definitions,
 )
-from echogtfs.services.database.postgre_base import PostgreRepositoryBase
+from echogtfs.services.database.postgres_base import PostgresRepositoryBase
 from echogtfs.services.database.realtime_models import (
     ServiceAlert,
     ServiceAlertActivePeriod,
@@ -58,7 +58,7 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         from echogtfs.common.config import settings
 
         super().__init__(mongo_url or settings.mongo_url, mongo_database or settings.mongo_database)
-        self._postgres = PostgreRepositoryBase(database_url, debug)
+        self._postgres = PostgresRepositoryBase(database_url, debug)
 
     async def initialize(self) -> None:
         """Validate PostgreSQL and MongoDB connectivity and create the MongoDB indices."""
