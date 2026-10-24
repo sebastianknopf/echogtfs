@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     # Caching (Redis)
     redis_url: str = "redis://redis:6379/0"
 
+    # Realtime object storage (MongoDB replica set, required for transactions and snapshot reads)
+    mongo_url: str = "mongodb://mongo:27017/?replicaSet=rs0"
+    mongo_database: str = "echogtfs"
+
     # Server
     host: str = "0.0.0.0"
     port: int = 8000

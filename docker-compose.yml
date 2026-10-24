@@ -27,6 +27,24 @@ services:
       timeout: 5s
       retries: 5
 
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    volumes:
+      - mongodata:/data/db
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - "try { quit(rs.status().ok === 1 ? 0 : 1) } catch (e) { rs.initiate({_id: 'rs0', members: [{_id: 0, host: 'mongo:27017'}]}); quit(1) }"
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 15s
+
   siricomservice:
     image: sebastianknopf/siriconsumer:0.2.0
     profiles:
@@ -51,6 +69,8 @@ services:
       ALGORITHM: ${ALGORITHM:-HS256}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      MONGO_URL: ${MONGO_URL:-mongodb://mongo:27017/?replicaSet=rs0}
+      MONGO_DATABASE: ${MONGO_DATABASE:-echogtfs}
       DOCS_ENABLED: ${DOCS_ENABLED:-false}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
       LOGIN_RATE_LIMIT: ${LOGIN_RATE_LIMIT:-10/minute}
@@ -67,7 +87,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    expose:
+      mongo:
+        condition: service_healthy
       - "8000"
 
   frontend:
@@ -84,6 +105,7 @@ services:
 volumes:
   pgsqldata:
   redisdata:
+  mongodata:
   siricomserviceapp:
   siricomservicelogs:
   datasource_logs:
