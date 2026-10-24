@@ -45,6 +45,13 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
                 or payload.get("assignment_type")
                 or "ASSIGNED"
             ),
+            "scheduled_start_stop_id": payload.get("scheduled_start_stop_id", record.get("scheduled_start_stop_id")),
+            "scheduled_start_time": payload.get("scheduled_start_time", record.get("scheduled_start_time")),
+            "scheduled_end_stop_id": payload.get("scheduled_end_stop_id", record.get("scheduled_end_stop_id")),
+            "scheduled_end_time": payload.get("scheduled_end_time", record.get("scheduled_end_time")),
+            "scheduled_intermediate_stops": payload.get(
+                "scheduled_intermediate_stops", record.get("scheduled_intermediate_stops")
+            ),
         }
 
     async def sync_records(
@@ -164,23 +171,22 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
             resolved_trip_id = derived_trip_id
             is_new_trip = trip_payload["schedule_relationship"].upper() == "NEW"
             trip_assignment_type = AssignmentType.DIRECT_BY_ID.value
-            vehicle_assignment_type = AssignmentType.DIRECT_BY_ID.value
             trip_reference_is_valid = True if is_new_trip else derived_trip_id in gtfs_entities["trip"]
             matched_trip_id: str | None = None
             matched_assignment_type: AssignmentType | None = None
+            match_inputs = self._map_scheduled_match_inputs(trip_payload)
 
             if not is_new_trip and not trip_reference_is_valid:
                 matched_trip_id, matched_assignment_type = await self._matching_service.match(
                     trip_id=derived_trip_id,
                     route_id=trip_payload["route_id"] or None,
                     operation_day_date=self._parse_operation_day(trip_payload.get("start_date")),
-                    **self._map_scheduled_match_inputs(record),
+                    **match_inputs,
                     is_complete_stop_sequence=bool(record.get("is_complete_stop_sequence", True)),
                     intermediate_stop_sample_size=self.MAX_INTERMEDIATE_STOP_SAMPLE_SIZE,
                 )
 
                 trip_assignment_type = matched_assignment_type.value
-                vehicle_assignment_type = matched_assignment_type.value
 
                 if matched_trip_id is not None:
                     resolved_trip_id = matched_trip_id
@@ -224,12 +230,6 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
 
             trip_is_trip_valid = trip_reference_is_valid
             trip_is_route_valid = route_is_valid
-            vehicle_is_valid = (
-                bool(record.get("is_valid", True))
-                and route_is_valid
-                and stop_reference_is_valid
-                and trip_reference_is_valid
-            )
 
             trip_payload["trip_id"] = resolved_trip_id
             trip_id_key = str(trip_payload["trip_id"])
@@ -274,6 +274,10 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
                 trip_assignment_type=trip_assignment_type,
                 trip_is_trip_valid=trip_is_trip_valid,
                 trip_is_route_valid=trip_is_route_valid,
+                trip_scheduled_start_stop_id=match_inputs["scheduled_start_stop_id"],
+                trip_scheduled_end_stop_id=match_inputs["scheduled_end_stop_id"],
+                trip_scheduled_start_time=match_inputs["scheduled_start_time"],
+                trip_scheduled_end_time=match_inputs["scheduled_end_time"],
                 vehicle_id=str(record["vehicle_id"]),
                 vehicle_label=record.get("vehicle_label"),
                 vehicle_license_plate=record.get("vehicle_license_plate"),
@@ -283,10 +287,8 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
                 longitude=float(record["longitude"]),
                 current_stop_sequence=current_stop_sequence,
                 current_status=str(record.get("current_status", "IN_TRANSIT_TO")),
-                assignment_type=vehicle_assignment_type,
                 congestion_level=str(record.get("congestion_level", "UNKNOWN_CONGESTION_LEVEL")),
                 is_active_on_create=vehicle_is_active_on_create,
-                is_valid=vehicle_is_valid,
             )
 
             if (

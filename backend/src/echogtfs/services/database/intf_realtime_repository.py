@@ -353,6 +353,10 @@ class RealtimeRepositoryInterface(ABC):
         trip_assignment_type: str,
         trip_is_trip_valid: bool,
         trip_is_route_valid: bool,
+        trip_scheduled_start_stop_id: str | None,
+        trip_scheduled_end_stop_id: str | None,
+        trip_scheduled_start_time: datetime | None,
+        trip_scheduled_end_time: datetime | None,
         vehicle_id: str,
         vehicle_label: str | None,
         vehicle_license_plate: str | None,
@@ -362,10 +366,8 @@ class RealtimeRepositoryInterface(ABC):
         longitude: float,
         current_stop_sequence: int | None,
         current_status: str,
-        assignment_type: str,
         congestion_level: str,
         is_active_on_create: bool,
-        is_valid: bool,
     ) -> str:
         """Create or update one synchronized vehicle position including its embedded trip descriptor."""
         raise NotImplementedError

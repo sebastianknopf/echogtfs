@@ -292,12 +292,10 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
             longitude=doc.get("longitude"),
             current_stop_sequence=doc.get("current_stop_sequence"),
             current_status=doc.get("current_status"),
-            assignment_type=doc.get("assignment_type"),
             congestion_level=doc.get("congestion_level"),
             is_active=bool(doc.get("is_active", True)),
             created_at=doc.get("created_at"),
             updated_at=doc.get("updated_at"),
-            is_valid=bool(doc.get("is_valid", True)),
             trip=VehicleTripDescriptor(
                 trip_id=trip_doc.get("trip_id"),
                 original_trip_id=trip_doc.get("original_trip_id"),
@@ -306,6 +304,10 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
                 start_time=trip_doc.get("start_time"),
                 schedule_relationship=trip_doc.get("schedule_relationship", "SCHEDULED"),
                 assignment_type=trip_doc.get("assignment_type"),
+                scheduled_start_stop_id=trip_doc.get("scheduled_start_stop_id"),
+                scheduled_end_stop_id=trip_doc.get("scheduled_end_stop_id"),
+                scheduled_start_time=trip_doc.get("scheduled_start_time"),
+                scheduled_end_time=trip_doc.get("scheduled_end_time"),
                 is_trip_valid=bool(trip_doc.get("is_trip_valid", True)),
                 is_route_valid=bool(trip_doc.get("is_route_valid", True)),
             ),
@@ -1079,6 +1081,10 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         trip_assignment_type: str,
         trip_is_trip_valid: bool,
         trip_is_route_valid: bool,
+        trip_scheduled_start_stop_id: str | None,
+        trip_scheduled_end_stop_id: str | None,
+        trip_scheduled_start_time: datetime | None,
+        trip_scheduled_end_time: datetime | None,
         vehicle_id: str,
         vehicle_label: str | None,
         vehicle_license_plate: str | None,
@@ -1088,10 +1094,8 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         longitude: float,
         current_stop_sequence: int | None,
         current_status: str,
-        assignment_type: str,
         congestion_level: str,
         is_active_on_create: bool,
-        is_valid: bool,
     ) -> str:
         """Queue the upsert of one synchronized vehicle position with its embedded trip descriptor.
 
@@ -1111,8 +1115,11 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
             "current_stop_sequence": current_stop_sequence,
             "current_status": self._text(current_status),
             "congestion_level": self._text(congestion_level),
-            "is_valid": is_valid,
             "trip.trip_id": trip_id,
+            "trip.scheduled_start_stop_id": trip_scheduled_start_stop_id,
+            "trip.scheduled_end_stop_id": trip_scheduled_end_stop_id,
+            "trip.scheduled_start_time": trip_scheduled_start_time,
+            "trip.scheduled_end_time": trip_scheduled_end_time,
             "trip.original_trip_id": trip_original_trip_id,
             "trip.route_id": trip_route_id,
             "trip.start_date": trip_start_date,
@@ -1123,11 +1130,6 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
             "updated_at": now,
         }
         on_insert: dict[str, Any] = {"is_active": is_active_on_create, "created_at": now}
-
-        if assignment_type != AssignmentType.MATCH_BY_CACHED_ID:
-            fields["assignment_type"] = self._text(assignment_type)
-        else:
-            on_insert["assignment_type"] = self._text(assignment_type)
 
         if trip_assignment_type != AssignmentType.MATCH_BY_CACHED_ID:
             fields["trip.assignment_type"] = self._text(trip_assignment_type)

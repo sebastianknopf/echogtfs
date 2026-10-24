@@ -143,12 +143,10 @@ def _vehicle_doc(vehicle_uuid=None, **overrides):
         "latitude": 47.0,
         "longitude": 8.0,
         "current_status": "IN_TRANSIT_TO",
-        "assignment_type": "DIRECT_BY_ID",
         "congestion_level": "UNKNOWN_CONGESTION_LEVEL",
         "is_active": True,
         "created_at": NOW,
         "updated_at": NOW,
-        "is_valid": True,
         "trip": {
             "trip_id": "trip-1",
             "original_trip_id": "orig-1",
@@ -195,6 +193,10 @@ def _sync_vehicle_kwargs(**overrides):
         trip_assignment_type="DIRECT_BY_ID",
         trip_is_trip_valid=True,
         trip_is_route_valid=True,
+        trip_scheduled_start_stop_id="S1",
+        trip_scheduled_end_stop_id="S9",
+        trip_scheduled_start_time=NOW,
+        trip_scheduled_end_time=NOW,
         vehicle_id="veh-1",
         vehicle_label=None,
         vehicle_license_plate=None,
@@ -204,10 +206,8 @@ def _sync_vehicle_kwargs(**overrides):
         longitude=8.0,
         current_stop_sequence=None,
         current_status="IN_TRANSIT_TO",
-        assignment_type="DIRECT_BY_ID",
         congestion_level="UNKNOWN_CONGESTION_LEVEL",
         is_active_on_create=True,
-        is_valid=True,
     )
     kwargs.update(overrides)
     return kwargs
@@ -622,6 +622,10 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(operation._doc["$setOnInsert"]["is_active"])
         self.assertEqual(fields["trip.trip_id"], "trip-1")
         self.assertEqual(fields["trip.original_trip_id"], "orig-1")
+        self.assertEqual(fields["trip.scheduled_start_stop_id"], "S1")
+        self.assertEqual(fields["trip.scheduled_end_stop_id"], "S9")
+        self.assertNotIn("assignment_type", fields)
+        self.assertNotIn("is_valid", fields)
         self.assertEqual(fields["trip.assignment_type"], "DIRECT_BY_ID")
         self.assertTrue(fields["trip.is_trip_valid"])
         self.assertFalse(fields["trip.is_route_valid"])
@@ -629,16 +633,13 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
     async def test_update_vehicle_position_from_sync_never_overwrites_assignment_with_cached_id(self):
         await self.repository.update_vehicle_position_from_sync(
             **_sync_vehicle_kwargs(
-                assignment_type=AssignmentType.MATCH_BY_CACHED_ID,
                 trip_assignment_type=AssignmentType.MATCH_BY_CACHED_ID,
             )
         )
 
         operation = self._written_operation(self.vehicles)
         cached = AssignmentType.MATCH_BY_CACHED_ID.value
-        self.assertNotIn("assignment_type", operation._doc["$set"])
         self.assertNotIn("trip.assignment_type", operation._doc["$set"])
-        self.assertEqual(operation._doc["$setOnInsert"]["assignment_type"], cached)
         self.assertEqual(operation._doc["$setOnInsert"]["trip.assignment_type"], cached)
 
     # ------------------------------------------------------------------ dashboard and statistics

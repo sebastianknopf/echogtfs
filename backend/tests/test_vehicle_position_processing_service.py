@@ -85,7 +85,8 @@ class TestVehiclePositionProcessingService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(kwargs["trip_route_id"], "mapped-route")
         self.assertEqual(kwargs["vehicle_id"], "vehicle-1")
         self.assertEqual(kwargs["trip_assignment_type"], "DIRECT_BY_ID")
-        self.assertEqual(kwargs["assignment_type"], "DIRECT_BY_ID")
+        self.assertIn("trip_scheduled_start_stop_id", kwargs)
+        self.assertNotIn("assignment_type", kwargs)
         datasource._matching_service.match.assert_not_awaited()
     async def test_sync_vehicle_position_records_sets_no_match_assignment_when_matching_fails(self):
         repository = _SystemRepositoryStub()
@@ -133,7 +134,6 @@ class TestVehiclePositionProcessingService(unittest.IsolatedAsyncioTestCase):
         datasource._matching_service.match.assert_awaited_once()
         kwargs = realtime_repository.update_vehicle_position_from_sync.await_args.kwargs
         self.assertEqual(kwargs["trip_assignment_type"], "NO_MATCH_GENERAL")
-        self.assertEqual(kwargs["assignment_type"], "NO_MATCH_GENERAL")
     async def test_sync_vehicle_position_records_discards_record_without_trip_object(self):
         repository = _SystemRepositoryStub()
         realtime_repository = _RealtimeRepositoryStub()
@@ -353,7 +353,7 @@ class TestVehiclePositionProcessingService(unittest.IsolatedAsyncioTestCase):
         )
 
         kwargs = realtime_repository.update_vehicle_position_from_sync.await_args.kwargs
-        self.assertFalse(kwargs["is_valid"])
+        self.assertNotIn("is_valid", kwargs)
         self.assertTrue(kwargs["trip_is_trip_valid"])
         self.assertFalse(kwargs["trip_is_route_valid"])
         self.assertEqual(kwargs["trip_route_id"], "")
