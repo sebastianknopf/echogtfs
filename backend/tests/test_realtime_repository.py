@@ -373,7 +373,6 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         result = await repository.upsert_service_alert_from_sync(
             alert_id=uuid.uuid4(),
             source_id=1,
-            source_name="source",
             cause="UNKNOWN_CAUSE",
             effect="UNKNOWN_EFFECT",
             severity_level="UNKNOWN_SEVERITY",
@@ -407,7 +406,6 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         result = await repository.upsert_service_alert_from_sync(
             alert_id=uuid.uuid4(),
             source_id=2,
-            source_name="new",
             cause="C",
             effect="E",
             severity_level="S",
@@ -631,7 +629,6 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         result = await repository.update_trip_update_from_sync(
             trip_uuid=uuid.uuid4(),
             source_id=11,
-            source_name="source-a",
             trip_id="trip-1",
             start_time="08:00:00",
             start_date="20260801",
@@ -674,7 +671,6 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         await repository.update_trip_update_from_sync(
             trip_uuid=uuid.uuid4(),
             source_id=11,
-            source_name="source-a",
             trip_id="trip-1",
             original_trip_id="original-trip-1",
             scheduled_start_stop_id="start-stop",
@@ -725,7 +721,6 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         result = await repository.update_trip_update_from_sync(
             trip_uuid=uuid.uuid4(),
             source_id=22,
-            source_name="source-b",
             trip_id="trip-2",
             start_time="09:00:00",
             start_date="20260802",
@@ -762,7 +757,6 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         result = await repository.update_vehicle_position_from_sync(
             vehicle_uuid=uuid.uuid4(),
             source_id=33,
-            source_name="source-c",
             trip_uuid=uuid.uuid4(),
             trip_id="trip-3",
             trip_start_time="10:00:00",
@@ -838,7 +832,6 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         result = await repository.update_vehicle_position_from_sync(
             vehicle_uuid=uuid.uuid4(),
             source_id=44,
-            source_name="source-d",
             trip_uuid=uuid.uuid4(),
             trip_id="trip-4",
             trip_start_time="11:00:00",
