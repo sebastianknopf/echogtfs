@@ -56,6 +56,58 @@ class TestCleanupService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(count, 0)
         realtime_repo.list_alert_ids_expired_before.assert_not_awaited()
 
+    async def test_delete_expired_trips_deletes_only_trips_without_touching_vehicles(self):
+        system_repo = SimpleNamespace(get_app_setting=AsyncMock(return_value="30"))
+        realtime_repo = SimpleNamespace(
+            list_trip_ids_updated_before=AsyncMock(return_value=["t1", "t2"]),
+            delete_trips_by_trip_ids=AsyncMock(return_value=2),
+            delete_vehicles_by_ids=AsyncMock(),
+        )
+        service = CleanupService(system_repo, realtime_repo)
+
+        count = await service._delete_expired_trips()
+
+        self.assertEqual(count, 2)
+        realtime_repo.delete_trips_by_trip_ids.assert_awaited_once_with(["t1", "t2"])
+        realtime_repo.delete_vehicles_by_ids.assert_not_awaited()
+
+    async def test_delete_expired_trips_without_expired_trips_deletes_nothing(self):
+        system_repo = SimpleNamespace(get_app_setting=AsyncMock(return_value=None))
+        realtime_repo = SimpleNamespace(
+            list_trip_ids_updated_before=AsyncMock(return_value=[]),
+            delete_trips_by_trip_ids=AsyncMock(),
+        )
+        service = CleanupService(system_repo, realtime_repo)
+
+        self.assertEqual(await service._delete_expired_trips(), 0)
+        realtime_repo.delete_trips_by_trip_ids.assert_not_awaited()
+
+    async def test_delete_expired_vehicles_deletes_only_vehicles_without_touching_trips(self):
+        system_repo = SimpleNamespace(get_app_setting=AsyncMock(return_value="10"))
+        realtime_repo = SimpleNamespace(
+            list_vehicles_updated_before=AsyncMock(return_value=[SimpleNamespace(id="v1"), SimpleNamespace(id="v2")]),
+            delete_vehicles_by_ids=AsyncMock(return_value=2),
+            delete_trips_by_trip_ids=AsyncMock(),
+        )
+        service = CleanupService(system_repo, realtime_repo)
+
+        count = await service._delete_expired_vehicles()
+
+        self.assertEqual(count, 2)
+        realtime_repo.delete_vehicles_by_ids.assert_awaited_once_with(["v1", "v2"])
+        realtime_repo.delete_trips_by_trip_ids.assert_not_awaited()
+
+    async def test_delete_expired_vehicles_without_expired_vehicles_deletes_nothing(self):
+        system_repo = SimpleNamespace(get_app_setting=AsyncMock(return_value=None))
+        realtime_repo = SimpleNamespace(
+            list_vehicles_updated_before=AsyncMock(return_value=[]),
+            delete_vehicles_by_ids=AsyncMock(),
+        )
+        service = CleanupService(system_repo, realtime_repo)
+
+        self.assertEqual(await service._delete_expired_vehicles(), 0)
+        realtime_repo.delete_vehicles_by_ids.assert_not_awaited()
+
     async def test_schedule_from_settings_uses_timezone_from_environment(self):
         class _FakeScheduler:
             def __init__(self) -> None:

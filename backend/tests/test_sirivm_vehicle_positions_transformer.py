@@ -106,6 +106,8 @@ class TestSiriVmVehiclePositionsTransformer(unittest.TestCase):
         self.assertEqual(trip["scheduled_start_time"], first_time)
         self.assertEqual(trip["scheduled_end_time"], last_time)
         self.assertEqual(trip["scheduled_intermediate_stops"], [])
+        self.assertTrue(trip["is_complete_stop_sequence"])
+        self.assertNotIn("is_valid", trip)
         self.assertEqual(vehicle["current_status"], VehicleStopStatus.STOPPED_AT.value)
         self.assertEqual(vehicle["current_stop_sequence"], 7)
         self.assertEqual(vehicle["stop_id"], "STOP_MONITORED")
@@ -136,8 +138,9 @@ class TestSiriVmVehiclePositionsTransformer(unittest.TestCase):
         self.assertEqual(trip["scheduled_end_stop_id"], "DESTINATION_REF")
         self.assertIsNone(trip["scheduled_start_time"])
         self.assertIsNone(trip["scheduled_end_time"])
+        self.assertFalse(trip["is_complete_stop_sequence"])
+        self.assertNotIn("is_valid", trip)
         self.assertEqual(trip["scheduled_intermediate_stops"], [])
-
     def test_incomplete_sequence_keeps_origin_destination_and_extracts_intermediate_calls(self) -> None:
         now = datetime.now(timezone.utc)
         call_1 = self._to_second_precision(now + timedelta(minutes=1))
