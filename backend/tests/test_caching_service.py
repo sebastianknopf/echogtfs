@@ -5,7 +5,7 @@ import types
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -125,3 +125,78 @@ class TestCachingService(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaises(RuntimeError):
             await service.pop_trip_id("external-trip-1")
+
+    async def test_contains_gtfs_ids_returns_known_subset_in_one_pipeline(self):
+        service = CachingService("redis://redis:6379/0")
+        pipeline = SimpleNamespace(
+            smismember=MagicMock(),
+            exists=MagicMock(),
+            execute=AsyncMock(return_value=[[1, 0], 1]),
+        )
+        service._client = SimpleNamespace(pipeline=MagicMock(return_value=pipeline))
+
+        result = await service.contains_gtfs_ids("route", ["r1", "r2"])
+
+        self.assertEqual(result, {"r1"})
+        pipeline.smismember.assert_called_once_with("echogtfs:data:ids:route", ["r1", "r2"])
+        pipeline.exists.assert_called_once_with("echogtfs:data:ids:meta:ready")
+
+    async def test_contains_gtfs_ids_returns_none_when_cache_not_built(self):
+        service = CachingService("redis://redis:6379/0")
+        pipeline = SimpleNamespace(
+            smismember=MagicMock(),
+            exists=MagicMock(),
+            execute=AsyncMock(return_value=[[1], 0]),
+        )
+        service._client = SimpleNamespace(pipeline=MagicMock(return_value=pipeline))
+
+        self.assertIsNone(await service.contains_gtfs_ids("stop", ["s1"]))
+
+    async def test_rebuild_gtfs_ids_swaps_temp_keys_atomically_and_releases_lock(self):
+        service = CachingService("redis://redis:6379/0")
+        pipeline = SimpleNamespace(
+            delete=MagicMock(),
+            rename=MagicMock(),
+            set=MagicMock(),
+            execute=AsyncMock(),
+        )
+        client = SimpleNamespace(
+            set=AsyncMock(return_value=True),
+            exists=AsyncMock(return_value=0),
+            delete=AsyncMock(),
+            sadd=AsyncMock(),
+            pipeline=MagicMock(return_value=pipeline),
+        )
+        service._client = client
+        gtfs_repository = SimpleNamespace(
+            list_gtfs_entity_ids=AsyncMock(
+                return_value={"agency": {"a1"}, "route": {"r1"}, "stop": set(), "trip": {"t1"}}
+            )
+        )
+
+        await service.rebuild_gtfs_ids(gtfs_repository)
+
+        gtfs_repository.list_gtfs_entity_ids.assert_awaited_once_with(kinds=("agency", "route", "stop", "trip"))
+        client.pipeline.assert_called_once_with(transaction=True)
+        pipeline.rename.assert_any_call("echogtfs:data:ids:agency:tmp", "echogtfs:data:ids:agency")
+        pipeline.rename.assert_any_call("echogtfs:data:ids:route:tmp", "echogtfs:data:ids:route")
+        pipeline.rename.assert_any_call("echogtfs:data:ids:trip:tmp", "echogtfs:data:ids:trip")
+        pipeline.delete.assert_called_once_with("echogtfs:data:ids:stop")
+        pipeline.set.assert_called_once_with("echogtfs:data:ids:meta:ready", "1")
+        pipeline.execute.assert_awaited_once()
+        client.delete.assert_awaited_with("echogtfs:data:ids:meta:lock")
+
+    async def test_rebuild_gtfs_ids_skips_when_ready_and_not_forced(self):
+        service = CachingService("redis://redis:6379/0")
+        client = SimpleNamespace(
+            set=AsyncMock(return_value=True),
+            exists=AsyncMock(return_value=1),
+            delete=AsyncMock(),
+        )
+        service._client = client
+        gtfs_repository = SimpleNamespace(list_gtfs_entity_ids=AsyncMock())
+
+        await service.rebuild_gtfs_ids(gtfs_repository, force=False)
+
+        gtfs_repository.list_gtfs_entity_ids.assert_not_awaited()
+        client.delete.assert_awaited_once_with("echogtfs:data:ids:meta:lock")

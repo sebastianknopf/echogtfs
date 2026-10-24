@@ -28,8 +28,8 @@ class GtfsRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def list_gtfs_entity_ids(self) -> dict[str, set[str]]:
-        """Return GTFS entity IDs as sets for agency, route, stop, and trip."""
+    async def list_gtfs_entity_ids(self, kinds: tuple[str, ...] | None = None) -> dict[str, set[str]]:
+        """Return GTFS entity IDs as sets for the given kinds (default: agency, route, stop, trip)."""
         raise NotImplementedError
 
     @abstractmethod

@@ -29,20 +29,23 @@ class GtfsRepository(RepositoryBase, GtfsRepositoryInterface):
         super().__init__(database_url, debug)
         self._initialized = True
 
-    async def list_gtfs_entity_ids(self) -> dict[str, set[str]]:
-        """Return GTFS IDs for agency, route, stop, and trip as sets."""
-        async with self.get_session() as db:
-            agencies_result = await db.execute(select(GtfsAgency.gtfs_id))
-            routes_result = await db.execute(select(GtfsRoute.gtfs_id))
-            stops_result = await db.execute(select(GtfsStop.gtfs_id))
-            trips_result = await db.execute(select(GtfsTrip.gtfs_id))
+    async def list_gtfs_entity_ids(self, kinds: tuple[str, ...] | None = None) -> dict[str, set[str]]:
+        """Return GTFS IDs as sets for the requested kinds (default: agency, route, stop, trip)."""
+        columns = {
+            "agency": GtfsAgency.gtfs_id,
+            "route": GtfsRoute.gtfs_id,
+            "stop": GtfsStop.gtfs_id,
+            "trip": GtfsTrip.gtfs_id,
+        }
+        selected_kinds = kinds if kinds is not None else tuple(columns)
 
-            return {
-                "agency": {row[0] for row in agencies_result.fetchall()},
-                "route": {row[0] for row in routes_result.fetchall()},
-                "stop": {row[0] for row in stops_result.fetchall()},
-                "trip": {row[0] for row in trips_result.fetchall()},
-            }
+        async with self.get_session() as db:
+            result: dict[str, set[str]] = {}
+            for kind in selected_kinds:
+                rows = await db.execute(select(columns[kind]))
+                result[kind] = {row[0] for row in rows.fetchall()}
+
+            return result
 
     async def list_gtfs_agencies(self) -> list[GtfsAgency]:
         """Return all GTFS agencies ordered by name."""

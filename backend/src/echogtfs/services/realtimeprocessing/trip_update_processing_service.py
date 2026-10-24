@@ -72,8 +72,24 @@ class TripUpdateProcessingService(RealtimeProcessingServiceBase):
             )
         )
 
-        gtfs_entities = await self._load_gtfs_entities(gtfs_repository)
-        nominal_trip_ids = gtfs_entities.get("trip", set())
+        gtfs_id_validator = self._create_gtfs_id_validator(gtfs_repository)
+        await gtfs_id_validator.prefetch(
+            "route",
+            (
+                self._identifier_mapping_service.apply_mapping({"route_id": record.get("route_id")}).get("route_id")
+                for record in records
+            ),
+        )
+        await gtfs_id_validator.prefetch(
+            "stop",
+            (
+                self._identifier_mapping_service.apply_mapping({"stop_id": event.get("stop_id")}).get("stop_id")
+                for record in records
+                for event in record.get("stop_events", [])
+            ),
+        )
+        await gtfs_id_validator.prefetch("trip", (record.get("trip_id") for record in records))
+        gtfs_entities = gtfs_id_validator.valid_ids()
         if self._matching_service is None:
             self._matching_service = MatchingService(gtfs_repository, self._caching_service)
 
@@ -164,7 +180,7 @@ class TripUpdateProcessingService(RealtimeProcessingServiceBase):
             original_trip_id = derived_trip_id
             resolved_trip_id = derived_trip_id
             assignment_type = AssignmentType.DIRECT_BY_ID.value
-            trip_reference_is_valid = True if is_new_trip else derived_trip_id in nominal_trip_ids
+            trip_reference_is_valid = True if is_new_trip else derived_trip_id in gtfs_entities["trip"]
             matched_trip_id: str | None = None
             matched_assignment_type: AssignmentType | None = None
 

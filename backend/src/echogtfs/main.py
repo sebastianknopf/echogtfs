@@ -73,6 +73,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     await caching_service.initialize()
     set_caching_service(caching_service)
+    await caching_service.rebuild_gtfs_ids(gtfs_repository, force=False)
 
     datasource_scheduler_service = DatasourceSchedulerService(
         system_repository,
@@ -93,7 +94,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
 
     # start schedulers for all scheduled services
-    await GtfsImportService(system_repository, gtfs_repository).schedule_from_settings()
+    await GtfsImportService(system_repository, gtfs_repository, caching_service).schedule_from_settings()
     await CleanupService(system_repository, realtime_repository).schedule_from_settings()
     
     await datasource_scheduler_service.schedule_all_data_sources()

@@ -73,7 +73,17 @@ class ServiceAlertProcessingService(RealtimeProcessingServiceBase):
                         alert_data["effect"] = original_effect
         
         # Load GTFS entities for validation
-        gtfs_entities = await self._load_gtfs_entities(gtfs_repository)
+        gtfs_id_validator = self._create_gtfs_id_validator(gtfs_repository)
+        for kind, id_key in (("agency", "agency_id"), ("route", "route_id"), ("stop", "stop_id")):
+            await gtfs_id_validator.prefetch(
+                kind,
+                (
+                    self._identifier_mapping_service.apply_mapping(entity_data).get(id_key)
+                    for alert_data in alert_dicts
+                    for entity_data in alert_data.get("informed_entities", [])
+                ),
+            )
+        gtfs_entities = gtfs_id_validator.valid_ids()
         
         # Get IDs of alerts from the feed
         incoming_alert_ids = {alert_data["id"] for alert_data in alert_dicts}
