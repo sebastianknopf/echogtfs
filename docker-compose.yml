@@ -89,7 +89,6 @@ services:
         condition: service_healthy
       mongo:
         condition: service_healthy
-      - "8000"
 
   frontend:
     build: ./frontend
