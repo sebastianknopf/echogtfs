@@ -816,17 +816,6 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         )
         return [self._trip_from_doc(doc, include_stop_events=False) for doc in docs]
 
-    async def list_trip_ids_with_stop_events(self, trip_ids: list[str]) -> set[str]:
-        if not trip_ids:
-            return set()
-
-        docs = await self._find(
-            TRIP_UPDATES_COLLECTION,
-            {"trip_id": {"$in": trip_ids}, "stop_event_count": {"$gt": 0}},
-            projection={"trip_id": 1},
-        )
-        return {doc["trip_id"] for doc in docs}
-
     async def list_stop_events_for_trip(self, trip_id: str) -> list[StopEvent]:
         docs = await self._find(TRIP_UPDATES_COLLECTION, {"trip_id": trip_id}, projection={"trip_id": 1, "stop_events": 1})
         if not docs:
@@ -840,42 +829,6 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
     async def list_trip_ids_updated_before(self, cutoff: datetime) -> list[str]:
         docs = await self._find(TRIP_UPDATES_COLLECTION, {"updated_at": {"$lt": cutoff}}, projection={"trip_id": 1})
         return [doc["trip_id"] for doc in docs]
-
-    async def list_trip_ids_with_vehicle(self, trip_ids: list[str]) -> set[str]:
-        if not trip_ids:
-            return set()
-
-        docs = await self._find(
-            VEHICLE_POSITIONS_COLLECTION,
-            {"trip.trip_id": {"$in": trip_ids}},
-            projection={"trip.trip_id": 1},
-        )
-        return {doc["trip"]["trip_id"] for doc in docs}
-
-    async def delete_stop_events_for_trip_ids(self, trip_ids: list[str]) -> int:
-        """Clear the stop events of the given trips without deleting the trip documents."""
-        if not trip_ids:
-            return 0
-
-        return await self._update_many(
-            TRIP_UPDATES_COLLECTION,
-            {"trip_id": {"$in": trip_ids}},
-            [
-                {
-                    "$set": {
-                        "stop_events": [],
-                        "stop_event_count": 0,
-                        "flags": {
-                            "$filter": {
-                                "input": {"$ifNull": ["$flags", []]},
-                                "as": "flag",
-                                "cond": {"$eq": ["$$flag", FLAG_INVALID_REFERENCE]},
-                            }
-                        },
-                    }
-                }
-            ],
-        )
 
     async def delete_trips_by_trip_ids(self, trip_ids: list[str]) -> int:
         if not trip_ids:

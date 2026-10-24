@@ -57,7 +57,6 @@ class _RealtimeRepositoryStub:
         self.list_trips_by_ids = AsyncMock(return_value=[])
         self.list_trips_by_trip_ids = AsyncMock(return_value=[])
         self.delete_trips_by_trip_ids = AsyncMock()
-        self.list_trip_ids_with_stop_events = AsyncMock(return_value=set())
         self.list_stop_events_for_trip = AsyncMock(return_value=[])
         self.delete_trips_for_data_source_by_ids = AsyncMock()
         self.update_trip_update_from_sync = AsyncMock()
