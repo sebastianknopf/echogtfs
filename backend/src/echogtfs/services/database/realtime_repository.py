@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 import uuid
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -9,7 +9,7 @@ from echogtfs.enum.gtfsrt import AssignmentType
 from sqlalchemy import case, delete, exists, func, select, update
 from sqlalchemy.orm import selectinload
 
-from echogtfs.services.database.base import RepositoryBase
+from echogtfs.services.database.postgre_base import PostgreRepositoryBase
 from echogtfs.services.database.intf_realtime_repository import RealtimeRepositoryInterface
 from echogtfs.services.database.models import (
     GtfsTrip,
@@ -23,7 +23,7 @@ from echogtfs.services.database.models import (
 )
 
 
-class RealtimeRepository(RepositoryBase, RealtimeRepositoryInterface):
+class RealtimeRepository(PostgreRepositoryBase, RealtimeRepositoryInterface):
     """SQLAlchemy repository for realtime-table access."""
 
     @staticmethod
