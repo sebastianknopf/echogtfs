@@ -205,12 +205,24 @@ class TripUpdateProcessingService(RealtimeProcessingServiceBase):
                     assignment_type = matched_assignment_type.value
 
                     trip_reference_is_valid = True
-
-                    await realtime_repository.delete_trips_by_trip_ids([original_trip_id])
                 else:
                     assignment_type = matched_assignment_type.value
 
             persisted_trip_uuid = existing_trip_uuid_by_trip_id.get(str(resolved_trip_id))
+            if matched_trip_id is not None:
+                unmatched_trip_uuid = existing_trip_uuid_by_trip_id.get(original_trip_id)
+                unmatched_trip = existing_trips.get(unmatched_trip_uuid)
+                can_reuse_unmatched = (
+                    unmatched_trip is not None
+                    and unmatched_trip.data_source_id == source_id
+                    and unmatched_trip.trip_id == original_trip_id
+                )
+
+                if persisted_trip_uuid is None and can_reuse_unmatched:
+                    persisted_trip_uuid = unmatched_trip_uuid
+                elif unmatched_trip_uuid is not None and persisted_trip_uuid != unmatched_trip_uuid:
+                    await realtime_repository.delete_trips_by_trip_ids([original_trip_id])
+
             if persisted_trip_uuid is None:
                 persisted_trip_uuid = self._make_unique_id(resolved_trip_id, source_name)
 
