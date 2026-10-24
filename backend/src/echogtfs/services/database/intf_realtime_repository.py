@@ -1,24 +1,22 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import AsyncGenerator
+from contextlib import AbstractAsyncContextManager
 from datetime import datetime
 from typing import Any
 import uuid
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from echogtfs.services.database.models import (
+from echogtfs.services.database.realtime_models import (
     ServiceAlert,
     ServiceAlertInformedEntity,
     StopEvent,
-    Trip,
-    Vehicle,
+    TripUpdate,
+    VehiclePosition,
 )
 
 
 class RealtimeRepositoryInterface(ABC):
-    """Interface for realtime-table data access."""
+    """Interface for realtime object data access."""
 
     @abstractmethod
     async def initialize(self) -> None:
@@ -31,8 +29,23 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_session(self) -> AsyncGenerator[AsyncSession, None]:
-        """Yield a managed database session owned by the repository."""
+    def transaction(self, *, isolation_level: str | None = None) -> AbstractAsyncContextManager[Any]:
+        """Run all repository writes inside the context as one atomic unit that becomes visible on commit."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def count_service_alerts_by_active(self) -> tuple[int, int]:
+        """Return the number of active and inactive service alerts."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def count_trip_updates_by_status(self) -> tuple[int, int, int]:
+        """Return the number of active (realtime), monitored and inactive trip updates."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def count_vehicle_positions_by_active(self) -> tuple[int, int]:
+        """Return the number of active and inactive vehicle positions."""
         raise NotImplementedError
 
     @abstractmethod
@@ -158,7 +171,7 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_realtime_trips(self) -> list[Trip]:
+    async def get_realtime_trips(self) -> list[TripUpdate]:
         """Return active realtime trips with stop events and vehicle relations loaded."""
         raise NotImplementedError
 
@@ -171,7 +184,7 @@ class RealtimeRepositoryInterface(ABC):
         sort: str,
         search: str,
         is_active: bool | None,
-    ) -> tuple[list[Trip], int]:
+    ) -> tuple[list[TripUpdate], int]:
         """Return paginated realtime trips with total count and required relationships loaded."""
         raise NotImplementedError
 
@@ -181,7 +194,7 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def toggle_trip_active(self, trip_uuid: uuid.UUID) -> Trip | None:
+    async def toggle_trip_active(self, trip_uuid: uuid.UUID) -> TripUpdate | None:
         """Toggle the is_active flag for one realtime trip and return updated model."""
         raise NotImplementedError
 
@@ -191,17 +204,17 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def list_trips_for_data_source(self, source_id: int) -> list[Trip]:
+    async def list_trips_for_data_source(self, source_id: int) -> list[TripUpdate]:
         """Return all realtime trips currently linked to one data source."""
         raise NotImplementedError
 
     @abstractmethod
-    async def list_trips_by_ids(self, trip_ids: list[uuid.UUID]) -> list[Trip]:
+    async def list_trips_by_ids(self, trip_ids: list[uuid.UUID]) -> list[TripUpdate]:
         """Return realtime trips by ids."""
         raise NotImplementedError
 
     @abstractmethod
-    async def list_trips_by_trip_ids(self, trip_ids: list[str]) -> list[Trip]:
+    async def list_trips_by_trip_ids(self, trip_ids: list[str]) -> list[TripUpdate]:
         """Return realtime trips by trip_id values."""
         raise NotImplementedError
 
@@ -272,7 +285,7 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def get_realtime_vehicles(self) -> list[Vehicle]:
+    async def get_realtime_vehicles(self) -> list[VehiclePosition]:
         """Return active realtime vehicle positions with trip relations loaded."""
         raise NotImplementedError
 
@@ -284,12 +297,12 @@ class RealtimeRepositoryInterface(ABC):
         limit: int,
         search: str,
         is_active: bool | None,
-    ) -> tuple[list[Vehicle], int]:
+    ) -> tuple[list[VehiclePosition], int]:
         """Return paginated realtime vehicles with total count and required relationships loaded."""
         raise NotImplementedError    
 
     @abstractmethod
-    async def toggle_vehicle_active(self, vehicle_uuid: uuid.UUID) -> Vehicle | None:
+    async def toggle_vehicle_active(self, vehicle_uuid: uuid.UUID) -> VehiclePosition | None:
         """Toggle the is_active flag for one realtime vehicle and return updated model."""
         raise NotImplementedError
 
@@ -299,17 +312,17 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def list_vehicles_for_data_source(self, source_id: int) -> list[Vehicle]:
+    async def list_vehicles_for_data_source(self, source_id: int) -> list[VehiclePosition]:
         """Return all realtime vehicles currently linked to one data source."""
         raise NotImplementedError
 
     @abstractmethod
-    async def list_vehicles_by_ids(self, vehicle_ids: list[uuid.UUID]) -> list[Vehicle]:
+    async def list_vehicles_by_ids(self, vehicle_ids: list[uuid.UUID]) -> list[VehiclePosition]:
         """Return realtime vehicles by ids."""
         raise NotImplementedError
 
     @abstractmethod
-    async def list_vehicles_updated_before(self, cutoff: datetime) -> list[Vehicle]:
+    async def list_vehicles_updated_before(self, cutoff: datetime) -> list[VehiclePosition]:
         """Return all realtime vehicles last updated before cutoff, regardless of data source."""
         raise NotImplementedError
 
@@ -334,14 +347,13 @@ class RealtimeRepositoryInterface(ABC):
         vehicle_uuid: uuid.UUID,
         source_id: int,
         source_name: str,
-        trip_uuid: uuid.UUID,
         trip_id: str,
+        trip_original_trip_id: str | None,
         trip_start_time: str,
         trip_start_date: str,
         trip_route_id: str,
         trip_schedule_relationship: str,
         trip_assignment_type: str,
-        trip_is_active_on_create: bool,
         trip_is_trip_valid: bool,
         trip_is_route_valid: bool,
         vehicle_id: str,
@@ -358,7 +370,7 @@ class RealtimeRepositoryInterface(ABC):
         is_active_on_create: bool,
         is_valid: bool,
     ) -> str:
-        """Create or update one synchronized vehicle position and ensure linked trip exists."""
+        """Create or update one synchronized vehicle position including its embedded trip descriptor."""
         raise NotImplementedError
 
     @abstractmethod
@@ -377,7 +389,7 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def list_trips_with_invalid_references(self) -> list[Trip]:
+    async def list_trips_with_invalid_references(self) -> list[TripUpdate]:
         """Return trips with invalid route or trip references and required relations loaded."""
         raise NotImplementedError
 
@@ -402,7 +414,7 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def list_trips_with_non_global_ids(self, pattern: str) -> list[Trip]:
+    async def list_trips_with_non_global_ids(self, pattern: str) -> list[TripUpdate]:
         """Return trips where route_id or trip_id does not match the provided global-id pattern."""
         raise NotImplementedError
 

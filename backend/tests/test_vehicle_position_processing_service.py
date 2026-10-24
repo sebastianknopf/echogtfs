@@ -220,7 +220,7 @@ class TestVehiclePositionProcessingService(unittest.IsolatedAsyncioTestCase):
         )
 
         datasource._matching_service.match.assert_awaited_once()
-        realtime_repository.delete_trips_by_trip_ids.assert_awaited_once_with(["external-trip-1"])
+        realtime_repository.delete_trips_by_trip_ids.assert_not_awaited()
         match_kwargs = datasource._matching_service.match.await_args.kwargs
         self.assertIsNotNone(match_kwargs["scheduled_start_time"])
         self.assertIsNotNone(match_kwargs["scheduled_end_time"])

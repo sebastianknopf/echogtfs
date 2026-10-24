@@ -184,63 +184,18 @@ class TripUpdateProcessingService(RealtimeProcessingServiceBase):
             matched_trip_id: str | None = None
             matched_assignment_type: AssignmentType | None = None
 
-            mapped_match_start_stop = self._identifier_mapping_service.apply_mapping(
-                {
-                    "stop_id": record.get("scheduled_start_stop_id"),
-                }
-            )
-            
-            mapped_match_end_stop = self._identifier_mapping_service.apply_mapping(
-                {
-                    "stop_id": record.get("scheduled_end_stop_id"),
-                }
-            )
-
-            scheduled_start_time = self._coerce_datetime(record.get("scheduled_start_time"))
-            scheduled_end_time = self._coerce_datetime(record.get("scheduled_end_time"))
-            scheduled_start_stop_id = mapped_match_start_stop.get("stop_id")
-            scheduled_end_stop_id = mapped_match_end_stop.get("stop_id")
-            scheduled_intermediate_stops: list[tuple[str, datetime]] = []
-
-            intermediate_candidates = record.get("scheduled_intermediate_stops")
-            if isinstance(intermediate_candidates, list):
-                for candidate in intermediate_candidates:
-                    if not isinstance(candidate, tuple) or len(candidate) != 2:
-                        continue
-
-                    candidate_stop_id, candidate_time = candidate
-                    mapped_intermediate_stop = self._identifier_mapping_service.apply_mapping(
-                        {
-                            "stop_id": candidate_stop_id,
-                        }
-                    )
-                    
-                    mapped_stop_id = mapped_intermediate_stop.get("stop_id")
-                    coerced_time = self._coerce_datetime(candidate_time)
-
-                    if mapped_stop_id is None or coerced_time is None:
-                        continue
-
-                    scheduled_intermediate_stops.append((str(mapped_stop_id), coerced_time))
+            match_inputs = self._map_scheduled_match_inputs(record)
+            scheduled_start_time = match_inputs["scheduled_start_time"]
+            scheduled_end_time = match_inputs["scheduled_end_time"]
+            scheduled_start_stop_id = match_inputs["scheduled_start_stop_id"]
+            scheduled_end_stop_id = match_inputs["scheduled_end_stop_id"]
 
             if not is_new_trip and not trip_reference_is_valid:
                 matched_trip_id, matched_assignment_type = await self._matching_service.match(
                     trip_id=derived_trip_id,
                     route_id=str(mapped_trip.get("route_id") or "") or None,
                     operation_day_date=self._parse_operation_day(record.get("start_date")),
-                    scheduled_start_time=scheduled_start_time,
-                    scheduled_end_time=scheduled_end_time,
-                    scheduled_start_stop_id=(
-                        str(scheduled_start_stop_id)
-                        if scheduled_start_stop_id is not None
-                        else None
-                    ),
-                    scheduled_end_stop_id=(
-                        str(scheduled_end_stop_id)
-                        if scheduled_end_stop_id is not None
-                        else None
-                    ),
-                    scheduled_intermediate_stops=scheduled_intermediate_stops,
+                    **match_inputs,
                     is_complete_stop_sequence=is_complete_stop_sequence,
                     intermediate_stop_sample_size=self.MAX_INTERMEDIATE_STOP_SAMPLE_SIZE,
                 )

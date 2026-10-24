@@ -13,7 +13,7 @@ from echogtfs.common.security import CurrentUser
 from echogtfs.services.database import get_realtime_repository, get_system_repository
 from echogtfs.services.database.intf_realtime_repository import RealtimeRepositoryInterface
 from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
-from echogtfs.services.database.models import AppSetting, ServiceAlert, StopEvent, Trip, Vehicle
+from echogtfs.services.database.models import AppSetting
 from echogtfs.validation.schemas import DashboardRead
 
 router = APIRouter()
@@ -38,71 +38,6 @@ def _build_public_api_url(request: Request, endpoint_path: str) -> str:
     return f"{base_url}/api/{endpoint_path}"
 
 
-async def _count_alerts(repository: RealtimeRepositoryInterface) -> tuple[int, int]:
-    async with repository.get_session() as db:
-        active_result = await db.execute(
-            select(func.count(ServiceAlert.id)).where(ServiceAlert.is_active == True)
-        )
-        inactive_result = await db.execute(
-            select(func.count(ServiceAlert.id)).where(ServiceAlert.is_active == False)
-        )
-
-        return int(active_result.scalar_one()), int(inactive_result.scalar_one())
-
-
-async def _count_trips_by_realtime_status(repository: RealtimeRepositoryInterface) -> tuple[int, int, int]:
-    has_stop_event = exists(
-        select(StopEvent.trip_id).where(StopEvent.trip_id == Trip.trip_id)
-    )
-    has_realtime_stop_event = exists(
-        select(StopEvent.trip_id).where(
-            StopEvent.trip_id == Trip.trip_id,
-            StopEvent.schedule_relationship != "NO_DATA",
-        )
-    )
-
-    async with repository.get_session() as db:
-        active_result = await db.execute(
-            select(func.count(Trip.id)).where(
-                Trip.is_active == True,
-                has_realtime_stop_event,
-            )
-        )
-        
-        monitored_result = await db.execute(
-            select(func.count(Trip.id)).where(
-                Trip.is_active == True,
-                has_stop_event,
-                ~has_realtime_stop_event,
-            )
-        )
-
-        inactive_result = await db.execute(
-            select(func.count(Trip.id)).where(
-                Trip.is_active == False,
-                has_stop_event,
-            )
-        )
-
-        return (
-            int(active_result.scalar_one()),
-            int(monitored_result.scalar_one()),
-            int(inactive_result.scalar_one()),
-        )
-
-
-async def _count_vehicles(repository: RealtimeRepositoryInterface) -> tuple[int, int]:
-    async with repository.get_session() as db:
-        active_result = await db.execute(
-            select(func.count(Vehicle.id)).where(Vehicle.is_active == True)
-        )
-        inactive_result = await db.execute(
-            select(func.count(Vehicle.id)).where(Vehicle.is_active == False)
-        )
-
-        return int(active_result.scalar_one()), int(inactive_result.scalar_one())
-
-
 @router.get("/", response_model=DashboardRead, include_in_schema=False)
 async def get_dashboard(
     request: Request,
@@ -123,9 +58,9 @@ async def get_dashboard(
         app_settings.get(AppSetting.KEY_GTFS_RT_VEHICLE_POSITIONS_PATH, _DEFAULT_VEHICLE_POSITIONS_PATH)
     )
 
-    alerts_active, alerts_inactive = await _count_alerts(repository)
-    trips_active, trips_monitored, trips_inactive = await _count_trips_by_realtime_status(repository)
-    vehicles_active, vehicles_inactive = await _count_vehicles(repository)
+    alerts_active, alerts_inactive = await repository.count_service_alerts_by_active()
+    trips_active, trips_monitored, trips_inactive = await repository.count_trip_updates_by_status()
+    vehicles_active, vehicles_inactive = await repository.count_vehicle_positions_by_active()
 
     return DashboardRead(
         counts={

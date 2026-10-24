@@ -727,7 +727,6 @@ class VehicleTripSummaryRead(BaseModel):
     start_time: str | None = None
     start_date: str
     schedule_relationship: str
-    is_active: bool
     is_valid: bool
 
     model_config = {"from_attributes": True}

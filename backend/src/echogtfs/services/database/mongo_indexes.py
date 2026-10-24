@@ -24,7 +24,7 @@ def realtime_index_definitions() -> dict[str, list[IndexModel]]:
         TRIP_UPDATES_COLLECTION: [
             IndexModel([("trip_id", ASCENDING)], name="trip_id_unique", unique=True),
             IndexModel(
-                [("is_active", ASCENDING), ("created_at", DESCENDING), ("trip_id", ASCENDING)],
+                [("is_active", ASCENDING), ("created_at", ASCENDING), ("trip_id", ASCENDING)],
                 name="is_active_created_at_trip_id",
             ),
             IndexModel([("data_source_id", ASCENDING)], name="data_source_id"),

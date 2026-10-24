@@ -254,6 +254,41 @@ class RealtimeProcessingServiceBase:
 
         return None
 
+    def _map_scheduled_match_inputs(self, record: dict[str, Any]) -> dict[str, Any]:
+        """Apply identifier mapping to the scheduled stops of a record and collect the matching criteria."""
+        mapped_start_stop = self._identifier_mapping_service.apply_mapping(
+            {"stop_id": record.get("scheduled_start_stop_id")}
+        ).get("stop_id")
+        mapped_end_stop = self._identifier_mapping_service.apply_mapping(
+            {"stop_id": record.get("scheduled_end_stop_id")}
+        ).get("stop_id")
+
+        intermediate_stops: list[tuple[str, datetime]] = []
+        intermediate_candidates = record.get("scheduled_intermediate_stops")
+        if isinstance(intermediate_candidates, list):
+            for candidate in intermediate_candidates:
+                if not isinstance(candidate, tuple) or len(candidate) != 2:
+                    continue
+
+                candidate_stop_id, candidate_time = candidate
+                mapped_stop_id = self._identifier_mapping_service.apply_mapping(
+                    {"stop_id": candidate_stop_id}
+                ).get("stop_id")
+                coerced_time = self._coerce_datetime(candidate_time)
+
+                if mapped_stop_id is None or coerced_time is None:
+                    continue
+
+                intermediate_stops.append((str(mapped_stop_id), coerced_time))
+
+        return {
+            "scheduled_start_time": self._coerce_datetime(record.get("scheduled_start_time")),
+            "scheduled_end_time": self._coerce_datetime(record.get("scheduled_end_time")),
+            "scheduled_start_stop_id": str(mapped_start_stop) if mapped_start_stop is not None else None,
+            "scheduled_end_stop_id": str(mapped_end_stop) if mapped_end_stop is not None else None,
+            "scheduled_intermediate_stops": intermediate_stops,
+        }
+
     @staticmethod
     def _parse_operation_day(start_date: Any) -> date | None:
         """Parse a GTFS-RT start_date (YYYYMMDD) into a date, or None if invalid."""

@@ -1,140 +1,503 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
+from enum import Enum
+import re
 from typing import Any
 import uuid
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from pymongo import ASCENDING, DESCENDING, DeleteMany, IndexModel, ReturnDocument, UpdateMany, UpdateOne
+from sqlalchemy import select
 
 from echogtfs.enum.gtfsrt import AssignmentType
-from sqlalchemy import case, delete, exists, func, select, update
-from sqlalchemy.orm import selectinload
-
-from echogtfs.services.database.postgre_base import PostgreRepositoryBase
 from echogtfs.services.database.intf_realtime_repository import RealtimeRepositoryInterface
-from echogtfs.services.database.models import (
-    GtfsTrip,
+from echogtfs.services.database.models import DataSource, GtfsTrip
+from echogtfs.services.database.mongo_base import MongoRepositoryBase
+from echogtfs.services.database.mongo_indexes import (
+    SERVICE_ALERTS_COLLECTION,
+    TRIP_UPDATES_COLLECTION,
+    VEHICLE_POSITIONS_COLLECTION,
+    realtime_index_definitions,
+)
+from echogtfs.services.database.postgre_base import PostgreRepositoryBase
+from echogtfs.services.database.realtime_models import (
     ServiceAlert,
     ServiceAlertActivePeriod,
     ServiceAlertInformedEntity,
     ServiceAlertTranslation,
     StopEvent,
-    Trip,
-    Vehicle,
+    TripUpdate,
+    VehiclePosition,
+    VehicleTripDescriptor,
 )
 
+# Flags stored on trip-update documents (multikey index) to find conflicts and dashboard states without scans.
+FLAG_INVALID_REFERENCE = "invalid_reference"
+FLAG_INVALID_STOP = "invalid_stop"
+FLAG_IMPLIED_DEVIATION = "implied_deviation"
+FLAG_CHANGED_STOP_ID = "changed_stop_id"
+FLAG_DEPARTURE_BEFORE_ARRIVAL = "departure_before_arrival"
+FLAG_REALTIME = "realtime"
 
-class RealtimeRepository(PostgreRepositoryBase, RealtimeRepositoryInterface):
-    """SQLAlchemy repository for realtime-table access."""
+_NO_STOP_EVENTS = {"stop_events": 0}
+
+
+class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
+    """MongoDB repository for realtime alerts, trip updates and vehicle positions.
+
+    PostgreSQL is only used to resolve data source names and running GTFS trips for statistics.
+    """
+
+    def __init__(
+        self,
+        database_url: str,
+        debug: bool = False,
+        mongo_url: str | None = None,
+        mongo_database: str | None = None,
+    ):
+        from echogtfs.common.config import settings
+
+        super().__init__(mongo_url or settings.mongo_url, mongo_database or settings.mongo_database)
+        self._postgres = PostgreRepositoryBase(database_url, debug)
+
+    async def initialize(self) -> None:
+        """Validate PostgreSQL and MongoDB connectivity and create the MongoDB indices."""
+        await self._postgres.initialize()
+        await super().initialize()
+
+    async def close(self) -> None:
+        """Close the MongoDB client and dispose the PostgreSQL engine."""
+        await super().close()
+        await self._postgres.close()
+
+    def index_definitions(self) -> dict[str, list[IndexModel]]:
+        return realtime_index_definitions()
+
+    # ------------------------------------------------------------------
+    # Low-level helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _now() -> datetime:
+        return datetime.now(UTC)
+
+    @staticmethod
+    def _text(value: Any) -> Any:
+        return value.value if isinstance(value, Enum) else value
+
+    @staticmethod
+    def _ids(values: list[uuid.UUID]) -> list[str]:
+        return [str(value) for value in values]
+
+    async def _session_options(self, session: Any = None) -> dict[str, Any]:
+        """Return the session keyword for reads: an explicit snapshot session, or the open transaction."""
+        if session is None:
+            session = await self.read_session()
+
+        return {"session": session} if session is not None else {}
+
+    async def _find(
+        self,
+        collection_name: str,
+        filter_: dict[str, Any] | None = None,
+        *,
+        projection: dict[str, Any] | None = None,
+        sort: list[tuple[str, int]] | None = None,
+        skip: int = 0,
+        limit: int = 0,
+        session: Any = None,
+    ) -> list[dict[str, Any]]:
+        options = await self._session_options(session)
+        cursor = self.collection(collection_name).find(filter_ or {}, projection, **options)
+        if sort:
+            cursor = cursor.sort(sort)
+        if skip:
+            cursor = cursor.skip(skip)
+        if limit:
+            cursor = cursor.limit(limit)
+
+        return await cursor.to_list()
+
+    async def _count(self, collection_name: str, filter_: dict[str, Any] | None = None) -> int:
+        options = await self._session_options()
+        return int(await self.collection(collection_name).count_documents(filter_ or {}, **options))
+
+    async def _aggregate(
+        self,
+        collection_name: str,
+        pipeline: list[dict[str, Any]],
+        session: Any = None,
+    ) -> list[dict[str, Any]]:
+        options = await self._session_options(session)
+        cursor = await self.collection(collection_name).aggregate(pipeline, **options)
+        return await cursor.to_list()
+
+    async def _delete(self, collection_name: str, filter_: dict[str, Any]) -> int:
+        """Delete matching documents; inside a sync transaction the delete is buffered and 0 is returned."""
+        if self._current_context() is not None:
+            await self.write(collection_name, DeleteMany(filter_))
+            return 0
+
+        result = await self.collection(collection_name).delete_many(filter_)
+        return int(result.deleted_count)
+
+    async def _update_many(self, collection_name: str, filter_: dict[str, Any], update: Any) -> int:
+        if self._current_context() is not None:
+            await self.write(collection_name, UpdateMany(filter_, update))
+            return 0
+
+        result = await self.collection(collection_name).update_many(filter_, update)
+        return int(result.modified_count)
+
+    async def _data_source_names(self) -> dict[int, str]:
+        async with self._postgres.get_session() as db:
+            result = await db.execute(select(DataSource.id, DataSource.name))
+            return {row[0]: row[1] for row in result.all()}
+
+    async def _fill_data_source_names(self, items: list[Any]) -> None:
+        """Set data_source_name on the given alerts, trips or vehicles using one PostgreSQL select."""
+        if not any(item.data_source_id is not None for item in items):
+            return
+
+        names = await self._data_source_names()
+        for item in items:
+            item.data_source_name = names.get(item.data_source_id) if item.data_source_id is not None else None
+
+    # ------------------------------------------------------------------
+    # Document <-> dataclass mapping
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _alert_from_doc(doc: dict[str, Any]) -> ServiceAlert:
+        alert = ServiceAlert(
+            id=uuid.UUID(doc["_id"]),
+            data_source_id=doc.get("data_source_id"),
+            cause=doc.get("cause"),
+            effect=doc.get("effect"),
+            severity_level=doc.get("severity_level"),
+            source=doc.get("source", "echogtfs"),
+            is_active=bool(doc.get("is_active", True)),
+            created_at=doc.get("created_at"),
+            updated_at=doc.get("updated_at"),
+            translations=[
+                ServiceAlertTranslation(
+                    id=index,
+                    language=item.get("language"),
+                    header_text=item.get("header_text"),
+                    description_text=item.get("description_text"),
+                    url=item.get("url"),
+                )
+                for index, item in enumerate(doc.get("translations", []), start=1)
+            ],
+            active_periods=[
+                ServiceAlertActivePeriod(
+                    id=index,
+                    period_type=item.get("period_type"),
+                    start_time=item.get("start_time"),
+                    end_time=item.get("end_time"),
+                )
+                for index, item in enumerate(doc.get("active_periods", []), start=1)
+            ],
+        )
+
+        alert.informed_entities = [
+            RealtimeRepository._informed_entity_from_doc(item, index, alert)
+            for index, item in enumerate(doc.get("informed_entities", []), start=1)
+        ]
+
+        return alert
+
+    @staticmethod
+    def _informed_entity_from_doc(
+        item: dict[str, Any],
+        entity_id: int,
+        alert: ServiceAlert,
+    ) -> ServiceAlertInformedEntity:
+        return ServiceAlertInformedEntity(
+            id=entity_id,
+            agency_id=item.get("agency_id"),
+            route_id=item.get("route_id"),
+            route_type=item.get("route_type"),
+            stop_id=item.get("stop_id"),
+            trip_id=item.get("trip_id"),
+            direction_id=item.get("direction_id"),
+            is_agency_valid=bool(item.get("is_agency_valid", True)),
+            is_route_valid=bool(item.get("is_route_valid", True)),
+            is_stop_valid=bool(item.get("is_stop_valid", True)),
+            is_trip_valid=bool(item.get("is_trip_valid", True)),
+            alert=alert,
+        )
+
+    @staticmethod
+    def _stop_event_from_doc(item: dict[str, Any], trip_id: str, trip: TripUpdate | None) -> StopEvent:
+        return StopEvent(
+            trip_id=trip_id,
+            stop_id=item.get("stop_id"),
+            original_stop_id=item.get("original_stop_id"),
+            stop_sequence=item.get("stop_sequence", ""),
+            arrival_time=item.get("arrival_time"),
+            departure_time=item.get("departure_time"),
+            scheduled_arrival_time=item.get("scheduled_arrival_time"),
+            scheduled_departure_time=item.get("scheduled_departure_time"),
+            schedule_relationship=item.get("schedule_relationship", "SCHEDULED"),
+            is_implied_schedule_relationship=bool(item.get("is_implied_schedule_relationship", False)),
+            is_valid=bool(item.get("is_valid", True)),
+            trip=trip,
+        )
+
+    @staticmethod
+    def _trip_from_doc(doc: dict[str, Any], *, include_stop_events: bool = True) -> TripUpdate:
+        trip = TripUpdate(
+            id=uuid.UUID(doc["_id"]),
+            data_source_id=doc.get("data_source_id"),
+            source=doc.get("source", "echogtfs"),
+            trip_id=doc["trip_id"],
+            original_trip_id=doc.get("original_trip_id"),
+            scheduled_start_stop_id=doc.get("scheduled_start_stop_id"),
+            scheduled_end_stop_id=doc.get("scheduled_end_stop_id"),
+            scheduled_start_time=doc.get("scheduled_start_time"),
+            scheduled_end_time=doc.get("scheduled_end_time"),
+            start_time=doc.get("start_time"),
+            start_date=doc.get("start_date", ""),
+            route_id=doc.get("route_id", ""),
+            schedule_relationship=doc.get("schedule_relationship", "SCHEDULED"),
+            assignment_type=doc.get("assignment_type"),
+            is_active=bool(doc.get("is_active", True)),
+            created_at=doc.get("created_at"),
+            updated_at=doc.get("updated_at"),
+            is_trip_valid=bool(doc.get("is_trip_valid", True)),
+            is_route_valid=bool(doc.get("is_route_valid", True)),
+            is_complete_stop_sequence=bool(doc.get("is_complete_stop_sequence", True)),
+        )
+
+        if include_stop_events:
+            trip.stop_events = [
+                RealtimeRepository._stop_event_from_doc(item, trip.trip_id, trip)
+                for item in doc.get("stop_events", [])
+            ]
+
+        return trip
+
+    @staticmethod
+    def _vehicle_from_doc(doc: dict[str, Any]) -> VehiclePosition:
+        trip_doc = doc.get("trip", {})
+
+        return VehiclePosition(
+            id=uuid.UUID(doc["_id"]),
+            data_source_id=doc.get("data_source_id"),
+            source=doc.get("source", "echogtfs"),
+            vehicle_id=doc.get("vehicle_id"),
+            vehicle_label=doc.get("vehicle_label"),
+            vehicle_license_plate=doc.get("vehicle_license_plate"),
+            vehicle_wheelchair_accessible=doc.get("vehicle_wheelchair_accessible"),
+            timestamp=doc.get("timestamp"),
+            latitude=doc.get("latitude"),
+            longitude=doc.get("longitude"),
+            current_stop_sequence=doc.get("current_stop_sequence"),
+            current_status=doc.get("current_status"),
+            assignment_type=doc.get("assignment_type"),
+            congestion_level=doc.get("congestion_level"),
+            is_active=bool(doc.get("is_active", True)),
+            created_at=doc.get("created_at"),
+            updated_at=doc.get("updated_at"),
+            is_valid=bool(doc.get("is_valid", True)),
+            trip=VehicleTripDescriptor(
+                trip_id=trip_doc.get("trip_id"),
+                original_trip_id=trip_doc.get("original_trip_id"),
+                route_id=trip_doc.get("route_id", ""),
+                start_date=trip_doc.get("start_date", ""),
+                start_time=trip_doc.get("start_time"),
+                schedule_relationship=trip_doc.get("schedule_relationship", "SCHEDULED"),
+                assignment_type=trip_doc.get("assignment_type"),
+                is_trip_valid=bool(trip_doc.get("is_trip_valid", True)),
+                is_route_valid=bool(trip_doc.get("is_route_valid", True)),
+            ),
+        )
 
     @staticmethod
     def _normalize_informed_entity_payload(entity_data: dict[str, Any]) -> dict[str, Any]:
         """Normalize service-alert informed-entity payload for persistence."""
-        normalized = dict(entity_data)
+        return {
+            "agency_id": entity_data.get("agency_id"),
+            "route_id": entity_data.get("route_id"),
+            "route_type": entity_data.get("route_type"),
+            "stop_id": entity_data.get("stop_id"),
+            "trip_id": entity_data.get("trip_id"),
+            "direction_id": entity_data.get("direction_id"),
+            "is_agency_valid": bool(entity_data.get("is_agency_valid", True)),
+            "is_route_valid": bool(entity_data.get("is_route_valid", True)),
+            "is_stop_valid": bool(entity_data.get("is_stop_valid", True)),
+            "is_trip_valid": bool(entity_data.get("is_trip_valid", True)),
+        }
 
-        normalized.setdefault("is_agency_valid", True)
-        normalized.setdefault("is_route_valid", True)
-        normalized.setdefault("is_stop_valid", True)
-        normalized.setdefault("is_trip_valid", True)
+    @classmethod
+    def _alert_child_fields(
+        cls,
+        translations: list[dict[str, Any]],
+        active_periods: list[dict[str, Any]],
+        informed_entities: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Build the embedded child arrays plus the derived fields used by queries and sorting."""
+        translation_docs = [
+            {
+                "language": item.get("language"),
+                "header_text": item.get("header_text"),
+                "description_text": item.get("description_text"),
+                "url": item.get("url"),
+            }
+            for item in translations
+        ]
+        period_docs = [
+            {
+                "period_type": cls._text(item.get("period_type")),
+                "start_time": item.get("start_time"),
+                "end_time": item.get("end_time"),
+            }
+            for item in active_periods
+        ]
+        entity_docs = [cls._normalize_informed_entity_payload(item) for item in informed_entities]
 
-        return normalized
+        starts = [item["start_time"] for item in period_docs if item["start_time"] is not None]
+        ends = [item["end_time"] for item in period_docs if item["end_time"] is not None]
+        first_start = min(starts) if starts else None
+
+        return {
+            "translations": translation_docs,
+            "active_periods": period_docs,
+            "informed_entities": entity_docs,
+            "first_start": first_start,
+            "has_first_start": first_start is not None,
+            "max_end_time": max(ends) if ends else None,
+            "has_invalid_reference": any(
+                not (
+                    item["is_agency_valid"]
+                    and item["is_route_valid"]
+                    and item["is_stop_valid"]
+                    and item["is_trip_valid"]
+                )
+                for item in entity_docs
+            ),
+        }
+
+    @classmethod
+    def _stop_event_document(cls, payload: dict[str, Any]) -> dict[str, Any]:
+        original_stop_id = payload.get("original_stop_id")
+        if original_stop_id in (None, ""):
+            original_stop_id = payload.get("stop_id")
+
+        stop_sequence = payload.get("stop_sequence")
+
+        return {
+            "stop_id": payload.get("stop_id"),
+            "original_stop_id": original_stop_id,
+            "stop_sequence": "" if stop_sequence is None else str(stop_sequence),
+            "arrival_time": payload.get("arrival_time"),
+            "departure_time": payload.get("departure_time"),
+            "scheduled_arrival_time": payload.get("scheduled_arrival_time"),
+            "scheduled_departure_time": payload.get("scheduled_departure_time"),
+            "schedule_relationship": cls._text(payload.get("schedule_relationship") or "SCHEDULED"),
+            "is_implied_schedule_relationship": bool(payload.get("is_implied_schedule_relationship", False)),
+            "is_valid": bool(payload.get("is_valid", True)),
+        }
+
+    @staticmethod
+    def _trip_flags(stop_events: list[dict[str, Any]], is_trip_valid: bool, is_route_valid: bool) -> list[str]:
+        flags: list[str] = []
+
+        def add(flag: str) -> None:
+            if flag not in flags:
+                flags.append(flag)
+
+        if not (is_trip_valid and is_route_valid):
+            add(FLAG_INVALID_REFERENCE)
+
+        for event in stop_events:
+            if not event["is_valid"]:
+                add(FLAG_INVALID_STOP)
+
+            if event["schedule_relationship"] != "NO_DATA":
+                add(FLAG_REALTIME)
+
+            if event["is_implied_schedule_relationship"] and event["schedule_relationship"] in ("ADDED", "SKIPPED"):
+                add(FLAG_IMPLIED_DEVIATION)
+
+            if event["stop_id"] != event["original_stop_id"]:
+                add(FLAG_CHANGED_STOP_ID)
+
+            try:
+                if (
+                    event["arrival_time"] is not None
+                    and event["departure_time"] is not None
+                    and event["departure_time"] < event["arrival_time"]
+                ):
+                    add(FLAG_DEPARTURE_BEFORE_ARRIVAL)
+            except TypeError:
+                pass
+
+        return flags
+
+    @staticmethod
+    def _stop_event_sort_key(stop_sequence: str) -> tuple[int, int, str]:
+        """Sort numeric stop_sequence values first, then fall back to string comparison."""
+        try:
+            return (0, int(stop_sequence), "")
+        except (TypeError, ValueError):
+            return (1, 0, str(stop_sequence))
+
+    # ------------------------------------------------------------------
+    # Service alerts
+    # ------------------------------------------------------------------
 
     async def delete_alerts_for_data_source(self, source_id: int) -> int:
-        """Delete all alerts for one data source and return deleted row count."""
-        stmt = delete(ServiceAlert).where(ServiceAlert.data_source_id == source_id)
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            await self.commit(db)
-
-            return int(result.rowcount or 0)
+        return await self._delete(SERVICE_ALERTS_COLLECTION, {"data_source_id": source_id})
 
     async def get_realtime_service_alerts(self) -> list[ServiceAlert]:
-        """Return active realtime alerts with relationships needed for GTFS-RT export."""
-        stmt = (
-            select(ServiceAlert)
-            .where(ServiceAlert.is_active == True)
-            .options(
-                selectinload(ServiceAlert.translations),
-                selectinload(ServiceAlert.active_periods),
-                selectinload(ServiceAlert.informed_entities),
+        """Return active alerts as one consistent snapshot for the GTFS-RT export."""
+        async with self.snapshot() as session:
+            docs = await self._find(
+                SERVICE_ALERTS_COLLECTION,
+                {"is_active": True},
+                sort=[("_id", ASCENDING)],
+                session=session,
             )
-            .order_by(ServiceAlert.id)
-        )
 
-        async with self.transaction(isolation_level="REPEATABLE READ") as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
+        return [self._alert_from_doc(doc) for doc in docs]
 
     async def list_expired_alert_ids(self, current_timestamp: int, *, only_active: bool) -> list[uuid.UUID]:
-        """Return alert ids, regardless of data source, where all active periods already ended."""
-        subquery = (
-            select(ServiceAlertActivePeriod.alert_id)
-            .group_by(ServiceAlertActivePeriod.alert_id)
-            .having(
-                func.max(ServiceAlertActivePeriod.end_time).isnot(None)
-                & (func.max(ServiceAlertActivePeriod.end_time) < current_timestamp)
-            )
-        )
-
-        stmt = select(ServiceAlert.id).where(ServiceAlert.id.in_(subquery))
-
+        filter_: dict[str, Any] = {"max_end_time": {"$lt": current_timestamp}}
         if only_active:
-            stmt = stmt.where(ServiceAlert.is_active == True)
+            filter_["is_active"] = True
 
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return [row[0] for row in result.all()]
+        docs = await self._find(SERVICE_ALERTS_COLLECTION, filter_, projection={"_id": 1})
+        return [uuid.UUID(doc["_id"]) for doc in docs]
 
     async def list_alert_ids_expired_before(self, cutoff_timestamp: int) -> list[uuid.UUID]:
-        """Return alert ids, regardless of data source, where all active periods ended before cutoff timestamp."""
-        subquery = (
-            select(ServiceAlertActivePeriod.alert_id)
-            .group_by(ServiceAlertActivePeriod.alert_id)
-            .having(
-                func.max(ServiceAlertActivePeriod.end_time).isnot(None)
-                & (func.max(ServiceAlertActivePeriod.end_time) < cutoff_timestamp)
-            )
+        docs = await self._find(
+            SERVICE_ALERTS_COLLECTION,
+            {"max_end_time": {"$lt": cutoff_timestamp}},
+            projection={"_id": 1},
         )
-
-        stmt = select(ServiceAlert.id).where(ServiceAlert.id.in_(subquery))
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return [row[0] for row in result.all()]
+        return [uuid.UUID(doc["_id"]) for doc in docs]
 
     async def deactivate_service_alerts(self, alert_ids: list[uuid.UUID]) -> int:
-        """Deactivate service alerts by id and return affected row count."""
         if not alert_ids:
             return 0
 
-        stmt = update(ServiceAlert).where(ServiceAlert.id.in_(alert_ids)).values(is_active=False)
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            await self.commit(db)
-
-            return int(result.rowcount or 0)
+        return await self._update_many(
+            SERVICE_ALERTS_COLLECTION,
+            {"_id": {"$in": self._ids(alert_ids)}},
+            {"$set": {"is_active": False, "updated_at": self._now()}},
+        )
 
     async def delete_service_alerts_by_ids(self, alert_ids: list[uuid.UUID]) -> int:
-        """Delete service alerts by id and return affected row count."""
         if not alert_ids:
             return 0
 
-        stmt = delete(ServiceAlert).where(ServiceAlert.id.in_(alert_ids))
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            await self.commit(db)
-
-            return int(result.rowcount or 0)
+        return await self._delete(SERVICE_ALERTS_COLLECTION, {"_id": {"$in": self._ids(alert_ids)}})
 
     async def list_service_alerts_for_data_source(self, source_id: int) -> list[ServiceAlert]:
-        """Return alerts linked to one data source."""
-        stmt = select(ServiceAlert).where(ServiceAlert.data_source_id == source_id)
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
+        docs = await self._find(SERVICE_ALERTS_COLLECTION, {"data_source_id": source_id})
+        return [self._alert_from_doc(doc) for doc in docs]
 
     async def list_service_alerts_paginated(
         self,
@@ -146,86 +509,49 @@ class RealtimeRepository(PostgreRepositoryBase, RealtimeRepositoryInterface):
         is_active: bool | None,
         has_data_source: bool | None,
     ) -> tuple[list[ServiceAlert], int]:
-        """Return paginated service alerts and total count with required relationships loaded."""
         page = max(1, page)
         limit = max(1, min(100, limit))
-        offset = (page - 1) * limit
         normalized_sort = sort.lower() if sort in ["newest", "oldest"] else "newest"
 
-        subq = (
-            select(
-                ServiceAlertActivePeriod.alert_id,
-                func.min(ServiceAlertActivePeriod.start_time).label("first_start"),
-            )
-            .group_by(ServiceAlertActivePeriod.alert_id)
-            .subquery()
-        )
-
-        where_conditions = []
+        filter_: dict[str, Any] = {}
         trimmed_search = search.strip()
         if trimmed_search:
-            search_pattern = f"%{trimmed_search}%"
-            where_conditions.append(
-                ServiceAlert.id.in_(
-                    select(ServiceAlertTranslation.alert_id)
-                    .where(ServiceAlertTranslation.header_text.ilike(search_pattern))
-                    .distinct()
-                )
-            )
+            filter_["translations.header_text"] = {"$regex": re.escape(trimmed_search), "$options": "i"}
 
         if is_active is not None:
-            where_conditions.append(ServiceAlert.is_active == is_active)
+            filter_["is_active"] = is_active
 
         if has_data_source is not None:
-            if has_data_source:
-                where_conditions.append(ServiceAlert.data_source_id.is_not(None))
-            else:
-                where_conditions.append(ServiceAlert.data_source_id.is_(None))
+            filter_["data_source_id"] = {"$ne": None} if has_data_source else None
 
-        count_stmt = select(func.count(ServiceAlert.id))
-        if where_conditions:
-            count_stmt = count_stmt.where(*where_conditions)
+        # Alerts without any period start come first, then by first start
+        start_direction = DESCENDING if normalized_sort == "newest" else ASCENDING
+        docs = await self._find(
+            SERVICE_ALERTS_COLLECTION,
+            filter_,
+            sort=[("has_first_start", ASCENDING), ("first_start", start_direction), ("_id", ASCENDING)],
+            skip=(page - 1) * limit,
+            limit=limit,
+        )
+        total = await self._count(SERVICE_ALERTS_COLLECTION, filter_)
 
-        sort_expr = subq.c.first_start.desc() if normalized_sort == "newest" else subq.c.first_start.asc()
+        items = [self._alert_from_doc(doc) for doc in docs]
+        await self._fill_data_source_names(items)
 
-        stmt = select(ServiceAlert).outerjoin(subq, ServiceAlert.id == subq.c.alert_id)
-        if where_conditions:
-            stmt = stmt.where(*where_conditions)
+        return items, total
 
-        stmt = stmt.options(
-            selectinload(ServiceAlert.translations),
-            selectinload(ServiceAlert.active_periods),
-            selectinload(ServiceAlert.informed_entities),
-            selectinload(ServiceAlert.data_source),
-        ).order_by(
-            case((subq.c.first_start.is_(None), 0), else_=1),
-            sort_expr.nulls_last(),
-        ).offset(offset).limit(limit)
+    async def _load_alert(self, alert_id: uuid.UUID) -> ServiceAlert | None:
+        docs = await self._find(SERVICE_ALERTS_COLLECTION, {"_id": str(alert_id)})
+        if not docs:
+            return None
 
-        async with self.get_session() as db:
-            count_result = await db.execute(count_stmt)
-            total = int(count_result.scalar_one())
+        alert = self._alert_from_doc(docs[0])
+        await self._fill_data_source_names([alert])
 
-            result = await db.execute(stmt)
-            items = list(result.scalars().all())
-            return items, total
+        return alert
 
     async def get_service_alert_by_id_with_relations(self, alert_id: uuid.UUID) -> ServiceAlert | None:
-        """Return one service alert by id with required relationships loaded."""
-        stmt = (
-            select(ServiceAlert)
-            .where(ServiceAlert.id == alert_id)
-            .options(
-                selectinload(ServiceAlert.data_source),
-                selectinload(ServiceAlert.translations),
-                selectinload(ServiceAlert.active_periods),
-                selectinload(ServiceAlert.informed_entities),
-            )
-        )
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return result.scalar_one_or_none()
+        return await self._load_alert(alert_id)
 
     async def create_service_alert(
         self,
@@ -238,41 +564,24 @@ class RealtimeRepository(PostgreRepositoryBase, RealtimeRepositoryInterface):
         active_periods: list[dict[str, Any]],
         informed_entities: list[dict[str, Any]],
     ) -> ServiceAlert:
-        """Create one internal service alert and return it with relationships loaded."""
-        async with self.get_session() as db:
-            alert = ServiceAlert(
-                cause=cause,
-                effect=effect,
-                severity_level=severity_level,
-                is_active=is_active,
-            )
-            db.add(alert)
-            await db.flush()
+        alert_id = uuid.uuid4()
+        now = self._now()
 
-            for translation_data in translations:
-                db.add(ServiceAlertTranslation(alert_id=alert.id, **translation_data))
+        document = {
+            "_id": str(alert_id),
+            "data_source_id": None,
+            "cause": self._text(cause),
+            "effect": self._text(effect),
+            "severity_level": self._text(severity_level),
+            "source": "echogtfs",
+            "is_active": is_active,
+            "created_at": now,
+            "updated_at": now,
+            **self._alert_child_fields(translations, active_periods, informed_entities),
+        }
+        await self.collection(SERVICE_ALERTS_COLLECTION).insert_one(document)
 
-            for period_data in active_periods:
-                db.add(ServiceAlertActivePeriod(alert_id=alert.id, **period_data))
-
-            for entity_data in informed_entities:
-                normalized_entity_data = self._normalize_informed_entity_payload(entity_data)
-                db.add(ServiceAlertInformedEntity(alert_id=alert.id, **normalized_entity_data))
-
-            await self.commit(db)
-
-            stmt = (
-                select(ServiceAlert)
-                .where(ServiceAlert.id == alert.id)
-                .options(
-                    selectinload(ServiceAlert.data_source),
-                    selectinload(ServiceAlert.translations),
-                    selectinload(ServiceAlert.active_periods),
-                    selectinload(ServiceAlert.informed_entities),
-                )
-            )
-            result = await db.execute(stmt)
-            return result.scalar_one()
+        return self._alert_from_doc(document)
 
     async def update_service_alert(
         self,
@@ -286,114 +595,68 @@ class RealtimeRepository(PostgreRepositoryBase, RealtimeRepositoryInterface):
         active_periods: list[dict[str, Any]] | None = None,
         informed_entities: list[dict[str, Any]] | None = None,
     ) -> ServiceAlert | None:
-        """Update one service alert and optionally replace child rows."""
-        stmt = (
-            select(ServiceAlert)
-            .where(ServiceAlert.id == alert_id)
-            .options(
-                selectinload(ServiceAlert.data_source),
-                selectinload(ServiceAlert.translations),
-                selectinload(ServiceAlert.active_periods),
-                selectinload(ServiceAlert.informed_entities),
+        docs = await self._find(SERVICE_ALERTS_COLLECTION, {"_id": str(alert_id)})
+        if not docs:
+            return None
+
+        current = docs[0]
+        changes: dict[str, Any] = {"updated_at": self._now()}
+
+        if cause is not None:
+            changes["cause"] = self._text(cause)
+        if effect is not None:
+            changes["effect"] = self._text(effect)
+        if severity_level is not None:
+            changes["severity_level"] = self._text(severity_level)
+        if is_active is not None:
+            changes["is_active"] = is_active
+
+        if translations is not None or active_periods is not None or informed_entities is not None:
+            changes.update(
+                self._alert_child_fields(
+                    translations if translations is not None else current.get("translations", []),
+                    active_periods if active_periods is not None else current.get("active_periods", []),
+                    informed_entities if informed_entities is not None else current.get("informed_entities", []),
+                )
             )
-        )
 
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            alert = result.scalar_one_or_none()
-            if alert is None:
-                return None
+        await self.collection(SERVICE_ALERTS_COLLECTION).update_one({"_id": str(alert_id)}, {"$set": changes})
 
-            if cause is not None:
-                alert.cause = cause
-            if effect is not None:
-                alert.effect = effect
-            if severity_level is not None:
-                alert.severity_level = severity_level
-            if is_active is not None:
-                alert.is_active = is_active
-
-            if translations is not None:
-                await db.execute(
-                    delete(ServiceAlertTranslation).where(ServiceAlertTranslation.alert_id == alert_id)
-                )
-                for translation_data in translations:
-                    db.add(ServiceAlertTranslation(alert_id=alert_id, **translation_data))
-
-            if active_periods is not None:
-                await db.execute(
-                    delete(ServiceAlertActivePeriod).where(ServiceAlertActivePeriod.alert_id == alert_id)
-                )
-                for period_data in active_periods:
-                    db.add(ServiceAlertActivePeriod(alert_id=alert_id, **period_data))
-
-            if informed_entities is not None:
-                await db.execute(
-                    delete(ServiceAlertInformedEntity).where(ServiceAlertInformedEntity.alert_id == alert_id)
-                )
-                for entity_data in informed_entities:
-                    normalized_entity_data = self._normalize_informed_entity_payload(entity_data)
-                    db.add(ServiceAlertInformedEntity(alert_id=alert_id, **normalized_entity_data))
-
-            await self.commit(db)
-
-            refreshed = await db.execute(stmt)
-            return refreshed.scalar_one_or_none()
+        return await self._load_alert(alert_id)
 
     async def toggle_service_alert_active(self, alert_id: uuid.UUID) -> ServiceAlert | None:
-        """Toggle the is_active flag for one service alert and return updated model."""
-        stmt = (
-            select(ServiceAlert)
-            .where(ServiceAlert.id == alert_id)
-            .options(
-                selectinload(ServiceAlert.data_source),
-                selectinload(ServiceAlert.translations),
-                selectinload(ServiceAlert.active_periods),
-                selectinload(ServiceAlert.informed_entities),
-            )
+        doc = await self.collection(SERVICE_ALERTS_COLLECTION).find_one_and_update(
+            {"_id": str(alert_id)},
+            [{"$set": {"is_active": {"$not": ["$is_active"]}, "updated_at": self._now()}}],
+            return_document=ReturnDocument.AFTER,
         )
+        if doc is None:
+            return None
 
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            alert = result.scalar_one_or_none()
-            if alert is None:
-                return None
+        alert = self._alert_from_doc(doc)
+        await self._fill_data_source_names([alert])
 
-            alert.is_active = not alert.is_active
-            await self.commit(db)
-
-            refreshed = await db.execute(stmt)
-            return refreshed.scalar_one_or_none()
+        return alert
 
     async def list_service_alerts_by_ids(self, alert_ids: list[uuid.UUID]) -> list[ServiceAlert]:
-        """Return alerts by IDs."""
         if not alert_ids:
             return []
 
-        stmt = select(ServiceAlert).where(ServiceAlert.id.in_(alert_ids))
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
+        docs = await self._find(SERVICE_ALERTS_COLLECTION, {"_id": {"$in": self._ids(alert_ids)}})
+        return [self._alert_from_doc(doc) for doc in docs]
 
     async def delete_service_alerts_for_data_source_by_ids(
         self,
         source_id: int,
         alert_ids: list[uuid.UUID],
     ) -> int:
-        """Delete alerts by IDs only for the given data source."""
         if not alert_ids:
             return 0
 
-        stmt = delete(ServiceAlert).where(
-            ServiceAlert.data_source_id == source_id,
-            ServiceAlert.id.in_(alert_ids),
+        return await self._delete(
+            SERVICE_ALERTS_COLLECTION,
+            {"data_source_id": source_id, "_id": {"$in": self._ids(alert_ids)}},
         )
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            await self.commit(db)
-            return int(result.rowcount or 0)
 
     async def upsert_service_alert_from_sync(
         self,
@@ -409,70 +672,57 @@ class RealtimeRepository(PostgreRepositoryBase, RealtimeRepositoryInterface):
         active_periods: list[dict[str, Any]],
         informed_entities: list[dict[str, Any]],
     ) -> str:
-        """Create or update a synchronized alert and replace child records."""
-        async with self.get_session() as db:
-            existing = await db.get(ServiceAlert, alert_id)
+        """Queue the upsert of one synchronized alert; is_active is only set when the alert is created."""
+        now = self._now()
+        fields = {
+            "data_source_id": source_id,
+            "source": source_name,
+            "cause": self._text(cause),
+            "effect": self._text(effect),
+            "severity_level": self._text(severity_level),
+            "updated_at": now,
+            **self._alert_child_fields(translations, active_periods, informed_entities),
+        }
 
-            action = "updated"
-            if existing is None:
-                action = "created"
-                existing = ServiceAlert(
-                    id=alert_id,
-                    cause=cause,
-                    effect=effect,
-                    severity_level=severity_level,
-                    source=source_name,
-                    data_source_id=source_id,
-                    is_active=is_active_on_create,
-                )
-                db.add(existing)
-                await db.flush()
-            else:
-                existing.cause = cause
-                existing.effect = effect
-                existing.severity_level = severity_level
-                existing.source = source_name
-                existing.data_source_id = source_id
-
-            await db.execute(
-                delete(ServiceAlertTranslation).where(ServiceAlertTranslation.alert_id == alert_id)
-            )
-            await db.execute(
-                delete(ServiceAlertActivePeriod).where(ServiceAlertActivePeriod.alert_id == alert_id)
-            )
-            await db.execute(
-                delete(ServiceAlertInformedEntity).where(ServiceAlertInformedEntity.alert_id == alert_id)
-            )
-
-            for translation_data in translations:
-                db.add(ServiceAlertTranslation(alert_id=alert_id, **translation_data))
-
-            for period_data in active_periods:
-                db.add(ServiceAlertActivePeriod(alert_id=alert_id, **period_data))
-
-            for entity_data in informed_entities:
-                normalized_entity_data = self._normalize_informed_entity_payload(entity_data)
-                db.add(ServiceAlertInformedEntity(alert_id=alert_id, **normalized_entity_data))
-
-            await self.commit(db)
-            return action
-
-    async def get_realtime_trips(self) -> list[Trip]:
-        """Return active realtime trips with relationships needed for GTFS-RT export."""
-        stmt = (
-            select(Trip)
-            .where(Trip.is_active == True)
-            .options(
-                selectinload(Trip.data_source),
-                selectinload(Trip.stop_events),
-                selectinload(Trip.vehicle),
-            )
-            .order_by(Trip.created_at, Trip.trip_id)
+        await self.write(
+            SERVICE_ALERTS_COLLECTION,
+            UpdateOne(
+                {"_id": str(alert_id)},
+                {"$set": fields, "$setOnInsert": {"is_active": is_active_on_create, "created_at": now}},
+                upsert=True,
+            ),
         )
 
-        async with self.transaction(isolation_level="REPEATABLE READ") as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
+        return "upserted"
+
+    # ------------------------------------------------------------------
+    # Trip updates
+    # ------------------------------------------------------------------
+
+    async def _vehicles_by_trip_id(self, trip_ids: list[str] | None, session: Any = None) -> dict[str, VehiclePosition]:
+        filter_ = {"trip.trip_id": {"$in": trip_ids}} if trip_ids is not None else {}
+        docs = await self._find(VEHICLE_POSITIONS_COLLECTION, filter_, session=session)
+
+        return {doc["trip"]["trip_id"]: self._vehicle_from_doc(doc) for doc in docs}
+
+    async def get_realtime_trips(self) -> list[TripUpdate]:
+        """Return active trips with stop events and linked vehicle as one consistent snapshot."""
+        async with self.snapshot() as session:
+            docs = await self._find(
+                TRIP_UPDATES_COLLECTION,
+                {"is_active": True},
+                sort=[("created_at", ASCENDING), ("trip_id", ASCENDING)],
+                session=session,
+            )
+            vehicles = await self._vehicles_by_trip_id(None, session=session)
+
+        trips = [self._trip_from_doc(doc) for doc in docs]
+        for trip in trips:
+            trip.vehicle = vehicles.get(trip.trip_id)
+
+        await self._fill_data_source_names(trips)
+
+        return trips
 
     async def list_trips_paginated(
         self,
@@ -482,237 +732,173 @@ class RealtimeRepository(PostgreRepositoryBase, RealtimeRepositoryInterface):
         sort: str,
         search: str,
         is_active: bool | None,
-    ) -> tuple[list[Trip], int]:
-        """Return paginated realtime trips with required relationships loaded."""
+    ) -> tuple[list[TripUpdate], int]:
         page = max(1, page)
         limit = max(1, min(100, limit))
-        offset = (page - 1) * limit
         normalized_sort = sort.lower() if sort in ["asc", "desc"] else "asc"
 
-        where_conditions = []
+        filter_: dict[str, Any] = {"stop_event_count": {"$gt": 0}}
         trimmed_search = search.strip()
         if trimmed_search:
-            search_pattern = f"%{trimmed_search}%"
-            where_conditions.append(
-                (
-                    Trip.trip_id.ilike(search_pattern)
-                    | Trip.route_id.ilike(search_pattern)
-                    | Trip.start_date.ilike(search_pattern)
-                    | Trip.start_time.ilike(search_pattern)
-                )
-            )
+            pattern = {"$regex": re.escape(trimmed_search), "$options": "i"}
+            filter_["$or"] = [{"trip_id": pattern}, {"route_id": pattern}, {"start_date": pattern}, {"start_time": pattern}]
 
         if is_active is not None:
-            where_conditions.append(Trip.is_active == is_active)
+            filter_["is_active"] = is_active
 
-        count_stmt = select(func.count(Trip.id)).where(
-            exists(select(StopEvent.trip_id).where(StopEvent.trip_id == Trip.trip_id))
+        direction = DESCENDING if normalized_sort == "desc" else ASCENDING
+        docs = await self._find(
+            TRIP_UPDATES_COLLECTION,
+            filter_,
+            sort=[("start_date", direction), ("start_time", direction), ("trip_id", ASCENDING)],
+            skip=(page - 1) * limit,
+            limit=limit,
         )
-        if where_conditions:
-            count_stmt = count_stmt.where(*where_conditions)
+        total = await self._count(TRIP_UPDATES_COLLECTION, filter_)
 
-        sort_date = Trip.start_date.desc() if normalized_sort == "desc" else Trip.start_date.asc()
-        sort_time = Trip.start_time.desc() if normalized_sort == "desc" else Trip.start_time.asc()
+        items = [self._trip_from_doc(doc) for doc in docs]
+        vehicles = await self._vehicles_by_trip_id([trip.trip_id for trip in items])
+        for trip in items:
+            trip.vehicle = vehicles.get(trip.trip_id)
 
-        stmt = select(Trip).where(
-            exists(select(StopEvent.trip_id).where(StopEvent.trip_id == Trip.trip_id))
-        )
-        if where_conditions:
-            stmt = stmt.where(*where_conditions)
+        await self._fill_data_source_names(items)
 
-        stmt = stmt.options(
-            selectinload(Trip.data_source),
-            selectinload(Trip.stop_events),
-            selectinload(Trip.vehicle),
-        ).order_by(
-            sort_date,
-            sort_time,
-            Trip.trip_id.asc(),
-        ).offset(offset).limit(limit)
-
-        async with self.get_session() as db:
-            count_result = await db.execute(count_stmt)
-            total = int(count_result.scalar_one())
-
-            result = await db.execute(stmt)
-            items = list(result.scalars().all())
-            return items, total
+        return items, total
 
     async def list_trip_ids_with_invalid_stop_events(self, trip_ids: list[str]) -> set[str]:
-        """Return trip_ids where at least one realtime stop event is marked invalid."""
         if not trip_ids:
             return set()
 
-        stmt = (
-            select(StopEvent.trip_id)
-            .where(
-                StopEvent.trip_id.in_(trip_ids),
-                StopEvent.is_valid == False,
-            )
-            .distinct()
+        docs = await self._find(
+            TRIP_UPDATES_COLLECTION,
+            {"trip_id": {"$in": trip_ids}, "flags": FLAG_INVALID_STOP},
+            projection={"trip_id": 1},
         )
+        return {doc["trip_id"] for doc in docs}
 
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return {row[0] for row in result.all()}
-
-    async def toggle_trip_active(self, trip_uuid: uuid.UUID) -> Trip | None:
-        """Toggle the is_active flag for one realtime trip and return updated model."""
-        stmt = (
-            select(Trip)
-            .where(Trip.id == trip_uuid)
-            .options(
-                selectinload(Trip.data_source),
-                selectinload(Trip.stop_events),
-                selectinload(Trip.vehicle),
-            )
+    async def toggle_trip_active(self, trip_uuid: uuid.UUID) -> TripUpdate | None:
+        doc = await self.collection(TRIP_UPDATES_COLLECTION).find_one_and_update(
+            {"_id": str(trip_uuid)},
+            [{"$set": {"is_active": {"$not": ["$is_active"]}, "updated_at": self._now()}}],
+            return_document=ReturnDocument.AFTER,
         )
+        if doc is None:
+            return None
 
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            trip = result.scalar_one_or_none()
-            if trip is None:
-                return None
+        trip = self._trip_from_doc(doc)
+        trip.vehicle = (await self._vehicles_by_trip_id([trip.trip_id])).get(trip.trip_id)
+        await self._fill_data_source_names([trip])
 
-            trip.is_active = not trip.is_active
-            await self.commit(db)
-
-            refreshed = await db.execute(stmt)
-            return refreshed.scalar_one_or_none()
+        return trip
 
     async def delete_trips_for_data_source(self, source_id: int) -> int:
-        """Delete all realtime trips for one data source and return deleted row count."""
-        stmt = delete(Trip).where(Trip.data_source_id == source_id)
+        return await self._delete(TRIP_UPDATES_COLLECTION, {"data_source_id": source_id})
 
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            await self.commit(db)
+    async def list_trips_for_data_source(self, source_id: int) -> list[TripUpdate]:
+        docs = await self._find(TRIP_UPDATES_COLLECTION, {"data_source_id": source_id}, projection=_NO_STOP_EVENTS)
+        return [self._trip_from_doc(doc, include_stop_events=False) for doc in docs]
 
-            return int(result.rowcount or 0)
-
-    async def list_trips_for_data_source(self, source_id: int) -> list[Trip]:
-        """Return realtime trips linked to one data source."""
-        stmt = select(Trip).where(Trip.data_source_id == source_id)
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
-
-    async def list_trips_by_ids(self, trip_ids: list[uuid.UUID]) -> list[Trip]:
-        """Return realtime trips by IDs."""
+    async def list_trips_by_ids(self, trip_ids: list[uuid.UUID]) -> list[TripUpdate]:
         if not trip_ids:
             return []
 
-        stmt = select(Trip).where(Trip.id.in_(trip_ids))
+        docs = await self._find(
+            TRIP_UPDATES_COLLECTION,
+            {"_id": {"$in": self._ids(trip_ids)}},
+            projection=_NO_STOP_EVENTS,
+        )
+        return [self._trip_from_doc(doc, include_stop_events=False) for doc in docs]
 
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
-
-    async def list_trips_by_trip_ids(self, trip_ids: list[str]) -> list[Trip]:
-        """Return realtime trips by trip_id values."""
+    async def list_trips_by_trip_ids(self, trip_ids: list[str]) -> list[TripUpdate]:
         if not trip_ids:
             return []
 
-        stmt = select(Trip).where(Trip.trip_id.in_(trip_ids))
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-
-            return list(result.scalars().all())
+        docs = await self._find(
+            TRIP_UPDATES_COLLECTION,
+            {"trip_id": {"$in": trip_ids}},
+            projection=_NO_STOP_EVENTS,
+        )
+        return [self._trip_from_doc(doc, include_stop_events=False) for doc in docs]
 
     async def list_trip_ids_with_stop_events(self, trip_ids: list[str]) -> set[str]:
-        """Return trip_id values that have at least one realtime stop event."""
         if not trip_ids:
             return set()
 
-        stmt = select(StopEvent.trip_id).where(StopEvent.trip_id.in_(trip_ids)).distinct()
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            
-            return {str(value) for value in result.scalars().all()}
+        docs = await self._find(
+            TRIP_UPDATES_COLLECTION,
+            {"trip_id": {"$in": trip_ids}, "stop_event_count": {"$gt": 0}},
+            projection={"trip_id": 1},
+        )
+        return {doc["trip_id"] for doc in docs}
 
     async def list_stop_events_for_trip(self, trip_id: str) -> list[StopEvent]:
-        """Return persisted stop events for one trip_id, ordered by stop_sequence."""
-        stmt = select(StopEvent).where(StopEvent.trip_id == trip_id)
+        docs = await self._find(TRIP_UPDATES_COLLECTION, {"trip_id": trip_id}, projection={"trip_id": 1, "stop_events": 1})
+        if not docs:
+            return []
 
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            events = list(result.scalars().all())
-
+        events = [self._stop_event_from_doc(item, trip_id, None) for item in docs[0].get("stop_events", [])]
         events.sort(key=lambda event: self._stop_event_sort_key(event.stop_sequence))
+
         return events
 
-    @staticmethod
-    def _stop_event_sort_key(stop_sequence: str) -> tuple[int, int, str]:
-        """Sort numeric stop_sequence values first, then fall back to string comparison."""
-        try:
-            return (0, int(stop_sequence), "")
-        except (TypeError, ValueError):
-            return (1, 0, str(stop_sequence))
-
     async def list_trip_ids_updated_before(self, cutoff: datetime) -> list[str]:
-        """Return trip_id values for all realtime trips last updated before cutoff."""
-        stmt = select(Trip.trip_id).where(Trip.updated_at < cutoff)
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return [str(value) for value in result.scalars().all()]
+        docs = await self._find(TRIP_UPDATES_COLLECTION, {"updated_at": {"$lt": cutoff}}, projection={"trip_id": 1})
+        return [doc["trip_id"] for doc in docs]
 
     async def list_trip_ids_with_vehicle(self, trip_ids: list[str]) -> set[str]:
-        """Return trip_id values that currently have a linked realtime vehicle position."""
         if not trip_ids:
             return set()
 
-        stmt = select(Vehicle.trip_id).where(Vehicle.trip_id.in_(trip_ids)).distinct()
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return {str(value) for value in result.scalars().all()}
+        docs = await self._find(
+            VEHICLE_POSITIONS_COLLECTION,
+            {"trip.trip_id": {"$in": trip_ids}},
+            projection={"trip.trip_id": 1},
+        )
+        return {doc["trip"]["trip_id"] for doc in docs}
 
     async def delete_stop_events_for_trip_ids(self, trip_ids: list[str]) -> int:
-        """Delete realtime stop events for the given trip_id values without touching the trip itself."""
+        """Clear the stop events of the given trips without deleting the trip documents."""
         if not trip_ids:
             return 0
 
-        stmt = delete(StopEvent).where(StopEvent.trip_id.in_(trip_ids))
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            await self.commit(db)
-            return int(result.rowcount or 0)
+        return await self._update_many(
+            TRIP_UPDATES_COLLECTION,
+            {"trip_id": {"$in": trip_ids}},
+            [
+                {
+                    "$set": {
+                        "stop_events": [],
+                        "stop_event_count": 0,
+                        "flags": {
+                            "$filter": {
+                                "input": {"$ifNull": ["$flags", []]},
+                                "as": "flag",
+                                "cond": {"$eq": ["$$flag", FLAG_INVALID_REFERENCE]},
+                            }
+                        },
+                    }
+                }
+            ],
+        )
 
     async def delete_trips_by_trip_ids(self, trip_ids: list[str]) -> int:
-            """Delete realtime trip rows by trip_id and return the deleted row count."""
-            if not trip_ids:
-                return 0
-    
-            stmt = delete(Trip).where(Trip.trip_id.in_(trip_ids))
-    
-            async with self.get_session() as db:
-                result = await db.execute(stmt)
-                await self.commit(db)
-                return int(result.rowcount or 0)
+        if not trip_ids:
+            return 0
+
+        return await self._delete(TRIP_UPDATES_COLLECTION, {"trip_id": {"$in": trip_ids}})
 
     async def delete_trips_for_data_source_by_ids(
         self,
         source_id: int,
         trip_ids: list[uuid.UUID],
     ) -> int:
-        """Delete trips by IDs only for the given data source."""
         if not trip_ids:
             return 0
 
-        stmt = delete(Trip).where(
-            Trip.data_source_id == source_id,
-            Trip.id.in_(trip_ids),
+        return await self._delete(
+            TRIP_UPDATES_COLLECTION,
+            {"data_source_id": source_id, "_id": {"$in": self._ids(trip_ids)}},
         )
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            await self.commit(db)
-            return int(result.rowcount or 0)
 
     async def update_trip_update_from_sync(
         self,
@@ -737,95 +923,65 @@ class RealtimeRepository(PostgreRepositoryBase, RealtimeRepositoryInterface):
         scheduled_end_time: datetime | None = None,
         is_complete_stop_sequence: bool = True,
     ) -> str:
-        """Create or update a synchronized trip update and replace stop events."""
-        async with self.get_session() as db:
-            existing = await db.get(Trip, trip_uuid)
+        """Queue the upsert of one synchronized trip update, replacing its embedded stop events.
 
-            action = "updated"
-            previous_trip_id = trip_id
-            if existing is None:
-                action = "created"
-                existing = Trip(
-                    id=trip_uuid,
-                    data_source_id=source_id,
-                    source=source_name,
-                    trip_id=trip_id,
-                    original_trip_id=original_trip_id,
-                    scheduled_start_stop_id=scheduled_start_stop_id,
-                    scheduled_end_stop_id=scheduled_end_stop_id,
-                    scheduled_start_time=scheduled_start_time,
-                    scheduled_end_time=scheduled_end_time,
-                    start_time=start_time,
-                    start_date=start_date,
-                    route_id=route_id,
-                    schedule_relationship=schedule_relationship,
-                    assignment_type=assignment_type,
-                    is_active=is_active_on_create,
-                    is_trip_valid=is_trip_valid,
-                    is_route_valid=is_route_valid,
-                    is_complete_stop_sequence=is_complete_stop_sequence,
-                )
+        is_active and created_at are only set on creation. A cached-id assignment never overwrites
+        the assignment type of an existing trip.
+        """
+        now = self._now()
+        event_docs = [self._stop_event_document(item) for item in stop_events]
+        event_docs.sort(key=lambda item: self._stop_event_sort_key(item["stop_sequence"]))
 
-                db.add(existing)
-                await db.flush()
-            else:
-                previous_trip_id = existing.trip_id
-                existing.data_source_id = source_id
-                existing.source = source_name
-                existing.trip_id = trip_id
-                existing.original_trip_id = original_trip_id
-                existing.scheduled_start_stop_id = scheduled_start_stop_id
-                existing.scheduled_end_stop_id = scheduled_end_stop_id
-                existing.scheduled_start_time = scheduled_start_time
-                existing.scheduled_end_time = scheduled_end_time
-                existing.start_time = start_time
-                existing.start_date = start_date
-                existing.route_id = route_id
-                existing.schedule_relationship = schedule_relationship
-                existing.is_complete_stop_sequence = is_complete_stop_sequence
+        fields: dict[str, Any] = {
+            "data_source_id": source_id,
+            "source": source_name,
+            "trip_id": trip_id,
+            "original_trip_id": original_trip_id,
+            "scheduled_start_stop_id": scheduled_start_stop_id,
+            "scheduled_end_stop_id": scheduled_end_stop_id,
+            "scheduled_start_time": scheduled_start_time,
+            "scheduled_end_time": scheduled_end_time,
+            "start_time": start_time,
+            "start_date": start_date,
+            "route_id": route_id,
+            "schedule_relationship": self._text(schedule_relationship),
+            "is_trip_valid": is_trip_valid,
+            "is_route_valid": is_route_valid,
+            "is_complete_stop_sequence": is_complete_stop_sequence,
+            "stop_events": event_docs,
+            "stop_event_count": len(event_docs),
+            "flags": self._trip_flags(event_docs, is_trip_valid, is_route_valid),
+            "updated_at": now,
+        }
+        on_insert: dict[str, Any] = {"is_active": is_active_on_create, "created_at": now}
 
-                if assignment_type != AssignmentType.MATCH_BY_CACHED_ID:
-                    existing.assignment_type = assignment_type
+        if assignment_type != AssignmentType.MATCH_BY_CACHED_ID:
+            fields["assignment_type"] = self._text(assignment_type)
+        else:
+            on_insert["assignment_type"] = self._text(assignment_type)
 
-                existing.is_trip_valid = is_trip_valid
-                existing.is_route_valid = is_route_valid
-                existing.updated_at = datetime.now(self._resolve_timezone(self._configured_timezone_name()))
-
-            trip_ids_to_clear = [trip_id]
-            if previous_trip_id != trip_id:
-                trip_ids_to_clear.append(previous_trip_id)
-
-            await db.execute(delete(StopEvent).where(StopEvent.trip_id.in_(trip_ids_to_clear)))
-
-            for event_data in stop_events:
-                payload = dict(event_data)
-                payload.pop("trip_id", None)
-                if payload.get("original_stop_id") in (None, ""):
-                    payload["original_stop_id"] = payload.get("stop_id")
-
-                payload["is_implied_schedule_relationship"] = bool(
-                    payload.get("is_implied_schedule_relationship", False)
-                )
-                
-                db.add(StopEvent(trip_id=trip_id, **payload))
-
-            await self.commit(db)
-            return action
-
-    async def get_realtime_vehicles(self) -> list[Vehicle]:
-        """Return active realtime vehicle positions with trip relations loaded."""
-        stmt = (
-            select(Vehicle)
-            .where(Vehicle.is_active == True)
-            .options(
-                selectinload(Vehicle.trip),
-            )
-            .order_by(Vehicle.created_at, Vehicle.trip_id)
+        await self.write(
+            TRIP_UPDATES_COLLECTION,
+            UpdateOne({"_id": str(trip_uuid)}, {"$set": fields, "$setOnInsert": on_insert}, upsert=True),
         )
 
-        async with self.transaction(isolation_level="REPEATABLE READ") as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
+        return "upserted"
+
+    # ------------------------------------------------------------------
+    # Vehicle positions
+    # ------------------------------------------------------------------
+
+    async def get_realtime_vehicles(self) -> list[VehiclePosition]:
+        """Return active vehicle positions as one consistent snapshot for the GTFS-RT export."""
+        async with self.snapshot() as session:
+            docs = await self._find(
+                VEHICLE_POSITIONS_COLLECTION,
+                {"is_active": True},
+                sort=[("created_at", ASCENDING), ("trip.trip_id", ASCENDING)],
+                session=session,
+            )
+
+        return [self._vehicle_from_doc(doc) for doc in docs]
 
     async def list_vehicles_paginated(
         self,
@@ -834,142 +990,88 @@ class RealtimeRepository(PostgreRepositoryBase, RealtimeRepositoryInterface):
         limit: int,
         search: str,
         is_active: bool | None,
-    ) -> tuple[list[Vehicle], int]:
-        """Return paginated realtime vehicles with required relationships loaded."""
+    ) -> tuple[list[VehiclePosition], int]:
         page = max(1, page)
         limit = max(1, min(1000, limit))
-        offset = (page - 1) * limit
 
-        where_conditions = []
+        filter_: dict[str, Any] = {}
         trimmed_search = search.strip()
         if trimmed_search:
-            search_pattern = f"%{trimmed_search}%"
-            where_conditions.append(
-                (
-                    Vehicle.vehicle_id.ilike(search_pattern)
-                    | Vehicle.trip_id.ilike(search_pattern)
-                    | Vehicle.vehicle_label.ilike(search_pattern)
-                    | Vehicle.vehicle_license_plate.ilike(search_pattern)
-                )
-            )
+            pattern = {"$regex": re.escape(trimmed_search), "$options": "i"}
+            filter_["$or"] = [
+                {"vehicle_id": pattern},
+                {"trip.trip_id": pattern},
+                {"vehicle_label": pattern},
+                {"vehicle_license_plate": pattern},
+            ]
 
         if is_active is not None:
-            where_conditions.append(Vehicle.is_active == is_active)
+            filter_["is_active"] = is_active
 
-        count_stmt = select(func.count(Vehicle.id))
-        if where_conditions:
-            count_stmt = count_stmt.where(*where_conditions)
-
-        stmt = select(Vehicle)
-        if where_conditions:
-            stmt = stmt.where(*where_conditions)
-
-        stmt = stmt.options(
-            selectinload(Vehicle.data_source),
-            selectinload(Vehicle.trip),
-        ).order_by(
-            Vehicle.timestamp.desc(),
-            Vehicle.vehicle_id.asc(),
-        ).offset(offset).limit(limit)
-
-        async with self.get_session() as db:
-            count_result = await db.execute(count_stmt)
-            total = int(count_result.scalar_one())
-
-            result = await db.execute(stmt)
-            items = list(result.scalars().all())
-            return items, total
-
-    async def toggle_vehicle_active(self, vehicle_uuid: uuid.UUID) -> Vehicle | None:
-        """Toggle the is_active flag for one realtime vehicle and return updated model."""
-        stmt = (
-            select(Vehicle)
-            .where(Vehicle.id == vehicle_uuid)
-            .options(
-                selectinload(Vehicle.data_source),
-                selectinload(Vehicle.trip),
-            )
+        docs = await self._find(
+            VEHICLE_POSITIONS_COLLECTION,
+            filter_,
+            sort=[("timestamp", DESCENDING), ("vehicle_id", ASCENDING)],
+            skip=(page - 1) * limit,
+            limit=limit,
         )
+        total = await self._count(VEHICLE_POSITIONS_COLLECTION, filter_)
 
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            vehicle = result.scalar_one_or_none()
-            if vehicle is None:
-                return None
+        items = [self._vehicle_from_doc(doc) for doc in docs]
+        await self._fill_data_source_names(items)
 
-            vehicle.is_active = not vehicle.is_active
-            await self.commit(db)
+        return items, total
 
-            refreshed = await db.execute(stmt)
-            return refreshed.scalar_one_or_none()
+    async def toggle_vehicle_active(self, vehicle_uuid: uuid.UUID) -> VehiclePosition | None:
+        doc = await self.collection(VEHICLE_POSITIONS_COLLECTION).find_one_and_update(
+            {"_id": str(vehicle_uuid)},
+            [{"$set": {"is_active": {"$not": ["$is_active"]}, "updated_at": self._now()}}],
+            return_document=ReturnDocument.AFTER,
+        )
+        if doc is None:
+            return None
+
+        vehicle = self._vehicle_from_doc(doc)
+        await self._fill_data_source_names([vehicle])
+
+        return vehicle
 
     async def delete_vehicles_for_data_source(self, source_id: int) -> int:
-        """Delete all realtime vehicles for one data source and return deleted row count."""
-        stmt = delete(Vehicle).where(Vehicle.data_source_id == source_id)
+        return await self._delete(VEHICLE_POSITIONS_COLLECTION, {"data_source_id": source_id})
 
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            await self.commit(db)
+    async def list_vehicles_for_data_source(self, source_id: int) -> list[VehiclePosition]:
+        docs = await self._find(VEHICLE_POSITIONS_COLLECTION, {"data_source_id": source_id})
+        return [self._vehicle_from_doc(doc) for doc in docs]
 
-            return int(result.rowcount or 0)
-
-    async def list_vehicles_for_data_source(self, source_id: int) -> list[Vehicle]:
-        """Return realtime vehicles linked to one data source."""
-        stmt = select(Vehicle).where(Vehicle.data_source_id == source_id)
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
-
-    async def list_vehicles_by_ids(self, vehicle_ids: list[uuid.UUID]) -> list[Vehicle]:
-        """Return realtime vehicles by IDs."""
+    async def list_vehicles_by_ids(self, vehicle_ids: list[uuid.UUID]) -> list[VehiclePosition]:
         if not vehicle_ids:
             return []
 
-        stmt = select(Vehicle).where(Vehicle.id.in_(vehicle_ids))
+        docs = await self._find(VEHICLE_POSITIONS_COLLECTION, {"_id": {"$in": self._ids(vehicle_ids)}})
+        return [self._vehicle_from_doc(doc) for doc in docs]
 
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
-
-    async def list_vehicles_updated_before(self, cutoff: datetime) -> list[Vehicle]:
-        """Return all realtime vehicles last updated before cutoff."""
-        stmt = select(Vehicle).where(Vehicle.updated_at < cutoff)
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
+    async def list_vehicles_updated_before(self, cutoff: datetime) -> list[VehiclePosition]:
+        docs = await self._find(VEHICLE_POSITIONS_COLLECTION, {"updated_at": {"$lt": cutoff}})
+        return [self._vehicle_from_doc(doc) for doc in docs]
 
     async def delete_vehicles_by_ids(self, vehicle_ids: list[uuid.UUID]) -> int:
-        """Delete realtime vehicles by ids, regardless of data source."""
         if not vehicle_ids:
             return 0
 
-        stmt = delete(Vehicle).where(Vehicle.id.in_(vehicle_ids))
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            await self.commit(db)
-            return int(result.rowcount or 0)
+        return await self._delete(VEHICLE_POSITIONS_COLLECTION, {"_id": {"$in": self._ids(vehicle_ids)}})
 
     async def delete_vehicles_for_data_source_by_ids(
         self,
         source_id: int,
         vehicle_ids: list[uuid.UUID],
     ) -> int:
-        """Delete vehicles by IDs only for the given data source."""
         if not vehicle_ids:
             return 0
 
-        stmt = delete(Vehicle).where(
-            Vehicle.data_source_id == source_id,
-            Vehicle.id.in_(vehicle_ids),
+        return await self._delete(
+            VEHICLE_POSITIONS_COLLECTION,
+            {"data_source_id": source_id, "_id": {"$in": self._ids(vehicle_ids)}},
         )
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            await self.commit(db)
-            return int(result.rowcount or 0)
 
     async def update_vehicle_position_from_sync(
         self,
@@ -977,14 +1079,13 @@ class RealtimeRepository(PostgreRepositoryBase, RealtimeRepositoryInterface):
         vehicle_uuid: uuid.UUID,
         source_id: int,
         source_name: str,
-        trip_uuid: uuid.UUID,
         trip_id: str,
+        trip_original_trip_id: str | None,
         trip_start_time: str,
         trip_start_date: str,
         trip_route_id: str,
         trip_schedule_relationship: str,
         trip_assignment_type: str,
-        trip_is_active_on_create: bool,
         trip_is_trip_valid: bool,
         trip_is_route_valid: bool,
         vehicle_id: str,
@@ -1001,80 +1102,98 @@ class RealtimeRepository(PostgreRepositoryBase, RealtimeRepositoryInterface):
         is_active_on_create: bool,
         is_valid: bool,
     ) -> str:
-        """Create or update a synchronized vehicle position and ensure linked trip exists."""
-        async with self.get_session() as db:
-            existing_trip = await db.get(Trip, trip_uuid)
-            if existing_trip is None:
-                existing_trip = Trip(
-                    id=trip_uuid,
-                    data_source_id=source_id,
-                    source=source_name,
-                    trip_id=trip_id,
-                    start_time=trip_start_time,
-                    start_date=trip_start_date,
-                    route_id=trip_route_id,
-                    schedule_relationship=trip_schedule_relationship,
-                    assignment_type=trip_assignment_type,
-                    is_active=trip_is_active_on_create,
-                    is_trip_valid=trip_is_trip_valid,
-                    is_route_valid=trip_is_route_valid,
-                    # Vehicle-position-only trips carry no stop events, so the sequence is never complete
-                    is_complete_stop_sequence=False,
-                )
-                
-                db.add(existing_trip)
-                await db.flush()
+        """Queue the upsert of one synchronized vehicle position with its embedded trip descriptor.
 
-            existing_vehicle = await db.get(Vehicle, vehicle_uuid)
+        is_active and created_at are only set on creation. A cached-id assignment never overwrites
+        an existing assignment type.
+        """
+        now = self._now()
+        fields: dict[str, Any] = {
+            "data_source_id": source_id,
+            "source": source_name,
+            "vehicle_id": vehicle_id,
+            "vehicle_label": vehicle_label,
+            "vehicle_license_plate": vehicle_license_plate,
+            "vehicle_wheelchair_accessible": self._text(vehicle_wheelchair_accessible),
+            "timestamp": timestamp,
+            "latitude": latitude,
+            "longitude": longitude,
+            "current_stop_sequence": current_stop_sequence,
+            "current_status": self._text(current_status),
+            "congestion_level": self._text(congestion_level),
+            "is_valid": is_valid,
+            "trip.trip_id": trip_id,
+            "trip.original_trip_id": trip_original_trip_id,
+            "trip.route_id": trip_route_id,
+            "trip.start_date": trip_start_date,
+            "trip.start_time": trip_start_time,
+            "trip.schedule_relationship": self._text(trip_schedule_relationship),
+            "trip.is_trip_valid": trip_is_trip_valid,
+            "trip.is_route_valid": trip_is_route_valid,
+            "updated_at": now,
+        }
+        on_insert: dict[str, Any] = {"is_active": is_active_on_create, "created_at": now}
 
-            action = "updated"
-            if existing_vehicle is None:
-                action = "created"
-                existing_vehicle = Vehicle(
-                    id=vehicle_uuid,
-                    data_source_id=source_id,
-                    source=source_name,
-                    trip_id=trip_id,
-                    vehicle_id=vehicle_id,
-                    vehicle_label=vehicle_label,
-                    vehicle_license_plate=vehicle_license_plate,
-                    vehicle_wheelchair_accessible=vehicle_wheelchair_accessible,
-                    timestamp=timestamp,
-                    latitude=latitude,
-                    longitude=longitude,
-                    current_stop_sequence=current_stop_sequence,
-                    current_status=current_status,
-                    assignment_type=assignment_type,
-                    congestion_level=congestion_level,
-                    is_active=is_active_on_create,
-                    is_valid=is_valid,
-                )
-                
-                db.add(existing_vehicle)
-                await db.flush()
-            else:
-                existing_vehicle.data_source_id = source_id
-                existing_vehicle.source = source_name
-                existing_vehicle.trip_id = trip_id
-                existing_vehicle.vehicle_id = vehicle_id
-                existing_vehicle.vehicle_label = vehicle_label
-                existing_vehicle.vehicle_license_plate = vehicle_license_plate
-                existing_vehicle.vehicle_wheelchair_accessible = vehicle_wheelchair_accessible
-                existing_vehicle.timestamp = timestamp
-                existing_vehicle.latitude = latitude
-                existing_vehicle.longitude = longitude
-                existing_vehicle.current_stop_sequence = current_stop_sequence
-                existing_vehicle.current_status = current_status
+        if assignment_type != AssignmentType.MATCH_BY_CACHED_ID:
+            fields["assignment_type"] = self._text(assignment_type)
+        else:
+            on_insert["assignment_type"] = self._text(assignment_type)
 
-                if assignment_type != AssignmentType.MATCH_BY_CACHED_ID:
-                    existing_vehicle.assignment_type = assignment_type
+        if trip_assignment_type != AssignmentType.MATCH_BY_CACHED_ID:
+            fields["trip.assignment_type"] = self._text(trip_assignment_type)
+        else:
+            on_insert["trip.assignment_type"] = self._text(trip_assignment_type)
 
-                existing_vehicle.congestion_level = congestion_level
-                existing_vehicle.is_valid = is_valid
-                existing_vehicle.updated_at = datetime.now(self._resolve_timezone(self._configured_timezone_name()))
+        await self.write(
+            VEHICLE_POSITIONS_COLLECTION,
+            UpdateOne({"_id": str(vehicle_uuid)}, {"$set": fields, "$setOnInsert": on_insert}, upsert=True),
+        )
 
-            await self.commit(db)
-            return action
+        return "upserted"
+
+    # ------------------------------------------------------------------
+    # Dashboard and statistics
+    # ------------------------------------------------------------------
+
+    async def count_service_alerts_by_active(self) -> tuple[int, int]:
+        active = await self._count(SERVICE_ALERTS_COLLECTION, {"is_active": True})
+        inactive = await self._count(SERVICE_ALERTS_COLLECTION, {"is_active": False})
+
+        return active, inactive
+
+    async def count_trip_updates_by_status(self) -> tuple[int, int, int]:
+        """Return the number of active (realtime), monitored (no realtime data yet) and inactive trips."""
+        active = await self._count(TRIP_UPDATES_COLLECTION, {"is_active": True, "flags": FLAG_REALTIME})
+        monitored = await self._count(
+            TRIP_UPDATES_COLLECTION,
+            {"is_active": True, "stop_event_count": {"$gt": 0}, "flags": {"$ne": FLAG_REALTIME}},
+        )
+        inactive = await self._count(TRIP_UPDATES_COLLECTION, {"is_active": False, "stop_event_count": {"$gt": 0}})
+
+        return active, monitored, inactive
+
+    async def count_vehicle_positions_by_active(self) -> tuple[int, int]:
+        active = await self._count(VEHICLE_POSITIONS_COLLECTION, {"is_active": True})
+        inactive = await self._count(VEHICLE_POSITIONS_COLLECTION, {"is_active": False})
+
+        return active, inactive
+
+    async def _list_running_gtfs_trips(self, route_ids: list[str]) -> dict[str, str]:
+        """Return GTFS trip id -> route id for trips running right now on the given routes."""
+        now_value = self._now()
+        stmt = (
+            select(GtfsTrip.route_id, GtfsTrip.gtfs_id)
+            .where(
+                GtfsTrip.route_id.in_(route_ids),
+                GtfsTrip.start_time <= now_value,
+                GtfsTrip.end_time >= now_value,
+            )
+            .distinct()
+        )
+
+        async with self._postgres.get_session() as db:
+            result = await db.execute(stmt)
+            return {str(gtfs_id): str(route_id) for route_id, gtfs_id in result.all()}
 
     async def list_realtime_object_statistics(self, route_ids: list[str]) -> dict[str, Any]:
         """Return active alert count plus route-based trip and vehicle statistics."""
@@ -1085,15 +1204,15 @@ class RealtimeRepository(PostgreRepositoryBase, RealtimeRepositoryInterface):
             if assignment_type != AssignmentType.MATCH_BY_CACHED_ID
         ]
 
-        def _empty_assignment_types() -> list[dict[str, int]]:
-            return [{assignment_type: 0} for assignment_type in assignment_type_values]
+        def _assignment_types(counts: dict[str, int]) -> list[dict[str, int]]:
+            return [{assignment_type: counts.get(assignment_type, 0)} for assignment_type in assignment_type_values]
 
         trips_stats = {
             route_id: {
                 "num_running_trips": 0,
                 "num_realtime_trips": 0,
                 "num_monitored_trips": 0,
-                "assignment_types": _empty_assignment_types(),
+                "assignment_types": _assignment_types({}),
             }
             for route_id in unique_route_ids
         }
@@ -1101,360 +1220,238 @@ class RealtimeRepository(PostgreRepositoryBase, RealtimeRepositoryInterface):
             route_id: {
                 "num_running_trips": 0,
                 "num_vehicles": 0,
-                "assignment_types": _empty_assignment_types(),
+                "assignment_types": _assignment_types({}),
             }
             for route_id in unique_route_ids
         }
 
-        async with self.get_session() as db:
-            alerts_count_result = await db.execute(
-                select(func.count(ServiceAlert.id)).where(ServiceAlert.is_active.is_(True))
+        num_alerts = await self._count(SERVICE_ALERTS_COLLECTION, {"is_active": True})
+
+        if unique_route_ids:
+            running_trips = await self._list_running_gtfs_trips(unique_route_ids)
+
+            for route_id in running_trips.values():
+                trips_stats[route_id]["num_running_trips"] += 1
+                vehicles_stats[route_id]["num_running_trips"] += 1
+
+            running_trip_ids = list(running_trips.keys())
+
+            def _event_count(excluded: list[str]) -> dict[str, Any]:
+                return {
+                    "$size": {
+                        "$filter": {
+                            "input": {"$ifNull": ["$stop_events", []]},
+                            "as": "event",
+                            "cond": {"$not": [{"$in": ["$$event.schedule_relationship", excluded]}]},
+                        }
+                    }
+                }
+
+            trip_docs = await self._aggregate(
+                TRIP_UPDATES_COLLECTION,
+                [
+                    {"$match": {"is_active": True, "trip_id": {"$in": running_trip_ids}}},
+                    {
+                        "$project": {
+                            "_id": 0,
+                            "trip_id": 1,
+                            "assignment_type": 1,
+                            "stop_event_count": 1,
+                            "num_non_no_data_events": _event_count(["NO_DATA"]),
+                            "num_realtime_events": _event_count(["NO_DATA", "ADDED"]),
+                        }
+                    },
+                ],
             )
-            num_alerts = int(alerts_count_result.scalar_one())
 
-            if unique_route_ids:
-                now_value = datetime.now(self._resolve_timezone(self._configured_timezone_name()))
+            trip_assignment_counts: dict[str, dict[str, int]] = {route_id: {} for route_id in unique_route_ids}
+            for doc in trip_docs:
+                route_id = running_trips[doc["trip_id"]]
+                assignment_type = doc.get("assignment_type")
 
-                running_trip_ids_subq = (
-                    select(
-                        GtfsTrip.route_id.label("route_id"),
-                        GtfsTrip.gtfs_id.label("gtfs_trip_id"),
-                    )
-                    .where(
-                        GtfsTrip.route_id.in_(unique_route_ids),
-                        GtfsTrip.start_time <= now_value,
-                        GtfsTrip.end_time >= now_value,
-                    )
-                    .distinct()
-                    .subquery()
-                )
+                if assignment_type in assignment_type_values:
+                    counts = trip_assignment_counts[route_id]
+                    counts[assignment_type] = counts.get(assignment_type, 0) + 1
 
-                running_trips_stmt = (
-                    select(
-                        running_trip_ids_subq.c.route_id,
-                        func.count(running_trip_ids_subq.c.gtfs_trip_id),
-                    )
-                    .group_by(running_trip_ids_subq.c.route_id)
-                )
-                running_trips_result = await db.execute(running_trips_stmt)
-                for route_id, count_value in running_trips_result.all():
-                    route_key = str(route_id)
-                    count_int = int(count_value or 0)
-                    trips_stats[route_key]["num_running_trips"] = count_int
-                    vehicles_stats[route_key]["num_running_trips"] = count_int
+                if doc.get("stop_event_count", 0) > 0:
+                    if doc["num_non_no_data_events"] == 0:
+                        trips_stats[route_id]["num_monitored_trips"] += 1
 
-                per_trip_stop_stats = (
-                    select(
-                        Trip.id.label("trip_uuid"),
-                        running_trip_ids_subq.c.route_id.label("route_id"),
-                        func.sum(
-                            case(
-                                (StopEvent.schedule_relationship != "NO_DATA", 1),
-                                else_=0,
-                            )
-                        ).label("num_non_no_data_events"),
-                        func.sum(
-                            case(
-                                (StopEvent.schedule_relationship.notin_(["NO_DATA", "ADDED"]), 1),
-                                else_=0,
-                            )
-                        ).label("num_realtime_events"),
-                    )
-                    .join(running_trip_ids_subq, Trip.trip_id == running_trip_ids_subq.c.gtfs_trip_id)
-                    .join(StopEvent, StopEvent.trip_id == Trip.trip_id)
-                    .where(
-                        Trip.is_active.is_(True),
-                    )
-                    .group_by(Trip.id, running_trip_ids_subq.c.route_id)
-                    .subquery()
-                )
+                    if doc["num_realtime_events"] > 0:
+                        trips_stats[route_id]["num_realtime_trips"] += 1
 
-                realtime_trips_stmt = (
-                    select(
-                        per_trip_stop_stats.c.route_id,
-                        func.sum(
-                            case(
-                                (per_trip_stop_stats.c.num_non_no_data_events == 0, 1),
-                                else_=0,
-                            )
-                        ).label("num_monitored_trips"),
-                        func.sum(
-                            case(
-                                (per_trip_stop_stats.c.num_realtime_events > 0, 1),
-                                else_=0,
-                            )
-                        ).label("num_realtime_trips"),
-                    )
-                    .group_by(per_trip_stop_stats.c.route_id)
-                )
-                realtime_trips_result = await db.execute(realtime_trips_stmt)
-                for route_id, monitored_count, realtime_count in realtime_trips_result.all():
-                    route_key = str(route_id)
-                    trips_stats[route_key]["num_monitored_trips"] = int(monitored_count or 0)
-                    trips_stats[route_key]["num_realtime_trips"] = int(realtime_count or 0)
+            for route_id in unique_route_ids:
+                trips_stats[route_id]["assignment_types"] = _assignment_types(trip_assignment_counts[route_id])
 
-                trip_assignment_type_stmt = (
-                    select(
-                        running_trip_ids_subq.c.route_id,
-                        Trip.assignment_type,
-                        func.count(Trip.id).label("num_trips"),
-                    )
-                    .join(running_trip_ids_subq, Trip.trip_id == running_trip_ids_subq.c.gtfs_trip_id)
-                    .where(
-                        Trip.is_active.is_(True),
-                        Trip.assignment_type.in_(assignment_type_values),
-                    )
-                    .group_by(running_trip_ids_subq.c.route_id, Trip.assignment_type)
-                )
-                trip_assignment_type_result = await db.execute(trip_assignment_type_stmt)
-                trip_assignment_type_counts: dict[str, dict[str, int]] = {
-                    route_id: {assignment_type: 0 for assignment_type in assignment_type_values}
-                    for route_id in unique_route_ids
-                }
-                for route_id, assignment_type, count_value in trip_assignment_type_result.all():
-                    trip_assignment_type_counts[str(route_id)][str(assignment_type)] = int(count_value or 0)
+            vehicle_docs = await self._find(
+                VEHICLE_POSITIONS_COLLECTION,
+                {"is_active": True, "trip.trip_id": {"$in": running_trip_ids}},
+                projection={"trip.trip_id": 1, "trip.assignment_type": 1},
+            )
 
-                for route_id in unique_route_ids:
-                    trips_stats[route_id]["assignment_types"] = [
-                        {assignment_type: trip_assignment_type_counts[route_id][assignment_type]}
-                        for assignment_type in assignment_type_values
-                    ]
+            vehicle_assignment_counts: dict[str, dict[str, int]] = {route_id: {} for route_id in unique_route_ids}
+            for doc in vehicle_docs:
+                route_id = running_trips[doc["trip"]["trip_id"]]
+                vehicles_stats[route_id]["num_vehicles"] += 1
 
-                vehicles_stmt = (
-                    select(
-                        running_trip_ids_subq.c.route_id,
-                        func.count(Vehicle.id).label("num_vehicles"),
-                    )
-                    .join(running_trip_ids_subq, running_trip_ids_subq.c.gtfs_trip_id == Vehicle.trip_id)
-                    .join(Trip, Trip.trip_id == Vehicle.trip_id)
-                    .where(
-                        Trip.is_active.is_(True),
-                        Vehicle.is_active.is_(True),
-                    )
-                    .group_by(running_trip_ids_subq.c.route_id)
-                )
-                vehicles_result = await db.execute(vehicles_stmt)
-                for route_id, count_value in vehicles_result.all():
-                    vehicles_stats[str(route_id)]["num_vehicles"] = int(count_value or 0)
+                assignment_type = doc["trip"].get("assignment_type")
+                if assignment_type in assignment_type_values:
+                    counts = vehicle_assignment_counts[route_id]
+                    counts[assignment_type] = counts.get(assignment_type, 0) + 1
 
-                vehicle_assignment_type_stmt = (
-                    select(
-                        running_trip_ids_subq.c.route_id,
-                        Trip.assignment_type,
-                        func.count(Vehicle.id).label("num_vehicles"),
-                    )
-                    .join(running_trip_ids_subq, running_trip_ids_subq.c.gtfs_trip_id == Vehicle.trip_id)
-                    .join(Trip, Trip.trip_id == Vehicle.trip_id)
-                    .where(
-                        Trip.is_active.is_(True),
-                        Vehicle.is_active.is_(True),
-                        Trip.assignment_type.in_(assignment_type_values),
-                    )
-                    .group_by(running_trip_ids_subq.c.route_id, Trip.assignment_type)
-                )
-                vehicle_assignment_type_result = await db.execute(vehicle_assignment_type_stmt)
-                vehicle_assignment_type_counts: dict[str, dict[str, int]] = {
-                    route_id: {assignment_type: 0 for assignment_type in assignment_type_values}
-                    for route_id in unique_route_ids
-                }
-                for route_id, assignment_type, count_value in vehicle_assignment_type_result.all():
-                    vehicle_assignment_type_counts[str(route_id)][str(assignment_type)] = int(count_value or 0)
+            for route_id in unique_route_ids:
+                vehicles_stats[route_id]["assignment_types"] = _assignment_types(vehicle_assignment_counts[route_id])
 
-                for route_id in unique_route_ids:
-                    vehicles_stats[route_id]["assignment_types"] = [
-                        {assignment_type: vehicle_assignment_type_counts[route_id][assignment_type]}
-                        for assignment_type in assignment_type_values
-                    ]
+        return {
+            "num_alerts": num_alerts,
+            "trips": trips_stats,
+            "vehicles": vehicles_stats,
+        }
 
-            return {
-                "num_alerts": num_alerts,
-                "trips": trips_stats,
-                "vehicles": vehicles_stats,
-            }
+    # ------------------------------------------------------------------
+    # Conflict queries
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _not_matching(pattern: str) -> dict[str, Any]:
+        return {"$ne": None, "$not": re.compile(pattern)}
+
+    async def _list_informed_entities(
+        self,
+        entity_filter: dict[str, Any],
+        alert_filter: dict[str, Any] | None = None,
+    ) -> list[ServiceAlertInformedEntity]:
+        pipeline: list[dict[str, Any]] = []
+        if alert_filter:
+            pipeline.append({"$match": alert_filter})
+
+        pipeline += [
+            {"$sort": {"_id": 1}},
+            {"$unwind": {"path": "$informed_entities", "includeArrayIndex": "entity_index"}},
+            {"$match": entity_filter},
+        ]
+
+        alerts: dict[str, ServiceAlert] = {}
+        entities: list[ServiceAlertInformedEntity] = []
+        for doc in await self._aggregate(SERVICE_ALERTS_COLLECTION, pipeline):
+            alert = alerts.get(doc["_id"])
+            if alert is None:
+                alert = self._alert_from_doc({**doc, "informed_entities": []})
+                alerts[doc["_id"]] = alert
+
+            entities.append(
+                self._informed_entity_from_doc(doc["informed_entities"], int(doc["entity_index"]) + 1, alert)
+            )
+
+        await self._fill_data_source_names(list(alerts.values()))
+
+        return entities
+
+    async def _list_stop_events(
+        self,
+        event_filter: dict[str, Any],
+        trip_filter: dict[str, Any] | None = None,
+    ) -> list[StopEvent]:
+        pipeline: list[dict[str, Any]] = []
+        if trip_filter:
+            pipeline.append({"$match": trip_filter})
+
+        pipeline += [
+            {"$sort": {"trip_id": 1}},
+            {"$unwind": "$stop_events"},
+            {"$match": event_filter},
+        ]
+
+        trips: dict[str, TripUpdate] = {}
+        events: list[StopEvent] = []
+        for doc in await self._aggregate(TRIP_UPDATES_COLLECTION, pipeline):
+            trip = trips.get(doc["_id"])
+            if trip is None:
+                trip = self._trip_from_doc({**doc, "stop_events": []}, include_stop_events=False)
+                trips[doc["_id"]] = trip
+
+            events.append(self._stop_event_from_doc(doc["stop_events"], trip.trip_id, trip))
+
+        await self._fill_data_source_names(list(trips.values()))
+
+        return events
 
     async def list_informed_entities_with_invalid_references(self) -> list[ServiceAlertInformedEntity]:
-        """Return informed entities with any invalid reference and alert relations loaded."""
-        stmt = (
-            select(ServiceAlertInformedEntity)
-            .where(
-                (ServiceAlertInformedEntity.is_agency_valid.is_(False))
-                | (ServiceAlertInformedEntity.is_route_valid.is_(False))
-                | (ServiceAlertInformedEntity.is_stop_valid.is_(False))
-                | (ServiceAlertInformedEntity.is_trip_valid.is_(False))
-            )
-            .options(
-                selectinload(ServiceAlertInformedEntity.alert).selectinload(ServiceAlert.data_source),
-            )
-            .order_by(ServiceAlertInformedEntity.alert_id.asc())
+        return await self._list_informed_entities(
+            {
+                "$or": [
+                    {"informed_entities.is_agency_valid": False},
+                    {"informed_entities.is_route_valid": False},
+                    {"informed_entities.is_stop_valid": False},
+                    {"informed_entities.is_trip_valid": False},
+                ]
+            },
+            {"has_invalid_reference": True},
         )
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
 
     async def list_stop_events_with_invalid_references(self) -> list[StopEvent]:
-        """Return invalid stop events with trip and datasource relations loaded."""
-        stmt = (
-            select(StopEvent)
-            .where(StopEvent.is_valid.is_(False))
-            .options(
-                selectinload(StopEvent.trip).selectinload(Trip.data_source),
-            )
-            .order_by(StopEvent.trip_id.asc())
+        return await self._list_stop_events({"stop_events.is_valid": False}, {"flags": FLAG_INVALID_STOP})
+
+    async def list_trips_with_invalid_references(self) -> list[TripUpdate]:
+        docs = await self._find(
+            TRIP_UPDATES_COLLECTION,
+            {"flags": FLAG_INVALID_REFERENCE},
+            projection=_NO_STOP_EVENTS,
+            sort=[("trip_id", ASCENDING)],
         )
 
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
+        trips = [self._trip_from_doc(doc, include_stop_events=False) for doc in docs]
+        await self._fill_data_source_names(trips)
 
-    async def list_trips_with_invalid_references(self) -> list[Trip]:
-        """Return trips where route or trip references are invalid."""
-        stmt = (
-            select(Trip)
-            .where(
-                (Trip.is_route_valid.is_(False))
-                | (Trip.is_trip_valid.is_(False))
-            )
-            .options(
-                selectinload(Trip.data_source),
-            )
-            .order_by(Trip.trip_id.asc())
-        )
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
+        return trips
 
     async def list_stop_events_with_implied_deviation_schedule_relationships(self) -> list[StopEvent]:
-        """Return implied deviation stop events with trip and datasource relations loaded."""
-        stmt = (
-            select(StopEvent)
-            .where(
-                StopEvent.is_implied_schedule_relationship.is_(True),
-                StopEvent.schedule_relationship.in_(["ADDED", "SKIPPED"]),
-            )
-            .options(
-                selectinload(StopEvent.trip).selectinload(Trip.data_source),
-            )
-            .order_by(StopEvent.trip_id.asc())
+        return await self._list_stop_events(
+            {
+                "stop_events.is_implied_schedule_relationship": True,
+                "stop_events.schedule_relationship": {"$in": ["ADDED", "SKIPPED"]},
+            },
+            {"flags": FLAG_IMPLIED_DEVIATION},
         )
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
 
     async def list_stop_events_with_changed_stop_id(self) -> list[StopEvent]:
-        """Return stop events where stop_id differs from original_stop_id."""
-        stmt = (
-            select(StopEvent)
-            .where(
-                StopEvent.stop_id != StopEvent.original_stop_id,
-            )
-            .options(
-                selectinload(StopEvent.trip).selectinload(Trip.data_source),
-            )
-            .order_by(StopEvent.trip_id.asc())
+        return await self._list_stop_events(
+            {"$expr": {"$ne": ["$stop_events.stop_id", "$stop_events.original_stop_id"]}},
+            {"flags": FLAG_CHANGED_STOP_ID},
         )
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
 
     async def list_informed_entities_with_non_global_ids(self, pattern: str) -> list[ServiceAlertInformedEntity]:
-        """Return informed entities whose ids do not match the provided global-id pattern."""
-        stmt = (
-            select(ServiceAlertInformedEntity)
-            .where(
-                ((ServiceAlertInformedEntity.agency_id.is_not(None)) & (~ServiceAlertInformedEntity.agency_id.op("~")(pattern)))
-                | ((ServiceAlertInformedEntity.route_id.is_not(None)) & (~ServiceAlertInformedEntity.route_id.op("~")(pattern)))
-                | ((ServiceAlertInformedEntity.stop_id.is_not(None)) & (~ServiceAlertInformedEntity.stop_id.op("~")(pattern)))
-                | ((ServiceAlertInformedEntity.trip_id.is_not(None)) & (~ServiceAlertInformedEntity.trip_id.op("~")(pattern)))
-            )
-            .options(
-                selectinload(ServiceAlertInformedEntity.alert).selectinload(ServiceAlert.data_source),
-            )
-            .order_by(ServiceAlertInformedEntity.alert_id.asc())
+        return await self._list_informed_entities(
+            {
+                "$or": [
+                    {f"informed_entities.{field}": self._not_matching(pattern)}
+                    for field in ("agency_id", "route_id", "stop_id", "trip_id")
+                ]
+            }
         )
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
 
     async def list_stop_events_with_non_global_ids(self, pattern: str) -> list[StopEvent]:
-        """Return stop events whose stop_id does not match the provided global-id pattern."""
-        stmt = (
-            select(StopEvent)
-            .where(
-                StopEvent.stop_id.is_not(None),
-                ~StopEvent.stop_id.op("~")(pattern),
-            )
-            .options(
-                selectinload(StopEvent.trip).selectinload(Trip.data_source),
-            )
-            .order_by(StopEvent.trip_id.asc())
+        return await self._list_stop_events({"stop_events.stop_id": self._not_matching(pattern)})
+
+    async def list_trips_with_non_global_ids(self, pattern: str) -> list[TripUpdate]:
+        docs = await self._find(
+            TRIP_UPDATES_COLLECTION,
+            {"$or": [{"trip_id": self._not_matching(pattern)}, {"route_id": self._not_matching(pattern)}]},
+            projection=_NO_STOP_EVENTS,
+            sort=[("trip_id", ASCENDING)],
         )
 
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
+        trips = [self._trip_from_doc(doc, include_stop_events=False) for doc in docs]
+        await self._fill_data_source_names(trips)
 
-    async def list_trips_with_non_global_ids(self, pattern: str) -> list[Trip]:
-        """Return trips where route_id or trip_id does not match the provided global-id pattern."""
-        stmt = (
-            select(Trip)
-            .where(
-                ((Trip.trip_id.is_not(None)) & (~Trip.trip_id.op("~")(pattern)))
-                | ((Trip.route_id.is_not(None)) & (~Trip.route_id.op("~")(pattern)))
-            )
-            .options(
-                selectinload(Trip.data_source),
-            )
-            .order_by(Trip.trip_id.asc())
-        )
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
+        return trips
 
     async def list_stop_events_with_departure_before_arrival(self) -> list[StopEvent]:
-        """Return stop events where departure_time is earlier than arrival_time."""
-        stmt = (
-            select(StopEvent)
-            .where(
-                StopEvent.arrival_time.is_not(None),
-                StopEvent.departure_time.is_not(None),
-                StopEvent.departure_time < StopEvent.arrival_time,
-            )
-            .options(
-                selectinload(StopEvent.trip).selectinload(Trip.data_source),
-            )
-            .order_by(StopEvent.trip_id.asc())
+        return await self._list_stop_events(
+            {
+                "stop_events.arrival_time": {"$ne": None},
+                "stop_events.departure_time": {"$ne": None},
+                "$expr": {"$lt": ["$stop_events.departure_time", "$stop_events.arrival_time"]},
+            },
+            {"flags": FLAG_DEPARTURE_BEFORE_ARRIVAL},
         )
-
-        async with self.get_session() as db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
-
-    @staticmethod
-    def _configured_timezone_name() -> str:
-        try:
-            from echogtfs.common.config import settings
-
-            timezone_name = getattr(settings, "timezone", "UTC")
-        except Exception:  # noqa: BLE001
-            timezone_name = "UTC"
-
-        if not isinstance(timezone_name, str) or not timezone_name.strip():
-            return "UTC"
-
-        return timezone_name
-
-    @staticmethod
-    def _resolve_timezone(timezone_name: object) -> ZoneInfo:
-        if not isinstance(timezone_name, str) or not timezone_name.strip():
-            return ZoneInfo("UTC")
-
-        try:
-            return ZoneInfo(timezone_name)
-        except ZoneInfoNotFoundError:
-            return ZoneInfo("UTC")
