@@ -266,6 +266,7 @@ class SiriSxSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
 
         return {
             "id": alert_id,
+            "is_deleted": False,
             "cause": self._map_cause_swiss(alert_cause_elem.text if alert_cause_elem is not None else None),
             "effect": "UNKNOWN_EFFECT",
             "severity_level": self._map_severity_swiss(severity_elem.text if severity_elem is not None else None),

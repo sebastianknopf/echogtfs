@@ -186,6 +186,7 @@ class GtfsRtServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                 alerts.append(
                     {
                         "id": alert_id,
+                        "is_deleted": False,
                         "cause": cause,
                         "effect": effect,
                         "severity_level": severity,

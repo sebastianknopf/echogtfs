@@ -46,6 +46,7 @@ Allowed data model:
 ```python
 {
     "id": str,
+    "is_deleted": bool,
     "cause": str,
     "effect": str,
     "severity_level": str,
@@ -91,6 +92,7 @@ The corresponding realtime processing service also writes these internal fields 
 Processed top-level fields:
 
 - id: required.
+- is_deleted: optional, default False.
 - cause: required.
 - effect: required.
 - severity_level: required.
@@ -155,6 +157,7 @@ Allowed data model:
 ```python
 {
     "id": str,
+    "is_deleted": bool,
     "trip_id": str,
     "original_trip_id": str | None,
     "start_time": str,
@@ -192,6 +195,7 @@ Allowed data model:
 Processed top-level fields:
 
 - id: optional. If missing, deterministic UUID is built from trip_id.
+- is_deleted: optional, default False.
 - trip_id: required.
 - original_trip_id: optional; persisted as the external/non-nominal trip reference when provided.
 - start_time: required.
@@ -272,6 +276,7 @@ Allowed data model:
 ```python
 {
     "id": str,
+    "is_deleted": bool,
     "trip": {
         "trip_id": str,
         "start_time": str,
@@ -307,6 +312,7 @@ Allowed data model:
 Processed top-level fields:
 
 - id: optional. If missing, deterministic UUID is built from vehicle_id.
+- is_deleted: optional, default False.
 - vehicle_id: required.
 - vehicle_label: optional.
 - vehicle_license_plate: optional.

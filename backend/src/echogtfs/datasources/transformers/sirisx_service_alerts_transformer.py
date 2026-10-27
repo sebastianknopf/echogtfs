@@ -329,6 +329,7 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
 
         return {
             "id": alert_id,
+            "is_deleted": False,
             "cause": "UNKNOWN_CAUSE",
             "effect": "UNKNOWN_EFFECT",
             "severity_level": "UNKNOWN_SEVERITY",
