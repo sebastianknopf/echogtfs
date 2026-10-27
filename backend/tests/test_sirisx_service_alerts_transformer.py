@@ -191,7 +191,7 @@ class TestSiriSxServiceAlertsTransformer(unittest.TestCase):
 
         self.assertFalse(transformer._matches_line_filter(situation))
 
-    def test_transform_skips_closed_progress(self):
+    def test_transform_marks_closed_progress_as_deleted(self):
         xml_payload = """
         <Siri xmlns="http://www.siri.org.uk/siri">
           <PtSituationElement>
@@ -200,7 +200,7 @@ class TestSiriSxServiceAlertsTransformer(unittest.TestCase):
             <Progress>closed</Progress>
             <PublicationWindow>
               <StartTime>2026-01-01T00:00:00Z</StartTime>
-              <EndTime>2099-01-01T00:00:00Z</EndTime>
+              <EndTime>2026-01-02T00:00:00Z</EndTime>
             </PublicationWindow>
             <Summary xml:lang="en">Line disruption</Summary>
           </PtSituationElement>
@@ -213,6 +213,60 @@ class TestSiriSxServiceAlertsTransformer(unittest.TestCase):
         )
 
         records = transformer.transform({"root": root, "source_name": "sx"})
+
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["id"], "sx-42")
+        self.assertTrue(records[0]["is_deleted"])
+
+    def test_transform_does_not_mark_open_progress_as_deleted(self):
+        for progress in ("open", "closing"):
+            with self.subTest(progress=progress):
+                xml_payload = f"""
+                <Siri xmlns="http://www.siri.org.uk/siri">
+                  <PtSituationElement>
+                    <SituationNumber>42</SituationNumber>
+                    <ParticipantRef>P2</ParticipantRef>
+                    <Progress>{progress}</Progress>
+                    <PublicationWindow>
+                      <StartTime>2026-01-01T00:00:00Z</StartTime>
+                      <EndTime>2099-01-01T00:00:00Z</EndTime>
+                    </PublicationWindow>
+                    <Summary xml:lang="en">Line disruption</Summary>
+                  </PtSituationElement>
+                </Siri>
+                """
+                transformer = SiriSxServiceAlertsTransformer(
+                    make_unique_id=lambda original, source: f"{source}-{original}",
+                    filters={"operator": [], "line": [], "legacy": ["P2"]},
+                )
+
+                records = transformer.transform(
+                    {"root": ET.fromstring(xml_payload), "source_name": "sx"}
+                )
+
+                self.assertEqual(len(records), 1)
+                self.assertFalse(records[0]["is_deleted"])
+
+    def test_transform_closed_progress_still_respects_participant_filter(self):
+        xml_payload = """
+        <Siri xmlns="http://www.siri.org.uk/siri">
+          <PtSituationElement>
+            <SituationNumber>42</SituationNumber>
+            <ParticipantRef>OTHER</ParticipantRef>
+            <Progress>closed</Progress>
+            <Summary xml:lang="en">Line disruption</Summary>
+          </PtSituationElement>
+        </Siri>
+        """
+        transformer = SiriSxServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filters={"operator": [], "line": [], "legacy": ["P2"]},
+        )
+
+        records = transformer.transform(
+            {"root": ET.fromstring(xml_payload), "source_name": "sx"}
+        )
+
         self.assertEqual(records, [])
 
     def test_transform_marks_closing_progress(self):

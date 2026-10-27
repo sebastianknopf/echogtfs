@@ -12,8 +12,7 @@
 2. Collect all `PtSituationElement` nodes; return empty list if none exist.
 3. For each situation:
 	 - Apply participant filter.
-	 - Skip situations where `Progress = closed`.
-	 - Apply publication-window filter.
+	 - Apply publication-window filter, except for situations where `Progress = closed`.
 	 - Parse to one internal service-alert dictionary.
 4. Keep exceptions isolated per situation (error logged, processing continues).
 5. Log transformed count and the total filtered count.
@@ -36,12 +35,13 @@ Participant filter pattern behavior:
 - Filter patterns are comma-separated.
 - `*` matches any number of any characters.
 - Matching uses full-value regex matching (`re.fullmatch`) after escaping literals and replacing `*` with `.*`.
-2. Publication window check fails.
-3. `Progress` equals `closed`.
-4. `SituationNumber` is missing.
-5. Translation extraction yields no meaningful text.
+2. Publication window check fails and `Progress` is not `closed`.
+3. `SituationNumber` is missing.
+4. Translation extraction yields no meaningful text.
 
 When `Progress = closing`, the situation is still transformed. `effect` remains `UNKNOWN_EFFECT` and `is_closing_alert` is set to `True`.
+
+When `Progress = closed`, the situation is still transformed, the publication window is not checked, and `is_deleted` is set to `True`.
 
 ## Publication Window Rules
 
@@ -153,6 +153,7 @@ Each output alert dictionary contains:
 - `effect`
 - `severity_level`
 - `is_active = True`
+- `is_deleted = True` when `Progress = closed`; otherwise `False`
 - `is_closing_alert = True` when `Progress = closing`; otherwise `False`
 - `translations`
 - `active_periods`
