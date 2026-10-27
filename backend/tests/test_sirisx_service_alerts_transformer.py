@@ -44,6 +44,7 @@ class TestSiriSxServiceAlertsTransformer(unittest.TestCase):
 
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0]["id"], "sx-42")
+        self.assertFalse(records[0]["is_deleted"])
         self.assertEqual(records[0]["translations"][0]["language"], "en")
         self.assertEqual(records[0]["informed_entities"][0]["stop_id"], "STOP-1")
 

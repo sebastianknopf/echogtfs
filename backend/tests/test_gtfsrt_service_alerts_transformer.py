@@ -54,6 +54,7 @@ class TestGtfsRtServiceAlertsTransformer(unittest.TestCase):
 
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0]["id"], "src-1")
+        self.assertFalse(records[0]["is_deleted"])
         self.assertEqual(records[0]["cause"], "MAINTENANCE")
         self.assertEqual(records[0]["effect"], "DETOUR")
         self.assertEqual(records[0]["severity_level"], "WARNING")

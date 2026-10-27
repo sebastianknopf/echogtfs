@@ -65,6 +65,7 @@ class TestSiriSxSwissServiceAlertsTransformer(unittest.TestCase):
 
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0]["id"], "sirisx-swiss-SN-1")
+        self.assertFalse(records[0]["is_deleted"])
         self.assertEqual(records[0]["translations"][0]["header_text"], "Warnung")
         self.assertEqual(records[0]["informed_entities"][0]["route_id"], "R1")
 

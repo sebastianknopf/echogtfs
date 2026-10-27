@@ -23,6 +23,7 @@ class TestSiriEtTripUpdatesTransformer(unittest.TestCase):
         trips = self.transformer.transform({"root": payload})
 
         self.assertEqual(len(trips), 1)
+        self.assertFalse(trips[0]["is_deleted"])
         self.assertEqual(trips[0]["schedule_relationship"], "SCHEDULED")
 
     def test_new_trip_is_discarded_when_stop_sequence_is_incomplete(self) -> None:
