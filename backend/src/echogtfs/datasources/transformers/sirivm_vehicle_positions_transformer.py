@@ -273,6 +273,7 @@ class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
                 "scheduled_end_time": scheduled_end_time,
                 "scheduled_intermediate_stops": scheduled_intermediate_stops,
             },
+            "is_deleted": False,
             "vehicle_id": vehicle_ref,
             "vehicle_label": vehicle_ref,
             "vehicle_wheelchair_accessible": WheelchairAccessible.UNKNOWN.value,

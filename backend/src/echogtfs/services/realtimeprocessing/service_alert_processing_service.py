@@ -36,8 +36,14 @@ class ServiceAlertProcessingService(RealtimeProcessingServiceBase):
             f"(policy: {policy.value})"
         )
 
-        alert_dicts = records
-        total_fetched = len(alert_dicts)
+        total_fetched = len(records)
+        alert_dicts, deleted_records = self._split_deleted_records(records)
+
+        await self._delete_flagged_records(
+            deleted_records,
+            resolve_ids=lambda record: [record["id"]] if record.get("id") else [],
+            delete_by_ids=lambda ids: realtime_repository.delete_service_alerts_for_data_source_by_ids(source_id, ids),
+        )
 
         # Load mappings and enrichments once per pipeline run.
         await self._identifier_mapping_service.initialize(repository, source_id)

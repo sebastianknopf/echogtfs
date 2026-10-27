@@ -222,6 +222,7 @@ class SiriEtTripUpdatesTransformer(TripUpdatesTransformerInterface):
 
         return {
             "trip_id": trip_id,
+            "is_deleted": False,
             "route_id": route_id,
             "start_time": start_time if is_complete_stop_sequence else None,
             "start_date": start_date or "",

@@ -618,3 +618,139 @@ class TestVehiclePositionTripDescriptorAndMatching(unittest.IsolatedAsyncioTestC
         realtime_repository.delete_trips_by_trip_ids.assert_not_awaited()
         realtime_repository.update_trip_update_from_sync.assert_not_awaited()
         realtime_repository.list_trips_by_trip_ids.assert_not_awaited()
+
+    @staticmethod
+    def _deletion_processor():
+        datasource = make_processor(VehiclePositionProcessingService, {})
+        datasource._caching_service = SimpleNamespace(put_trip_id=AsyncMock(), pop_trip_id=AsyncMock())
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=(None, AssignmentType.NO_MATCH_GENERAL))
+        )
+        datasource._identifier_mapping_service = SimpleNamespace(
+            initialize=AsyncMock(),
+            get_loaded_mapping_count=lambda: 0,
+            apply_mapping=lambda entity: entity,
+        )
+        return datasource
+
+    @staticmethod
+    def _vehicle_record(record_id, **overrides):
+        record = {
+            "id": record_id,
+            "trip": {"trip_id": "trip-1", "start_time": "", "start_date": "20260801", "route_id": "r1"},
+            "vehicle_id": f"vehicle-{record_id}",
+            "timestamp": "2026-08-01T08:05:00Z",
+            "latitude": 47.1,
+            "longitude": 8.5,
+        }
+        record.update(overrides)
+        return record
+
+    async def _sync_records(self, datasource, realtime_repository, records, is_differential=False):
+        repository = _SystemRepositoryStub()
+        repository.get_data_source_is_differential_updates = AsyncMock(return_value=is_differential)
+        return await datasource.sync_records(
+            repository=repository,
+            realtime_repository=realtime_repository,
+            gtfs_repository=_GtfsRepositoryStub(),
+            source_id=2,
+            source_name="Demo",
+            records=records,
+        )
+
+    async def test_flagged_vehicle_is_deleted_by_id_and_not_persisted(self):
+        datasource = self._deletion_processor()
+        realtime_repository = _RealtimeRepositoryStub()
+
+        await self._sync_records(
+            datasource, realtime_repository, [self._vehicle_record("veh-1", is_deleted=True)]
+        )
+
+        realtime_repository.delete_vehicles_for_data_source_by_ids.assert_awaited_once_with(
+            2, [datasource._make_unique_id("veh-1", "Demo")]
+        )
+        realtime_repository.update_vehicle_position_from_sync.assert_not_awaited()
+
+    async def test_flagged_vehicle_without_trip_payload_is_still_deleted(self):
+        datasource = self._deletion_processor()
+        realtime_repository = _RealtimeRepositoryStub()
+
+        await self._sync_records(
+            datasource, realtime_repository, [{"id": "veh-1", "is_deleted": True}]
+        )
+
+        realtime_repository.delete_vehicles_for_data_source_by_ids.assert_awaited_once_with(
+            2, [datasource._make_unique_id("veh-1", "Demo")]
+        )
+
+    async def test_missing_flagged_vehicle_is_ignored_and_other_records_are_processed(self):
+        datasource = self._deletion_processor()
+        realtime_repository = _RealtimeRepositoryStub()
+        realtime_repository.delete_vehicles_for_data_source_by_ids = AsyncMock(return_value=0)
+
+        result = await self._sync_records(
+            datasource,
+            realtime_repository,
+            [
+                self._vehicle_record("gone", is_deleted=True),
+                self._vehicle_record("veh-2"),
+            ],
+        )
+
+        realtime_repository.update_vehicle_position_from_sync.assert_awaited_once()
+        self.assertEqual(result, {"added": 1, "updated": 0, "deleted": 0})
+
+    async def test_existing_flagged_vehicle_is_deleted_once_and_counted(self):
+        datasource = self._deletion_processor()
+        realtime_repository = _RealtimeRepositoryStub()
+        vehicle_uuid = datasource._make_unique_id("veh-1", "Demo")
+        realtime_repository.list_vehicles_for_data_source = AsyncMock(
+            return_value=[
+                SimpleNamespace(
+                    id=vehicle_uuid,
+                    data_source_id=2,
+                    trip_id="trip-1",
+                    trip=SimpleNamespace(original_trip_id="orig-trip"),
+                )
+            ]
+        )
+
+        result = await self._sync_records(
+            datasource, realtime_repository, [self._vehicle_record("veh-1", is_deleted=True)]
+        )
+
+        realtime_repository.delete_vehicles_for_data_source_by_ids.assert_awaited_once_with(2, [vehicle_uuid])
+        datasource._caching_service.pop_trip_id.assert_awaited_once_with("orig-trip")
+        self.assertEqual(result["deleted"], 1)
+
+    async def test_vehicle_without_flag_is_not_deleted(self):
+        for overrides in ({}, {"is_deleted": False}):
+            with self.subTest(overrides=overrides):
+                datasource = self._deletion_processor()
+                realtime_repository = _RealtimeRepositoryStub()
+
+                await self._sync_records(
+                    datasource, realtime_repository, [self._vehicle_record("veh-1", **overrides)]
+                )
+
+                realtime_repository.delete_vehicles_for_data_source_by_ids.assert_not_awaited()
+                realtime_repository.update_vehicle_position_from_sync.assert_awaited_once()
+
+    async def test_flagged_vehicle_does_not_delete_other_vehicles_in_differential_mode(self):
+        datasource = self._deletion_processor()
+        realtime_repository = _RealtimeRepositoryStub()
+        other_uuid = datasource._make_unique_id("other", "Demo")
+        realtime_repository.list_vehicles_for_data_source = AsyncMock(
+            return_value=[SimpleNamespace(id=other_uuid, data_source_id=2, trip_id="trip-9", trip=None)]
+        )
+
+        await self._sync_records(
+            datasource,
+            realtime_repository,
+            [self._vehicle_record("veh-1", is_deleted=True)],
+            is_differential=True,
+        )
+
+        realtime_repository.delete_vehicles_for_data_source_by_ids.assert_awaited_once_with(
+            2, [datasource._make_unique_id("veh-1", "Demo")]
+        )

@@ -57,11 +57,9 @@ class SiriSxSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                         continue
 
                     progress = self._get_progress(situation)
-                    if progress == "closed":
-                        filtered += 1
-                        continue
+                    is_closed = progress == "closed"
 
-                    if not self._is_in_publication_window(situation, current_timestamp):
+                    if not is_closed and not self._is_in_publication_window(situation, current_timestamp):
                         filtered += 1
                         continue
 
@@ -266,6 +264,7 @@ class SiriSxSwissServiceAlertsTransformer(ServiceAlertsTransformerInterface):
 
         return {
             "id": alert_id,
+            "is_deleted": progress == "closed",
             "cause": self._map_cause_swiss(alert_cause_elem.text if alert_cause_elem is not None else None),
             "effect": "UNKNOWN_EFFECT",
             "severity_level": self._map_severity_swiss(severity_elem.text if severity_elem is not None else None),

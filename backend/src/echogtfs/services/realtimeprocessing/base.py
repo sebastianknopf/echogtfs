@@ -4,7 +4,7 @@ import asyncio
 from datetime import date, datetime
 import logging
 import uuid
-from typing import Any
+from typing import Any, Awaitable, Callable, Iterable
 
 from echogtfs.services.caching import get_caching_service
 from echogtfs.services.caching.intf_caching_service import CachingServiceInterface
@@ -46,6 +46,38 @@ class RealtimeProcessingServiceBase:
         namespace = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
         
         return uuid.uuid5(namespace, f"{source_name}-{original_id}")
+
+    @staticmethod
+    def _split_deleted_records(records: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Split records into (regular, flagged with is_deleted)."""
+        regular: list[dict[str, Any]] = []
+        deleted: list[dict[str, Any]] = []
+        for record in records:
+            (deleted if record.get("is_deleted", False) else regular).append(record)
+
+        return regular, deleted
+
+    @staticmethod
+    async def _delete_flagged_records(
+        deleted_records: list[dict[str, Any]],
+        *,
+        resolve_ids: Callable[[dict[str, Any]], Iterable[Any]],
+        delete_by_ids: Callable[[list[Any]], Awaitable[Any]],
+        extra_ids: Iterable[Any] = (),
+    ) -> set[Any]:
+        """Delete the entities of records flagged with is_deleted by ID and return the targeted IDs.
+
+        The delete result is deliberately ignored: the entity may already be gone
+        (cleanup service, transformer filters), which is neither an error nor a reason to abort the run.
+        """
+        entity_ids: set[Any] = set(extra_ids)
+        for record in deleted_records:
+            entity_ids.update(resolve_ids(record))
+
+        if entity_ids:
+            await delete_by_ids(list(entity_ids))
+
+        return entity_ids
 
     def _create_gtfs_id_validator(self, repository: GtfsRepositoryInterface) -> GtfsIdValidator:
         """Create the per-run validator for nominal GTFS IDs (cache-backed)."""

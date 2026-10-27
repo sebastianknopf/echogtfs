@@ -54,6 +54,7 @@ class TestGtfsRtServiceAlertsTransformer(unittest.TestCase):
 
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0]["id"], "src-1")
+        self.assertFalse(records[0]["is_deleted"])
         self.assertEqual(records[0]["cause"], "MAINTENANCE")
         self.assertEqual(records[0]["effect"], "DETOUR")
         self.assertEqual(records[0]["severity_level"], "WARNING")
@@ -108,6 +109,57 @@ class TestGtfsRtServiceAlertsTransformer(unittest.TestCase):
         records = transformer.transform({"feed": feed, "source_name": "src"})
 
         self.assertEqual(records, [])
+
+    def test_transform_marks_deleted_entity_without_alert_payload(self):
+        feed = gtfs_realtime_pb2.FeedMessage()
+        entity = gtfs_realtime_pb2.FeedEntity()
+        entity.id = "gone"
+        entity.is_deleted = True
+        feed.entity.append(entity)
+
+        transformer = GtfsRtServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filters={"line": ["R*"], "operator": [], "legacy": []},
+        )
+        records = transformer.transform({"feed": feed, "source_name": "src"})
+
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["id"], "src-gone")
+        self.assertTrue(records[0]["is_deleted"])
+        self.assertEqual(records[0]["informed_entities"], [])
+
+    def test_transform_marks_deleted_entity_with_expired_alert_payload(self):
+        now = int(time.time())
+        feed = gtfs_realtime_pb2.FeedMessage()
+        entity = gtfs_realtime_pb2.FeedEntity()
+        entity.id = "gone"
+        entity.is_deleted = True
+        period = entity.alert.active_period.add()
+        period.start = now - 10800
+        period.end = now - 7200
+        feed.entity.append(entity)
+
+        transformer = GtfsRtServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filters={"line": [], "operator": [], "legacy": []},
+        )
+        records = transformer.transform({"feed": feed, "source_name": "src"})
+
+        self.assertEqual(len(records), 1)
+        self.assertTrue(records[0]["is_deleted"])
+
+    def test_transform_keeps_regular_entity_not_deleted(self):
+        feed = self._feed_with_route_ids("R1")
+        feed.entity[0].is_deleted = False
+
+        transformer = GtfsRtServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filters={"line": [], "operator": [], "legacy": []},
+        )
+        records = transformer.transform({"feed": feed, "source_name": "src"})
+
+        self.assertEqual(len(records), 1)
+        self.assertFalse(records[0]["is_deleted"])
 
     @staticmethod
     def _feed_with_route_ids(*route_ids: str) -> gtfs_realtime_pb2.FeedMessage:

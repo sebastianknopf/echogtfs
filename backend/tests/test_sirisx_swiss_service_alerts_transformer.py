@@ -65,6 +65,7 @@ class TestSiriSxSwissServiceAlertsTransformer(unittest.TestCase):
 
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0]["id"], "sirisx-swiss-SN-1")
+        self.assertFalse(records[0]["is_deleted"])
         self.assertEqual(records[0]["translations"][0]["header_text"], "Warnung")
         self.assertEqual(records[0]["informed_entities"][0]["route_id"], "R1")
 
@@ -233,16 +234,65 @@ class TestSiriSxSwissServiceAlertsTransformer(unittest.TestCase):
 
         self.assertFalse(transformer._matches_line_filter(situation))
 
-    def test_transform_skips_closed_progress(self):
-        xml_payload = """
+    def test_transform_marks_closed_progress_as_deleted(self):
+        xml_payload = self._situation_xml("closed", "2026-01-02T00:00:00Z")
+        transformer = SiriSxSwissServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filters={"operator": [], "line": [], "legacy": ["P1"]},
+        )
+
+        records = transformer.transform(
+            {"root": ET.fromstring(xml_payload), "source_name": "sirisx-swiss"}
+        )
+
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["id"], "sirisx-swiss-SN-1")
+        self.assertTrue(records[0]["is_deleted"])
+
+    def test_transform_does_not_mark_open_progress_as_deleted(self):
+        for progress in ("open", "closing"):
+            with self.subTest(progress=progress):
+                transformer = SiriSxSwissServiceAlertsTransformer(
+                    make_unique_id=lambda original, source: f"{source}-{original}",
+                    filters={"operator": [], "line": [], "legacy": ["P1"]},
+                )
+
+                records = transformer.transform(
+                    {
+                        "root": ET.fromstring(self._situation_xml(progress, "2099-01-01T00:00:00Z")),
+                        "source_name": "sirisx-swiss",
+                    }
+                )
+
+                self.assertEqual(len(records), 1)
+                self.assertFalse(records[0]["is_deleted"])
+
+    def test_transform_closed_progress_still_respects_participant_filter(self):
+        transformer = SiriSxSwissServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filters={"operator": [], "line": [], "legacy": ["OTHER"]},
+        )
+
+        records = transformer.transform(
+            {
+                "root": ET.fromstring(self._situation_xml("closed", "2099-01-01T00:00:00Z")),
+                "source_name": "sirisx-swiss",
+            }
+        )
+
+        self.assertEqual(records, [])
+
+    @staticmethod
+    def _situation_xml(progress: str, publication_end: str) -> str:
+        return f"""
         <Siri xmlns="http://www.siri.org.uk/siri">
           <PtSituationElement>
             <SituationNumber>SN-1</SituationNumber>
             <ParticipantRef>P1</ParticipantRef>
-            <Progress>closed</Progress>
+            <Progress>{progress}</Progress>
             <PublicationWindow>
               <StartTime>2026-01-01T00:00:00Z</StartTime>
-              <EndTime>2099-01-01T00:00:00Z</EndTime>
+              <EndTime>{publication_end}</EndTime>
             </PublicationWindow>
             <PublishingActions>
               <PublishingAction>
@@ -259,14 +309,6 @@ class TestSiriSxSwissServiceAlertsTransformer(unittest.TestCase):
           </PtSituationElement>
         </Siri>
         """
-        root = ET.fromstring(xml_payload)
-        transformer = SiriSxSwissServiceAlertsTransformer(
-            make_unique_id=lambda original, source: f"{source}-{original}",
-            filters={"operator": [], "line": [], "legacy": ["P1"]},
-        )
-
-        records = transformer.transform({"root": root, "source_name": "sirisx-swiss"})
-        self.assertEqual(records, [])
 
     def test_transform_marks_closing_progress(self):
         xml_payload = """

@@ -101,6 +101,8 @@ class TestSiriVmVehiclePositionsTransformer(unittest.TestCase):
         self.assertEqual(len(result), 1)
         vehicle = result[0]
         trip = vehicle["trip"]
+        self.assertFalse(vehicle["is_deleted"])
+        self.assertNotIn("is_deleted", trip)
         self.assertEqual(trip["scheduled_start_stop_id"], "STOP_PREV")
         self.assertEqual(trip["scheduled_end_stop_id"], "STOP_ONWARD_2")
         self.assertEqual(trip["scheduled_start_time"], first_time)

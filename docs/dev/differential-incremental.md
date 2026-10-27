@@ -114,3 +114,19 @@ Applied during trip-update processing:
 - Vehicle positions: `vehicles_to_delete` is empty when `is_differential_updates` is true.
 
 Policy-based explicit deletions (invalid-reference policy outcomes) still execute independently from differential mode.
+
+## Explicit Deletion via `is_deleted`
+
+Differential sources never signal a removal by absence, so a transformer can mark a record as removed with `is_deleted = true`. The field contract is defined in [transformation.md](transformation.md).
+
+Processing is identical in `ServiceAlertProcessingService`, `TripUpdateProcessingService` and `VehiclePositionProcessingService`:
+
+1. Records with `is_deleted = true` are split off before validation, matching and enrichment. Only their identity is used.
+2. The matching entities of the current data source are deleted by ID inside the transaction of the run, together with the regular upserts.
+3. The outcome is ignored. A missing entity (already removed by cleanup, or never stored because a transformer filter rejected it) is not an error and does not abort the run.
+4. Explicit deletions run independently from `is_differential_updates`. Entities deleted this way are excluded from the absence-based deletion, so they are not deleted twice or counted twice.
+5. Trip updates and vehicle positions are additionally looked up by their trip reference, since the stored ID may stem from the matched trip.
+
+Deletions are scoped to the data source, so one source cannot remove entities of another.
+
+The split of flagged records and the delete-by-ID step (deduplicated IDs, result ignored) are implemented once in `RealtimeProcessingServiceBase` (`_split_deleted_records`, `_delete_flagged_records`). Each processing service only supplies how a record resolves to entity IDs and which data-source-scoped repository delete to call.
