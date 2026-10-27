@@ -1007,3 +1007,168 @@ class TestTripUpdateProcessingService(unittest.IsolatedAsyncioTestCase):
         realtime_repository.delete_trips_for_data_source_by_ids.assert_awaited_once_with(
             2, [untouched_trip_uuid]
         )
+
+    @staticmethod
+    def _deletion_processor():
+        datasource = make_processor(TripUpdateProcessingService, {})
+        datasource._caching_service = SimpleNamespace(put_trip_id=AsyncMock(), pop_trip_id=AsyncMock())
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=(None, AssignmentType.NO_MATCH_GENERAL))
+        )
+        datasource._identifier_mapping_service = SimpleNamespace(
+            initialize=AsyncMock(),
+            get_loaded_mapping_count=lambda: 0,
+            apply_mapping=lambda entity: entity,
+        )
+        return datasource
+
+    @staticmethod
+    def _trip_record(record_id, **overrides):
+        record = {
+            "id": record_id,
+            "trip_id": "trip-1",
+            "start_time": "08:00:00",
+            "start_date": "20260801",
+            "route_id": "r1",
+            "schedule_relationship": "SCHEDULED",
+            "stop_events": [],
+        }
+        record.update(overrides)
+        return record
+
+    async def _sync_records(self, datasource, realtime_repository, records, is_differential=False):
+        repository = _SystemRepositoryStub()
+        repository.get_data_source_is_differential_updates = AsyncMock(return_value=is_differential)
+        return await datasource.sync_records(
+            repository=repository,
+            realtime_repository=realtime_repository,
+            gtfs_repository=_GtfsRepositoryStub(),
+            source_id=2,
+            source_name="Demo",
+            records=records,
+        )
+
+    async def test_flagged_trip_is_deleted_by_id_and_not_persisted(self):
+        datasource = self._deletion_processor()
+        realtime_repository = _RealtimeRepositoryStub()
+
+        await self._sync_records(
+            datasource, realtime_repository, [self._trip_record("trip-upd-1", is_deleted=True)]
+        )
+
+        realtime_repository.delete_trips_for_data_source_by_ids.assert_awaited_once_with(
+            2, [datasource._make_unique_id("trip-upd-1", "Demo")]
+        )
+        realtime_repository.update_trip_update_from_sync.assert_not_awaited()
+
+    async def test_flagged_trip_without_payload_is_still_deleted(self):
+        datasource = self._deletion_processor()
+        realtime_repository = _RealtimeRepositoryStub()
+
+        await self._sync_records(
+            datasource, realtime_repository, [{"id": "trip-upd-1", "is_deleted": True}]
+        )
+
+        realtime_repository.delete_trips_for_data_source_by_ids.assert_awaited_once_with(
+            2, [datasource._make_unique_id("trip-upd-1", "Demo")]
+        )
+
+    async def test_flagged_trip_also_deletes_trip_found_by_trip_reference(self):
+        datasource = self._deletion_processor()
+        realtime_repository = _RealtimeRepositoryStub()
+        stored_uuid = datasource._make_unique_id("stored", "Demo")
+        stored_trip = SimpleNamespace(
+            id=stored_uuid, trip_id="trip-1", data_source_id=2, original_trip_id="orig-trip"
+        )
+        realtime_repository.list_trips_by_trip_ids = AsyncMock(return_value=[stored_trip])
+
+        await self._sync_records(
+            datasource, realtime_repository, [self._trip_record("trip-upd-1", is_deleted=True)]
+        )
+
+        deleted_ids = realtime_repository.delete_trips_for_data_source_by_ids.await_args.args[1]
+        self.assertEqual(
+            set(deleted_ids),
+            {datasource._make_unique_id("trip-upd-1", "Demo"), stored_uuid},
+        )
+        datasource._caching_service.pop_trip_id.assert_awaited_once_with("orig-trip")
+
+    async def test_missing_flagged_trip_is_ignored_and_other_records_are_processed(self):
+        datasource = self._deletion_processor()
+        realtime_repository = _RealtimeRepositoryStub()
+        realtime_repository.delete_trips_for_data_source_by_ids = AsyncMock(return_value=0)
+
+        result = await self._sync_records(
+            datasource,
+            realtime_repository,
+            [
+                self._trip_record("gone", trip_id="trip-gone", is_deleted=True),
+                self._trip_record("trip-upd-2", trip_id="trip-1"),
+            ],
+        )
+
+        realtime_repository.update_trip_update_from_sync.assert_awaited_once()
+        self.assertEqual(result, {"added": 1, "updated": 0, "deleted": 0})
+
+    async def test_existing_flagged_trip_is_deleted_once_and_counted(self):
+        datasource = self._deletion_processor()
+        realtime_repository = _RealtimeRepositoryStub()
+        trip_uuid = datasource._make_unique_id("trip-upd-1", "Demo")
+        existing_trip = SimpleNamespace(
+            id=trip_uuid,
+            trip_id="trip-1",
+            data_source_id=2,
+            is_active=True,
+            is_complete_stop_sequence=True,
+            original_trip_id="trip-1",
+        )
+        realtime_repository.list_trips_for_data_source = AsyncMock(return_value=[existing_trip])
+        realtime_repository.list_trips_by_trip_ids = AsyncMock(return_value=[existing_trip])
+
+        result = await self._sync_records(
+            datasource, realtime_repository, [self._trip_record("trip-upd-1", is_deleted=True)]
+        )
+
+        realtime_repository.delete_trips_for_data_source_by_ids.assert_awaited_once_with(2, [trip_uuid])
+        self.assertEqual(result["deleted"], 1)
+
+    async def test_trip_without_flag_is_not_deleted(self):
+        for overrides in ({}, {"is_deleted": False}):
+            with self.subTest(overrides=overrides):
+                datasource = self._deletion_processor()
+                realtime_repository = _RealtimeRepositoryStub()
+
+                await self._sync_records(
+                    datasource, realtime_repository, [self._trip_record("trip-upd-1", **overrides)]
+                )
+
+                realtime_repository.delete_trips_for_data_source_by_ids.assert_not_awaited()
+                realtime_repository.update_trip_update_from_sync.assert_awaited_once()
+
+    async def test_flagged_trip_does_not_delete_other_trips_in_differential_mode(self):
+        datasource = self._deletion_processor()
+        realtime_repository = _RealtimeRepositoryStub()
+        other_uuid = datasource._make_unique_id("other", "Demo")
+        realtime_repository.list_trips_for_data_source = AsyncMock(
+            return_value=[
+                SimpleNamespace(
+                    id=other_uuid,
+                    trip_id="trip-9",
+                    data_source_id=2,
+                    is_active=True,
+                    is_complete_stop_sequence=True,
+                    original_trip_id="trip-9",
+                )
+            ]
+        )
+
+        await self._sync_records(
+            datasource,
+            realtime_repository,
+            [self._trip_record("trip-upd-1", is_deleted=True)],
+            is_differential=True,
+        )
+
+        realtime_repository.delete_trips_for_data_source_by_ids.assert_awaited_once_with(
+            2, [datasource._make_unique_id("trip-upd-1", "Demo")]
+        )

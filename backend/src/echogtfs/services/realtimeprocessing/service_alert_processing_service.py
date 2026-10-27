@@ -36,8 +36,22 @@ class ServiceAlertProcessingService(RealtimeProcessingServiceBase):
             f"(policy: {policy.value})"
         )
 
-        alert_dicts = records
-        total_fetched = len(alert_dicts)
+        total_fetched = len(records)
+        alert_dicts = [record for record in records if not record.get("is_deleted", False)]
+        deleted_alert_ids = list(
+            dict.fromkeys(
+                record["id"]
+                for record in records
+                if record.get("is_deleted", False) and record.get("id")
+            )
+        )
+
+        # The result is deliberately ignored: the alert may already be gone (cleanup, transformer filters).
+        if deleted_alert_ids:
+            await realtime_repository.delete_service_alerts_for_data_source_by_ids(
+                source_id,
+                deleted_alert_ids,
+            )
 
         # Load mappings and enrichments once per pipeline run.
         await self._identifier_mapping_service.initialize(repository, source_id)

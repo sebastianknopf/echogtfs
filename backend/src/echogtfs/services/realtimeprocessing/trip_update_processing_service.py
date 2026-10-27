@@ -25,6 +25,46 @@ class TripUpdateProcessingService(RealtimeProcessingServiceBase):
         super().__init__(*args, **kwargs)
         self._stop_event_propagation_service = StopEventPropagationService()
 
+    async def _delete_flagged_trips(
+        self,
+        realtime_repository: RealtimeRepositoryInterface,
+        source_id: int,
+        source_name: str,
+        deleted_records: list[dict[str, Any]],
+    ) -> set[uuid.UUID]:
+        """Delete trips of records flagged with is_deleted; missing trips are ignored."""
+        trip_uuids: set[uuid.UUID] = set()
+        trip_references: set[str] = set()
+        for record in deleted_records:
+            if record.get("trip_id"):
+                trip_references.add(str(record["trip_id"]))
+
+            try:
+                trip_uuids.add(
+                    self._record_uuid(record, source_name, fallback_key="trip_id", kind="Trip-update")
+                )
+            except ValueError:
+                continue
+
+        existing_by_reference = (
+            await realtime_repository.list_trips_by_trip_ids(list(trip_references))
+            if trip_references
+            else []
+        )
+        trip_uuids.update(trip.id for trip in existing_by_reference)
+
+        if not trip_uuids:
+            return trip_uuids
+
+        # The result is deliberately ignored: the trip may already be gone (cleanup, transformer filters).
+        await realtime_repository.delete_trips_for_data_source_by_ids(source_id, list(trip_uuids))
+
+        for trip in existing_by_reference:
+            if trip.data_source_id == source_id and getattr(trip, "original_trip_id", None):
+                await self._caching_service.pop_trip_id(trip.original_trip_id)
+
+        return trip_uuids
+
 
     async def sync_records(
         self,
@@ -71,6 +111,10 @@ class TripUpdateProcessingService(RealtimeProcessingServiceBase):
                 )
             )
         )
+
+        total_fetched = len(records)
+        deleted_records = [record for record in records if record.get("is_deleted", False)]
+        records = [record for record in records if not record.get("is_deleted", False)]
 
         gtfs_id_validator = self._create_gtfs_id_validator(gtfs_repository)
         await gtfs_id_validator.prefetch(
@@ -139,6 +183,18 @@ class TripUpdateProcessingService(RealtimeProcessingServiceBase):
         stats_deleted = 0
         policy_based_deletes: set[uuid.UUID] = set()
         processed_trip_uuids: set[uuid.UUID] = set()
+
+        explicitly_deleted_trip_uuids = await self._delete_flagged_trips(
+            realtime_repository,
+            source_id,
+            source_name,
+            deleted_records,
+        )
+        stats_deleted += sum(
+            1
+            for trip_uuid in explicitly_deleted_trip_uuids
+            if trip_uuid in existing_trips and existing_trips[trip_uuid].data_source_id == source_id
+        )
 
         for record in records:
             is_complete_stop_sequence = bool(record.get("is_complete_stop_sequence", True))
@@ -398,6 +454,7 @@ class TripUpdateProcessingService(RealtimeProcessingServiceBase):
             if trip.data_source_id == source_id
             and trip_id not in processed_trip_uuids
             and trip_id not in policy_based_deletes
+            and trip_id not in explicitly_deleted_trip_uuids
         } if not is_differential_updates else {}
 
         if trips_to_delete:
@@ -424,7 +481,7 @@ class TripUpdateProcessingService(RealtimeProcessingServiceBase):
 
         logger.info(
             f"[{self.get_adapter_type()}] Trip-update import completed for '{source_name}': "
-            f"fetched={len(records)}, created={stats_created}, updated={stats_updated}, deleted={stats_deleted}"
+            f"fetched={total_fetched}, created={stats_created}, updated={stats_updated}, deleted={stats_deleted}"
         )
 
         return {

@@ -86,6 +86,10 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
                 f"[{self.get_adapter_type()}] Loaded {mapping_count} mapping entries"
             )
 
+        total_fetched = len(records)
+        deleted_records = [record for record in records if record.get("is_deleted", False)]
+        records = [record for record in records if not record.get("is_deleted", False)]
+
         gtfs_id_validator = self._create_gtfs_id_validator(gtfs_repository)
         vehicle_route_ids: set[object] = set()
         vehicle_trip_ids: set[object] = set()
@@ -145,6 +149,40 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
         stats_deleted = 0
         policy_based_deletes: set[uuid.UUID] = set()
         persisted_vehicle_uuids: set[uuid.UUID] = set()
+
+        # The delete result is deliberately ignored: the vehicle may already be gone (cleanup, transformer filters).
+        explicitly_deleted_vehicle_uuids: set[uuid.UUID] = set()
+        for record in deleted_records:
+            try:
+                explicitly_deleted_vehicle_uuids.add(
+                    self._record_uuid(record, source_name, fallback_key="vehicle_id", kind="Vehicle-position")
+                )
+            except ValueError:
+                pass
+
+            try:
+                deleted_trip_id = self._extract_vehicle_trip_payload(record)["trip_id"]
+            except ValueError:
+                continue
+
+            if deleted_trip_id in vehicle_uuid_by_trip_id:
+                explicitly_deleted_vehicle_uuids.add(vehicle_uuid_by_trip_id[deleted_trip_id])
+
+        if explicitly_deleted_vehicle_uuids:
+            await realtime_repository.delete_vehicles_for_data_source_by_ids(
+                source_id,
+                list(explicitly_deleted_vehicle_uuids),
+            )
+
+            for vehicle_id in explicitly_deleted_vehicle_uuids:
+                existing_vehicle = existing_vehicles.get(vehicle_id)
+                if existing_vehicle is None or existing_vehicle.data_source_id != source_id:
+                    continue
+
+                stats_deleted += 1
+                original_trip_id = getattr(getattr(existing_vehicle, "trip", None), "original_trip_id", None)
+                if original_trip_id:
+                    await self._caching_service.pop_trip_id(original_trip_id)
 
         for record in records:
             vehicle_uuid = self._record_uuid(record, source_name, fallback_key="vehicle_id", kind="Vehicle-position")
@@ -308,6 +346,7 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
             if vehicle.data_source_id == source_id
             and vehicle_id not in persisted_vehicle_uuids
             and vehicle_id not in policy_based_deletes
+            and vehicle_id not in explicitly_deleted_vehicle_uuids
         } if not is_differential_updates else set()
 
         if vehicles_to_delete:
@@ -337,7 +376,7 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
 
         logger.info(
             f"[{self.get_adapter_type()}] Vehicle-position import completed for '{source_name}': "
-            f"fetched={len(records)}, created={stats_created}, updated={stats_updated}, deleted={stats_deleted}"
+            f"fetched={total_fetched}, created={stats_created}, updated={stats_updated}, deleted={stats_deleted}"
         )
 
         return {

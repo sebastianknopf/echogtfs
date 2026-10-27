@@ -37,6 +37,15 @@ Implementation notes for the concrete transformers are collected in [transformer
 
 Only fields listed below are consumed by the realtime processing services and/or `RealtimeRepository` for each record type.
 
+## Deleted Records
+
+A record with `is_deleted = True` is a deletion request. Before normal processing, each realtime processing service splits these records from the rest and handles them as follows:
+
+- The entity is deleted by its ID (for trip updates, also by the stored trip reference) through the data-source-scoped repository delete, within the running sync transaction.
+- The result of the deletion is ignored. An entity that no longer exists (for example after cleanup or transformer filtering) is neither an error nor a reason to stop the run.
+- The record is not validated, mapped, enriched, matched, or persisted. Only `id` is required (`trip_id` or `vehicle_id` serve as fallback for trip updates and vehicle positions).
+- The same entity is not deleted a second time by the deletion of entities missing from the feed.
+
 The following structures describe the internal data model, which can be returned by a transformer to the data source implementation for further processing (mapping, matching, persistence).
 
 ## record_type service_alerts
