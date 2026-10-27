@@ -38,6 +38,10 @@ class GtfsRtServiceAlertsTransformer(ServiceAlertsTransformerInterface):
 
         try:
             for entity_index, entity in enumerate(feed.entity, start=1):
+                if entity.is_deleted:
+                    alerts.append(self._build_deleted_alert(self._make_unique_id(entity.id, source_name)))
+                    continue
+
                 if not entity.HasField("alert"):
                     continue
 
@@ -206,6 +210,20 @@ class GtfsRtServiceAlertsTransformer(ServiceAlertsTransformerInterface):
             return alerts
         finally:
             self._runtime_duration_ms = (perf_counter() - start_time) * 1000
+
+    @staticmethod
+    def _build_deleted_alert(alert_id: str) -> dict[str, Any]:
+        return {
+            "id": alert_id,
+            "is_deleted": True,
+            "cause": "UNKNOWN_CAUSE",
+            "effect": "UNKNOWN_EFFECT",
+            "severity_level": "UNKNOWN_SEVERITY",
+            "is_active": True,
+            "translations": [],
+            "active_periods": [],
+            "informed_entities": [],
+        }
 
     def _matches_line_filter(self, informed_entities: list[dict[str, Any]]) -> bool:
         allowed_patterns = self._filters["line"]

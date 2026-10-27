@@ -3,15 +3,16 @@
 ## Input and Entry Points
 
 1. The datasource passes parsed GTFS-RT feed data to `transform()` as `{"feed": feed_message, "source_name": ...}`.
-2. `transform()` iterates `feed.entity` and processes only entities containing an `alert` field.
+2. `transform()` iterates `feed.entity`. Entities with `is_deleted = true` are always converted; other entities are processed only when they contain an `alert` field.
 3. Each valid alert entity is converted into one internal service-alert dictionary.
 
 ## Top-Level Transform Flow
 
 1. Reset runtime metric and start runtime measurement with `perf_counter()`.
 2. Iterate all entities in the feed.
-3. Skip entities that do not contain `alert`.
-4. For each alert entity:
+3. For entities with `is_deleted = true`, append a minimal record (see Deleted Entities) and continue. No filter is applied.
+4. Skip entities that do not contain `alert`.
+5. For each alert entity:
 	- Build a stable internal alert ID via `make_unique_id(entity.id, source_name)`.
 	- Map cause, effect, and severity (with unknown fallbacks).
 	- Build translations.
@@ -21,6 +22,10 @@
 	- Append the normalized alert record.
 5. Log transformed alert count and the total filtered count.
 6. Always store runtime duration in milliseconds in `_runtime_duration_ms`.
+
+## Deleted Entities
+
+The GTFS-RT `FeedEntity.is_deleted` flag marks an entity as deleted and is usually sent without an `alert` payload. Such an entity bypasses the alert-payload requirement, the time-window filter, and the line filter, because the payload needed for them may be absent. The transformer emits a record with `id`, `is_deleted = True`, unknown-value defaults for `cause`, `effect`, and `severity_level`, `is_active = True`, and empty `translations`, `active_periods`, and `informed_entities`. Any alert payload present on a deleted entity is ignored.
 
 ## Filtering
 
@@ -100,6 +105,7 @@ Missing values are stored as `None`.
 Each output record contains:
 
 - `id`
+- `is_deleted` (`True` when the GTFS-RT entity has `is_deleted = true`; otherwise `False`)
 - `cause`
 - `effect`
 - `severity_level`
