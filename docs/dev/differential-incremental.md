@@ -128,3 +128,5 @@ Processing is identical in `ServiceAlertProcessingService`, `TripUpdateProcessin
 5. Trip updates and vehicle positions are additionally looked up by their trip reference, since the stored ID may stem from the matched trip.
 
 Deletions are scoped to the data source, so one source cannot remove entities of another.
+
+The split of flagged records and the delete-by-ID step (deduplicated IDs, result ignored) are implemented once in `RealtimeProcessingServiceBase` (`_split_deleted_records`, `_delete_flagged_records`). Each processing service only supplies how a record resolves to entity IDs and which data-source-scoped repository delete to call.

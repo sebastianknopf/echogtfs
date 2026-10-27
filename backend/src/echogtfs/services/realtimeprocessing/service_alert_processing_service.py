@@ -37,21 +37,13 @@ class ServiceAlertProcessingService(RealtimeProcessingServiceBase):
         )
 
         total_fetched = len(records)
-        alert_dicts = [record for record in records if not record.get("is_deleted", False)]
-        deleted_alert_ids = list(
-            dict.fromkeys(
-                record["id"]
-                for record in records
-                if record.get("is_deleted", False) and record.get("id")
-            )
-        )
+        alert_dicts, deleted_records = self._split_deleted_records(records)
 
-        # The result is deliberately ignored: the alert may already be gone (cleanup, transformer filters).
-        if deleted_alert_ids:
-            await realtime_repository.delete_service_alerts_for_data_source_by_ids(
-                source_id,
-                deleted_alert_ids,
-            )
+        await self._delete_flagged_records(
+            deleted_records,
+            resolve_ids=lambda record: [record["id"]] if record.get("id") else [],
+            delete_by_ids=lambda ids: realtime_repository.delete_service_alerts_for_data_source_by_ids(source_id, ids),
+        )
 
         # Load mappings and enrichments once per pipeline run.
         await self._identifier_mapping_service.initialize(repository, source_id)
