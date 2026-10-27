@@ -266,7 +266,7 @@ class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
                 "schedule_relationship": "SCHEDULED",
                 "assignment_type": "ASSIGNED",
                 "is_active": True,
-                "is_valid": True,
+                "is_complete_stop_sequence": is_complete_stop_sequence,
                 "scheduled_start_stop_id": scheduled_start_stop_id,
                 "scheduled_start_time": scheduled_start_time,
                 "scheduled_end_stop_id": scheduled_end_stop_id,

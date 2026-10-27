@@ -6,12 +6,13 @@ EchoGTFS is a self-hosted, containerized web application for creating and managi
 
 ## Container Layout
 
-The application is composed of four core Docker services and one optional service defined in `docker-compose.yml`:
+The application is composed of five core Docker services and one optional service defined in `docker-compose.yml`:
 
 - `backend`: Python/FastAPI HTTP service, port 8000 (internal only).
 - `frontend`: NGINX web server that serves the static single-page application and reverse-proxies `/api` requests to the backend. Exposed on the host at the port defined by `FRONTEND_PORT` (default 80).
-- `database`: PostgreSQL 16. Accessible only to the backend container.
-- `redis`: Redis service used for caching and event streaming inside the application.
+- `database`: PostgreSQL 16. Holds system and nominal GTFS data. Accessible only to the backend container.
+- `mongo`: MongoDB 7 single-node replica set. Holds the realtime objects, see [realtime-storage.md](realtime-storage.md). Accessible only to the backend container.
+- `redis`: Redis service used for caching and event streaming inside the application, including the nominal GTFS ID cache described in [gtfs-id-cache.md](gtfs-id-cache.md).
 - `siricomservice`: Optional SIRI consumer communication service for managed SIRI subscriptions. Compose starts it only when the `siripubsub` profile is enabled.
 
 All runtime configuration is injected via environment variables. The canonical source of variable names is `.env.example`.
@@ -32,6 +33,7 @@ echogtfs/
 - FastAPI: HTTP framework and dependency injection
 - SQLAlchemy (async): ORM and query builder
 - asyncpg: Async PostgreSQL driver
+- pymongo (async client): MongoDB driver for the realtime collections
 - Pydantic / pydantic-settings: Data validation and environment configuration
 - PyJWT + bcrypt: Token creation and password hashing
 - slowapi: Rate limiting (wraps limits library)
@@ -48,12 +50,14 @@ echogtfs/
 ## Application Startup Sequence
 
 1. `main.py` `lifespan` context manager runs at startup.
-3. `AlembicMigrationService` applies all pending numbered SQL migrations.
-4. If the `sys_users` table is empty, a first superuser is created from `FIRST_SUPERUSER*` environment variables.
-5. Scheduled jobs are configured:
+2. `AlembicMigrationService` applies all pending numbered SQL migrations.
+3. The system, GTFS, and realtime repositories are initialized. `RealtimeRepository.initialize()` checks the MongoDB connection and creates the realtime indices.
+4. `CachingService` is initialized and builds the nominal GTFS ID cache if it is not present yet.
+5. If the `sys_users` table is empty, a first superuser is created from `FIRST_SUPERUSER*` environment variables.
+6. Scheduled jobs are configured:
    - `GtfsImportService.schedule_from_settings`: Reads the `gtfs_cron` key from the `app_settings` table and registers a GTFS Static feed import job.
    - `CleanupService.schedule_from_settings`: Reads cleanup configuration from `app_settings` and registers the alert expiry cleanup job.
-6. FastAPI app starts accepting requests.
+7. FastAPI app starts accepting requests.
 
 ## API Routers
 
@@ -87,7 +91,7 @@ Most services are instantiated when they're used in the code. Some special servi
 
 - `SecurityService` (related for security related issues)
 - `SiriSubscriptionService` (consumer API client for subscription lifecycle, status, readiness, and liveness)
-- `CachingService` (abstraction layer for redis access)
+- `CachingService` (abstraction layer for redis access: trip ID matching cache and nominal GTFS ID cache)
 
 The single instance services are initialized in the `main.py` module during the startup sequence of the application and also used across other modules and services.
 
@@ -103,7 +107,9 @@ Those services are not designed as single-instance service but only used by `mai
 
 ### Core Tables
 
-Tables are split into `sys_` tables which are internal application tables, `gtfs_` tables for holding the nominal reference data and `realtime_` tables for the reatime data.
+PostgreSQL tables are split into `sys_` tables which are internal application tables and `gtfs_` tables for holding the nominal reference data.
+
+The realtime data is not stored in PostgreSQL. It lives in the MongoDB collections `realtime_service_alerts`, `realtime_trip_updates` and `realtime_vehicle_positions`, described in [realtime-storage.md](realtime-storage.md).
 
 ### Database Migrations
 
@@ -115,11 +121,11 @@ There're several repositories for structured database access. The repositories a
 
 - `SystemRepository`: responsible for general database access especially for `sys_` tables
 - `GtfsRepository`: reponsible for GTFS nominal data access of `gtfs_` tables
-- `RealtimeRepository`: responsible for GTFS-RT data access of `realtime_` tables
+- `RealtimeRepository`: responsible for GTFS-RT data access of the realtime MongoDB collections
 
 Each repository has an interface defined for testing purposes.
 
-Most repositories hold a reference to open a separate database connection on demand for each query. Realtime synchronization and its transaction boundaries are described in [datasources.md](datasources.md).
+`SystemRepository` and `GtfsRepository` derive from `PostgresRepositoryBase` and open a separate database connection on demand for each query. `RealtimeRepository` derives from `MongoRepositoryBase` and uses `PostgresRepositoryBase` only for data source names and statistics on nominal GTFS trips. Transactions, snapshot reads and indices of the realtime repository are described in [realtime-storage.md](realtime-storage.md). Realtime synchronization is described in [datasources.md](datasources.md).
 
 ## Data Sources
 
@@ -127,7 +133,7 @@ Data source behavior and its integration with the rest of the system are documen
 
 ## GTFS-Realtime Feed
 
-The GTFS-RT endpoint is the public output endpoint. It serializes realtime data to GTFS-RT compliant protobuf stream. The endpoint also supports a `?format=json` query parameter for JSON output. 
+The GTFS-RT endpoint is the public output endpoint. It serializes realtime data to GTFS-RT compliant protobuf stream. Each feed is built from one snapshot read of the realtime collections, so it contains only fully committed data source runs, see [realtime-storage.md](realtime-storage.md). The endpoint also supports a `?format=json` query parameter for JSON output. 
 
 Optional Basic Auth can be enabled for the realtime endpoint by storing `gtfs_rt_username` and `gtfs_rt_password` in `app_settings`.
 

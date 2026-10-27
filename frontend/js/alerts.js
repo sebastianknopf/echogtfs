@@ -275,7 +275,7 @@ const alerts = (() => {
       }
       
       // Build source badge
-      const isInternal = alert.source === 'echogtfs' || !alert.data_source_id;
+      const isInternal = !alert.data_source_id;
       const sourceName = isInternal ? window.i18n('alerts.badge.internal') : (alert.data_source_name || window.i18n('alerts.badge.external'));
       const sourceBadge = `<span class="badge badge--system">${ui.esc(sourceName)}</span>`;
       

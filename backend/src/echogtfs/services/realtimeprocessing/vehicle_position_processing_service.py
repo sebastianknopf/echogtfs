@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
 import logging
 import uuid
 from typing import Any
@@ -46,8 +45,15 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
                 or payload.get("assignment_type")
                 or "ASSIGNED"
             ),
-            "is_active_on_create": bool(
-                record.get("trip_is_active_on_create", payload.get("is_active", True))
+            "scheduled_start_stop_id": payload.get("scheduled_start_stop_id", record.get("scheduled_start_stop_id")),
+            "scheduled_start_time": payload.get("scheduled_start_time", record.get("scheduled_start_time")),
+            "scheduled_end_stop_id": payload.get("scheduled_end_stop_id", record.get("scheduled_end_stop_id")),
+            "scheduled_end_time": payload.get("scheduled_end_time", record.get("scheduled_end_time")),
+            "scheduled_intermediate_stops": payload.get(
+                "scheduled_intermediate_stops", record.get("scheduled_intermediate_stops")
+            ),
+            "is_complete_stop_sequence": bool(
+                payload.get("is_complete_stop_sequence", record.get("is_complete_stop_sequence", True))
             ),
         }
 
@@ -80,30 +86,33 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
                 f"[{self.get_adapter_type()}] Loaded {mapping_count} mapping entries"
             )
 
-        gtfs_entities = await self._load_gtfs_entities(gtfs_repository)
-        nominal_trip_ids = gtfs_entities.get("trip", set())
+        gtfs_id_validator = self._create_gtfs_id_validator(gtfs_repository)
+        vehicle_route_ids: set[object] = set()
+        vehicle_trip_ids: set[object] = set()
+        for record in records:
+            try:
+                record_trip_payload = self._extract_vehicle_trip_payload(record)
+            except ValueError:
+                continue
+
+            vehicle_route_ids.add(
+                self._identifier_mapping_service.apply_mapping(
+                    {"route_id": record_trip_payload.get("route_id")}
+                ).get("route_id")
+            )
+
+            vehicle_trip_ids.add(record_trip_payload.get("trip_id"))
+
+        await gtfs_id_validator.prefetch("route", vehicle_route_ids)
+        await gtfs_id_validator.prefetch("trip", vehicle_trip_ids)
+        await gtfs_id_validator.prefetch("stop", (record.get("stop_id") for record in records))
+        gtfs_entities = gtfs_id_validator.valid_ids()
         if self._matching_service is None:
             self._matching_service = MatchingService(gtfs_repository, self._caching_service)
 
         incoming_vehicle_ids = {
             self._record_uuid(record, source_name, fallback_key="vehicle_id", kind="Vehicle-position")
             for record in records
-        }
-
-        incoming_vehicle_trip_ids: set[str] = set()
-        for record in records:
-            try:
-                vehicle_trip_payload = self._extract_vehicle_trip_payload(record)
-            except ValueError:
-                continue
-
-            incoming_vehicle_trip_ids.add(str(vehicle_trip_payload.get("trip_id") or ""))
-
-        incoming_vehicle_trip_ids.discard("")
-
-        existing_trip_uuid_by_trip_id = {
-            str(trip.trip_id): trip.id
-            for trip in await realtime_repository.list_trips_by_trip_ids(list(incoming_vehicle_trip_ids))
         }
 
         existing_vehicles = {
@@ -163,85 +172,28 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
 
             derived_trip_id = trip_payload["trip_id"]
             resolved_trip_id = derived_trip_id
+            is_new_trip = trip_payload["schedule_relationship"].upper() == "NEW"
             trip_assignment_type = AssignmentType.DIRECT_BY_ID.value
-            vehicle_assignment_type = AssignmentType.DIRECT_BY_ID.value
-            trip_reference_is_valid = derived_trip_id in nominal_trip_ids
+            trip_reference_is_valid = True if is_new_trip else derived_trip_id in gtfs_entities["trip"]
             matched_trip_id: str | None = None
             matched_assignment_type: AssignmentType | None = None
+            match_inputs = self._map_scheduled_match_inputs(trip_payload)
 
-            if not trip_reference_is_valid:
-                mapped_match_start_stop = self._identifier_mapping_service.apply_mapping(
-                    {
-                        "stop_id": record.get("scheduled_start_stop_id"),
-                    }
-                )
-                mapped_match_end_stop = self._identifier_mapping_service.apply_mapping(
-                    {
-                        "stop_id": record.get("scheduled_end_stop_id"),
-                    }
-                )
-    
-                scheduled_start_time = self._coerce_datetime(record.get("scheduled_start_time"))
-                scheduled_end_time = self._coerce_datetime(record.get("scheduled_end_time"))
-                scheduled_start_stop_id = mapped_match_start_stop.get("stop_id")
-                scheduled_end_stop_id = mapped_match_end_stop.get("stop_id")
-                scheduled_intermediate_stops: list[tuple[str, datetime]] = []
-    
-                intermediate_candidates = trip_payload.get("scheduled_intermediate_stops")
-                if isinstance(intermediate_candidates, list):
-                    for candidate in intermediate_candidates:
-                        if not isinstance(candidate, tuple) or len(candidate) != 2:
-                            continue
-    
-                        candidate_stop_id, candidate_time = candidate
-                        mapped_intermediate_stop = self._identifier_mapping_service.apply_mapping(
-                            {
-                                "stop_id": candidate_stop_id,
-                            }
-                        )
-                        
-                        mapped_stop_id = mapped_intermediate_stop.get("stop_id")
-                        coerced_time = self._coerce_datetime(candidate_time)
-    
-                        if mapped_stop_id is None or coerced_time is None:
-                            continue
-    
-                        scheduled_intermediate_stops.append((str(mapped_stop_id), coerced_time))
-
+            if not is_new_trip and not trip_reference_is_valid:
                 matched_trip_id, matched_assignment_type = await self._matching_service.match(
                     trip_id=derived_trip_id,
                     route_id=trip_payload["route_id"] or None,
                     operation_day_date=self._parse_operation_day(trip_payload.get("start_date")),
-                    scheduled_start_time=scheduled_start_time,
-                    scheduled_end_time=scheduled_end_time,
-                    scheduled_start_stop_id=(
-                        str(scheduled_start_stop_id)
-                        if scheduled_start_stop_id is not None
-                        else None
-                    ),
-                    scheduled_end_stop_id=(
-                        str(scheduled_end_stop_id)
-                        if scheduled_end_stop_id is not None
-                        else None
-                    ),
-                    scheduled_intermediate_stops=scheduled_intermediate_stops,
-                    is_complete_stop_sequence=bool(
-                        record.get("is_complete_stop_sequence", scheduled_start_time is not None)
-                    ),
+                    **match_inputs,
+                    is_complete_stop_sequence=trip_payload["is_complete_stop_sequence"],
                     intermediate_stop_sample_size=self.MAX_INTERMEDIATE_STOP_SAMPLE_SIZE,
                 )
 
+                trip_assignment_type = matched_assignment_type.value
+
                 if matched_trip_id is not None:
                     resolved_trip_id = matched_trip_id
-                    trip_assignment_type = matched_assignment_type.value
-                    vehicle_assignment_type = matched_assignment_type.value
-
                     trip_reference_is_valid = True
-                    await realtime_repository.delete_trips_by_trip_ids([derived_trip_id])
-                else:
-                    trip_assignment_type = matched_assignment_type.value
-                    vehicle_assignment_type = matched_assignment_type.value
-                    trip_payload["is_active_on_create"] = False
 
             has_invalid_reference = (not route_is_valid) or (not stop_reference_is_valid) or (not trip_reference_is_valid)
 
@@ -281,12 +233,6 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
 
             trip_is_trip_valid = trip_reference_is_valid
             trip_is_route_valid = route_is_valid
-            vehicle_is_valid = (
-                bool(record.get("is_valid", True))
-                and route_is_valid
-                and stop_reference_is_valid
-                and trip_reference_is_valid
-            )
 
             trip_payload["trip_id"] = resolved_trip_id
             trip_id_key = str(trip_payload["trip_id"])
@@ -300,13 +246,6 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
                     kind="Vehicle-position",
                 )
                 vehicle_uuid_by_trip_id[trip_id_key] = vehicle_uuid
-
-            existing_trip_uuid = existing_trip_uuid_by_trip_id.get(str(resolved_trip_id))
-            if existing_trip_uuid is not None:
-                trip_uuid = existing_trip_uuid
-            else:
-                trip_uuid = self._make_unique_id(trip_payload["trip_id"], source_name)
-                existing_trip_uuid_by_trip_id[str(resolved_trip_id)] = trip_uuid
 
             if vehicle_uuid in processed_vehicle_ids:
                 stats_updated += 1
@@ -329,17 +268,19 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
             await realtime_repository.update_vehicle_position_from_sync(
                 vehicle_uuid=vehicle_uuid,
                 source_id=source_id,
-                source_name=source_name,
-                trip_uuid=trip_uuid,
                 trip_id=trip_payload["trip_id"],
+                trip_original_trip_id=derived_trip_id,
                 trip_start_time=trip_payload["start_time"],
                 trip_start_date=trip_payload["start_date"],
                 trip_route_id=trip_payload["route_id"],
                 trip_schedule_relationship=trip_payload["schedule_relationship"],
                 trip_assignment_type=trip_assignment_type,
-                trip_is_active_on_create=trip_payload["is_active_on_create"],
                 trip_is_trip_valid=trip_is_trip_valid,
                 trip_is_route_valid=trip_is_route_valid,
+                trip_scheduled_start_stop_id=match_inputs["scheduled_start_stop_id"],
+                trip_scheduled_end_stop_id=match_inputs["scheduled_end_stop_id"],
+                trip_scheduled_start_time=match_inputs["scheduled_start_time"],
+                trip_scheduled_end_time=match_inputs["scheduled_end_time"],
                 vehicle_id=str(record["vehicle_id"]),
                 vehicle_label=record.get("vehicle_label"),
                 vehicle_license_plate=record.get("vehicle_license_plate"),
@@ -349,10 +290,8 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
                 longitude=float(record["longitude"]),
                 current_stop_sequence=current_stop_sequence,
                 current_status=str(record.get("current_status", "IN_TRANSIT_TO")),
-                assignment_type=vehicle_assignment_type,
                 congestion_level=str(record.get("congestion_level", "UNKNOWN_CONGESTION_LEVEL")),
                 is_active_on_create=vehicle_is_active_on_create,
-                is_valid=vehicle_is_valid,
             )
 
             if (
@@ -390,38 +329,11 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
             stats_deleted += len(policy_based_deletes)
             deleted_vehicle_ids.update(policy_based_deletes)
 
-        deleted_vehicle_trip_ids = {
-            str(existing_vehicles[vehicle_id].trip_id)
-            for vehicle_id in deleted_vehicle_ids
-            if vehicle_id in existing_vehicles and getattr(existing_vehicles[vehicle_id], "trip_id", None)
-        }
-
-        if deleted_vehicle_trip_ids:
-            trip_ids_with_stop_events = await realtime_repository.list_trip_ids_with_stop_events(
-                list(deleted_vehicle_trip_ids)
-            )
-
-            deletable_trip_ids = deleted_vehicle_trip_ids - trip_ids_with_stop_events
-
-            if deletable_trip_ids:
-                resolved_trips = await realtime_repository.list_trips_by_trip_ids(
-                    list(deletable_trip_ids)
-                )
-                
-                deletable_trips = {
-                    trip.id: trip
-                    for trip in resolved_trips
-                    if trip.data_source_id == source_id
-                }
-
-                if deletable_trips:
-                    await realtime_repository.delete_trips_for_data_source_by_ids(
-                        source_id,
-                        list(deletable_trips.keys()),
-                    )
-
-                for id, trip in deletable_trips.items():
-                    await self._caching_service.pop_trip_id(trip.original_trip_id)
+        for vehicle_id in deleted_vehicle_ids:
+            deleted_vehicle = existing_vehicles.get(vehicle_id)
+            original_trip_id = getattr(getattr(deleted_vehicle, "trip", None), "original_trip_id", None)
+            if original_trip_id:
+                await self._caching_service.pop_trip_id(original_trip_id)
 
         logger.info(
             f"[{self.get_adapter_type()}] Vehicle-position import completed for '{source_name}': "

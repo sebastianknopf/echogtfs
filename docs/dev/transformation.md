@@ -282,6 +282,7 @@ Allowed data model:
         "is_active": bool,
         "is_trip_valid": bool,
         "is_route_valid": bool,
+        "is_complete_stop_sequence": bool,
         "scheduled_start_stop_id": str | None,
         "scheduled_start_time": datetime | None,
         "scheduled_end_stop_id": str | None,
@@ -297,10 +298,8 @@ Allowed data model:
     "longitude": float | int,
     "current_stop_sequence": int,
     "current_status": str,
-    "assignment_type": str,
     "congestion_level": str,
     "is_active": bool,
-    "is_valid": bool,
     "stop_id": str,
 }
 ```
@@ -319,7 +318,6 @@ Processed top-level fields:
 - current_status: optional, default IN_TRANSIT_TO.
 - congestion_level: optional, default UNKNOWN_CONGESTION_LEVEL.
 - is_active: optional create-only value for vehicle, default True.
-- is_valid: optional value for vehicle, default True.
 - stop_id: optional stop-reference validation input.
 
 Trip payload sources for vehicle_positions:
@@ -339,8 +337,9 @@ Trip payload processing rules:
 - trip is_trip_valid defaults to True.
 - trip is_route_valid defaults to True.
 - mapped `route_id` replaces the original route ID in the normalized trip payload.
-- trip.scheduled_start_stop_id, trip.scheduled_start_time, trip.scheduled_end_stop_id, and trip.scheduled_end_time are nullable and passed to matching.
+- trip.scheduled_start_stop_id, trip.scheduled_start_time, trip.scheduled_end_stop_id, and trip.scheduled_end_time are nullable, passed to matching and persisted in the trip descriptor (stop IDs after mapping).
 - trip.scheduled_intermediate_stops is an optional list of `(stop_id, datetime)` tuples for additional scheduled anchors.
+- trip.is_complete_stop_sequence is an optional boolean, default True. If true, matching first uses the start/end anchors; otherwise only the intermediate stops are used. A flat top-level `is_complete_stop_sequence` is accepted as fallback.
 
 Derived matching inputs for vehicle_positions:
 
@@ -348,7 +347,8 @@ Derived matching inputs for vehicle_positions:
 - scheduled_end_time: taken from transformer field trip.scheduled_end_time and coerced to datetime, or None.
 - scheduled_start_stop_id: taken from transformer field trip.scheduled_start_stop_id, mapped via stop mapping, or None.
 - scheduled_end_stop_id: taken from transformer field trip.scheduled_end_stop_id, mapped via stop mapping, or None.
-- scheduled_intermediate_stops: optional mapped list of `(stop_id, datetime)` tuples from vehicle payload, or trip payload fallback.
+- scheduled_intermediate_stops: optional mapped list of `(stop_id, datetime)` tuples from the trip payload, or the flat vehicle payload as fallback.
+- The matching cycle (cached ID, start/end anchors, intermediate-stop fallback, assignment types) is the same as for trip_updates.
 
 Intermediate fallback matching for vehicle_positions:
 
@@ -358,9 +358,9 @@ Intermediate fallback matching for vehicle_positions:
 
 Assignment behavior for vehicle_positions:
 
-- If trip_id is nominal GTFS trip ID: trip_assignment_type and vehicle assignment_type become DIRECT_BY_ID.
-- If trip_id is not nominal and match succeeds: both assignment fields become MATCHED_BY_CURRENT_STOP and trip_id is replaced by matched ID.
-- If trip_id is not nominal and match fails: both assignment fields become NO_MATCH_GENERAL.
+- If trip_id is nominal GTFS trip ID: trip_assignment_type becomes DIRECT_BY_ID.
+- If trip_id is not nominal and match succeeds: the trip assignment type becomes MATCHED_BY_CURRENT_STOP and trip_id is replaced by matched ID.
+- If trip_id is not nominal and match fails: the trip assignment type becomes NO_MATCH_GENERAL.
 
 Invalid-reference policy effects for vehicle_positions:
 
@@ -370,7 +370,7 @@ Invalid-reference policy effects for vehicle_positions:
     - `trip_id` is neither a nominal GTFS trip ID nor successfully matched.
 - Persisted `trip_is_trip_valid` becomes false when the trip reference is invalid.
 - Persisted `trip_is_route_valid` becomes false when the route reference is invalid.
-- Persisted vehicle `is_valid` becomes false when the route, stop, or trip reference is invalid.
+- A vehicle position has no own validity flag; it is valid when its trip descriptor is valid (`is_trip_valid` and `is_route_valid`). An invalid optional `stop_id` only affects the invalid-reference policy.
 - `discard_entire_object`: skip the full vehicle position and delete an existing synced vehicle with the same ID.
 - `discard_invalid` and `discard_invalid_elements`:
     - clear trip `route_id` to an empty string when the mapped route is invalid.

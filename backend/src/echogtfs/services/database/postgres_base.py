@@ -14,7 +14,7 @@ _current_session: ContextVar[tuple[object, AsyncSession] | None] = ContextVar(
 )
 
 
-class RepositoryBase:
+class PostgresRepositoryBase:
     """Shared async SQLAlchemy engine/session lifecycle for repositories."""
 
     def __init__(self, database_url: str, debug: bool = False):

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import date, datetime
 import re
@@ -638,7 +638,6 @@ class ServiceAlertRead(BaseModel):
     cause: str
     effect: str
     severity_level: str
-    source: str
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -681,7 +680,6 @@ class TripRead(BaseModel):
     """Read model for realtime trips."""
     id: UUID
     data_source_id: int | None
-    source: str
     trip_id: str
     original_trip_id: str | None = None
     scheduled_start_stop_id: str | None = None
@@ -727,7 +725,10 @@ class VehicleTripSummaryRead(BaseModel):
     start_time: str | None = None
     start_date: str
     schedule_relationship: str
-    is_active: bool
+    scheduled_start_stop_id: str | None = None
+    scheduled_end_stop_id: str | None = None
+    scheduled_start_time: datetime | None = None
+    scheduled_end_time: datetime | None = None
     is_valid: bool
 
     model_config = {"from_attributes": True}
@@ -737,7 +738,6 @@ class VehicleRead(BaseModel):
     """Read model for realtime vehicle positions."""
     id: UUID
     data_source_id: int | None
-    source: str
     trip_id: str
     vehicle_id: str
     vehicle_label: str | None
@@ -748,7 +748,6 @@ class VehicleRead(BaseModel):
     longitude: float
     current_stop_sequence: int | None
     current_status: str
-    assignment_type: str
     congestion_level: str
     is_active: bool
     created_at: datetime

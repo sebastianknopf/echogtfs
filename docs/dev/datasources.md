@@ -33,7 +33,7 @@ The processing flow separates transport and source-specific parsing from record 
 
 The concrete transformer return contract and record shapes are documented in [transformation.md](transformation.md). Trip matching and stop propagation are described in [matching.md](matching.md) and [stop-propagation.md](stop-propagation.md).
 
-`RealtimeProcessingDispatcherService` wraps record synchronization in a transaction provided by the realtime repository, so each synchronization operation is atomic.
+`RealtimeProcessingDispatcherService` wraps record synchronization in a transaction provided by the realtime repository, so each synchronization operation is atomic. Writes are buffered and committed together, and the GTFS-RT exports read snapshots, so they never see an uncommitted run. Details are in [realtime-storage.md](realtime-storage.md). Nominal GTFS IDs are validated against a Redis cache instead of being loaded per run, see [gtfs-id-cache.md](gtfs-id-cache.md).
 
 ## Base Types
 
@@ -65,7 +65,7 @@ The frontend clears cron values for event-based and subscription-based sources. 
 
 ## Scheduling and Worker Execution
 
-`DatasourceSchedulerService` registers cron jobs for active sources with a cron expression. It supports five-field minute-based and six-field second-based cron expressions. It skips subscription-based sources and logs a warning rather than polling them. Scheduled source runs execute in a process pool.
+`DatasourceSchedulerService` registers cron jobs for active sources with a cron expression. It supports five-field minute-based and six-field second-based cron expressions. It skips subscription-based sources and logs a warning rather than polling them. Scheduled source runs execute in a process pool. Each worker process creates its own repository instances, including the MongoDB client of the realtime repository, from the same connection settings.
 
 | Configuration | Default | Meaning |
 |---|---|---|

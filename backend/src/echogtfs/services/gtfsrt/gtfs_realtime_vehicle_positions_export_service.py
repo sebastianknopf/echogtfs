@@ -10,7 +10,7 @@ from google.protobuf.json_format import MessageToDict
 from echogtfs import gtfs_realtime_pb2
 from echogtfs.enum.gtfsrt import WheelchairAccessible
 from echogtfs.services.database.intf_realtime_repository import RealtimeRepositoryInterface
-from echogtfs.services.database.models import Vehicle
+from echogtfs.services.database.realtime_models import VehiclePosition
 from echogtfs.services.gtfsrt.intf_gtfs_realtime_export import GtfsRealtimeExportInterface
 
 
@@ -40,7 +40,7 @@ class GtfsRealtimeVehiclePositionsExportService(GtfsRealtimeExportInterface):
 
         return json.dumps(feed_dict, indent=2).encode("utf-8")
 
-    async def _load_vehicle_positions(self) -> list[Vehicle]:
+    async def _load_vehicle_positions(self) -> list[VehiclePosition]:
         """Load active Vehicle entities with their trip relations."""
         return list(await self._repository.get_realtime_vehicles())
 
@@ -188,10 +188,10 @@ class GtfsRealtimeVehiclePositionsExportService(GtfsRealtimeExportInterface):
             return value
 
     @staticmethod
-    def _vehicle_id_value(vehicle_model: Vehicle) -> str:
+    def _vehicle_id_value(vehicle_model: VehiclePosition) -> str:
         return vehicle_model.vehicle_id or str(vehicle_model.id)
 
-    def _build_feed_message(self, vehicles: list[Vehicle]) -> gtfs_realtime_pb2.FeedMessage:
+    def _build_feed_message(self, vehicles: list[VehiclePosition]) -> gtfs_realtime_pb2.FeedMessage:
         """Build GTFS-RT FeedMessage from Vehicle models."""
         feed = gtfs_realtime_pb2.FeedMessage()
 

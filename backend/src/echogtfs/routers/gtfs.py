@@ -17,6 +17,7 @@ from apscheduler.triggers.cron import CronTrigger
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
+from echogtfs.services.caching import get_caching_service
 from echogtfs.services.database import get_gtfs_repository, get_system_repository
 from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
 from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
@@ -41,7 +42,7 @@ _GtfsRepo = Annotated[GtfsRepositoryInterface, Depends(get_gtfs_repository)]
 
 def create_gtfs_import_service(repository: _Repo, gtfs_repository: _GtfsRepo) -> GtfsImportInterface:
     """Create a GTFS import service instance for the current dependency scope."""
-    return GtfsImportService(repository, gtfs_repository)
+    return GtfsImportService(repository, gtfs_repository, get_caching_service())
 
 
 _GtfsImport = Annotated[GtfsImportInterface, Depends(create_gtfs_import_service)]

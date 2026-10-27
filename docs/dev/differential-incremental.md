@@ -17,7 +17,7 @@
 `TripUpdateProcessingService.sync_records` executes this order:
 
 1. Read invalid-reference policy and `is_differential_updates` from the data source row.
-2. Initialize identifier mapping and load nominal GTFS entity IDs.
+2. Initialize identifier mapping and prefetch the nominal GTFS IDs of the incoming records from the Redis cache (see [gtfs-id-cache.md](gtfs-id-cache.md)).
 3. Resolve existing realtime trips for this source and incoming trip UUIDs.
 4. For each incoming trip-update record:
    - Map route and stop IDs.
@@ -90,11 +90,19 @@ This keeps incremental prognosis consistent with each stop's own `scheduled_*` v
 
 `RealtimeRepository.update_trip_update_from_sync` persists trip updates as replace-on-write for stop events:
 
-1. Create or update one `Trip` row (including `is_complete_stop_sequence` and nullable `start_time`).
-2. Delete existing `StopEvent` rows for current `trip_id` (and previous `trip_id` if it changed).
-3. Insert all provided stop events with normalized defaults (`original_stop_id`, `is_implied_schedule_relationship`).
+1. Queue one upsert of the trip update document, keyed by the document ID (`_id` is the trip UUID). It includes `is_complete_stop_sequence` and the nullable `start_time`.
+2. The embedded `stop_events` array is replaced as a whole with the provided stop events, using normalized defaults (`original_stop_id`, `is_implied_schedule_relationship`). `stop_event_count` and `flags` are recomputed.
+3. `is_active` and `created_at` are written only on insert. A cached-ID assignment (`MATCH_BY_CACHED_ID`) never overwrites the assignment type of an existing document.
 
-The merge and delay-propagation logic lives in `StopEventPropagationService`, orchestrated by `TripUpdateProcessingService`; the repository persists the already-resolved stop-event list atomically.
+The upsert is buffered in the current transaction and becomes visible with its commit, see [realtime-storage.md](realtime-storage.md).
+
+The merge and delay-propagation logic lives in `StopEventPropagationService`, orchestrated by `TripUpdateProcessingService`; the repository persists the already-resolved stop-event list in the same document write.
+
+## Late Matching of Unmatched Trips
+
+A trip that could not be matched is stored with `trip_id == original_trip_id` and `is_trip_valid = false`. If a later run matches it to a nominal trip, `TripUpdateProcessingService` reuses the stored document of the same data source: the document keeps its `_id`, `trip_id` changes to the matched ID, and `is_trip_valid` becomes true. No delete and re-create happens.
+
+If a document with the matched `trip_id` already exists in addition to the unmatched one, the unmatched document is deleted via `delete_trips_by_trip_ids` and the existing document is updated. The unique index on `trip_id` makes this case necessary. Vehicle positions follow the same matching cycle, but never delete trip updates.
 
 ## Differential Deletion Semantics
 

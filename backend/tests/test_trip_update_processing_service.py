@@ -8,6 +8,7 @@ import _service_test_bootstrap  # noqa: F401
 
 from datetime import datetime, timezone
 import unittest
+import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -142,7 +143,7 @@ class TestTripUpdateProcessingService(unittest.IsolatedAsyncioTestCase):
             TripUpdateProcessingService.MAX_INTERMEDIATE_STOP_SAMPLE_SIZE,
         )
         self.assertEqual(TripUpdateProcessingService.MAX_INTERMEDIATE_STOP_SAMPLE_SIZE, 3)
-        realtime_repository.delete_trips_by_trip_ids.assert_awaited_once_with(["external-trip-1"])
+        realtime_repository.delete_trips_by_trip_ids.assert_not_awaited()
         kwargs = realtime_repository.update_trip_update_from_sync.await_args.kwargs
         self.assertEqual(kwargs["trip_id"], "matched-trip-1")
         self.assertEqual(kwargs["assignment_type"], "MATCHED_BY_START_STOP")
@@ -150,6 +151,67 @@ class TestTripUpdateProcessingService(unittest.IsolatedAsyncioTestCase):
             "external-trip-1",
             "matched-trip-1",
         )
+
+    async def test_sync_trip_update_records_updates_unmatched_trip_in_place_when_matched_later(self):
+        repository = _SystemRepositoryStub()
+        realtime_repository = _RealtimeRepositoryStub()
+        gtfs_repository = _GtfsRepositoryStub()
+        gtfs_repository.list_gtfs_entity_ids = AsyncMock(
+            return_value={"agency": {"a1"}, "route": {"r1"}, "stop": {"s1"}, "trip": {"nominal-trip"}}
+        )
+        unmatched_trip = SimpleNamespace(
+            id=uuid.uuid4(),
+            data_source_id=2,
+            trip_id="external-trip-1",
+            original_trip_id="external-trip-1",
+            is_active=True,
+            is_complete_stop_sequence=True,
+            start_time=None,
+            scheduled_start_time=None,
+            scheduled_end_time=None,
+            scheduled_start_stop_id=None,
+            scheduled_end_stop_id=None,
+        )
+        realtime_repository.list_trips_for_data_source = AsyncMock(return_value=[unmatched_trip])
+        realtime_repository.list_trips_by_trip_ids = AsyncMock(return_value=[unmatched_trip])
+        realtime_repository.list_trips_by_ids = AsyncMock(return_value=[unmatched_trip])
+        datasource = make_processor(TripUpdateProcessingService, {})
+        datasource._caching_service = SimpleNamespace(put_trip_id=AsyncMock(), pop_trip_id=AsyncMock())
+        datasource._matching_service = SimpleNamespace(
+            match=AsyncMock(return_value=("nominal-trip", AssignmentType.MATCHED_BY_START_STOP))
+        )
+        datasource._identifier_mapping_service = SimpleNamespace(
+            initialize=AsyncMock(),
+            get_loaded_mapping_count=lambda: 0,
+            apply_mapping=lambda entity: entity,
+        )
+
+        result = await datasource.sync_records(
+            repository=repository,
+            realtime_repository=realtime_repository,
+            gtfs_repository=gtfs_repository,
+            source_id=2,
+            source_name="Demo",
+            records=[
+                {
+                    "id": "trip-upd-1",
+                    "trip_id": "external-trip-1",
+                    "start_time": "08:00:00",
+                    "start_date": "20260801",
+                    "route_id": "r1",
+                    "stop_events": [],
+                }
+            ],
+        )
+
+        self.assertEqual(result, {"added": 0, "updated": 1, "deleted": 0})
+        realtime_repository.delete_trips_by_trip_ids.assert_not_awaited()
+        realtime_repository.delete_trips_for_data_source_by_ids.assert_not_awaited()
+        kwargs = realtime_repository.update_trip_update_from_sync.await_args.kwargs
+        self.assertEqual(kwargs["trip_uuid"], unmatched_trip.id)
+        self.assertEqual(kwargs["trip_id"], "nominal-trip")
+        self.assertEqual(kwargs["original_trip_id"], "external-trip-1")
+        self.assertTrue(kwargs["is_trip_valid"])
     async def test_sync_trip_update_records_sets_invalid_and_deactivates_when_trip_unmatched(self):
         repository = _SystemRepositoryStub()
         realtime_repository = _RealtimeRepositoryStub()

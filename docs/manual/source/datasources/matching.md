@@ -4,7 +4,7 @@ Das Matching ordnet externe Fahrten-IDs aus Datenquellen den passenden Fahrten a
 
 ## Einsatzbereiche
 
-Matching wird nur dann angewendet, wenn eine eingehende Fahrt nicht direkt über ihre Fahrt-ID im GTFS-Feed gefunden wird.
+Matching wird nur dann angewendet, wenn eine eingehende Fahrt oder Fahrzeugsposition nicht direkt über ihre Fahrt-ID im GTFS-Feed gefunden wird.
 
 Wenn eine direkte Zuordnung möglich ist, wird kein Matching benötigt.
 
@@ -14,7 +14,7 @@ Die Zuordnung erfolgt schrittweise:
 
 1. Vorhandene Zuordnung aus einem früheren Lauf wiederverwenden.
 2. Abgleich über Linie, Betriebstag sowie geplante Start-/Endzeit und Start-/Endhaltestelle.
-3. Fallback-Abgleich über drei zufällig gewählte Zwischenhalte.
+3. Fallback-Abgleich über bis zu drei zufällig gewählte Zwischenhalte.
 
 Sobald eine Stufe genau eine eindeutige Fahrt liefert, wird diese verwendet.
 
@@ -41,7 +41,7 @@ Dadurch führen beispielsweise falsch versorgte Steige in den Quelldaten nicht z
 
 Der Zwischenhalt-Fallback wird automatisch verwendet, wenn aus Start- und Endzeit einer Fahrt kein erfolgreiches Match gefunden wurde.
 
-In diesem Fall werden maximal 3 zufällig gewählte Zwischenhalte (Haltestelle + Zeit) mit den GTFS-Haltezeiten verglichen:
+In diesem Fall werden bis zu drei zufällig gewählte Zwischenhalte (Haltestelle + Zeit) mit den GTFS-Haltezeiten verglichen:
 
 - Die Haltestelle muss zur Fahrt passen.
 - Die Zeit muss innerhalb einer 120-Sekunden-Toleranz um die geplante Abfahrtszeit liegen.

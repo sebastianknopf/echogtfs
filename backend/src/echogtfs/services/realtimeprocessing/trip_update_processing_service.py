@@ -72,8 +72,24 @@ class TripUpdateProcessingService(RealtimeProcessingServiceBase):
             )
         )
 
-        gtfs_entities = await self._load_gtfs_entities(gtfs_repository)
-        nominal_trip_ids = gtfs_entities.get("trip", set())
+        gtfs_id_validator = self._create_gtfs_id_validator(gtfs_repository)
+        await gtfs_id_validator.prefetch(
+            "route",
+            (
+                self._identifier_mapping_service.apply_mapping({"route_id": record.get("route_id")}).get("route_id")
+                for record in records
+            ),
+        )
+        await gtfs_id_validator.prefetch(
+            "stop",
+            (
+                self._identifier_mapping_service.apply_mapping({"stop_id": event.get("stop_id")}).get("stop_id")
+                for record in records
+                for event in record.get("stop_events", [])
+            ),
+        )
+        await gtfs_id_validator.prefetch("trip", (record.get("trip_id") for record in records))
+        gtfs_entities = gtfs_id_validator.valid_ids()
         if self._matching_service is None:
             self._matching_service = MatchingService(gtfs_repository, self._caching_service)
 
@@ -164,67 +180,22 @@ class TripUpdateProcessingService(RealtimeProcessingServiceBase):
             original_trip_id = derived_trip_id
             resolved_trip_id = derived_trip_id
             assignment_type = AssignmentType.DIRECT_BY_ID.value
-            trip_reference_is_valid = True if is_new_trip else derived_trip_id in nominal_trip_ids
+            trip_reference_is_valid = True if is_new_trip else derived_trip_id in gtfs_entities["trip"]
             matched_trip_id: str | None = None
             matched_assignment_type: AssignmentType | None = None
 
-            mapped_match_start_stop = self._identifier_mapping_service.apply_mapping(
-                {
-                    "stop_id": record.get("scheduled_start_stop_id"),
-                }
-            )
-            
-            mapped_match_end_stop = self._identifier_mapping_service.apply_mapping(
-                {
-                    "stop_id": record.get("scheduled_end_stop_id"),
-                }
-            )
-
-            scheduled_start_time = self._coerce_datetime(record.get("scheduled_start_time"))
-            scheduled_end_time = self._coerce_datetime(record.get("scheduled_end_time"))
-            scheduled_start_stop_id = mapped_match_start_stop.get("stop_id")
-            scheduled_end_stop_id = mapped_match_end_stop.get("stop_id")
-            scheduled_intermediate_stops: list[tuple[str, datetime]] = []
-
-            intermediate_candidates = record.get("scheduled_intermediate_stops")
-            if isinstance(intermediate_candidates, list):
-                for candidate in intermediate_candidates:
-                    if not isinstance(candidate, tuple) or len(candidate) != 2:
-                        continue
-
-                    candidate_stop_id, candidate_time = candidate
-                    mapped_intermediate_stop = self._identifier_mapping_service.apply_mapping(
-                        {
-                            "stop_id": candidate_stop_id,
-                        }
-                    )
-                    
-                    mapped_stop_id = mapped_intermediate_stop.get("stop_id")
-                    coerced_time = self._coerce_datetime(candidate_time)
-
-                    if mapped_stop_id is None or coerced_time is None:
-                        continue
-
-                    scheduled_intermediate_stops.append((str(mapped_stop_id), coerced_time))
+            match_inputs = self._map_scheduled_match_inputs(record)
+            scheduled_start_time = match_inputs["scheduled_start_time"]
+            scheduled_end_time = match_inputs["scheduled_end_time"]
+            scheduled_start_stop_id = match_inputs["scheduled_start_stop_id"]
+            scheduled_end_stop_id = match_inputs["scheduled_end_stop_id"]
 
             if not is_new_trip and not trip_reference_is_valid:
                 matched_trip_id, matched_assignment_type = await self._matching_service.match(
                     trip_id=derived_trip_id,
                     route_id=str(mapped_trip.get("route_id") or "") or None,
                     operation_day_date=self._parse_operation_day(record.get("start_date")),
-                    scheduled_start_time=scheduled_start_time,
-                    scheduled_end_time=scheduled_end_time,
-                    scheduled_start_stop_id=(
-                        str(scheduled_start_stop_id)
-                        if scheduled_start_stop_id is not None
-                        else None
-                    ),
-                    scheduled_end_stop_id=(
-                        str(scheduled_end_stop_id)
-                        if scheduled_end_stop_id is not None
-                        else None
-                    ),
-                    scheduled_intermediate_stops=scheduled_intermediate_stops,
+                    **match_inputs,
                     is_complete_stop_sequence=is_complete_stop_sequence,
                     intermediate_stop_sample_size=self.MAX_INTERMEDIATE_STOP_SAMPLE_SIZE,
                 )
@@ -234,12 +205,24 @@ class TripUpdateProcessingService(RealtimeProcessingServiceBase):
                     assignment_type = matched_assignment_type.value
 
                     trip_reference_is_valid = True
-
-                    await realtime_repository.delete_trips_by_trip_ids([original_trip_id])
                 else:
                     assignment_type = matched_assignment_type.value
 
             persisted_trip_uuid = existing_trip_uuid_by_trip_id.get(str(resolved_trip_id))
+            if matched_trip_id is not None:
+                unmatched_trip_uuid = existing_trip_uuid_by_trip_id.get(original_trip_id)
+                unmatched_trip = existing_trips.get(unmatched_trip_uuid)
+                can_reuse_unmatched = (
+                    unmatched_trip is not None
+                    and unmatched_trip.data_source_id == source_id
+                    and unmatched_trip.trip_id == original_trip_id
+                )
+
+                if persisted_trip_uuid is None and can_reuse_unmatched:
+                    persisted_trip_uuid = unmatched_trip_uuid
+                elif unmatched_trip_uuid is not None and persisted_trip_uuid != unmatched_trip_uuid:
+                    await realtime_repository.delete_trips_by_trip_ids([original_trip_id])
+
             if persisted_trip_uuid is None:
                 persisted_trip_uuid = self._make_unique_id(resolved_trip_id, source_name)
 
@@ -374,7 +357,6 @@ class TripUpdateProcessingService(RealtimeProcessingServiceBase):
             await realtime_repository.update_trip_update_from_sync(
                 trip_uuid=persisted_trip_uuid,
                 source_id=source_id,
-                source_name=source_name,
                 trip_id=resolved_trip_id,
                 start_time=persist_start_time,
                 start_date=str(record["start_date"]),

@@ -19,6 +19,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from echogtfs.common.config import settings
 from echogtfs.common.intf_progress_report import ReportProgressInterface
+from echogtfs.services.caching.intf_caching_service import CachingServiceInterface
 from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
 from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
 from echogtfs.services.database.models import AppSetting
@@ -55,9 +56,15 @@ class GtfsImportService(GtfsImportInterface):
 
     _scheduler: AsyncIOScheduler | None = None
 
-    def __init__(self, repository: SystemRepositoryInterface, gtfs_repository: GtfsRepositoryInterface):
+    def __init__(
+        self,
+        repository: SystemRepositoryInterface,
+        gtfs_repository: GtfsRepositoryInterface,
+        caching_service: CachingServiceInterface | None = None,
+    ):
         self._repository = repository
         self._gtfs_repository = gtfs_repository
+        self._caching_service = caching_service
         
         timezone_name = getattr(settings, "timezone", "UTC")
         if not isinstance(timezone_name, str) or not timezone_name.strip():
@@ -277,6 +284,9 @@ class GtfsImportService(GtfsImportInterface):
                 await self._gtfs_repository.insert_gtfs_stop_times(batch)
 
             stop_times_count = sum(len(batch) for batch in stop_time_batches)
+
+            if self._caching_service is not None:
+                await self._caching_service.rebuild_gtfs_ids(self._gtfs_repository)
 
             return {
                 "agencies": len(agencies),

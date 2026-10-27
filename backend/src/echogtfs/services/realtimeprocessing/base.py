@@ -1,21 +1,17 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import asynccontextmanager
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 import logging
 import uuid
 from typing import Any
 
-from echogtfs.common.global_id import GlobalId
-from echogtfs.enum.gtfsrt import AssignmentType
-from echogtfs.enum.system import IncorrectStopIdHandling, InvalidReferencePolicy
+from echogtfs.services.caching import get_caching_service
 from echogtfs.services.caching.intf_caching_service import CachingServiceInterface
 from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
-from echogtfs.services.database.intf_realtime_repository import RealtimeRepositoryInterface
-from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
 from echogtfs.services.enrichment.intf_entity_enrichment import EntityEnrichmentInterface
 from echogtfs.services.mapping.intf_identifier_mapping import IdentifierMappingInterface
+from echogtfs.services.realtimeprocessing.gtfs_id_validator import GtfsIdValidator
 from echogtfs.services.matching.intf_matching_service import MatchingServiceInterface
 from echogtfs.services.matching.matching_service import MatchingService
 
@@ -51,31 +47,9 @@ class RealtimeProcessingServiceBase:
         
         return uuid.uuid5(namespace, f"{source_name}-{original_id}")
 
-    async def _load_gtfs_entities(
-        self,
-        repository: GtfsRepositoryInterface,
-    ) -> dict[str, set[str]]:
-        """Load all GTFS entity IDs into memory for fast validation.
-        
-        Returns a dictionary with sets of valid IDs:
-        {
-            "agency": {"agency_1", "agency_2", ...},
-            "route": {"route_1", "route_2", ...},
-            "stop": {"stop_1", "stop_2", ...}
-        }
-        
-        Args:
-            db: Database session
-        """
-        logger.info("[Datasource] Loading GTFS entities into memory for validation")
-        gtfs_entities = await repository.list_gtfs_entity_ids()
-        
-        logger.info(
-            f"[Datasource] Loaded {len(gtfs_entities['agency'])} agencies, "
-            f"{len(gtfs_entities['route'])} routes, {len(gtfs_entities['stop'])} stops"
-        )
-        
-        return gtfs_entities
+    def _create_gtfs_id_validator(self, repository: GtfsRepositoryInterface) -> GtfsIdValidator:
+        """Create the per-run validator for nominal GTFS IDs (cache-backed)."""
+        return GtfsIdValidator(get_caching_service(), repository)
 
     def _validate_entity(
         self, 
@@ -86,7 +60,7 @@ class RealtimeProcessingServiceBase:
         
         Args:
             entity_data: Dictionary with entity fields (agency_id, route_id, stop_id)
-            gtfs_entities: Dictionary of valid GTFS IDs from _load_gtfs_entities()
+            gtfs_entities: Dictionary of valid GTFS IDs from GtfsIdValidator.valid_ids()
         
         Returns:
             True if all referenced entities are valid, False otherwise
@@ -162,7 +136,7 @@ class RealtimeProcessingServiceBase:
         
         Args:
             entity_data: Dictionary with entity fields (agency_id, route_id, stop_id, etc.)
-            gtfs_entities: Dictionary of valid GTFS IDs from _load_gtfs_entities()
+            gtfs_entities: Dictionary of valid GTFS IDs from GtfsIdValidator.valid_ids()
         
         Returns:
             Tuple of (cleaned_entity_data, has_any_valid_reference)
@@ -279,6 +253,41 @@ class RealtimeProcessingServiceBase:
             return value
 
         return None
+
+    def _map_scheduled_match_inputs(self, record: dict[str, Any]) -> dict[str, Any]:
+        """Apply identifier mapping to the scheduled stops of a record and collect the matching criteria."""
+        mapped_start_stop = self._identifier_mapping_service.apply_mapping(
+            {"stop_id": record.get("scheduled_start_stop_id")}
+        ).get("stop_id")
+        mapped_end_stop = self._identifier_mapping_service.apply_mapping(
+            {"stop_id": record.get("scheduled_end_stop_id")}
+        ).get("stop_id")
+
+        intermediate_stops: list[tuple[str, datetime]] = []
+        intermediate_candidates = record.get("scheduled_intermediate_stops")
+        if isinstance(intermediate_candidates, list):
+            for candidate in intermediate_candidates:
+                if not isinstance(candidate, tuple) or len(candidate) != 2:
+                    continue
+
+                candidate_stop_id, candidate_time = candidate
+                mapped_stop_id = self._identifier_mapping_service.apply_mapping(
+                    {"stop_id": candidate_stop_id}
+                ).get("stop_id")
+                coerced_time = self._coerce_datetime(candidate_time)
+
+                if mapped_stop_id is None or coerced_time is None:
+                    continue
+
+                intermediate_stops.append((str(mapped_stop_id), coerced_time))
+
+        return {
+            "scheduled_start_time": self._coerce_datetime(record.get("scheduled_start_time")),
+            "scheduled_end_time": self._coerce_datetime(record.get("scheduled_end_time")),
+            "scheduled_start_stop_id": str(mapped_start_stop) if mapped_start_stop is not None else None,
+            "scheduled_end_stop_id": str(mapped_end_stop) if mapped_end_stop is not None else None,
+            "scheduled_intermediate_stops": intermediate_stops,
+        }
 
     @staticmethod
     def _parse_operation_day(start_date: Any) -> date | None:

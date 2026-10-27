@@ -85,7 +85,8 @@ class TestVehiclePositionProcessingService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(kwargs["trip_route_id"], "mapped-route")
         self.assertEqual(kwargs["vehicle_id"], "vehicle-1")
         self.assertEqual(kwargs["trip_assignment_type"], "DIRECT_BY_ID")
-        self.assertEqual(kwargs["assignment_type"], "DIRECT_BY_ID")
+        self.assertIn("trip_scheduled_start_stop_id", kwargs)
+        self.assertNotIn("assignment_type", kwargs)
         datasource._matching_service.match.assert_not_awaited()
     async def test_sync_vehicle_position_records_sets_no_match_assignment_when_matching_fails(self):
         repository = _SystemRepositoryStub()
@@ -133,7 +134,6 @@ class TestVehiclePositionProcessingService(unittest.IsolatedAsyncioTestCase):
         datasource._matching_service.match.assert_awaited_once()
         kwargs = realtime_repository.update_vehicle_position_from_sync.await_args.kwargs
         self.assertEqual(kwargs["trip_assignment_type"], "NO_MATCH_GENERAL")
-        self.assertEqual(kwargs["assignment_type"], "NO_MATCH_GENERAL")
     async def test_sync_vehicle_position_records_discards_record_without_trip_object(self):
         repository = _SystemRepositoryStub()
         realtime_repository = _RealtimeRepositoryStub()
@@ -220,7 +220,7 @@ class TestVehiclePositionProcessingService(unittest.IsolatedAsyncioTestCase):
         )
 
         datasource._matching_service.match.assert_awaited_once()
-        realtime_repository.delete_trips_by_trip_ids.assert_awaited_once_with(["external-trip-1"])
+        realtime_repository.delete_trips_by_trip_ids.assert_not_awaited()
         match_kwargs = datasource._matching_service.match.await_args.kwargs
         self.assertIsNotNone(match_kwargs["scheduled_start_time"])
         self.assertIsNotNone(match_kwargs["scheduled_end_time"])
@@ -353,7 +353,7 @@ class TestVehiclePositionProcessingService(unittest.IsolatedAsyncioTestCase):
         )
 
         kwargs = realtime_repository.update_vehicle_position_from_sync.await_args.kwargs
-        self.assertFalse(kwargs["is_valid"])
+        self.assertNotIn("is_valid", kwargs)
         self.assertTrue(kwargs["trip_is_trip_valid"])
         self.assertFalse(kwargs["trip_is_route_valid"])
         self.assertEqual(kwargs["trip_route_id"], "")
@@ -407,3 +407,214 @@ class TestVehiclePositionProcessingService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result, {"added": 0, "updated": 0, "deleted": 1})
         realtime_repository.update_vehicle_position_from_sync.assert_not_awaited()
         realtime_repository.delete_vehicles_for_data_source_by_ids.assert_awaited()
+
+class TestVehiclePositionTripDescriptorAndMatching(unittest.IsolatedAsyncioTestCase):
+    @staticmethod
+    def _record(trip: dict | None = None, **overrides) -> dict:
+        record = {
+            "id": "veh-upd-1",
+            "trip": {
+                "trip_id": "external-trip-1",
+                "start_time": "08:00:00",
+                "start_date": "20260801",
+                "route_id": "r1",
+                **(trip or {}),
+            },
+            "vehicle_id": "vehicle-1",
+            "timestamp": "2026-08-01T08:05:00Z",
+            "latitude": 47.1,
+            "longitude": 8.5,
+        }
+        record.update(overrides)
+        return record
+
+    @staticmethod
+    async def _run(records, match_result=(None, AssignmentType.NO_MATCH_GENERAL), policy=None, entities=None):
+        repository = _SystemRepositoryStub()
+        if policy is not None:
+            repository.get_data_source_invalid_reference_policy = AsyncMock(return_value=policy)
+
+        realtime_repository = _RealtimeRepositoryStub()
+        gtfs_repository = _GtfsRepositoryStub()
+        gtfs_repository.list_gtfs_entity_ids = AsyncMock(
+            return_value=entities
+            or {"agency": {"a1"}, "route": {"r1"}, "stop": {"s1", "s2"}, "trip": {"nominal-trip"}}
+        )
+        datasource = make_processor(VehiclePositionProcessingService, {})
+        datasource._caching_service = SimpleNamespace(put_trip_id=AsyncMock(), pop_trip_id=AsyncMock())
+        datasource._matching_service = SimpleNamespace(match=AsyncMock(return_value=match_result))
+        datasource._identifier_mapping_service = SimpleNamespace(
+            initialize=AsyncMock(),
+            get_loaded_mapping_count=lambda: 0,
+            apply_mapping=lambda entity: {
+                **entity,
+                **({"stop_id": f"mapped-{entity['stop_id']}"} if entity.get("stop_id") else {}),
+            },
+        )
+
+        await datasource.sync_records(
+            repository=repository,
+            realtime_repository=realtime_repository,
+            gtfs_repository=gtfs_repository,
+            source_id=2,
+            source_name="Demo",
+            records=records,
+        )
+
+        return datasource, realtime_repository
+
+    async def test_persists_mapped_scheduled_fields_of_trip_descriptor(self):
+        start = datetime(2026, 8, 1, 8, 0, tzinfo=timezone.utc)
+        end = datetime(2026, 8, 1, 9, 0, tzinfo=timezone.utc)
+        record = self._record(
+            {
+                "scheduled_start_stop_id": "s1",
+                "scheduled_start_time": start,
+                "scheduled_end_stop_id": "s2",
+                "scheduled_end_time": end,
+            }
+        )
+
+        _, realtime_repository = await self._run([record])
+
+        kwargs = realtime_repository.update_vehicle_position_from_sync.await_args.kwargs
+        self.assertEqual(kwargs["trip_scheduled_start_stop_id"], "mapped-s1")
+        self.assertEqual(kwargs["trip_scheduled_end_stop_id"], "mapped-s2")
+        self.assertEqual(kwargs["trip_scheduled_start_time"], start)
+        self.assertEqual(kwargs["trip_scheduled_end_time"], end)
+
+    async def test_scheduled_fields_are_none_when_not_provided_and_invalid_times_are_dropped(self):
+        record = self._record({"scheduled_start_time": "2026-08-01T08:00:00Z"})
+
+        _, realtime_repository = await self._run([record])
+
+        kwargs = realtime_repository.update_vehicle_position_from_sync.await_args.kwargs
+        self.assertIsNone(kwargs["trip_scheduled_start_stop_id"])
+        self.assertIsNone(kwargs["trip_scheduled_end_stop_id"])
+        self.assertIsNone(kwargs["trip_scheduled_start_time"])
+        self.assertIsNone(kwargs["trip_scheduled_end_time"])
+
+    async def test_intermediate_stops_and_incomplete_flag_are_passed_to_matching(self):
+        stop_time = datetime(2026, 8, 1, 8, 10, tzinfo=timezone.utc)
+        record = self._record(
+            {
+                "is_complete_stop_sequence": False,
+                "scheduled_intermediate_stops": [("s1", stop_time), ("s2", "invalid"), "broken"],
+            }
+        )
+
+        datasource, _ = await self._run([record])
+
+        match_kwargs = datasource._matching_service.match.await_args.kwargs
+        self.assertFalse(match_kwargs["is_complete_stop_sequence"])
+        self.assertEqual(match_kwargs["scheduled_intermediate_stops"], [("mapped-s1", stop_time)])
+
+    async def test_flat_record_fields_are_used_as_fallback_for_matching(self):
+        stop_time = datetime(2026, 8, 1, 8, 10, tzinfo=timezone.utc)
+        record = self._record(
+            is_complete_stop_sequence=False,
+            scheduled_intermediate_stops=[("s1", stop_time)],
+        )
+
+        datasource, _ = await self._run([record])
+
+        match_kwargs = datasource._matching_service.match.await_args.kwargs
+        self.assertFalse(match_kwargs["is_complete_stop_sequence"])
+        self.assertEqual(match_kwargs["scheduled_intermediate_stops"], [("mapped-s1", stop_time)])
+
+    async def test_complete_sequence_is_the_default_for_matching(self):
+        datasource, _ = await self._run([self._record()])
+
+        self.assertTrue(datasource._matching_service.match.await_args.kwargs["is_complete_stop_sequence"])
+
+    async def test_new_trip_skips_matching_and_is_valid(self):
+        record = self._record({"trip_id": "brand-new", "schedule_relationship": "NEW"})
+
+        datasource, realtime_repository = await self._run([record])
+
+        datasource._matching_service.match.assert_not_awaited()
+        kwargs = realtime_repository.update_vehicle_position_from_sync.await_args.kwargs
+        self.assertTrue(kwargs["trip_is_trip_valid"])
+        self.assertEqual(kwargs["trip_assignment_type"], "DIRECT_BY_ID")
+        self.assertTrue(kwargs["is_active_on_create"])
+
+    async def test_matched_trip_is_valid_and_keeps_original_trip_id(self):
+        datasource, realtime_repository = await self._run(
+            [self._record()], match_result=("nominal-trip", AssignmentType.MATCHED_BY_START_STOP)
+        )
+
+        kwargs = realtime_repository.update_vehicle_position_from_sync.await_args.kwargs
+        self.assertEqual(kwargs["trip_id"], "nominal-trip")
+        self.assertEqual(kwargs["trip_original_trip_id"], "external-trip-1")
+        self.assertEqual(kwargs["trip_assignment_type"], "MATCHED_BY_START_STOP")
+        self.assertTrue(kwargs["trip_is_trip_valid"])
+        self.assertTrue(kwargs["is_active_on_create"])
+
+    async def test_cached_match_is_not_written_back_to_cache(self):
+        datasource, _ = await self._run(
+            [self._record()], match_result=("nominal-trip", AssignmentType.MATCH_BY_CACHED_ID)
+        )
+
+        datasource._caching_service.put_trip_id.assert_not_awaited()
+
+    async def test_failed_match_marks_trip_invalid_deactivates_and_does_not_cache(self):
+        datasource, realtime_repository = await self._run([self._record()])
+
+        kwargs = realtime_repository.update_vehicle_position_from_sync.await_args.kwargs
+        self.assertFalse(kwargs["trip_is_trip_valid"])
+        self.assertTrue(kwargs["trip_is_route_valid"])
+        self.assertEqual(kwargs["trip_assignment_type"], "NO_MATCH_GENERAL")
+        self.assertEqual(kwargs["trip_original_trip_id"], "external-trip-1")
+        self.assertFalse(kwargs["is_active_on_create"])
+        datasource._caching_service.put_trip_id.assert_not_awaited()
+
+    async def test_ambiguous_match_is_reported_in_assignment_type(self):
+        _, realtime_repository = await self._run(
+            [self._record()], match_result=(None, AssignmentType.NO_MATCH_AMBIGUOUS_TRIP)
+        )
+
+        kwargs = realtime_repository.update_vehicle_position_from_sync.await_args.kwargs
+        self.assertEqual(kwargs["trip_assignment_type"], "NO_MATCH_AMBIGUOUS_TRIP")
+
+    async def test_invalid_stop_reference_does_not_invalidate_the_trip(self):
+        record = self._record({"trip_id": "nominal-trip"}, stop_id="unknown-stop")
+
+        _, realtime_repository = await self._run([record])
+
+        kwargs = realtime_repository.update_vehicle_position_from_sync.await_args.kwargs
+        self.assertTrue(kwargs["trip_is_trip_valid"])
+        self.assertTrue(kwargs["trip_is_route_valid"])
+        self.assertNotIn("is_valid", kwargs)
+
+    async def test_keep_object_disabled_deactivates_vehicle_with_invalid_route(self):
+        record = self._record({"trip_id": "nominal-trip", "route_id": "unknown-route"})
+
+        _, realtime_repository = await self._run([record], policy=InvalidReferencePolicy.KEEP_OBJECT_DISABLED)
+
+        kwargs = realtime_repository.update_vehicle_position_from_sync.await_args.kwargs
+        self.assertFalse(kwargs["is_active_on_create"])
+        self.assertFalse(kwargs["trip_is_route_valid"])
+        self.assertEqual(kwargs["trip_route_id"], "unknown-route")
+
+    async def test_valid_vehicle_is_active_on_create_unless_record_says_otherwise(self):
+        record = self._record({"trip_id": "nominal-trip"}, is_active=False)
+
+        _, realtime_repository = await self._run([record])
+
+        self.assertFalse(realtime_repository.update_vehicle_position_from_sync.await_args.kwargs["is_active_on_create"])
+
+    async def test_vehicle_repository_call_has_no_vehicle_level_assignment_or_validity(self):
+        _, realtime_repository = await self._run([self._record({"trip_id": "nominal-trip"})])
+
+        kwargs = realtime_repository.update_vehicle_position_from_sync.await_args.kwargs
+        self.assertNotIn("assignment_type", kwargs)
+        self.assertNotIn("is_valid", kwargs)
+
+    async def test_vehicle_sync_never_touches_trip_updates(self):
+        _, realtime_repository = await self._run(
+            [self._record()], match_result=("nominal-trip", AssignmentType.MATCHED_BY_START_STOP)
+        )
+
+        realtime_repository.delete_trips_by_trip_ids.assert_not_awaited()
+        realtime_repository.update_trip_update_from_sync.assert_not_awaited()
+        realtime_repository.list_trips_by_trip_ids.assert_not_awaited()
