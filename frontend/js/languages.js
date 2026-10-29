@@ -710,6 +710,23 @@ window.translations = {
     'adapter.vdv454.incorrect_stop_id_handling.help_text': 'Legt fest, wie bei abweichender Halt-ID auf Stop-Ebene verfahren wird.',
     'adapter.vdv454.incorrect_stop_id_handling.option.IGNORE': 'Ignorieren',
     'adapter.vdv454.incorrect_stop_id_handling.option.FIX_TO_NOMINAL_STOP_ID': 'Auf Soll-Halt-ID korrigieren',
+
+    // VDV453-VIS Adapter
+    'adapter.vdv453.endpoint.label': 'Endpoint URL',
+    'adapter.vdv453.endpoint.placeholder': 'https://api.example.com/vdv453',
+    'adapter.vdv453.endpoint.help_text': 'URL zum VDV453-VIS Produzenten',
+    'adapter.vdv453.subscriberref.label': 'Leitstellenkennung Client',
+    'adapter.vdv453.subscriberref.placeholder': 'PARTICIPANT_ID-CLIENT',
+    'adapter.vdv453.subscriberref.help_text': 'Leitstellenkennung des Clients',
+    'adapter.vdv453.producerref.label': 'Leitstellenkennung Server',
+    'adapter.vdv453.producerref.placeholder': 'PRODUCER_ID-SERVER',
+    'adapter.vdv453.producerref.help_text': 'Leitstellenkennung des Servers',
+    'adapter.vdv453.dialect.label': 'Dialekt',
+    'adapter.vdv453.dialect.help_text': 'VDV453 Implementierungsvariante',
+    'adapter.vdv453.dialect.option.vdv453_31': 'VDV453-VIS 3.1',
+    'adapter.vdv453.filter.label': 'Filter',
+    'adapter.vdv453.filter.placeholder': 'Optionaler Filter-Ausdruck',
+    'adapter.vdv453.filter.help_text': 'Filter zur Einschränkung der Datenquelle',
     
     // SIRI-SX Adapter
     'adapter.sirisx.endpoint.label': 'Endpoint URL',
@@ -1452,6 +1469,23 @@ window.translations = {
     'adapter.vdv454.incorrect_stop_id_handling.help_text': 'Defines how to handle differing stop IDs on stop level.',
     'adapter.vdv454.incorrect_stop_id_handling.option.IGNORE': 'Ignore',
     'adapter.vdv454.incorrect_stop_id_handling.option.FIX_TO_NOMINAL_STOP_ID': 'Fix to nominal stop ID',
+
+    // VDV453-VIS Adapter
+    'adapter.vdv453.endpoint.label': 'Endpoint URL',
+    'adapter.vdv453.endpoint.placeholder': 'https://api.example.com/vdv453',
+    'adapter.vdv453.endpoint.help_text': 'URL to the VDV453-VIS producer',
+    'adapter.vdv453.subscriberref.label': 'Participant Reference Consumer',
+    'adapter.vdv453.subscriberref.placeholder': 'YOUR_PARTICIPANT_ID',
+    'adapter.vdv453.subscriberref.help_text': 'Participant identifier of the consumer',
+    'adapter.vdv453.producerref.label': 'Participant Reference Producer',
+    'adapter.vdv453.producerref.placeholder': 'PRODUCER_ID',
+    'adapter.vdv453.producerref.help_text': 'Participant identifier of the producer',
+    'adapter.vdv453.dialect.label': 'Dialect',
+    'adapter.vdv453.dialect.help_text': 'VDV453 implementation variant',
+    'adapter.vdv453.dialect.option.vdv453_31': 'VDV453-VIS 3.1',
+    'adapter.vdv453.filter.label': 'Filter',
+    'adapter.vdv453.filter.placeholder': 'Optional filter expression',
+    'adapter.vdv453.filter.help_text': 'Filter to restrict the data source',
     
     // SIRI-SX Adapter
     'adapter.sirisx.endpoint.label': 'Endpoint URL',
