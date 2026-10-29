@@ -3,12 +3,15 @@ import unittest
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from echogtfs.datasources.transformers.vdv453_31_vehicle_positions_transformer import (
     Vdv453V31VehiclePositionsTransformer,
 )
+
+MODULE = "echogtfs.datasources.transformers.vdv453_31_vehicle_positions_transformer"
 
 # 13.3377 degrees east and 52.5079 degrees north in milliseconds of arc
 LONGITUDE_MS = 48015918
@@ -72,6 +75,11 @@ def _payload(*activities: str) -> ET.Element:
 
 class TestVdv453V31VehiclePositionsTransformer(unittest.TestCase):
     def setUp(self) -> None:
+        for level in ("debug", "info", "warning", "error"):
+            patcher = patch(f"{MODULE}.logger.{level}")
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
         self.transformer = self._transformer()
         self.now = datetime.now(timezone.utc).replace(microsecond=0)
 
