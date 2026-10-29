@@ -47,7 +47,7 @@ The base class supplies shared behavior such as source context injection, reques
 
 `SubscriptionDatasourceBase` extends `DatasourceBase` for adapters that can describe a managed subscription. It adds the abstract `get_subscription_params()` method; the method returns datasource-specific configuration for the subscription manager. The subscription manager adds the datasource ID reference and internal HTTP sink.
 
-The base type alone does not select execution mode. A persisted `subscription_based` execution type selects subscription lifecycle management, and the adapter must also inherit `SubscriptionDatasourceBase` to supply its configuration. Currently, SIRI-ET, SIRI-SX, and SIRI-VM implement this contract; SIRI-Lite and GTFS-RT use `DatasourceBase` directly.
+The base type alone does not select execution mode. A persisted `subscription_based` execution type selects subscription lifecycle management, and the adapter must also inherit `SubscriptionDatasourceBase` to supply its configuration. Currently, SIRI-ET, SIRI-SX, SIRI-VM, and VDV454 implement this contract; SIRI-Lite and GTFS-RT use `DatasourceBase` directly.
 
 ## Execution Modes
 

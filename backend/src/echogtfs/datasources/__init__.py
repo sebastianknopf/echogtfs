@@ -11,6 +11,7 @@ from echogtfs.datasources.siriet import SiriEtDatasource
 from echogtfs.datasources.sirilite import SiriLiteDatasource
 from echogtfs.datasources.sirivm import SiriVmDatasource
 from echogtfs.datasources.sirisx import SiriSxDatasource
+from echogtfs.datasources.vdv454 import Vdv454Datasource
 
 __all__ = [
     "DatasourceBase",
@@ -20,6 +21,7 @@ __all__ = [
     "SiriLiteDatasource",
     "SiriVmDatasource",
     "SiriSxDatasource",
+    "Vdv454Datasource",
     "DATASOURCE_REGISTRY",
     "get_datasource",
 ]
@@ -31,6 +33,7 @@ DATASOURCE_REGISTRY: dict[str, type[DatasourceBase]] = {
     "sirisx": SiriSxDatasource,
     "siriet": SiriEtDatasource,
     "sirivm": SiriVmDatasource,
+    "vdv454": Vdv454Datasource,
 }
 
 
