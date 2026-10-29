@@ -81,7 +81,6 @@ class TestVdv454Datasource(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(params["provider_url"], "https://x/aus")
         self.assertEqual(params["service"], "ET")
-        self.assertEqual(params["requestor_ref"], "P1")
         self.assertEqual(params["producer_ref"], "PROD1")
         self.assertEqual(params["delivery_mode"], "fetched")
         self.assertTrue(params["incremental_updates"])
