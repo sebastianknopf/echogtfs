@@ -1,4 +1,4 @@
-"""Transformers for datasource-specific payload formats."""
+﻿"""Transformers for datasource-specific payload formats."""
 
 from echogtfs.datasources.transformers.intf_service_alerts_transformer import (
     ServiceAlertsTransformerInterface,
@@ -14,6 +14,9 @@ from echogtfs.datasources.transformers.gtfsrt_service_alerts_transformer import 
 )
 from echogtfs.datasources.transformers.siriet_trip_updates_transformer import (
     SiriEtTripUpdatesTransformer,
+)
+from echogtfs.datasources.transformers.vdv454_31_trip_updates_transformer import (
+    Vdv454V31TripUpdatesTransformer,
 )
 from echogtfs.datasources.transformers.sirivm_vehicle_positions_transformer import (
     SiriVmVehiclePositionsTransformer,
@@ -31,6 +34,7 @@ __all__ = [
     "VehiclePositionsTransformerInterface",
     "GtfsRtServiceAlertsTransformer",
     "SiriEtTripUpdatesTransformer",
+    "Vdv454V31TripUpdatesTransformer",
     "SiriVmVehiclePositionsTransformer",
     "SwissServiceAlertsTransformer",
     "SiriSxServiceAlertsTransformer",

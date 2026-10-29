@@ -90,7 +90,8 @@ If no stop events are produced, the journey is discarded.
 - `schedule_relationship` defaults to `SCHEDULED`.
 - If `ExtraJourney=true`, relationship is `NEW`.
 - Else if `Cancellation=true`, relationship is `CANCELED`.
-- Output `is_complete_stop_sequence` is currently always `True` for accepted journeys.
+- Output `is_complete_stop_sequence` is extracted from `IsCompleteStopSequence` and is `True` only when the value is `true`; otherwise `False`.
+- For incomplete journeys (`False`), `start_time`, `scheduled_start_time` and `scheduled_end_time` are `None`, and all calls are used as `scheduled_intermediate_stops`.
 
 ## Trip Window Rules
 

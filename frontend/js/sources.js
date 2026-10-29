@@ -689,7 +689,7 @@ const sources = (() => {
       tr.innerHTML = `
         <td>${ui.esc(String(source.id))}</td>
         <td>${ui.esc(source.name)}</td>
-        <td>${ui.esc(source.type)}</td>
+        <td>${ui.esc(String(source.type || '').toUpperCase())}</td>
         <td>${ui.esc(executionTypeText)}</td>
         <td>${ui.esc(lastRunText)}</td>
         ${_siriServiceAvailable ? `<td>${subscriptionStatus}</td>` : ''}
@@ -753,7 +753,7 @@ const sources = (() => {
       _adapterTypes.forEach(adapter => {
         const option = document.createElement('option');
         option.value = adapter.type;
-        option.textContent = adapter.type;
+        option.textContent = adapter.type.toUpperCase();
         typeSelect.appendChild(option);
       });
     }
