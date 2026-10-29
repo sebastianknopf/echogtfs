@@ -45,7 +45,6 @@ class SiriSubscriptionService(SiriSubscriptionServiceInterface):
 
         internal_config = {
             "subscription_ref": str(datasource_id),
-            "delivery_mode": "direct",
             "sink": {
                 "type": "http",
                 "url": f"http://backend:8000/internal/execute/datasource/{datasource_id}",

@@ -108,7 +108,7 @@ class TestSiriSubscriptionService(unittest.IsolatedAsyncioTestCase):
             "http://siricomservice:8080/api/subscriptions",
             json={
                 "provider_url": "https://provider.example/siri",
-                "delivery_mode": "direct",
+                "delivery_mode": "other",
                 "subscription_ref": "42",
                 "sink": {
                     "type": "http",
