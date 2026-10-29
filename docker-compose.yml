@@ -46,13 +46,12 @@ services:
       start_period: 15s
 
   siricomservice:
-    image: sebastianknopf/siriconsumer:0.2.0
+    image: sebastianknopf/siriconsumer:0.3.0
     profiles:
       - siripubsub
     restart: unless-stopped
     volumes:
-      - siricomserviceapp:/app
-      - siricomservicelogs:/var/log/siri
+      - siricomservicedata:/data
 
   backend:
     build:
@@ -81,7 +80,7 @@ services:
       GLOBAL_ID_PATTERN: ${GLOBAL_ID_PATTERN}
     command: "echogtfs"
     volumes:
-      - datasource_logs:/var/log/echogtfs/datasources
+      - datasourcelogs:/var/log/echogtfs/datasources
     depends_on:
       database:
         condition: service_healthy
@@ -105,6 +104,5 @@ volumes:
   pgsqldata:
   redisdata:
   mongodata:
-  siricomserviceapp:
-  siricomservicelogs:
-  datasource_logs:
+  siricomservicedata:
+  datasourcelogs:
