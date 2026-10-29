@@ -87,6 +87,26 @@ class TestVdv454Datasource(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(params["incremental_updates"])
         self.assertNotIn("consumer_address", params)
 
+    def test_subscription_filters_default_to_empty(self):
+        params = Vdv454Datasource(_config()).get_subscription_params()
+
+        self.assertEqual(params["filters"], {"operators": [], "lines": []})
+
+    def test_subscription_filters_use_prefixed_values_only(self):
+        datasource = Vdv454Datasource(
+            _config(filter="line/de:123:456, line/de:789:000 operator/OP1 operator/OP2 legacy_value")
+        )
+
+        self.assertEqual(
+            datasource.get_subscription_params()["filters"],
+            {"operators": ["OP1", "OP2"], "lines": ["de:123:456", "de:789:000"]},
+        )
+
+    def test_subscription_filters_ignore_legacy_filters(self):
+        datasource = Vdv454Datasource(_config(filter="legacy1 legacy2"))
+
+        self.assertEqual(datasource._get_subscription_filters(), {"operators": [], "lines": []})
+
     async def test_fetch_records_is_not_implemented(self):
         with self.assertRaises(NotImplementedError):
             await Vdv454Datasource(_config())._fetch_records()

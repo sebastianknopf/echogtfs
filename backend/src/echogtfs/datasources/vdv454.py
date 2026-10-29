@@ -199,6 +199,15 @@ class Vdv454Datasource(SubscriptionDatasourceBase):
             "_transform_runtime_ms": transformer.get_runtime_duration_ms(),
         }
 
+    def _get_subscription_filters(self) -> dict[str, list[str]]:
+        """Map prefixed line/operator filters to subscription filters; legacy filters are ignored."""
+        filters = self.get_filters()
+
+        return {
+            "operators": list(filters["operator"]),
+            "lines": list(filters["line"]),
+        }
+
     def get_subscription_params(self) -> dict[str, Any]:
         """Return the parameters required to configure the subscription.
 
@@ -220,6 +229,7 @@ class Vdv454Datasource(SubscriptionDatasourceBase):
             "initial_termination_time": "2999-12-31T23:59:00Z",
             "incremental_updates": True,
             "change_before_updates": "PT30S",
+            "filters": self._get_subscription_filters(),
             "heartbeat": {
                 "enabled": True,
                 "timeout_seconds": 180,
