@@ -2292,6 +2292,9 @@ body {
 .md-switch input:checked ~ .md-switch__track          { background: var(--md-primary); }
 .md-switch input:checked ~ .md-switch__track::after   { transform: translateX(16px); }
 .md-switch__label { font-size: .875rem; line-height: 1.5; }
+.md-switch input:disabled ~ .md-switch__track,
+.md-switch input:disabled ~ .md-switch__label { opacity: 0.38; cursor: not-allowed; }
+.md-switch:has(input:disabled) { cursor: not-allowed; }
 
 /* -- Modal form helpers ------------------------------------------------------ */
 .modal-form-row {
