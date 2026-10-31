@@ -139,13 +139,14 @@ class VehiclePosition:
     timestamp: Any
     latitude: float
     longitude: float
-    current_stop_sequence: int | None
+    stop_id: str | None
     current_status: str
     congestion_level: str
     is_active: bool
     created_at: datetime
     updated_at: datetime
     trip: VehicleTripDescriptor
+    is_stop_valid: bool = True
     data_source_name: str | None = None
 
     @property
