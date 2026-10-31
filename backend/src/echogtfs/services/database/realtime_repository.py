@@ -909,7 +909,11 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
 
         await self.write(
             TRIP_UPDATES_COLLECTION,
-            UpdateOne({"_id": str(trip_uuid)}, {"$set": fields, "$setOnInsert": on_insert}, upsert=True),
+            UpdateOne(
+                {"$or": [{"_id": str(trip_uuid)}, {"trip_id": trip_id}]},
+                {"$set": fields, "$setOnInsert": {**on_insert, "_id": str(trip_uuid)}},
+                upsert=True,
+            ),
         )
 
         return "upserted"
@@ -1091,7 +1095,11 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
 
         await self.write(
             VEHICLE_POSITIONS_COLLECTION,
-            UpdateOne({"_id": str(vehicle_uuid)}, {"$set": fields, "$setOnInsert": on_insert}, upsert=True),
+            UpdateOne(
+                {"$or": [{"_id": str(vehicle_uuid)}, {"trip.trip_id": trip_id}]},
+                {"$set": fields, "$setOnInsert": {**on_insert, "_id": str(vehicle_uuid)}},
+                upsert=True,
+            ),
         )
 
         return "upserted"

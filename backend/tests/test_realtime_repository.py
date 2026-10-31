@@ -536,7 +536,11 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
 
         operation = self._written_operation(self.trips)
         fields = operation._doc["$set"]
-        self.assertEqual(operation._filter, {"_id": str(trip_uuid)})
+        self.assertEqual(
+            operation._filter,
+            {"$or": [{"_id": str(trip_uuid)}, {"trip_id": "trip-1"}]},
+        )
+        self.assertEqual(operation._doc["$setOnInsert"]["_id"], str(trip_uuid))
         self.assertEqual([event["stop_sequence"] for event in fields["stop_events"]], ["2", "10"])
         self.assertEqual(fields["stop_event_count"], 2)
         self.assertEqual(fields["original_trip_id"], "orig-1")
@@ -616,7 +620,10 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
 
         operation = self._written_operation(self.vehicles)
         fields = operation._doc["$set"]
-        self.assertEqual(operation._filter, {"_id": str(vehicle_uuid)})
+        self.assertEqual(
+            operation._filter,
+            {"$or": [{"_id": str(vehicle_uuid)}, {"trip.trip_id": "trip-1"}]},
+        )
         self.assertTrue(operation._upsert)
         self.assertNotIn("is_active", fields)
         self.assertFalse(operation._doc["$setOnInsert"]["is_active"])

@@ -258,6 +258,12 @@ class TripUpdateProcessingService(RealtimeProcessingServiceBase):
                     assignment_type = matched_assignment_type.value
 
             persisted_trip_uuid = existing_trip_uuid_by_trip_id.get(str(resolved_trip_id))
+            if persisted_trip_uuid is None and matched_trip_id is not None:
+                for stored_trip in await realtime_repository.list_trips_by_trip_ids([str(resolved_trip_id)]):
+                    persisted_trip_uuid = stored_trip.id
+                    existing_trip_uuid_by_trip_id[str(stored_trip.trip_id)] = stored_trip.id
+                    existing_trips.setdefault(stored_trip.id, stored_trip)
+                    existing_trip_ids.add(stored_trip.id)
             if matched_trip_id is not None:
                 unmatched_trip_uuid = existing_trip_uuid_by_trip_id.get(original_trip_id)
                 unmatched_trip = existing_trips.get(unmatched_trip_uuid)
