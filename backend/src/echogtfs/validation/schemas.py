@@ -725,10 +725,13 @@ class VehicleTripSummaryRead(BaseModel):
     start_time: str | None = None
     start_date: str
     schedule_relationship: str
+    assignment_type: str | None = None
     scheduled_start_stop_id: str | None = None
     scheduled_end_stop_id: str | None = None
     scheduled_start_time: datetime | None = None
     scheduled_end_time: datetime | None = None
+    is_trip_valid: bool = True
+    is_route_valid: bool = True
     is_valid: bool
 
     model_config = {"from_attributes": True}
@@ -747,7 +750,17 @@ class VehicleRead(BaseModel):
     latitude: float
     longitude: float
     stop_id: str | None
+    stop_name: str | None = None
+    is_stop_valid: bool = True
     current_status: str
+    congestion_level: str
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    is_valid: bool
+    data_source_name: str | None = None
+    trip: VehicleTripSummaryRead | None = None
+
     congestion_level: str
     is_active: bool
     created_at: datetime

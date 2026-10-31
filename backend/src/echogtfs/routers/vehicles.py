@@ -21,8 +21,8 @@ _Repo = Annotated[RealtimeRepositoryInterface, Depends(get_realtime_repository)]
 _GtfsRepo = Annotated[GtfsRepositoryInterface, Depends(get_gtfs_repository)]
 
 
-async def _load_gtfs_route_names(repository: GtfsRepositoryInterface) -> dict[str, str]:
-    """Load GTFS route ID-to-name mapping for vehicle line enrichment."""
+async def _load_gtfs_entity_names(repository: GtfsRepositoryInterface) -> dict[str, dict[str, str]]:
+    """Load GTFS route and stop IDs and names for vehicle enrichment."""
     routes = await repository.list_gtfs_routes(query="", limit=100000)
     route_names: dict[str, str] = {}
 
@@ -43,19 +43,25 @@ async def _load_gtfs_route_names(repository: GtfsRepositoryInterface) -> dict[st
         if name:
             route_names[gtfs_id] = name
 
-    return route_names
+    stops = await repository.list_gtfs_stops(query="", limit=100000)
+
+    return {"route": route_names, "stop": {stop.gtfs_id: stop.name for stop in stops}}
 
 
-def _enrich_vehicles_with_route_names(vehicles: list[dict], route_names: dict[str, str]) -> None:
-    """Enrich vehicle dicts with resolved trip route names (fallback to route_id)."""
+def _enrich_vehicles_with_entity_names(vehicles: list[dict], entity_names: dict[str, dict[str, str]]) -> None:
+    """Enrich vehicle dicts with resolved route and stop names (fallback to the IDs)."""
     for vehicle in vehicles:
+        stop_id = vehicle.get("stop_id")
+        if stop_id:
+            vehicle["stop_name"] = entity_names["stop"].get(stop_id, stop_id)
+
         trip = vehicle.get("trip")
         if not trip:
             continue
 
         route_id = trip.get("route_id")
         if route_id:
-            trip["route_name"] = route_names.get(route_id, route_id)
+            trip["route_name"] = entity_names["route"].get(route_id, route_id)
 
 
 def _apply_effective_vehicle_validity(
@@ -110,9 +116,9 @@ async def list_vehicles(
         items=items,
     )
 
-    route_names = await _load_gtfs_route_names(gtfs_repository)
+    entity_names = await _load_gtfs_entity_names(gtfs_repository)
     response_dict = response.model_dump()
-    _enrich_vehicles_with_route_names(response_dict["items"], route_names)
+    _enrich_vehicles_with_entity_names(response_dict["items"], entity_names)
 
     trip_ids = [
         item["trip"]["trip_id"]
@@ -145,8 +151,8 @@ async def toggle_vehicle_active(
     vehicle_read = VehicleRead.model_validate(vehicle)
     vehicle_dict = vehicle_read.model_dump()
 
-    route_names = await _load_gtfs_route_names(gtfs_repository)
-    _enrich_vehicles_with_route_names([vehicle_dict], route_names)
+    entity_names = await _load_gtfs_entity_names(gtfs_repository)
+    _enrich_vehicles_with_entity_names([vehicle_dict], entity_names)
 
     trip_ids = [vehicle_dict["trip"]["trip_id"]] if vehicle_dict.get("trip") and vehicle_dict["trip"].get("trip_id") else []
     trip_ids_with_invalid_stop_events = await repository.list_trip_ids_with_invalid_stop_events(trip_ids)
