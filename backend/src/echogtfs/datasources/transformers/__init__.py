@@ -18,6 +18,9 @@ from echogtfs.datasources.transformers.siriet_trip_updates_transformer import (
 from echogtfs.datasources.transformers.vdv454_31_trip_updates_transformer import (
     Vdv454V31TripUpdatesTransformer,
 )
+from echogtfs.datasources.transformers.vdv453_31_vehicle_positions_transformer import (
+    Vdv453V31VehiclePositionsTransformer,
+)
 from echogtfs.datasources.transformers.sirivm_vehicle_positions_transformer import (
     SiriVmVehiclePositionsTransformer,
 )
@@ -35,6 +38,7 @@ __all__ = [
     "GtfsRtServiceAlertsTransformer",
     "SiriEtTripUpdatesTransformer",
     "Vdv454V31TripUpdatesTransformer",
+    "Vdv453V31VehiclePositionsTransformer",
     "SiriVmVehiclePositionsTransformer",
     "SwissServiceAlertsTransformer",
     "SiriSxServiceAlertsTransformer",

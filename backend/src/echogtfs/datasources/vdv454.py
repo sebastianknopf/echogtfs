@@ -221,7 +221,6 @@ class Vdv454Datasource(SubscriptionDatasourceBase):
             "version": "3.1",
             "service": "ET",
             "delivery_mode": "fetched",
-            "requestor_ref": self.config.get("subscriberref"),
             "subscriber_ref": self.config.get("subscriberref"),
             "producer_ref": self.config.get("producerref"),
             "logging": False,
