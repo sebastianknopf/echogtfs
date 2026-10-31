@@ -293,16 +293,6 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
 
             persisted_vehicle_uuids.add(vehicle_uuid)
 
-            current_stop_sequence_raw = record.get("current_stop_sequence")
-            try:
-                current_stop_sequence = (
-                    int(current_stop_sequence_raw)
-                    if current_stop_sequence_raw is not None
-                    else None
-                )
-            except (TypeError, ValueError):
-                current_stop_sequence = None
-
             await realtime_repository.update_vehicle_position_from_sync(
                 vehicle_uuid=vehicle_uuid,
                 source_id=source_id,
@@ -326,7 +316,8 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
                 timestamp=record["timestamp"],
                 latitude=float(record["latitude"]),
                 longitude=float(record["longitude"]),
-                current_stop_sequence=current_stop_sequence,
+                stop_id=str(stop_reference_value) if stop_reference_value else None,
+                is_stop_valid=stop_reference_is_valid,
                 current_status=str(record.get("current_status", "IN_TRANSIT_TO")),
                 congestion_level=str(record.get("congestion_level", "UNKNOWN_CONGESTION_LEVEL")),
                 is_active_on_create=vehicle_is_active_on_create,

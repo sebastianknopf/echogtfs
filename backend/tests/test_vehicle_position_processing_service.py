@@ -60,7 +60,7 @@ class TestVehiclePositionProcessingService(unittest.IsolatedAsyncioTestCase):
                 "timestamp": "2026-08-01T08:05:00Z",
                 "latitude": 47.1,
                 "longitude": 8.5,
-                "current_stop_sequence": 4,
+                "stop_id": None,
                 "current_status": "IN_TRANSIT_TO",
                 "assignment_type": "ASSIGNED",
                 "congestion_level": "UNKNOWN_CONGESTION_LEVEL",

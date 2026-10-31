@@ -310,11 +310,10 @@ Allowed data model:
     "timestamp": str | datetime,
     "latitude": float | int,
     "longitude": float | int,
-    "current_stop_sequence": int,
     "current_status": str,
     "congestion_level": str,
     "is_active": bool,
-    "stop_id": str,
+    "stop_id": str | None,
 }
 ```
 
@@ -329,7 +328,6 @@ Processed top-level fields:
 - timestamp: required.
 - latitude: required.
 - longitude: required.
-- current_stop_sequence: optional, default 0.
 - current_status: optional, default IN_TRANSIT_TO.
 - congestion_level: optional, default UNKNOWN_CONGESTION_LEVEL.
 - is_active: optional create-only value for vehicle, default True.

@@ -746,7 +746,7 @@ class VehicleRead(BaseModel):
     timestamp: datetime
     latitude: float
     longitude: float
-    current_stop_sequence: int | None
+    stop_id: str | None
     current_status: str
     congestion_level: str
     is_active: bool

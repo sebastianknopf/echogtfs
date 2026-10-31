@@ -65,7 +65,6 @@ class TestGtfsRealtimeVehiclePositionsExportService(unittest.IsolatedAsyncioTest
         entity = feed.entity[0]
         self.assertEqual(entity.vehicle.position.latitude, 47.0)
         self.assertEqual(entity.vehicle.position.longitude, 8.0)
-        self.assertEqual(entity.vehicle.current_stop_sequence, 7)
         self.assertEqual(entity.vehicle.trip.route_id, "ROUTE-1")
         self.assertEqual(entity.vehicle.vehicle.id, "BUS-1")
 
@@ -177,7 +176,6 @@ class TestGtfsRealtimeVehiclePositionsExportService(unittest.IsolatedAsyncioTest
             id="vehicle-row-id",
             trip=trip,
             timestamp=1700000001,
-            current_stop_sequence=7,
             vehicle_id=vehicle_id,
             vehicle_label="Vehicle Label",
             vehicle_license_plate="ABC-123",
