@@ -92,7 +92,7 @@ This keeps incremental prognosis consistent with each stop's own `scheduled_*` v
 
 1. Queue one upsert of the trip update document, keyed by the document ID (`_id` is the trip UUID). It includes `is_complete_stop_sequence` and the nullable `start_time`.
 2. The embedded `stop_events` array is replaced as a whole with the provided stop events, using normalized defaults (`original_stop_id`, `is_implied_schedule_relationship`). `stop_event_count` and `flags` are recomputed.
-3. `is_active` and `created_at` are written only on insert. A cached-ID assignment (`MATCH_BY_CACHED_ID`) never overwrites the assignment type of an existing document.
+3. `is_active` and `created_at` are written only on insert. A cached-ID assignment (`MATCHED_BY_CACHED_ID`) never overwrites the assignment type of an existing document.
 
 The upsert is buffered in the current transaction and becomes visible with its commit, see [realtime-storage.md](realtime-storage.md).
 

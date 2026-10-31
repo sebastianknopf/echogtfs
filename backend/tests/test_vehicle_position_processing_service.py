@@ -552,7 +552,7 @@ class TestVehiclePositionTripDescriptorAndMatching(unittest.IsolatedAsyncioTestC
 
     async def test_cached_match_is_not_written_back_to_cache(self):
         datasource, _ = await self._run(
-            [self._record()], match_result=("nominal-trip", AssignmentType.MATCH_BY_CACHED_ID)
+            [self._record()], match_result=("nominal-trip", AssignmentType.MATCHED_BY_CACHED_ID)
         )
 
         datasource._caching_service.put_trip_id.assert_not_awaited()

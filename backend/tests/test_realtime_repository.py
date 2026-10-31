@@ -560,12 +560,12 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
 
     async def test_update_trip_update_from_sync_never_overwrites_assignment_with_cached_id(self):
         await self.repository.update_trip_update_from_sync(
-            **_sync_trip_kwargs(assignment_type=AssignmentType.MATCH_BY_CACHED_ID)
+            **_sync_trip_kwargs(assignment_type=AssignmentType.MATCHED_BY_CACHED_ID)
         )
 
         operation = self._written_operation(self.trips)
         self.assertNotIn("assignment_type", operation._doc["$set"])
-        self.assertEqual(operation._doc["$setOnInsert"]["assignment_type"], AssignmentType.MATCH_BY_CACHED_ID.value)
+        self.assertEqual(operation._doc["$setOnInsert"]["assignment_type"], AssignmentType.MATCHED_BY_CACHED_ID.value)
 
     # ------------------------------------------------------------------ vehicle positions
 
@@ -641,12 +641,12 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
     async def test_update_vehicle_position_from_sync_never_overwrites_assignment_with_cached_id(self):
         await self.repository.update_vehicle_position_from_sync(
             **_sync_vehicle_kwargs(
-                trip_assignment_type=AssignmentType.MATCH_BY_CACHED_ID,
+                trip_assignment_type=AssignmentType.MATCHED_BY_CACHED_ID,
             )
         )
 
         operation = self._written_operation(self.vehicles)
-        cached = AssignmentType.MATCH_BY_CACHED_ID.value
+        cached = AssignmentType.MATCHED_BY_CACHED_ID.value
         self.assertNotIn("trip.assignment_type", operation._doc["$set"])
         self.assertEqual(operation._doc["$setOnInsert"]["trip.assignment_type"], cached)
 
@@ -679,7 +679,7 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
                 "num_non_no_data_events": 0,
                 "num_realtime_events": 0,
             },
-            {"trip_id": "t3", "assignment_type": "MATCH_BY_CACHED_ID", "stop_event_count": 0},
+            {"trip_id": "t3", "assignment_type": "MATCHED_BY_CACHED_ID", "stop_event_count": 0},
         ]
         self.vehicles.docs = [
             {"trip": {"trip_id": "t1", "assignment_type": "DIRECT_BY_ID"}},
@@ -693,7 +693,7 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((r1["num_running_trips"], r1["num_realtime_trips"], r1["num_monitored_trips"]), (2, 1, 1))
         self.assertIn({"DIRECT_BY_ID": 1}, r1["assignment_types"])
         self.assertIn({"NO_MATCH_GENERAL": 1}, r1["assignment_types"])
-        self.assertNotIn("MATCH_BY_CACHED_ID", [key for item in r1["assignment_types"] for key in item])
+        self.assertNotIn("MATCHED_BY_CACHED_ID", [key for item in r1["assignment_types"] for key in item])
         self.assertEqual(result["trips"]["R2"]["num_monitored_trips"], 0)
         self.assertEqual(result["trips"]["R3"]["num_running_trips"], 0)
         self.assertEqual(result["vehicles"]["R1"]["num_vehicles"], 1)

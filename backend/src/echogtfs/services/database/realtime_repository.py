@@ -903,7 +903,7 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         }
         on_insert: dict[str, Any] = {"is_active": is_active_on_create, "created_at": now}
 
-        if assignment_type != AssignmentType.MATCH_BY_CACHED_ID:
+        if assignment_type != AssignmentType.MATCHED_BY_CACHED_ID:
             fields["assignment_type"] = self._text(assignment_type)
         else:
             on_insert["assignment_type"] = self._text(assignment_type)
@@ -1091,7 +1091,7 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         }
         on_insert: dict[str, Any] = {"is_active": is_active_on_create, "created_at": now}
 
-        if trip_assignment_type != AssignmentType.MATCH_BY_CACHED_ID:
+        if trip_assignment_type != AssignmentType.MATCHED_BY_CACHED_ID:
             fields["trip.assignment_type"] = self._text(trip_assignment_type)
         else:
             on_insert["trip.assignment_type"] = self._text(trip_assignment_type)
@@ -1157,7 +1157,7 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         assignment_type_values = [
             assignment_type.value
             for assignment_type in AssignmentType
-            if assignment_type != AssignmentType.MATCH_BY_CACHED_ID
+            if assignment_type != AssignmentType.MATCHED_BY_CACHED_ID
         ]
 
         def _assignment_types(counts: dict[str, int]) -> list[dict[str, int]]:

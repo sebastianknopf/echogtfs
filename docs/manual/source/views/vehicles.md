@@ -16,7 +16,7 @@ Im Bereich "Fahrzeuge" werden alle aktuellen Fahrzeugpositionen angezeigt.
     - **Fahrt-ID**: Zugeordnete Fahrt, auf der das Fahrzeug aktuell verkehrt. Wenn die Fahrt nicht aus dem Soll-Fahrplan ermittelt werden konnte, wird dies über ein Fehler-Icon kenntlich gemacht
     - **Zuordnungstyp**: Gibt an, auf welchem Weg eine Fahrt aus der Datenquelle einer konkreten Fahrt im Soll-Fahrplan zugeordnet wurde. Folgende Werte können hier auftauchen:
         - `DIRECT_BY_ID`: die Fahrt wurde anhand ihrer ID im Soll-Fahrplan gefunden
-        - `MATCH_BY_CACHED_ID`: die Fahrt wurde bereits durch eine andere Datenquelle einer Fahrt im Soll-Fahrplan zugeordnet
+        - `MATCHED_BY_CACHED_ID`: die Fahrt wurde bereits durch eine andere Datenquelle einer Fahrt im Soll-Fahrplan zugeordnet
         - `MATCHED_BY_START_STOP`: die Fahrt wurde anhand ihrer Start- und Endhaltestelle, sowie der Abfahrts- und Ankunftszeit im Soll-Fahrplan gefunden
         - `MATCHED_BY_CURRENT_STOP`: die Fahrt wurde anhand von mindestens einem Unterwegshalt im Soll-Fahrplan gefunden
         - `NO_MATCH_GENERAL`: es wurde keine passende Fahrt im Soll-Fahrplan gefunden

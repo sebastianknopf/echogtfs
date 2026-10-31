@@ -36,7 +36,7 @@ Um die Details zu einer Fahrt anzuzeigen, klicken Sie auf den "View" Button in d
 - Das Flag **Komplettfahrt** gibt an, ob es sich bei dem vorgehaltenen Datenstand um den Gesamtverlauf der Fahrt handelt, oder ob die Fahrt nur mit inkrementellen Updates vorliegt. Weitere Informationen dazu unter {ref}`h-system-copy-system-copy`
 - Der Zuordnungstyp gibt an, auf welchem Weg eine Fahrt aus der Datenquelle einer konkreten Fahrt im Soll-Fahrplan zugeordnet wurde. Folgende Werte können hier auftauchen:
     - `DIRECT_BY_ID`: die Fahrt wurde anhand ihrer ID im Soll-Fahrplan gefunden
-    - `MATCH_BY_CACHED_ID`: die Fahrt wurde bereits durch eine andere Datenquelle einer Fahrt im Soll-Fahrplan zugeordnet
+    - `MATCHED_BY_CACHED_ID`: die Fahrt wurde bereits durch eine andere Datenquelle einer Fahrt im Soll-Fahrplan zugeordnet
     - `MATCHED_BY_START_STOP`: die Fahrt wurde anhand ihrer Start- und Endhaltestelle, sowie der Abfahrts- und Ankunftszeit im Soll-Fahrplan gefunden
     - `MATCHED_BY_CURRENT_STOP`: die Fahrt wurde anhand von mindestens einem Unterwegshalt im Soll-Fahrplan gefunden
     - `NO_MATCH_GENERAL`: es wurde keine passende Fahrt im Soll-Fahrplan gefunden
