@@ -188,7 +188,6 @@ class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
         monitored_call = monitored_journey.find("siri:MonitoredCall", self._siri_ns)
         stop_id = None
         vehicle_at_stop = False
-        current_stop_sequence = None
 
         if monitored_call is not None:
             stop_id = self._get_text(monitored_call.find("siri:StopPointRef", self._siri_ns))
@@ -196,17 +195,6 @@ class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
                 self._get_text(monitored_call.find("siri:VehicleAtStop", self._siri_ns)),
                 default=False,
             )
-
-            order_text = self._get_text(monitored_call.find("siri:Order", self._siri_ns))
-            if order_text is not None:
-                try:
-                    current_stop_sequence = int(order_text)
-                except ValueError:
-                    logger.warning(
-                        "[SiriVmVehiclePositionsTransformer] Ignoring non-integer MonitoredCall.Order '%s' for trip %s",
-                        order_text,
-                        trip_id,
-                    )
 
         current_status = (
             VehicleStopStatus.STOPPED_AT.value
@@ -280,7 +268,6 @@ class SiriVmVehiclePositionsTransformer(VehiclePositionsTransformerInterface):
             "timestamp": timestamp,
             "latitude": latitude,
             "longitude": longitude,
-            "current_stop_sequence": current_stop_sequence,
             "current_status": current_status,
             "congestion_level": CongestionLevel.UNKNOWN_CONGESTION_LEVEL.value,
             "stop_id": stop_id,

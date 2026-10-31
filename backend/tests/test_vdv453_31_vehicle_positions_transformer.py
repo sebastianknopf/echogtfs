@@ -122,7 +122,6 @@ class TestVdv453V31VehiclePositionsTransformer(unittest.TestCase):
         self.assertIsNone(record["trip"]["scheduled_start_stop_id"])
         self.assertIsNone(record["trip"]["scheduled_end_stop_id"])
         self.assertNotIn("stop_id", record)
-        self.assertNotIn("current_stop_sequence", record)
 
     def test_vehicle_id_falls_back_to_service_date_and_trip(self) -> None:
         result = self._transform(self._activity(fahrt_info=None))

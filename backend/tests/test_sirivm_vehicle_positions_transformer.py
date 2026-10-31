@@ -111,7 +111,6 @@ class TestSiriVmVehiclePositionsTransformer(unittest.TestCase):
         self.assertTrue(trip["is_complete_stop_sequence"])
         self.assertNotIn("is_valid", trip)
         self.assertEqual(vehicle["current_status"], VehicleStopStatus.STOPPED_AT.value)
-        self.assertEqual(vehicle["current_stop_sequence"], 7)
         self.assertEqual(vehicle["stop_id"], "STOP_MONITORED")
 
     def test_incomplete_sequence_uses_origin_and_destination_without_aimed_call_times(self) -> None:

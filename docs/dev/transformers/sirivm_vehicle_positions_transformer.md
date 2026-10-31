@@ -64,8 +64,6 @@ Operator filter pattern behavior:
 - `MonitoredCall/VehicleAtStop` controls status:
   - `true` -> `current_status = STOPPED_AT`
   - otherwise -> `current_status = IN_TRANSIT_TO`
-- `MonitoredCall/Order` is parsed as integer for `current_stop_sequence`.
-  - Non-integer values are ignored with a warning.
 
 ### Complete vs Incomplete Stop Sequence
 
@@ -122,7 +120,7 @@ Each parsed record contains both nested and top-level scheduled fields.
   - `vehicle_id`, `vehicle_label`
   - `vehicle_wheelchair_accessible = UNKNOWN`
   - `timestamp`, `latitude`, `longitude`
-  - `current_stop_sequence`, `current_status`, `stop_id`
+  - `current_status`, `stop_id`
   - `congestion_level = UNKNOWN_CONGESTION_LEVEL`
   - Duplicated schedule anchor fields (`scheduled_*`) for vehicle-level consumers.
 
