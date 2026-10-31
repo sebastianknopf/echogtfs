@@ -266,7 +266,7 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
                 continue
 
             vehicle_is_active_on_create = bool(record.get("is_active", True))
-            if should_deactivate_vehicle:
+            if should_deactivate_vehicle or has_invalid_reference:
                 vehicle_is_active_on_create = False
 
             trip_is_trip_valid = trip_reference_is_valid
