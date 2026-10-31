@@ -96,8 +96,8 @@ Both coordinates are optional in the schema, because VIS can also feed a vehicle
 ### Core Trip and Vehicle Fields
 
 - `trip.trip_id` from `FahrtID/FahrtBezeichner`.
-- `trip.start_date` from `FahrtID/Betriebstag`, as delivered (`YYYY-MM-DD`). Default is an empty string.
-- `trip.start_time` is an empty string (same as SIRI-VM).
+- `trip.start_date` from `FahrtID/Betriebstag`, as delivered (`YYYY-MM-DD`). If `Betriebstag` is missing, it falls back to the local date of `scheduled_start_time`; otherwise an empty string.
+- `trip.start_time` is derived from `scheduled_start_time` in the configured time zone (`settings.timezone`) as `HH:MM:SS`, in the same way as in the VDV454 transformer ([vdv454_31_trip_updates_transformer.md](vdv454_31_trip_updates_transformer.md)). If the local start lies on the day after `start_date`, 24 is added to the hours (for example `25:10:00`). Without a start time it is an empty string.
 - `trip.route_id` from `LinienID`.
 - `latitude` and `longitude` from `Latitude` and `Longitude`, see [Coordinate Conversion](#coordinate-conversion).
 

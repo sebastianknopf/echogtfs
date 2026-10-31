@@ -220,6 +220,38 @@ class TestVdv453V31VehiclePositionsTransformer(unittest.TestCase):
         self.assertIsNone(end_only["scheduled_start_time"])
         self.assertIsNone(end_only["scheduled_end_time"])
 
+    def _start_time_for(self, start: datetime, service_date: str | None) -> dict:
+        with patch(f"{MODULE}.settings") as settings:
+            settings.timezone = "Europe/Berlin"
+            transformer = self._transformer()
+
+        activity = self._activity(
+            service_date=service_date,
+            fahrt_info=f"<FahrzeugID>V1</FahrzeugID><AbfahrtszeitStartHst>{_iso(start)}</AbfahrtszeitStartHst>",
+        )
+        return transformer.transform({"root": _payload(activity), "source_name": "t"})[0]["trip"]
+
+    def test_start_time_is_formatted_in_local_time(self) -> None:
+        trip = self._start_time_for(datetime(2026, 1, 15, 8, 5, 9, tzinfo=timezone.utc), "2026-01-15")
+
+        self.assertEqual(trip["start_time"], "09:05:09")
+
+    def test_start_time_exceeds_24_hours_after_service_date(self) -> None:
+        trip = self._start_time_for(datetime(2026, 1, 15, 23, 30, tzinfo=timezone.utc), "2026-01-15")
+
+        self.assertEqual(trip["start_time"], "24:30:00")
+
+    def test_start_date_falls_back_to_local_start_date(self) -> None:
+        trip = self._start_time_for(datetime(2026, 1, 15, 23, 30, tzinfo=timezone.utc), None)
+
+        self.assertEqual(trip["start_date"], "2026-01-16")
+        self.assertEqual(trip["start_time"], "00:30:00")
+
+    def test_start_time_is_empty_without_start_time(self) -> None:
+        trip = self._transform(self._activity())[0]["trip"]
+
+        self.assertEqual(trip["start_time"], "")
+
     def test_short_names_are_not_used_as_stop_ids(self) -> None:
         trip = self._transform(
             self._activity(

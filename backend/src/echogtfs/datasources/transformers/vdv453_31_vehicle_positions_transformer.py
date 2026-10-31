@@ -5,10 +5,12 @@ from __future__ import annotations
 import logging
 import re
 import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from time import perf_counter
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from echogtfs.common.config import settings
 from echogtfs.enum.gtfsrt import CongestionLevel, VehicleStopStatus, WheelchairAccessible
 from echogtfs.datasources.transformers.intf_vehicle_positions_transformer import (
     VehiclePositionsTransformerInterface,
@@ -32,6 +34,7 @@ class Vdv453V31VehiclePositionsTransformer(VehiclePositionsTransformerInterface)
     def __init__(self, filters: dict[str, list[str]]):
         super().__init__(filters)
         self._runtime_duration_ms = 0.0
+        self._target_timezone = self._resolve_timezone(self._configured_timezone_name())
 
     def transform(self, raw_data: Any) -> list[dict[str, Any]]:
         """Transform a VDV453 VIS XML root to internal vehicle-position dictionaries."""
@@ -150,13 +153,20 @@ class Vdv453V31VehiclePositionsTransformer(VehiclePositionsTransformerInterface)
 
         scheduled_start_time, scheduled_end_time, is_complete_stop_sequence = self._extract_schedule_times(activity)
 
+        start_date = self._child_text(activity.find("FahrtID"), "Betriebstag")
+        if not start_date and scheduled_start_time is not None:
+            start_date = scheduled_start_time.astimezone(self._target_timezone).date().isoformat()
+
         timestamp = recorded_at or valid_until or now
 
         record: dict[str, Any] = {
             "trip": {
                 "trip_id": trip_id,
-                "start_time": "",
-                "start_date": self._child_text(activity.find("FahrtID"), "Betriebstag") or "",
+                "start_time": self._format_start_time(
+                    start_date=start_date,
+                    scheduled_start_time=scheduled_start_time,
+                ),
+                "start_date": start_date or "",
                 "route_id": route_id,
                 "schedule_relationship": "SCHEDULED",
                 "assignment_type": "ASSIGNED",
@@ -229,6 +239,59 @@ class Vdv453V31VehiclePositionsTransformer(VehiclePositionsTransformerInterface)
             return current_stop, VehicleStopStatus.STOPPED_AT.value
 
         return (None if at_stop else next_stop), VehicleStopStatus.IN_TRANSIT_TO.value
+
+    @staticmethod
+    def _configured_timezone_name() -> str:
+        timezone_name = getattr(settings, "timezone", "UTC")
+        if not isinstance(timezone_name, str) or not timezone_name.strip():
+            return "UTC"
+
+        return timezone_name
+
+    @staticmethod
+    def _resolve_timezone(timezone_name: str) -> ZoneInfo:
+        try:
+            return ZoneInfo(timezone_name)
+        except ZoneInfoNotFoundError:
+            logger.warning(
+                "[Vdv453V31VehiclePositionsTransformer] Unknown TIMEZONE '%s'. Falling back to UTC",
+                timezone_name,
+            )
+
+            return ZoneInfo("UTC")
+
+    @staticmethod
+    def _parse_service_date(value: str | None) -> date | None:
+        if not value:
+            return None
+
+        candidate = value.strip()
+        for fmt in ("%Y-%m-%d", "%Y%m%d"):
+            try:
+                return datetime.strptime(candidate, fmt).date()
+            except ValueError:
+                continue
+
+        return None
+
+    def _format_start_time(
+        self,
+        *,
+        start_date: str | None,
+        scheduled_start_time: datetime | None,
+    ) -> str:
+        """Format the local start time; hours exceed 23 when the start lies on the day after the service date."""
+        if scheduled_start_time is None:
+            return ""
+
+        local_start_dt = scheduled_start_time.astimezone(self._target_timezone)
+
+        service_date = self._parse_service_date(start_date)
+        if service_date is not None and local_start_dt.date() == service_date + timedelta(days=1):
+            hours = local_start_dt.hour + 24
+            return f"{hours:02d}:{local_start_dt.minute:02d}:{local_start_dt.second:02d}"
+
+        return local_start_dt.strftime("%H:%M:%S")
 
     def _extract_schedule_times(
         self,
