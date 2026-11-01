@@ -6,7 +6,7 @@ import unittest
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -260,6 +260,28 @@ class TestMatchingService(unittest.IsolatedAsyncioTestCase):
         sampled = service._match_by_intermediate_stops.await_args.kwargs["scheduled_intermediate_stops"]
         self.assertEqual(len(sampled), 2)
 
+    async def test_match_intermediate_fallback_preserves_order_for_sampled_stops(self):
+        stops = [
+            (f"de:123:stop{i}:platformX", datetime(2026, 1, 1, 8, i, 0, tzinfo=UTC))
+            for i in range(5)
+        ]
+        service = MatchingService(SimpleNamespace(), SimpleNamespace(get_trip_id=AsyncMock(return_value=None)))
+        service._match_by_intermediate_stops = AsyncMock(return_value=(None, False))
+
+        with patch(
+            "echogtfs.services.matching.matching_service.random.sample",
+            return_value=[4, 1, 3],
+        ):
+            await service.match(
+                trip_id="x",
+                route_id="R1",
+                scheduled_intermediate_stops=stops,
+                intermediate_stop_sample_size=3,
+            )
+
+        sampled = service._match_by_intermediate_stops.await_args.kwargs["scheduled_intermediate_stops"]
+        self.assertEqual([item[0] for item in sampled], ["de:123:stop1", "de:123:stop3", "de:123:stop4"])
+
     async def test_match_does_not_use_intermediate_fallback_when_start_time_exists(self):
         repository = SimpleNamespace(
             find_trip_ids_by_match_properties=AsyncMock(return_value=None),
@@ -424,3 +446,28 @@ class TestMatchingService(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result, (None, AssignmentType.NO_MATCH_GENERAL))
         caching_service.put_trip_id.assert_not_awaited()
+
+    def test_trip_matches_intermediate_stops_rejects_reversed_stop_order(self):
+        trip = SimpleNamespace(
+            stop_times=[
+                SimpleNamespace(
+                    stop_id="de:123:stopA:platform1",
+                    departure_time=datetime(2026, 1, 1, 8, 5, 0, tzinfo=UTC),
+                ),
+                SimpleNamespace(
+                    stop_id="de:123:stopB:platform1",
+                    departure_time=datetime(2026, 1, 1, 8, 10, 0, tzinfo=UTC),
+                ),
+            ]
+        )
+        service = MatchingService(SimpleNamespace(), SimpleNamespace(get_trip_id=AsyncMock(return_value=None)))
+
+        matches = service._trip_matches_intermediate_stops(
+            trip,
+            [
+                ("de:123:stopB", datetime(2026, 1, 1, 8, 10, 0, tzinfo=UTC)),
+                ("de:123:stopA", datetime(2026, 1, 1, 8, 5, 0, tzinfo=UTC)),
+            ],
+        )
+
+        self.assertFalse(matches)
