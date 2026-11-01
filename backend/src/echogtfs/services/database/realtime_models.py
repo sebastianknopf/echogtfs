@@ -155,4 +155,4 @@ class VehiclePosition:
 
     @property
     def is_valid(self) -> bool:
-        return self.trip.is_valid
+        return bool(self.trip.is_valid and self.is_stop_valid)

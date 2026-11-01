@@ -331,7 +331,7 @@ Processed top-level fields:
 - current_status: optional, default IN_TRANSIT_TO.
 - congestion_level: optional, default UNKNOWN_CONGESTION_LEVEL.
 - is_active: optional create-only value for vehicle, default True.
-- stop_id: optional stop-reference validation input.
+- stop_id: optional. Current stop of the vehicle; validated against nominal GTFS stop IDs and persisted as nullable `stop_id`.
 
 Trip payload sources for vehicle_positions:
 
@@ -383,7 +383,8 @@ Invalid-reference policy effects for vehicle_positions:
     - `trip_id` is neither a nominal GTFS trip ID nor successfully matched.
 - Persisted `trip_is_trip_valid` becomes false when the trip reference is invalid.
 - Persisted `trip_is_route_valid` becomes false when the route reference is invalid.
-- A vehicle position has no own validity flag; it is valid when its trip descriptor is valid (`is_trip_valid` and `is_route_valid`). An invalid optional `stop_id` only affects the invalid-reference policy.
+- A vehicle position is valid when its trip descriptor is valid (`is_trip_valid` and `is_route_valid`) and its stop reference is valid. An invalid optional `stop_id` additionally affects the invalid-reference policy.
+- Any invalid reference (trip, route or stop) creates a new vehicle position with `is_active` false, regardless of the policy, except `discard_entire_object`, which skips the record.
 - `discard_entire_object`: skip the full vehicle position and delete an existing synced vehicle with the same ID.
 - `discard_invalid` and `discard_invalid_elements`:
     - clear trip `route_id` to an empty string when the mapped route is invalid.

@@ -62,7 +62,7 @@ The vehicle positions may have implications on the vehicle position. Internall, 
 
 - a vehicle position document in `realtime_vehicle_positions` (entrypoint for `GtfsRealtimeVehiclePositionsExportService`) with an embedded trip descriptor
 
-A vehicle position has no assignment type and no validity flag of its own. Both belong to the embedded trip descriptor.
+A vehicle position has no assignment type of its own, it belongs to the embedded trip descriptor. Besides the trip validity flags, the vehicle position carries a nullable `stop_id` (current stop) and the flag `is_stop_valid` (default `true`), which is set during processing and is not part of the transformer output.
 
 ### Relations
 
@@ -72,7 +72,9 @@ The storage layout, indices, and snapshot behavior of the three collections are 
 
 ### Validity Flag
 
-- a vehicle is considered as valid, when the embedded trip descriptor is valid (`is_trip_valid` and `is_route_valid`); this is the same rule as for trips, see trip validity for reference
+- a vehicle position is considered as valid, when the embedded trip descriptor is valid (`is_trip_valid` and `is_route_valid`) and `is_stop_valid` is true
+- the vehicle's own `is_stop_valid` flag is false when `stop_id` is set but not a nominal GTFS stop ID
+- a new vehicle is created with `is_active = false` when `is_stop_valid`, `trip.is_trip_valid` or `trip.is_route_valid` is false
 
 ### Implications
 
