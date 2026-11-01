@@ -182,7 +182,7 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
             stats_deleted += 1
             original_trip_id = getattr(getattr(existing_vehicle, "trip", None), "original_trip_id", None)
             if original_trip_id:
-                await self._caching_service.pop_trip_id(original_trip_id)
+                await self._pop_trip_id_if_unreferenced(realtime_repository, original_trip_id)
 
         for record in records:
             vehicle_uuid = self._record_uuid(record, source_name, fallback_key="vehicle_id", kind="Vehicle-position")
@@ -363,7 +363,7 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
             deleted_vehicle = existing_vehicles.get(vehicle_id)
             original_trip_id = getattr(getattr(deleted_vehicle, "trip", None), "original_trip_id", None)
             if original_trip_id:
-                await self._caching_service.pop_trip_id(original_trip_id)
+                await self._pop_trip_id_if_unreferenced(realtime_repository, original_trip_id)
 
         logger.info(
             f"[{self.get_adapter_type()}] Vehicle-position import completed for '{source_name}': "

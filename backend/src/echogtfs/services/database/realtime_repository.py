@@ -773,6 +773,24 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         )
         return {doc["trip_id"] for doc in docs}
 
+    async def is_trip_referenced_by_any_object(self, trip_id: str) -> bool:
+        if not trip_id:
+            return False
+
+        filters = (
+            (TRIP_UPDATES_COLLECTION, {"$or": [{"trip_id": trip_id}, {"original_trip_id": trip_id}]}),
+            (
+                VEHICLE_POSITIONS_COLLECTION,
+                {"$or": [{"trip.trip_id": trip_id}, {"trip.original_trip_id": trip_id}]},
+            ),
+            (SERVICE_ALERTS_COLLECTION, {"informed_entities.trip_id": trip_id}),
+        )
+        for collection_name, filter_ in filters:
+            if await self._find(collection_name, filter_, projection={"_id": 1}, limit=1):
+                return True
+
+        return False
+
     async def toggle_trip_active(self, trip_uuid: uuid.UUID) -> TripUpdate | None:
         doc = await self.collection(TRIP_UPDATES_COLLECTION).find_one_and_update(
             {"_id": str(trip_uuid)},

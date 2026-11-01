@@ -99,3 +99,5 @@ An anchor cannot match when either time cannot be converted to UTC.
 Only one unique candidate is accepted. Zero candidates and ambiguous results return `None`. In any case, the `AssignmentType` is returned in order to store it on each trip object.
 
 The cache key is the external realtime `trip_id`. No cache write occurs when matching fails, is ambiguous, or stops at a precondition or normalization check.
+
+A cache entry is evicted (`pop_trip_id`) only after the trip update or vehicle position was deleted and `RealtimeRepository.is_trip_referenced_by_any_object(trip_id)` reports that no trip update, vehicle position or service alert informed entity still references the trip ID (matched or original). Otherwise the entry is kept.

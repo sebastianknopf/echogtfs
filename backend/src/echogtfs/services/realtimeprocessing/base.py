@@ -31,6 +31,16 @@ class RealtimeProcessingServiceBase:
     def get_adapter_type(self) -> str:
         return str(self.config.get("_adapter_type", "datasource"))
 
+    async def _pop_trip_id_if_unreferenced(self, realtime_repository: Any, trip_id: str | None) -> None:
+        """Evict the cached trip id mapping only when no realtime object references the trip anymore."""
+        if not trip_id:
+            return
+
+        if await realtime_repository.is_trip_referenced_by_any_object(str(trip_id)):
+            return
+
+        await self._caching_service.pop_trip_id(trip_id)
+
     @staticmethod
     def _is_uuid(value: str) -> bool:
         try:

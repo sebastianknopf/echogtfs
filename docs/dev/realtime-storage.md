@@ -52,13 +52,16 @@ Indices are created idempotently by `RealtimeRepository.initialize()` at startup
 | | `is_active` | Export. |
 | | `max_end_time`, `first_start` | Expiry and period queries. |
 | | `has_invalid_reference` (partial, only `true`) | Conflict and monitoring queries. |
+| | `informed_entities.trip_id` (multikey) | Trip reference check before cache eviction. |
 | `realtime_trip_updates` | `trip_id` (unique) | One trip update per matched trip ID. |
+| | `original_trip_id` | Trip reference check before cache eviction. |
 | | `is_active`, `created_at`, `trip_id` | Export order. |
 | | `data_source_id` | Per-source reads and deletes. |
 | | `updated_at` (descending) | Cleanup. |
 | | `flags` (multikey) | Invalid trips and stop events, statistics, conflicts. |
 | | `start_date`, `start_time`, `trip_id` | Sorted lists. |
 | `realtime_vehicle_positions` | `trip.trip_id` (unique) | One vehicle per matched trip ID, join to trip updates. |
+| | `trip.original_trip_id` | Trip reference check before cache eviction. |
 | | `is_active` | Export. |
 | | `data_source_id` | Per-source reads and deletes. |
 | | `updated_at` (descending) | Cleanup. |
