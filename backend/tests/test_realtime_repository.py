@@ -236,6 +236,38 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         collection.bulk_write.assert_awaited_once()
         return collection.bulk_write.await_args.args[0][0]
 
+    def test_trip_relevance_end_prefers_realtime_departure_of_last_stop(self):
+        early = datetime(2026, 1, 1, 10, tzinfo=timezone.utc)
+        late = datetime(2026, 1, 1, 11, tzinfo=timezone.utc)
+        nominal = datetime(2026, 1, 1, 9, tzinfo=timezone.utc)
+        doc = {
+            "stop_events": [
+                {"stop_sequence": "10", "departure_time": late},
+                {"stop_sequence": "2", "departure_time": early},
+                {"stop_sequence": "10", "arrival_time": early, "scheduled_departure_time": nominal},
+            ],
+        }
+        self.assertEqual(RealtimeRepository._trip_relevance_end(doc), late)
+
+    def test_trip_relevance_end_falls_back_to_arrival_then_nominal_then_trip_times(self):
+        arrival = datetime(2026, 1, 1, 10, tzinfo=timezone.utc)
+        nominal = datetime(2026, 1, 1, 9, tzinfo=timezone.utc)
+        updated = datetime(2026, 1, 1, 8, tzinfo=timezone.utc)
+
+        self.assertEqual(
+            RealtimeRepository._trip_relevance_end(
+                {"stop_events": [{"stop_sequence": "1", "arrival_time": arrival, "scheduled_departure_time": nominal}]}
+            ),
+            arrival,
+        )
+        self.assertEqual(
+            RealtimeRepository._trip_relevance_end(
+                {"stop_events": [{"stop_sequence": "1", "scheduled_arrival_time": nominal}]}
+            ),
+            nominal,
+        )
+        self.assertEqual(RealtimeRepository._trip_relevance_end({"stop_events": [], "updated_at": updated}), updated)
+
     def test_normalize_informed_entity_payload_sets_per_field_defaults(self):
         payload = RealtimeRepository._normalize_informed_entity_payload(
             {"agency_id": "a1", "route_id": "r1", "stop_id": "s1", "trip_id": None}
