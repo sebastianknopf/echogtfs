@@ -723,6 +723,29 @@ class TestVehiclePositionTripDescriptorAndMatching(unittest.IsolatedAsyncioTestC
         datasource._caching_service.pop_trip_id.assert_awaited_once_with("orig-trip")
         self.assertEqual(result["deleted"], 1)
 
+    async def test_deleted_vehicle_keeps_cached_trip_id_while_still_referenced(self):
+        datasource = self._deletion_processor()
+        realtime_repository = _RealtimeRepositoryStub()
+        realtime_repository.is_trip_referenced_by_any_object = AsyncMock(return_value=True)
+        vehicle_uuid = datasource._make_unique_id("veh-1", "Demo")
+        realtime_repository.list_vehicles_for_data_source = AsyncMock(
+            return_value=[
+                SimpleNamespace(
+                    id=vehicle_uuid,
+                    data_source_id=2,
+                    trip_id="trip-1",
+                    trip=SimpleNamespace(original_trip_id="orig-trip"),
+                )
+            ]
+        )
+
+        await self._sync_records(
+            datasource, realtime_repository, [self._vehicle_record("veh-1", is_deleted=True)]
+        )
+
+        realtime_repository.is_trip_referenced_by_any_object.assert_awaited_once_with("orig-trip")
+        datasource._caching_service.pop_trip_id.assert_not_awaited()
+
     async def test_vehicle_without_flag_is_not_deleted(self):
         for overrides in ({}, {"is_deleted": False}):
             with self.subTest(overrides=overrides):

@@ -1093,6 +1093,23 @@ class TestTripUpdateProcessingService(unittest.IsolatedAsyncioTestCase):
         )
         datasource._caching_service.pop_trip_id.assert_awaited_once_with("orig-trip")
 
+    async def test_flagged_trip_keeps_cached_trip_id_while_still_referenced(self):
+        datasource = self._deletion_processor()
+        realtime_repository = _RealtimeRepositoryStub()
+        realtime_repository.is_trip_referenced_by_any_object = AsyncMock(return_value=True)
+        stored_uuid = datasource._make_unique_id("stored", "Demo")
+        stored_trip = SimpleNamespace(
+            id=stored_uuid, trip_id="trip-1", data_source_id=2, original_trip_id="orig-trip"
+        )
+        realtime_repository.list_trips_by_trip_ids = AsyncMock(return_value=[stored_trip])
+
+        await self._sync_records(
+            datasource, realtime_repository, [self._trip_record("trip-upd-1", is_deleted=True)]
+        )
+
+        realtime_repository.is_trip_referenced_by_any_object.assert_awaited_once_with("orig-trip")
+        datasource._caching_service.pop_trip_id.assert_not_awaited()
+
     async def test_missing_flagged_trip_is_ignored_and_other_records_are_processed(self):
         datasource = self._deletion_processor()
         realtime_repository = _RealtimeRepositoryStub()

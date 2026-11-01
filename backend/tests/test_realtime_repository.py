@@ -494,6 +494,24 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result, {"trip-1"})
         self.assertEqual(self.trips.find_calls[0][0], {"trip_id": {"$in": ["trip-1", "trip-2"]}, "flags": "invalid_stop"})
 
+    async def test_is_trip_referenced_by_any_object_checks_all_collections(self):
+        self.assertFalse(await self.repository.is_trip_referenced_by_any_object(""))
+        self.assertFalse(await self.repository.is_trip_referenced_by_any_object("orig-trip"))
+        self.assertEqual(
+            self.alerts.find_calls[0][0], {"informed_entities.trip_id": "orig-trip"}
+        )
+        self.assertEqual(
+            self.trips.find_calls[0][0],
+            {"$or": [{"trip_id": "orig-trip"}, {"original_trip_id": "orig-trip"}]},
+        )
+        self.assertEqual(
+            self.vehicles.find_calls[0][0],
+            {"$or": [{"trip.trip_id": "orig-trip"}, {"trip.original_trip_id": "orig-trip"}]},
+        )
+
+        self.alerts.docs = [{"_id": "alert-1"}]
+        self.assertTrue(await self.repository.is_trip_referenced_by_any_object("orig-trip"))
+
     async def test_toggle_trip_active_returns_none_when_not_found(self):
         self.assertIsNone(await self.repository.toggle_trip_active(uuid.uuid4()))
 

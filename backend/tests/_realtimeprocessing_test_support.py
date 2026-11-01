@@ -64,6 +64,7 @@ class _RealtimeRepositoryStub:
         self.list_vehicles_by_ids = AsyncMock(return_value=[])
         self.delete_vehicles_for_data_source_by_ids = AsyncMock()
         self.update_vehicle_position_from_sync = AsyncMock()
+        self.is_trip_referenced_by_any_object = AsyncMock(return_value=False)
 
 
 class _GtfsRepositoryStub:
