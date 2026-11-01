@@ -59,7 +59,7 @@ class TestCleanupService(unittest.IsolatedAsyncioTestCase):
     async def test_delete_expired_trips_deletes_only_trips_without_touching_vehicles(self):
         system_repo = SimpleNamespace(get_app_setting=AsyncMock(return_value="30"))
         realtime_repo = SimpleNamespace(
-            list_trip_ids_updated_before=AsyncMock(return_value=["t1", "t2"]),
+            list_trip_ids_ended_before=AsyncMock(return_value=["t1", "t2"]),
             delete_trips_by_trip_ids=AsyncMock(return_value=2),
             delete_vehicles_by_ids=AsyncMock(),
         )
@@ -74,7 +74,7 @@ class TestCleanupService(unittest.IsolatedAsyncioTestCase):
     async def test_delete_expired_trips_without_expired_trips_deletes_nothing(self):
         system_repo = SimpleNamespace(get_app_setting=AsyncMock(return_value=None))
         realtime_repo = SimpleNamespace(
-            list_trip_ids_updated_before=AsyncMock(return_value=[]),
+            list_trip_ids_ended_before=AsyncMock(return_value=[]),
             delete_trips_by_trip_ids=AsyncMock(),
         )
         service = CleanupService(system_repo, realtime_repo)

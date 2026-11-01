@@ -845,9 +845,42 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
 
         return events
 
-    async def list_trip_ids_updated_before(self, cutoff: datetime) -> list[str]:
-        docs = await self._find(TRIP_UPDATES_COLLECTION, {"updated_at": {"$lt": cutoff}}, projection={"trip_id": 1})
-        return [doc["trip_id"] for doc in docs]
+    @classmethod
+    def _trip_relevance_end(cls, doc: dict[str, Any]) -> datetime | None:
+        """Return the time after which a trip update is irrelevant.
+
+        Uses the departure (else arrival) of the last stop event, preferring realtime values over
+        nominal ones. Falls back to the trip's scheduled end time and finally to its update time.
+        """
+        stop_events = doc.get("stop_events") or []
+        if stop_events:
+            last_event = max(stop_events, key=lambda item: cls._stop_event_sort_key(item.get("stop_sequence")))
+            for key in ("departure_time", "arrival_time", "scheduled_departure_time", "scheduled_arrival_time"):
+                if last_event.get(key) is not None:
+                    return last_event[key]
+
+        return doc.get("scheduled_end_time") or doc.get("updated_at")
+
+    async def list_trip_ids_ended_before(self, cutoff: datetime) -> list[str]:
+        docs = await self._find(
+            TRIP_UPDATES_COLLECTION,
+            {},
+            projection={"trip_id": 1, "stop_events": 1, "scheduled_end_time": 1, "updated_at": 1},
+        )
+
+        trip_ids: list[str] = []
+        for doc in docs:
+            end_time = self._trip_relevance_end(doc)
+            if end_time is None:
+                continue
+
+            if end_time.tzinfo is None:
+                end_time = end_time.replace(tzinfo=UTC)
+
+            if end_time < cutoff:
+                trip_ids.append(doc["trip_id"])
+
+        return trip_ids
 
     async def delete_trips_by_trip_ids(self, trip_ids: list[str]) -> int:
         if not trip_ids:

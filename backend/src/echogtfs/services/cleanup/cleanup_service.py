@@ -179,12 +179,12 @@ class CleanupService:
         return count
 
     async def _delete_expired_trips(self) -> int:
-        """Delete trip updates not updated within the configured max age."""
+        """Delete trip updates whose last stop event ended longer ago than the configured max age."""
         max_age_value = await self._repository.get_app_setting(AppSetting.KEY_CLEANUP_EXPIRED_TRIPS_MAX_AGE)
         max_age_minutes = int(max_age_value) if max_age_value is not None else 120
         cutoff = datetime.now(UTC) - timedelta(minutes=max_age_minutes)
 
-        trip_ids = await self._realtime_repository.list_trip_ids_updated_before(cutoff)
+        trip_ids = await self._realtime_repository.list_trip_ids_ended_before(cutoff)
         if not trip_ids:
             logger.info("[Cleanup] No trips older than %s minutes found", max_age_minutes)
             return 0

@@ -228,8 +228,11 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def list_trip_ids_updated_before(self, cutoff: datetime) -> list[str]:
-        """Return trip_id values for all realtime trips last updated before cutoff, regardless of data source."""
+    async def list_trip_ids_ended_before(self, cutoff: datetime) -> list[str]:
+        """Return trip_id values for all realtime trips whose last stop event ended before cutoff, regardless of data source.
+
+        The end is the departure (else arrival) of the last stop event, preferring realtime over nominal times.
+        """
         raise NotImplementedError
 
     @abstractmethod
