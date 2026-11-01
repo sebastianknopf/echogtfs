@@ -54,13 +54,6 @@ class GtfsRealtimeVehiclePositionsExportService(GtfsRealtimeExportInterface):
         return int(value)
 
     @staticmethod
-    def _stop_sequence_value(value) -> int | None:
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return None
-
-    @staticmethod
     def _vehicle_stop_status_to_enum(value: object | None) -> int | None:
         if value is None:
             return None
@@ -205,9 +198,6 @@ class GtfsRealtimeVehiclePositionsExportService(GtfsRealtimeExportInterface):
 
             vehicle_position = entity.vehicle
             vehicle_position.timestamp = self._timestamp_value(vehicle_model.timestamp) or int(time.time())
-            current_stop_sequence = self._stop_sequence_value(vehicle_model.current_stop_sequence)
-            if current_stop_sequence is not None:
-                vehicle_position.current_stop_sequence = current_stop_sequence
 
             trip_descriptor = vehicle_position.trip
             trip = vehicle_model.trip

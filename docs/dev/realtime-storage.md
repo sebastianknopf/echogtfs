@@ -36,7 +36,7 @@ The repository maintains these fields on write so that list, statistics, and con
 
 ### Vehicle Trip Descriptor
 
-The embedded `trip` carries `trip_id` (matched ID), `original_trip_id`, `route_id`, `start_date`, `start_time`, `schedule_relationship`, `assignment_type`, the `scheduled_*` anchors, `is_trip_valid`, and `is_route_valid`. A vehicle has no validity or assignment type of its own. `VehiclePosition.is_valid` returns the `is_valid` of its trip descriptor, which is `is_trip_valid and is_route_valid`, like for trip updates. Matching works as for trip updates, see [matching.md](matching.md).
+The embedded `trip` carries `trip_id` (matched ID), `original_trip_id`, `route_id`, `start_date`, `start_time`, `schedule_relationship`, `assignment_type`, the `scheduled_*` anchors, `is_trip_valid`, and `is_route_valid`. A vehicle has no assignment type of its own. Its position fields are `vehicle_id`, `vehicle_label`, `vehicle_license_plate`, `vehicle_wheelchair_accessible`, `timestamp`, `latitude`, `longitude`, `current_status`, `congestion_level`, the nullable current stop `stop_id` and `is_stop_valid` (default `true`). `VehiclePosition.is_valid` is `is_trip_valid and is_route_valid` of its trip descriptor and `is_stop_valid`. Matching works as for trip updates, see [matching.md](matching.md).
 
 ### Activation Flag
 
@@ -52,13 +52,16 @@ Indices are created idempotently by `RealtimeRepository.initialize()` at startup
 | | `is_active` | Export. |
 | | `max_end_time`, `first_start` | Expiry and period queries. |
 | | `has_invalid_reference` (partial, only `true`) | Conflict and monitoring queries. |
+| | `informed_entities.trip_id` (multikey) | Trip reference check before cache eviction. |
 | `realtime_trip_updates` | `trip_id` (unique) | One trip update per matched trip ID. |
+| | `original_trip_id` | Trip reference check before cache eviction. |
 | | `is_active`, `created_at`, `trip_id` | Export order. |
 | | `data_source_id` | Per-source reads and deletes. |
 | | `updated_at` (descending) | Cleanup. |
 | | `flags` (multikey) | Invalid trips and stop events, statistics, conflicts. |
 | | `start_date`, `start_time`, `trip_id` | Sorted lists. |
 | `realtime_vehicle_positions` | `trip.trip_id` (unique) | One vehicle per matched trip ID, join to trip updates. |
+| | `trip.original_trip_id` | Trip reference check before cache eviction. |
 | | `is_active` | Export. |
 | | `data_source_id` | Per-source reads and deletes. |
 | | `updated_at` (descending) | Cleanup. |

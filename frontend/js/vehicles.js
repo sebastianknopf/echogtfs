@@ -8,8 +8,6 @@ const vehicles = (() => {
   const POLL_INTERVAL_MS = 5_000;
   const VEHICLE_ICON_PATH = 'M240-120q-17 0-28.5-11.5T200-160v-82q-18-20-29-44.5T160-340v-380q0-83 77-121.5T480-880q172 0 246 37t74 123v380q0 29-11 53.5T760-242v82q0 17-11.5 28.5T720-120h-40q-17 0-28.5-11.5T640-160v-40H320v40q0 17-11.5 28.5T280-120h-40Zm242-640h224-448 224Zm158 280H240h480-80Zm-400-80h480v-120H240v120Zm142.5 222.5Q400-355 400-380t-17.5-42.5Q365-440 340-440t-42.5 17.5Q280-405 280-380t17.5 42.5Q315-320 340-320t42.5-17.5Zm280 0Q680-355 680-380t-17.5-42.5Q645-440 620-440t-42.5 17.5Q560-405 560-380t17.5 42.5Q595-320 620-320t42.5-17.5ZM258-760h448q-15-17-64.5-28.5T482-800q-107 0-156.5 12.5T258-760Zm62 480h320q33 0 56.5-23.5T720-360v-120H240v120q0 33 23.5 56.5T320-280Z';
   const WARNING_ICON_PATH = 'M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z';
-  const CLOCK_ICON_PATH = 'M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.5-13H11v6l5.2 3.2.8-1.3-4.5-2.7V7z';
-  const WHEELCHAIR_ICON_PATH = 'M12 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm7 6h-4.31l-1.38-1.38A2 2 0 0 0 11.9 6H9v7h2v9h2v-6h2l1.1 3.3c.3.9 1.2 1.7 2.2 1.7H20v-2h-1.7l-1.5-4.5c-.2-.6-.7-1.1-1.3-1.4L14 12v-2h2.2l1.8 1.8V16h2V8z';
   const POWER_ICON_PATH = 'M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42C17.99 7.86 19 9.81 19 12c0 3.87-3.13 7-7 7s-7-3.13-7-7c0-2.19 1.01-4.14 2.59-5.41L6.17 5.17C4.23 6.82 3 9.26 3 12c0 4.97 4.03 9 9 9s9-4.03 9-9c0-2.74-1.23-5.18-3.17-6.83z';
   const DEFAULT_VIEW = {
     center: [8.5417, 47.3769],
@@ -32,7 +30,13 @@ const vehicles = (() => {
   let _sheetElement = null;
 
   function _getVehicleDisplayTitle(vehicle) {
-    return vehicle.vehicle_label || vehicle.vehicle_license_plate || vehicle.vehicle_id || window.i18n('vehicles.title');
+    const clean = (value) => (value == null ? '' : String(value).trim());
+    const parts = [clean(vehicle?.vehicle_license_plate), clean(vehicle?.vehicle_label)].filter(Boolean);
+    if (parts.length) {
+      return parts.join(' - ');
+    }
+
+    return clean(vehicle?.vehicle_id) || window.i18n('vehicles.title');
   }
 
   function _getVehicleSearchValue(vehicle) {
@@ -73,10 +77,14 @@ const vehicles = (() => {
         : window.i18n('vehicles.time.seconds_ago', { count: secondsDiff });
     }
 
-    const minutesDiff = Math.floor(secondsDiff / 60);
+    const minutesDiff = Math.round(secondsDiff / 60);
     return minutesDiff === 1
       ? window.i18n('vehicles.time.minute_ago', { count: minutesDiff })
       : window.i18n('vehicles.time.minutes_ago', { count: minutesDiff });
+  }
+
+  function _warningHtml(titleKey) {
+    return `<span class="view-item__warning" title="${ui.esc(window.i18n(titleKey))}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${WARNING_ICON_PATH}"/></svg></span>`;
   }
 
   function _getRouteDisplayName(vehicle) {
@@ -87,35 +95,17 @@ const vehicles = (() => {
     return vehicle?.trip?.trip_id || vehicle?.trip_id || '-';
   }
 
-  function _getLineTripDisplay(vehicle) {
-    return `${_getRouteDisplayName(vehicle)} / ${_getTripDisplayId(vehicle)}`;
+  function _getStopDisplayName(vehicle) {
+    return vehicle?.stop_name || vehicle?.stop_id || '-';
   }
 
-  function _getVehicleIdentityDisplay(vehicle) {
-    const label = vehicle?.vehicle_label == null ? '' : String(vehicle.vehicle_label).trim();
-    if (label) {
-      return label;
-    }
-
-    const licensePlate = vehicle?.vehicle_license_plate == null ? '' : String(vehicle.vehicle_license_plate).trim();
-    if (licensePlate) {
-      return licensePlate;
-    }
-
-    const vehicleId = vehicle?.vehicle_id == null ? '' : String(vehicle.vehicle_id).trim();
-    return vehicleId || '-';
-  }
-
-  function _getWheelchairStatusText(vehicle) {
-    const rawValue = vehicle?.wheelchair_accessible ?? vehicle?.vehicle_wheelchair_accessible;
-    const value = String(rawValue ?? '').trim().toUpperCase();
-    if (value === '2' || value === 'WHEELCHAIR_ACCESSIBLE') {
-      return window.i18n('vehicles.wheelchair.accessible');
-    }
-    if (value === '3' || value === 'WHEELCHAIR_INACCESSIBLE') {
-      return window.i18n('vehicles.wheelchair.inaccessible');
-    }
-    return window.i18n('vehicles.wheelchair.unknown');
+  function _renderDetailRow(labelKey, value, warningHtml = '', valueId = '') {
+    return `
+      <div class="view-item">
+        <div class="view-item__label">${ui.esc(window.i18n(labelKey))}</div>
+        <div class="view-item__content"${valueId ? ` id="${valueId}"` : ''}>${ui.esc(value)}</div>
+        ${warningHtml}
+      </div>`;
   }
 
   function _findVehicleById(vehicleId) {
@@ -143,20 +133,7 @@ const vehicles = (() => {
           </button>
         </div>
       </div>
-      <div class="vehicle-map-sheet__details">
-        <div class="vehicle-map-sheet__detail-row">
-          <svg class="vehicle-map-sheet__detail-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${CLOCK_ICON_PATH}"/></svg>
-          <span id="vehicle-map-sheet-updated"></span>
-        </div>
-        <div class="vehicle-map-sheet__detail-row">
-          <svg class="vehicle-map-sheet__detail-icon" viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="${VEHICLE_ICON_PATH}"/></svg>
-          <span id="vehicle-map-sheet-vehicle"></span>
-        </div>
-        <div class="vehicle-map-sheet__detail-row">
-          <svg class="vehicle-map-sheet__detail-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${WHEELCHAIR_ICON_PATH}"/></svg>
-          <span id="vehicle-map-sheet-wheelchair"></span>
-        </div>
-      </div>
+      <div class="vehicle-map-sheet__details" id="vehicle-map-sheet-details"></div>
     `;
 
     mapContainer.appendChild(sheet);
@@ -188,6 +165,15 @@ const vehicles = (() => {
     }
 
     _sheetElement = sheet;
+
+    window.setInterval(() => {
+      const updatedEl = document.getElementById('vehicle-map-sheet-updated');
+      const selectedVehicle = _findVehicleById(_selectedVehicleId);
+      if (updatedEl && selectedVehicle && !sheet.hidden) {
+        updatedEl.textContent = _formatRelativeTimestamp(selectedVehicle.timestamp);
+      }
+    }, 1000);
+
     return _sheetElement;
   }
 
@@ -202,31 +188,27 @@ const vehicles = (() => {
     }
 
     const titleEl = sheet.querySelector('#vehicle-map-sheet-title');
-    const vehicleEl = sheet.querySelector('#vehicle-map-sheet-vehicle');
-    const updatedEl = sheet.querySelector('#vehicle-map-sheet-updated');
-    const wheelchairEl = sheet.querySelector('#vehicle-map-sheet-wheelchair');
+    const detailsEl = sheet.querySelector('#vehicle-map-sheet-details');
     const toggleBtn = sheet.querySelector('#vehicle-map-sheet-toggle');
 
     if (titleEl) {
-      titleEl.textContent = _getLineTripDisplay(selectedVehicle);
+      titleEl.textContent = _getVehicleDisplayTitle(selectedVehicle);
     }
 
-    if (vehicleEl) {
-      vehicleEl.textContent = window.i18n('vehicles.sheet.vehicle', {
-        value: _getVehicleIdentityDisplay(selectedVehicle),
-      });
+    if (detailsEl) {
+      const trip = selectedVehicle.trip || {};
+      detailsEl.innerHTML = [
+        _renderDetailRow('vehicles.view.updated', _formatRelativeTimestamp(selectedVehicle.timestamp), '', 'vehicle-map-sheet-updated'),
+        _renderDetailRow('trips.view.route', _getRouteDisplayName(selectedVehicle),
+          trip.is_route_valid === false ? _warningHtml('trips.resolution.warning') : ''),
+        _renderDetailRow('trips.view.trip_id', _getTripDisplayId(selectedVehicle),
+          trip.is_trip_valid === false ? _warningHtml('trips.resolution.warning') : ''),
+        _renderDetailRow('trips.view.assignment_type', String(trip.assignment_type || '-').toUpperCase()),
+        _renderDetailRow('vehicles.view.current_stop', _getStopDisplayName(selectedVehicle),
+          selectedVehicle.is_stop_valid === false ? _warningHtml('trips.stop_reference.warning') : ''),
+        _renderDetailRow('vehicles.view.stop_status', selectedVehicle.current_status || '-'),
+      ].join('');
     }
-
-    if (updatedEl) {
-      updatedEl.textContent = window.i18n('vehicles.sheet.updated', {
-        value: _formatRelativeTimestamp(selectedVehicle.timestamp),
-      });
-    }
-
-    if (wheelchairEl) {
-      wheelchairEl.textContent = _getWheelchairStatusText(selectedVehicle);
-    }
-
     if (toggleBtn) {
       const isActive = Boolean(selectedVehicle.is_active);
       toggleBtn.classList.toggle('icon-btn--success', isActive);
@@ -251,7 +233,7 @@ const vehicles = (() => {
           <path d="${VEHICLE_ICON_PATH}"/>
         </svg>
       </span>
-      ${vehicle.is_valid === false ? `<span class="vehicle-map-marker__warning" title="${window.i18n('trips.resolution.warning')}">
+      ${(vehicle.is_valid === false || vehicle.is_stop_valid === false || vehicle.trip?.is_route_valid === false || vehicle.trip?.is_trip_valid === false) ? `<span class="vehicle-map-marker__warning" title="${window.i18n('trips.resolution.warning')}">
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="${WARNING_ICON_PATH}"/>
         </svg>

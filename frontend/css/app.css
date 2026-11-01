@@ -1,4 +1,4 @@
-﻿/* -- Reset & base ------------------------------------------------------------ */
+/* -- Reset & base ------------------------------------------------------------ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body { height: 100%; }
@@ -1300,7 +1300,7 @@ body {
   left: 50%;
   bottom: 16px;
   transform: translateX(-50%);
-  width: 600px;
+  width: 615px;
   max-width: calc(100% - 24px);
   background: var(--md-surface);
   border-radius: var(--md-shape-m);
@@ -1350,24 +1350,19 @@ body {
 
 .vehicle-map-sheet__details {
   margin-top: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
 }
 
-.vehicle-map-sheet__detail-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--md-on-surface-medium);
-  font-size: 0.875rem;
+.vehicle-map-sheet__details .view-item {
+  grid-template-columns: 130px 1fr auto;
+  gap: 12px;
+  padding: 4px 0;
 }
 
-.vehicle-map-sheet__detail-icon {
-  width: 16px;
-  height: 16px;
-  color: var(--md-on-surface-medium);
-  flex: 0 0 16px;
+.vehicle-map-sheet__details .view-item__content {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* -- Filter Popout ------------------------------------------------------- */

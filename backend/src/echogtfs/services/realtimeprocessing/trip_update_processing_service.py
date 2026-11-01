@@ -55,7 +55,7 @@ class TripUpdateProcessingService(RealtimeProcessingServiceBase):
 
         for trip in existing_by_reference:
             if trip.data_source_id == source_id and getattr(trip, "original_trip_id", None):
-                await self._caching_service.pop_trip_id(trip.original_trip_id)
+                await self._pop_trip_id_if_unreferenced(realtime_repository, trip.original_trip_id)
 
         return trip_uuids
 
@@ -463,7 +463,7 @@ class TripUpdateProcessingService(RealtimeProcessingServiceBase):
             )
 
             for id, trip in trips_to_delete.items():
-                await self._caching_service.pop_trip_id(trip.original_trip_id)
+                await self._pop_trip_id_if_unreferenced(realtime_repository, trip.original_trip_id)
 
             stats_deleted += len(trips_to_delete)
 
@@ -474,7 +474,11 @@ class TripUpdateProcessingService(RealtimeProcessingServiceBase):
             )
 
             for trip_id in policy_based_deletes:
-                await self._caching_service.pop_trip_id(trip_id)
+                policy_trip = existing_trips.get(trip_id)
+                await self._pop_trip_id_if_unreferenced(
+                    realtime_repository,
+                    getattr(policy_trip, "original_trip_id", None),
+                )
 
             stats_deleted += len(policy_based_deletes)
 

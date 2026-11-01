@@ -31,7 +31,7 @@ class TestMatchingService(unittest.IsolatedAsyncioTestCase):
             scheduled_start_time=datetime(2026, 1, 1, 8, 0, tzinfo=UTC),
         )
 
-        self.assertEqual(result, ("CACHED-T42", AssignmentType.MATCH_BY_CACHED_ID))
+        self.assertEqual(result, ("CACHED-T42", AssignmentType.MATCHED_BY_CACHED_ID))
         caching_service.get_trip_id.assert_awaited_once_with("external-trip-1")
         repository.find_trip_ids_by_match_properties.assert_not_awaited()
         caching_service.put_trip_id.assert_not_awaited()

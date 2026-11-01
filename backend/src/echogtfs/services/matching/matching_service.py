@@ -41,7 +41,7 @@ class MatchingService(MatchingServiceInterface):
 
         cached_trip_id = await self._caching_service.get_trip_id(trip_id)
         if cached_trip_id is not None:
-            return cached_trip_id, AssignmentType.MATCH_BY_CACHED_ID
+            return cached_trip_id, AssignmentType.MATCHED_BY_CACHED_ID
 
         if route_id is None:
             return None, AssignmentType.NO_MATCH_GENERAL

@@ -290,7 +290,8 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
             timestamp=doc.get("timestamp"),
             latitude=doc.get("latitude"),
             longitude=doc.get("longitude"),
-            current_stop_sequence=doc.get("current_stop_sequence"),
+            stop_id=doc.get("stop_id"),
+            is_stop_valid=bool(doc.get("is_stop_valid", True)),
             current_status=doc.get("current_status"),
             congestion_level=doc.get("congestion_level"),
             is_active=bool(doc.get("is_active", True)),
@@ -772,6 +773,24 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         )
         return {doc["trip_id"] for doc in docs}
 
+    async def is_trip_referenced_by_any_object(self, trip_id: str) -> bool:
+        if not trip_id:
+            return False
+
+        filters = (
+            (TRIP_UPDATES_COLLECTION, {"$or": [{"trip_id": trip_id}, {"original_trip_id": trip_id}]}),
+            (
+                VEHICLE_POSITIONS_COLLECTION,
+                {"$or": [{"trip.trip_id": trip_id}, {"trip.original_trip_id": trip_id}]},
+            ),
+            (SERVICE_ALERTS_COLLECTION, {"informed_entities.trip_id": trip_id}),
+        )
+        for collection_name, filter_ in filters:
+            if await self._find(collection_name, filter_, projection={"_id": 1}, limit=1):
+                return True
+
+        return False
+
     async def toggle_trip_active(self, trip_uuid: uuid.UUID) -> TripUpdate | None:
         doc = await self.collection(TRIP_UPDATES_COLLECTION).find_one_and_update(
             {"_id": str(trip_uuid)},
@@ -902,7 +921,7 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         }
         on_insert: dict[str, Any] = {"is_active": is_active_on_create, "created_at": now}
 
-        if assignment_type != AssignmentType.MATCH_BY_CACHED_ID:
+        if assignment_type != AssignmentType.MATCHED_BY_CACHED_ID:
             fields["assignment_type"] = self._text(assignment_type)
         else:
             on_insert["assignment_type"] = self._text(assignment_type)
@@ -1049,7 +1068,8 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         timestamp: Any,
         latitude: float,
         longitude: float,
-        current_stop_sequence: int | None,
+        stop_id: str | None,
+        is_stop_valid: bool,
         current_status: str,
         congestion_level: str,
         is_active_on_create: bool,
@@ -1069,7 +1089,8 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
             "timestamp": timestamp,
             "latitude": latitude,
             "longitude": longitude,
-            "current_stop_sequence": current_stop_sequence,
+            "stop_id": stop_id,
+            "is_stop_valid": is_stop_valid,
             "current_status": self._text(current_status),
             "congestion_level": self._text(congestion_level),
             "trip.trip_id": trip_id,
@@ -1088,7 +1109,7 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         }
         on_insert: dict[str, Any] = {"is_active": is_active_on_create, "created_at": now}
 
-        if trip_assignment_type != AssignmentType.MATCH_BY_CACHED_ID:
+        if trip_assignment_type != AssignmentType.MATCHED_BY_CACHED_ID:
             fields["trip.assignment_type"] = self._text(trip_assignment_type)
         else:
             on_insert["trip.assignment_type"] = self._text(trip_assignment_type)
@@ -1154,7 +1175,7 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         assignment_type_values = [
             assignment_type.value
             for assignment_type in AssignmentType
-            if assignment_type != AssignmentType.MATCH_BY_CACHED_ID
+            if assignment_type != AssignmentType.MATCHED_BY_CACHED_ID
         ]
 
         def _assignment_types(counts: dict[str, int]) -> list[dict[str, int]]:

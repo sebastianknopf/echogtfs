@@ -182,7 +182,7 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
             stats_deleted += 1
             original_trip_id = getattr(getattr(existing_vehicle, "trip", None), "original_trip_id", None)
             if original_trip_id:
-                await self._caching_service.pop_trip_id(original_trip_id)
+                await self._pop_trip_id_if_unreferenced(realtime_repository, original_trip_id)
 
         for record in records:
             vehicle_uuid = self._record_uuid(record, source_name, fallback_key="vehicle_id", kind="Vehicle-position")
@@ -266,7 +266,7 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
                 continue
 
             vehicle_is_active_on_create = bool(record.get("is_active", True))
-            if should_deactivate_vehicle:
+            if should_deactivate_vehicle or has_invalid_reference:
                 vehicle_is_active_on_create = False
 
             trip_is_trip_valid = trip_reference_is_valid
@@ -293,16 +293,6 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
 
             persisted_vehicle_uuids.add(vehicle_uuid)
 
-            current_stop_sequence_raw = record.get("current_stop_sequence")
-            try:
-                current_stop_sequence = (
-                    int(current_stop_sequence_raw)
-                    if current_stop_sequence_raw is not None
-                    else None
-                )
-            except (TypeError, ValueError):
-                current_stop_sequence = None
-
             await realtime_repository.update_vehicle_position_from_sync(
                 vehicle_uuid=vehicle_uuid,
                 source_id=source_id,
@@ -326,7 +316,8 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
                 timestamp=record["timestamp"],
                 latitude=float(record["latitude"]),
                 longitude=float(record["longitude"]),
-                current_stop_sequence=current_stop_sequence,
+                stop_id=str(stop_reference_value) if stop_reference_value else None,
+                is_stop_valid=stop_reference_is_valid,
                 current_status=str(record.get("current_status", "IN_TRANSIT_TO")),
                 congestion_level=str(record.get("congestion_level", "UNKNOWN_CONGESTION_LEVEL")),
                 is_active_on_create=vehicle_is_active_on_create,
@@ -372,7 +363,7 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
             deleted_vehicle = existing_vehicles.get(vehicle_id)
             original_trip_id = getattr(getattr(deleted_vehicle, "trip", None), "original_trip_id", None)
             if original_trip_id:
-                await self._caching_service.pop_trip_id(original_trip_id)
+                await self._pop_trip_id_if_unreferenced(realtime_repository, original_trip_id)
 
         logger.info(
             f"[{self.get_adapter_type()}] Vehicle-position import completed for '{source_name}': "

@@ -132,7 +132,6 @@ The values are converted to `float`. Whitespace is trimmed before parsing. Decim
 
 - This follows GTFS-Realtime semantics, where `stop_id` is the stop the vehicle is stopped at or heading to. It matches SIRI-VM, where `MonitoredCall` is the next or current stop.
 - `stop_id` is the value of `HaltID/HaltestellenID`. `BereichsID` and `SteigID` are not used, in line with the VDV454 transformer.
-- `current_stop_sequence` is not set and defaults to 0. `AktHstSeqZaehler` and `NachHstSeqZaehler` are the pass-through order for stub journeys (chapter 6.4.3.3.1), not the position in the stop sequence, so they must not be mapped to the SIRI `Order` equivalent.
 - `Distanz` (percentage between current and next stop) has no counterpart in the internal model and is ignored.
 
 ### Schedule Anchors and Completeness
@@ -208,7 +207,7 @@ Each parsed position record contains both nested and top-level scheduled fields,
   - `vehicle_id`, `vehicle_label`
   - `vehicle_wheelchair_accessible = UNKNOWN`
   - `timestamp`, `latitude`, `longitude`
-  - `current_stop_sequence` (omitted, consumer default 0), `current_status`, `stop_id` (only when resolved)
+  - `current_status`, `stop_id` (only when resolved)
   - `congestion_level = UNKNOWN_CONGESTION_LEVEL`
   - Duplicated schedule anchor fields (`scheduled_*`) for vehicle-level consumers.
 

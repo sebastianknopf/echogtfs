@@ -20,9 +20,11 @@ def realtime_index_definitions() -> dict[str, list[IndexModel]]:
                 name="has_invalid_reference_partial",
                 partialFilterExpression={"has_invalid_reference": True},
             ),
+            IndexModel([("informed_entities.trip_id", ASCENDING)], name="informed_entities_trip_id"),
         ],
         TRIP_UPDATES_COLLECTION: [
             IndexModel([("trip_id", ASCENDING)], name="trip_id_unique", unique=True),
+            IndexModel([("original_trip_id", ASCENDING)], name="original_trip_id"),
             IndexModel(
                 [("is_active", ASCENDING), ("created_at", ASCENDING), ("trip_id", ASCENDING)],
                 name="is_active_created_at_trip_id",
@@ -37,6 +39,7 @@ def realtime_index_definitions() -> dict[str, list[IndexModel]]:
         ],
         VEHICLE_POSITIONS_COLLECTION: [
             IndexModel([("trip.trip_id", ASCENDING)], name="trip_trip_id_unique", unique=True),
+            IndexModel([("trip.original_trip_id", ASCENDING)], name="trip_original_trip_id"),
             IndexModel([("is_active", ASCENDING)], name="is_active"),
             IndexModel([("data_source_id", ASCENDING)], name="data_source_id"),
             IndexModel([("updated_at", DESCENDING)], name="updated_at"),

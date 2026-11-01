@@ -193,6 +193,11 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def is_trip_referenced_by_any_object(self, trip_id: str) -> bool:
+        """Return True if any trip update, vehicle position or service alert references the trip id (matched or original)."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def toggle_trip_active(self, trip_uuid: uuid.UUID) -> TripUpdate | None:
         """Toggle the is_active flag for one realtime trip and return updated model."""
         raise NotImplementedError
@@ -349,7 +354,8 @@ class RealtimeRepositoryInterface(ABC):
         timestamp: Any,
         latitude: float,
         longitude: float,
-        current_stop_sequence: int | None,
+        stop_id: str | None,
+        is_stop_valid: bool,
         current_status: str,
         congestion_level: str,
         is_active_on_create: bool,
