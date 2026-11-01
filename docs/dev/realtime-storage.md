@@ -57,14 +57,14 @@ Indices are created idempotently by `RealtimeRepository.initialize()` at startup
 | | `original_trip_id` | Trip reference check before cache eviction. |
 | | `is_active`, `created_at`, `trip_id` | Export order. |
 | | `data_source_id` | Per-source reads and deletes. |
-| | `updated_at` (descending) | Cleanup. |
+| | `updated_at` (descending) | Lookups by update time. |
 | | `flags` (multikey) | Invalid trips and stop events, statistics, conflicts. |
 | | `start_date`, `start_time`, `trip_id` | Sorted lists. |
 | `realtime_vehicle_positions` | `trip.trip_id` (unique) | One vehicle per matched trip ID, join to trip updates. |
 | | `trip.original_trip_id` | Trip reference check before cache eviction. |
 | | `is_active` | Export. |
 | | `data_source_id` | Per-source reads and deletes. |
-| | `updated_at` (descending) | Cleanup. |
+| | `updated_at` (descending) | Selection of outdated vehicle positions. |
 
 ## Transactions and Snapshots
 
@@ -95,10 +95,9 @@ An export therefore never sees a partially applied data source run, and a run th
 
 `data_source_name` is a plain field filled by the repository from one PostgreSQL query per list, toggle, or conflict read. Sync and export paths do not query it.
 
-## Cleanup and Source Deletion
+## Source Deletion
 
-- `CleanupService` deletes expired trip updates by `updated_at` and expired vehicle positions by `updated_at` independently of each other.
-- Deactivating or deleting a data source calls the `delete_*_for_data_source` repository methods for all three collections, see [datasources.md](datasources.md).
+Deactivating or deleting a data source calls the `delete_*_for_data_source` repository methods for all three collections, see [datasources.md](datasources.md).
 
 ## Migration From PostgreSQL
 

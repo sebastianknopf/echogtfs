@@ -56,7 +56,7 @@ echogtfs/
 5. If the `sys_users` table is empty, a first superuser is created from `FIRST_SUPERUSER*` environment variables.
 6. Scheduled jobs are configured:
    - `GtfsImportService.schedule_from_settings`: Reads the `gtfs_cron` key from the `app_settings` table and registers a GTFS Static feed import job.
-   - `CleanupService.schedule_from_settings`: Reads cleanup configuration from `app_settings` and registers the alert expiry cleanup job.
+   - `CleanupService.schedule_from_settings`: Reads the `cleanup_cron` key from `app_settings` and registers the cleanup job, see [Cleanup Service](#cleanup-service).
 7. FastAPI app starts accepting requests.
 
 ## API Routers
@@ -102,6 +102,29 @@ Other services initialized in `main.py` are:
 - `CleanupService` (responsible for scheduled cleanup tasks)
 
 Those services are not designed as single-instance service but only used by `main.py`.
+
+### Cleanup Service
+
+#### Process Model
+
+`CleanupService` runs in the main backend process. It is not executed in a separate process or process pool. Its class-level `AsyncIOScheduler` runs on the event loop of the FastAPI application, and the cleanup job `run_cleanup_task` is a coroutine that uses the shared repositories. The scheduler is created lazily on the first call of `schedule_from_settings` and is independent of the `AsyncIOScheduler` instances of the GTFS import and data source scheduler services.
+
+#### Scheduling
+
+`schedule_from_settings` reads `cleanup_cron` from `app_settings` (default `*/10 * * * *`), removes the existing job `alert_cleanup_cron` and registers the job again. It is called at startup in `main.py` and again by `routers/settings.py` after the cleanup settings change. An invalid cron expression is logged and no job is registered.
+
+#### Cleanup Steps
+
+`run_cleanup_task` executes the following steps sequentially. An exception aborts the remaining steps of the run and is logged.
+
+1. Expired service alerts: Alerts whose `max_end_time` lies in the past are handled by the policy `cleanup_expired_alerts_policy` (default `deactivate`). `deactivate` sets `is_active = false` on still active alerts, `delete` deletes them.
+2. Old expired alerts: Alerts that expired more than `cleanup_delete_alerts_after_days` days ago (default 7) are deleted. The cutoff is the start of the day after the computed date, in UTC. A value of -1 disables this step.
+3. Trip updates: Trip updates are deleted when the end of the trip is older than `cleanup_expired_trips_max_age` minutes (default 120). The end is determined by `RealtimeRepository.list_trip_ids_ended_before`, which loads the stop events of all trips and evaluates them in Python:
+   1. The last stop event is the one with the highest `stop_sequence` (numeric values first).
+   2. Its end time is the first available value of `departure_time`, `arrival_time`, `scheduled_departure_time`, `scheduled_arrival_time`. Realtime values take precedence over nominal values.
+   3. Without any such value, the trip's `scheduled_end_time` is used, then `updated_at`.
+4. Vehicle positions: Vehicle positions with `updated_at` older than `cleanup_expired_vehicles_max_age` minutes (default 5) are deleted.
+5. Data source logs: Logs older than 24 hours are deleted from the database and their log files from disk.
 
 ## Data Model
 
