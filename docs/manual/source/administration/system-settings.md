@@ -52,9 +52,9 @@ Im Abschnitt "Datenbereinigung" können Sie das Verhalten des Berenigungs-Dienst
 - **Cron-Ausdruck**: Cron-Ausdruck mit dem der Berenigungs-Dienst im Hintergrund ausgeführt wird
 - **Verfahrensweise bei abgelaufenen Meldungen**: Legt fest, ob abgelaufene Meldungen **gelöscht** oder **deaktiviert** werden sollen
 - **Endgültiges Löschen abgelaufender Meldungen**: Legt fest, ab welchem Alter Meldugnen endgültig gelöscht werden
-- **Maximales Alter für Fahrten**: Legt fest, wie lange das letzte Update einer Fahrt her sein darf, bevor sie gelöscht wird
+- **Maximales Alter für Fahrten**: Legt fest, wie wie lange eine Fahrt gespeichert wird, bevor sie gelöscht wird. Die Ermittlung entsprechender Fahrten basiert auf den Fahrzeiten an der letzten übermittelten Haltestelle oder der planmäßigen Ankuntfszeit an der letzten Haltestelle der Fahrt
 - **Maximales Alter für Fahrzeuge**: Legt fest, wie lange das letzte Update eines Fahrzeuges her sein darf, bevor es gelöscht wird
 
 ```{note}
-Der Berenigungs-Dienst bezieht sich aktuell ausschließlich auf Datenquellen-Logs und Daten, welche nicht von einer  {ref}`differentiellen Datenquelle <h-datasources-differential-incremental-updates>` stammen. Datenquellen-Logs werden grundsätzlich **nach 24 Stunden** gelöscht. Objekte, welche über nicht-differenzielle Datenquellen synchronisiert werden, werden vom Berenigungs-Dienst nicht verändert.
+Der Berenigungs-Dienst bezieht sich aktuell ausschließlich auf Datenquellen-Logs und Daten, welche nicht von einer  {ref}`differentiellen Datenquelle <h-datasources-differential-incremental-updates>` stammen. Interne Meldungen werden grundsätzlich von der Datenbereinigung behandelt. Datenquellen-Logs werden grundsätzlich **nach 24 Stunden** gelöscht. Objekte, welche über nicht-differenzielle Datenquellen synchronisiert werden, werden vom Berenigungs-Dienst nicht verändert.
 ```
