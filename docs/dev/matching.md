@@ -53,7 +53,7 @@ Before intermediate-stop matching, each anchor is validated and normalized:
 - Entries whose time is not a `datetime` are discarded.
 - Remaining stop IDs are reduced with `GlobalId.level(..., 3)`.
 
-If all supplied intermediate anchors are discarded, fallback matching is not attempted. If more anchors remain than `intermediate_stop_sample_size` (default 3), that many are drawn at random with `random.sample(...)`; otherwise all remaining anchors are used. `TripUpdateProcessingService.MAX_INTERMEDIATE_STOP_SAMPLE_SIZE` (3) defines the limit for trip updates.
+If all supplied intermediate anchors are discarded, fallback matching is not attempted. If more anchors remain than `intermediate_stop_sample_size` (default 3), that many are drawn at random with `random.sample(...)`, then reordered to preserve their original input order; otherwise all remaining anchors are used. `TripUpdateProcessingService.MAX_INTERMEDIATE_STOP_SAMPLE_SIZE` (3) defines the limit for trip updates.
 
 ## Start/End Anchor Matching
 
@@ -75,14 +75,14 @@ Fallback matching runs when start/end matching was skipped or failed and at leas
 
 The service first requests route-scoped candidate IDs with `find_trip_ids_by_match_properties(...)`, passing `route_id` and the supplied `operation_day_date`. If no candidates are returned, fallback fails.
 
-For each candidate, the service loads the trip and its stop times with `get_gtfs_trip_with_stop_times(...)`. A candidate matches only when every sampled intermediate anchor (at most three) matches at least one stop time:
+For each candidate, the service loads the trip and its stop times with `get_gtfs_trip_with_stop_times(...)`. A candidate matches only when every sampled intermediate anchor (at most three) matches in the same sequence order as provided to the matching service:
 
 1. The trip must have a non-empty `stop_times` list.
 2. The stop time must have a string `stop_id` and a non-null `departure_time`.
 3. The candidate stop ID must start with the normalized anchor stop ID (matching based on station level).
 4. Both departure and scheduled times must be datetimes whose UTC values differ by no more than **120 seconds**.
 
-If any anchor has no matching stop time, the candidate is rejected. Fallback succeeds only when exactly one candidate remains. That result is then cached.
+Matching is sequential: after one anchor matches at index `i` in `stop_times`, the next anchor is searched only in entries after `i`. If any anchor has no matching stop time in that forward-only search, the candidate is rejected. Fallback succeeds only when exactly one candidate remains. That result is then cached.
 
 ## Datetime Handling
 
