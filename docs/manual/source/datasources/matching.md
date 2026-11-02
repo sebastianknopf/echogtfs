@@ -43,9 +43,9 @@ Der Zwischenhalt-Fallback wird automatisch verwendet, wenn aus Start- und Endzei
 
 In diesem Fall werden bis zu drei zufällig gewählte Zwischenhalte (Haltestelle + Zeit) mit den GTFS-Haltezeiten verglichen:
 
-- Die Haltestelle muss zur Fahrt passen.
+- Die gewählten Haltestellen müssen zur Fahrt passen.
 - Die Zeit muss innerhalb einer 120-Sekunden-Toleranz um die geplante Abfahrtszeit liegen.
-- Alle gewählten Zwischenhalte müssen zur gleichen Fahrt passen.
+- Alle gewählten Zwischenhalte müssen in derselben Reihenfolge auch in der Fahrt vorkommen.
 
 ## Auswirkungen auf den Betrieb
 
