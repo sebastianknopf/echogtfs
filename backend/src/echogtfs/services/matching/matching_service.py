@@ -83,7 +83,12 @@ class MatchingService(MatchingServiceInterface):
 
         sample_size = max(1, intermediate_stop_sample_size)
         if len(reduced_intermediate_stops) > sample_size:
-            reduced_intermediate_stops = random.sample(reduced_intermediate_stops, sample_size)
+            sampled_indices = sorted(
+                random.sample(range(len(reduced_intermediate_stops)), sample_size)
+            )
+            reduced_intermediate_stops = [
+                reduced_intermediate_stops[index] for index in sampled_indices
+            ]
 
         if not reduced_intermediate_stops:
             return None, fallback_assignment_type
@@ -194,19 +199,29 @@ class MatchingService(MatchingServiceInterface):
         if not isinstance(stop_times, list) or not stop_times:
             return False
 
+        next_search_start_idx = 0
         for stop_id, scheduled_time in scheduled_intermediate_stops:
-            if not self._has_matching_stop_time(stop_times, stop_id, scheduled_time):
+            matched_idx = self._find_matching_stop_time_index(
+                stop_times,
+                stop_id,
+                scheduled_time,
+                next_search_start_idx,
+            )
+            if matched_idx is None:
                 return False
+            next_search_start_idx = matched_idx + 1
 
         return True
 
-    def _has_matching_stop_time(
+    def _find_matching_stop_time_index(
         self,
         stop_times: list[Any],
         reduced_stop_id: str,
         scheduled_time: datetime,
-    ) -> bool:
-        for stop_time in stop_times:
+        start_index: int,
+    ) -> int | None:
+        for idx in range(start_index, len(stop_times)):
+            stop_time = stop_times[idx]
             candidate_stop_id = getattr(stop_time, "stop_id", None)
             departure_time = getattr(stop_time, "departure_time", None)
             if not isinstance(candidate_stop_id, str) or departure_time is None:
@@ -221,9 +236,9 @@ class MatchingService(MatchingServiceInterface):
                 continue
 
             if abs(departure_time_utc - scheduled_time_utc) <= timedelta(seconds=120):
-                return True
+                return idx
 
-        return False
+        return None
 
     @staticmethod
     def _to_utc(value: Any) -> datetime | None:
