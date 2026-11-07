@@ -8,6 +8,7 @@ import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from echogtfs.enum.system import UserRole
 from echogtfs.services.database.models import (
     AppSetting,
     DataSource,
@@ -84,8 +85,7 @@ class SystemRepositoryInterface(ABC):
         hashed_password: str,
         *,
         is_active: bool = True,
-        is_superuser: bool = False,
-        is_technical_contact: bool = False,
+        role: UserRole = UserRole.USER,
     ) -> User:
         """Create and persist one user."""
         raise NotImplementedError
@@ -98,8 +98,7 @@ class SystemRepositoryInterface(ABC):
         email: str | None = None,
         hashed_password: str | None = None,
         is_active: bool | None = None,
-        is_superuser: bool | None = None,
-        is_technical_contact: bool | None = None,
+        role: UserRole | None = None,
     ) -> User | None:
         """Update mutable user fields and return updated user, or None when not found."""
         raise NotImplementedError

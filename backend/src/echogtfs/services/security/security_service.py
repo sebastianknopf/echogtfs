@@ -7,6 +7,7 @@ import jwt
 from fastapi import HTTPException, Request, status
 
 from echogtfs.common.config import settings
+from echogtfs.enum.system import UserRole
 from echogtfs.services.database import SystemRepositoryInterface
 from echogtfs.services.database.models import User
 from echogtfs.services.security.intf_security import SecurityServiceInterface
@@ -82,7 +83,7 @@ class SecurityService(SecurityServiceInterface):
     async def get_current_superuser(self, request: Request, token: str) -> User:
         current_user = await self.get_current_active_user(request, token)
         
-        if not current_user.is_superuser:
+        if current_user.role != UserRole.ADMIN:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="error.403_permission",
@@ -92,7 +93,7 @@ class SecurityService(SecurityServiceInterface):
 
     async def get_current_poweruser_or_admin(self, request: Request, token: str) -> User:
         current_user = await self.get_current_active_user(request, token)
-        if not (current_user.is_technical_contact or current_user.is_superuser):
+        if current_user.role not in (UserRole.POWERUSER, UserRole.ADMIN):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="error.403_permission",

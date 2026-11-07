@@ -10,6 +10,7 @@ from slowapi.errors import RateLimitExceeded
 from echogtfs.common.config import settings
 from echogtfs.common.security import SlidingTokenMiddleware
 from echogtfs.common.extensions import limiter
+from echogtfs.enum.system import UserRole
 from echogtfs.services.database.alembic_migration_service import AlembicMigrationService
 from echogtfs.services.database import (
     GtfsRepository,
@@ -90,7 +91,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             email=settings.first_superuser_email,
             hashed_password=get_security_service().hash_password(settings.first_superuser_password),
             is_active=True,
-            is_superuser=True,
+            role=UserRole.ADMIN,
         )
 
     # start schedulers for all scheduled services

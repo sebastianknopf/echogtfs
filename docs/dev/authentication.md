@@ -73,13 +73,15 @@ Passwords are hashed with bcrypt via the `hash_password(password)` function. Ver
 
 ## Role Model
 
-The `User` model has three boolean flag columns that control access:
+The `User` model has an `is_active` flag and a `role` column (`UserRole` enum in `enum/system.py`) that control access:
 
-| Flag | Column | Description |
+| Field | Column | Description |
 |---|---|---|
 | Active | `is_active` | Account must be active to authenticate. Inactive accounts receive `HTTP 400`. |
-| Superuser | `is_superuser` | Full administrative access. Can manage users, all settings, and all resources. |
-| Technical contact | `is_technical_contact` | Intermediate role. Can manage data sources and settings alongside superusers. |
+| Admin | `role = ADMIN` | Full administrative access. Can manage users, all settings, and all resources. |
+| Poweruser | `role = POWERUSER` | Intermediate role. Can manage data sources and settings alongside admins. |
+| User | `role = USER` | Regular account without administrative access. |
+| API | `role = API` | Reserved for API accounts; has no access through the dependency aliases below except `CurrentUser`. |
 
 ## FastAPI Dependency Aliases
 
@@ -88,8 +90,8 @@ The `User` model has three boolean flag columns that control access:
 | Alias | Resolved by | Minimum required role |
 |---|---|---|
 | `CurrentUser` | `get_current_active_user` | Any active authenticated user |
-| `CurrentSuperuser` | `get_current_superuser` | `is_superuser = True` |
-| `CurrentPoweruser` | `get_current_poweruser_or_admin` | `is_technical_contact = True` or `is_superuser = True` |
+| `CurrentSuperuser` | `get_current_superuser` | `role = ADMIN` |
+| `CurrentPoweruser` | `get_current_poweruser_or_admin` | `role = POWERUSER` or `role = ADMIN` |
 
 Example usage in a router:
 
@@ -113,4 +115,4 @@ Push API authentication and status behavior are documented in `docs/dev/push-api
 
 ## First Superuser Bootstrap
 
-If the `users` table is empty at startup, `main.py` creates one user from the environment variables `FIRST_SUPERUSER`, `FIRST_SUPERUSER_EMAIL`, and `FIRST_SUPERUSER_PASSWORD`. This user is created with `is_superuser=True` and `is_active=True`. The password is bcrypt-hashed before storage.
+If the `users` table is empty at startup, `main.py` creates one user from the environment variables `FIRST_SUPERUSER`, `FIRST_SUPERUSER_EMAIL`, and `FIRST_SUPERUSER_PASSWORD`. This user is created with `role=ADMIN` and `is_active=True`. The password is bcrypt-hashed before storage.

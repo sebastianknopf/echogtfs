@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from echogtfs.enum.system import UserRole
 from echogtfs.services.database import SystemRepositoryInterface, get_system_repository
 from echogtfs.services.database.models import User
 from echogtfs.services.security import get_security_service
@@ -114,18 +115,15 @@ async def update_user(
                 detail="Cannot deactivate yourself",
             )
 
-    if payload.is_superuser is not None:
-        if user_id == current_superuser.id and current_superuser.is_superuser and not payload.is_superuser:
+    if payload.role is not None:
+        if (
+            user_id == current_superuser.id
+            and current_superuser.role == UserRole.ADMIN
+            and payload.role != UserRole.ADMIN
+        ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Cannot remove your own admin privileges",
-            )
-
-    if payload.is_technical_contact is not None:
-        if user_id == current_superuser.id and current_superuser.is_technical_contact and not payload.is_technical_contact:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot remove your own technical contact status",
             )
 
     user = await repository.update_user(
@@ -137,8 +135,7 @@ async def update_user(
             else None
         ),
         is_active=payload.is_active,
-        is_superuser=payload.is_superuser,
-        is_technical_contact=payload.is_technical_contact,
+        role=payload.role,
     )
 
     if user is None:

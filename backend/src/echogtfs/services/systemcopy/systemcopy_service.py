@@ -8,6 +8,7 @@ import zipfile
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from echogtfs.enum.system import UserRole
 from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
 from echogtfs.services.database.models import (
     AppSetting,
@@ -244,6 +245,19 @@ class SystemCopyService(SystemCopyInterface):
             if row.key in keys
         ]
 
+    @staticmethod
+    def _parse_user_role(row: dict[str, object], default: UserRole) -> UserRole:
+        if "role" in row:
+            return UserRole(str(row["role"]))
+        
+        # exports created before the role field was introduced
+        if row.get("is_superuser"):
+            return UserRole.ADMIN
+        if row.get("is_technical_contact"):
+            return UserRole.POWERUSER
+        
+        return default
+
     def _serialize_users(self, users: list[User]) -> list[dict[str, object]]:
         return [
             {
@@ -252,8 +266,7 @@ class SystemCopyService(SystemCopyInterface):
                 "email": user.email,
                 "hashed_password": user.hashed_password,
                 "is_active": user.is_active,
-                "is_superuser": user.is_superuser,
-                "is_technical_contact": user.is_technical_contact,
+                "role": UserRole(user.role).value,
                 "created_at": self._to_iso_datetime(user.created_at),
             }
             for user in users
@@ -354,8 +367,7 @@ class SystemCopyService(SystemCopyInterface):
                 existing.email = email
                 existing.hashed_password = str(row.get("hashed_password", existing.hashed_password))
                 existing.is_active = bool(row.get("is_active", existing.is_active))
-                existing.is_superuser = bool(row.get("is_superuser", existing.is_superuser))
-                existing.is_technical_contact = bool(row.get("is_technical_contact", existing.is_technical_contact))
+                existing.role = self._parse_user_role(row, existing.role)
                 updated += 1
                 continue
 
@@ -378,8 +390,7 @@ class SystemCopyService(SystemCopyInterface):
                 email=email,
                 hashed_password=str(row.get("hashed_password", "")),
                 is_active=bool(row.get("is_active", True)),
-                is_superuser=bool(row.get("is_superuser", False)),
-                is_technical_contact=bool(row.get("is_technical_contact", False)),
+                role=self._parse_user_role(row, UserRole.USER),
             )
             created_at = self._parse_datetime(row.get("created_at"))
             if created_at is not None:

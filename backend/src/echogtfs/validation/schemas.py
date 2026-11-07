@@ -16,6 +16,7 @@ from echogtfs.enum.system import (
     ExpiredRealtimeObjectPolicy,
     InvalidReferencePolicy,
     SourceField,
+    UserRole,
 )
 
 _HEX_COLOR = re.compile(r'^#[0-9a-fA-F]{6}$')
@@ -185,8 +186,7 @@ class UserUpdate(BaseModel):
     email: EmailStr | None = None
     password: str | None = None
     is_active: bool | None = None
-    is_superuser: bool | None = None
-    is_technical_contact: bool | None = None
+    role: UserRole | None = None
 
 
 class UserRead(BaseModel):
@@ -194,8 +194,7 @@ class UserRead(BaseModel):
     username: str
     email: str
     is_active: bool
-    is_superuser: bool
-    is_technical_contact: bool
+    role: UserRole
     created_at: datetime
 
     model_config = {"from_attributes": True}
