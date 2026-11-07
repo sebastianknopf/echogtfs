@@ -23,31 +23,11 @@ const dashboard = (() => {
     },
   ];
 
-  const ENDPOINTS = [
-    {
-      key: 'service_alerts',
-      labelKey: 'dashboard.endpoints.service_alerts',
-    },
-    {
-      key: 'trip_updates',
-      labelKey: 'dashboard.endpoints.trip_updates',
-    },
-    {
-      key: 'vehicle_positions',
-      labelKey: 'dashboard.endpoints.vehicle_positions',
-    },
-  ];
-
   let _dashboardData = {
     counts: {
       service_alerts: { active: 0, inactive: 0 },
       trip_updates: { active: 0, monitored: 0, inactive: 0 },
       vehicle_positions: { active: 0, inactive: 0 },
-    },
-    endpoints: {
-      service_alerts: { path: 'realtime/service-alerts.pbf', url: `${window.location.origin}/api/realtime/service-alerts.pbf` },
-      trip_updates: { path: 'realtime/trip-updates.pbf', url: `${window.location.origin}/api/realtime/trip-updates.pbf` },
-      vehicle_positions: { path: 'realtime/vehicle-positions.pbf', url: `${window.location.origin}/api/realtime/vehicle-positions.pbf` },
     },
     siriHealth: false,
   };
@@ -72,19 +52,6 @@ const dashboard = (() => {
     return document.getElementById('dashboard-content');
   }
 
-  function _buildJsonUrl(url) {
-    return url.includes('?') ? `${url}&json` : `${url}?json`;
-  }
-
-  function _getEndpointUrl(key, format) {
-    const endpoint = _dashboardData.endpoints[key];
-    if (!endpoint || !endpoint.url) {
-      return window.location.origin;
-    }
-
-    return format === 'json' ? _buildJsonUrl(endpoint.url) : endpoint.url;
-  }
-
   function _setDashboardData(payload) {
     if (!payload || typeof payload !== 'object') {
       return;
@@ -97,12 +64,6 @@ const dashboard = (() => {
       };
     }
 
-    if (payload.endpoints && typeof payload.endpoints === 'object') {
-      _dashboardData.endpoints = {
-        ..._dashboardData.endpoints,
-        ...payload.endpoints,
-      };
-    }
   }
 
   function _renderStats() {
@@ -125,52 +86,6 @@ const dashboard = (() => {
         </div>
       </article>
     `).join('');
-  }
-
-  function _renderEndpoints() {
-    return ENDPOINTS.map((item, index) => {
-      const protobufUrl = _getEndpointUrl(item.key, 'protobuf');
-      return `
-        <div class="dashboard-endpoint-row">
-          <div class="dashboard-endpoint-row__label" data-i18n="${item.labelKey}">${window.i18n(item.labelKey)}</div>
-          <div class="dashboard-endpoint-row__url-line">
-            <a class="dashboard-endpoint-row__link" href="${protobufUrl}" target="_blank" rel="noopener noreferrer">${protobufUrl}</a>
-            <div class="dashboard-endpoint-row__actions">
-              <button
-                type="button"
-                class="dashboard-copy-btn"
-                data-ripple
-                data-copy-index="${index}"
-                data-copy-key="${item.key}"
-                data-copy-format="protobuf"
-                data-i18n-title="dashboard.copy.protobuf"
-                data-i18n-aria-label="dashboard.copy.protobuf"
-                title="${window.i18n('dashboard.copy.protobuf')}"
-                aria-label="${window.i18n('dashboard.copy.protobuf')}"
-              >
-                <svg viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="M360-240q-33 0-56.5-23.5T280-320v-440q0-33 23.5-56.5T360-840h360q33 0 56.5 23.5T800-760v440q0 33-23.5 56.5T720-240H360Zm0-80h360v-440H360v440ZM200-120q-33 0-56.5-23.5T120-200v-480h80v480h400v80H200Zm160-200v-440 440Z"/></svg>
-                <span data-i18n="dashboard.copy.protobuf.short">${window.i18n('dashboard.copy.protobuf.short')}</span>
-              </button>
-              <button
-                type="button"
-                class="dashboard-copy-btn"
-                data-ripple
-                data-copy-index="${index}"
-                data-copy-key="${item.key}"
-                data-copy-format="json"
-                data-i18n-title="dashboard.copy.json"
-                data-i18n-aria-label="dashboard.copy.json"
-                title="${window.i18n('dashboard.copy.json')}"
-                aria-label="${window.i18n('dashboard.copy.json')}"
-              >
-                <svg viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="M360-240q-33 0-56.5-23.5T280-320v-440q0-33 23.5-56.5T360-840h360q33 0 56.5 23.5T800-760v440q0 33-23.5 56.5T720-240H360Zm0-80h360v-440H360v440ZM200-120q-33 0-56.5-23.5T120-200v-480h80v480h400v80H200Zm160-200v-440 440Z"/></svg>
-                <span data-i18n="dashboard.copy.json.short">${window.i18n('dashboard.copy.json.short')}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      `;
-    }).join('');
   }
 
   function _renderServiceStatus() {
@@ -215,39 +130,6 @@ const dashboard = (() => {
         </div>
       </section>
     `;
-  }
-
-  async function _copyText(text) {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text);
-      return;
-    }
-
-    const helper = document.createElement('textarea');
-    helper.value = text;
-    helper.setAttribute('readonly', '');
-    helper.style.position = 'absolute';
-    helper.style.left = '-9999px';
-    document.body.appendChild(helper);
-    helper.select();
-    document.execCommand('copy');
-    document.body.removeChild(helper);
-  }
-
-  async function _handleContentClick(e) {
-    const copyButton = e.target.closest('.dashboard-copy-btn');
-    if (!copyButton) return;
-
-    const endpointKey = copyButton.dataset.copyKey || '';
-    const format = copyButton.dataset.copyFormat;
-    if (!endpointKey) return;
-
-    try {
-      await _copyText(_getEndpointUrl(endpointKey, format));
-      ui.toast(window.i18n('dashboard.copy.success'), 'success');
-    } catch (error) {
-      ui.toast(window.i18n('dashboard.copy.error'), 'error');
-    }
   }
 
   async function _loadCapabilities() {
@@ -298,15 +180,6 @@ const dashboard = (() => {
           </div>
         </section>
 
-        <section class="dashboard-section dashboard-section--full">
-          <div class="dashboard-section__header">
-            <h3 class="dashboard-section__title" data-i18n="dashboard.section.endpoints">${window.i18n('dashboard.section.endpoints')}</h3>
-          </div>
-          <div class="dashboard-endpoints-list">
-            ${_renderEndpoints()}
-          </div>
-        </section>
-
         ${_renderServiceStatus()}
       </div>
     `;
@@ -316,7 +189,6 @@ const dashboard = (() => {
   }
 
   function init() {
-    _getContent()?.addEventListener('click', _handleContentClick);
     _startPolling();
   }
 
