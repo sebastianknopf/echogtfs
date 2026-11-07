@@ -8,8 +8,9 @@ Zur Verwaltung der Accounts in EchoGTFS wechseln Sie über das Seitenmenü in de
 :name: img-accounts-accounts-overview-screen
 ```
 
-Jeder Account kann mit verschiedenen Rechten ausgestattet werden. Derzeit gibt es folgende Rechte:
+Jeder Account wird mit einer Rolle ausgestattet. Derzeit gibt es folgende Rollen:
 
+- **API**: Darf ausschließlich auf die Echo-API zugreifen. Kein Login in EchoGTFS möglich.
 - **Standard**: Darf in EchoGTFS Meldungen, Fahrten und Fahrzeuge sehen, sowie manuell Meldungen erfassen.
 - **Poweruser**: Darf zusätzlich Einstellungen an Datenquellen vornehmen.
 - **Admin**: Darf zusätzlich Systemeinstellungen und Accounts ändern.
@@ -26,7 +27,7 @@ Um einen neuen Account hinzuzufügen, klicken Sie auf den Button "Neuer Account"
 :name: img-accounts-accounts-new-account-screen
 ```
 
-Weisen Sie dem Account außerdem entsprechende Rechte zu und aktivieren Sie ihn.
+Weisen Sie dem Account außerdem die entsprechende Rolle zu und aktivieren Sie ihn.
 
 Bestätigen Sie den Dialog mit Klick auf "Speichern". Im Anschluss wird der neue Account in der Übersicht angezeigt und kann sofort verwendet werden.
 
@@ -40,7 +41,7 @@ Um einen bestehenden Account zu bearbeiten, klicken Sie in der entsprechenden Ze
 :name: img-accounts-accounts-edit-account-screen
 ```
 
-Auf diesem Weg können Sie beispielsweise auch einen bestehenden Account **aktivieren oder deaktivieren**, **andere Rechte zuweisen** oder das **Passwort ändern**. Wenn das bestehende Passwort beibehalten werden soll, lassen Sie das Feld einfach leer.
+Auf diesem Weg können Sie beispielsweise auch einen bestehenden Account **aktivieren oder deaktivieren**, eine **andere Rolle zuweisen** oder das **Passwort ändern**. Wenn das bestehende Passwort beibehalten werden soll, lassen Sie das Feld einfach leer.
 
 (h-accounts-delete-account)=
 
