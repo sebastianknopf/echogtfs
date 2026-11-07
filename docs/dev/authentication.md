@@ -110,9 +110,9 @@ async def delete_user(user_id: int, current_user: CurrentSuperuser, db: _DB):
 
 The GTFS-RT output endpoint (`/api/realtime/feed`) uses a separate optional Basic Auth mechanism, not the JWT system. If both `gtfs_rt_username` and `gtfs_rt_password` are present in the `app_settings` table, the endpoint requires an `Authorization: Basic` header. This allows consumer applications (e.g., journey planners) to access the feed without needing a user account.
 
-## Push API Authentication
+## Echo API Authentication
 
-The push endpoint (`/api/push/datasource/{source_id}`) also uses optional Basic Auth from app settings (`push_api_username`, `push_api_password`) and an additional feature flag (`push_api_enabled`).
+The push endpoint (`/api/push/datasource/{source_id}`) requires a bearer token of an account with the `API` role or higher (`CurrentApiUser`) and the feature flag `push_api_enabled`.
 
 Push API authentication and status behavior are documented in `docs/dev/push-api.md`.
 

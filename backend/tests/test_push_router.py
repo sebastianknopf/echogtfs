@@ -25,85 +25,22 @@ def _settings_repository(rows: dict[str, str]) -> SimpleNamespace:
     return SimpleNamespace(get_all_app_settings=AsyncMock(return_value=rows))
 
 
-class TestCheckPushApiAuth(unittest.IsolatedAsyncioTestCase):
+class TestCheckPushApiEnabled(unittest.IsolatedAsyncioTestCase):
     async def test_raises_403_when_push_api_disabled(self):
         repository = _settings_repository({"push_api_enabled": "false"})
 
         with patch("echogtfs.routers.push.get_system_repository", return_value=repository):
             with self.assertRaises(HTTPException) as ctx:
-                await push.check_push_api_auth(SimpleNamespace(headers={}))
+                await push.check_push_api_enabled()
 
         self.assertEqual(ctx.exception.status_code, 403)
         self.assertEqual(ctx.exception.detail, "error.push_api_disabled")
 
-    async def test_allows_access_when_enabled_without_credentials_configured(self):
-        repository = _settings_repository({
-            "push_api_enabled": "true",
-            "push_api_username": "",
-            "push_api_password": "",
-        })
+    async def test_allows_access_when_enabled(self):
+        repository = _settings_repository({"push_api_enabled": "true"})
 
         with patch("echogtfs.routers.push.get_system_repository", return_value=repository):
-            await push.check_push_api_auth(SimpleNamespace(headers={}))
-
-    async def test_raises_401_when_credentials_configured_but_missing_header(self):
-        repository = _settings_repository({
-            "push_api_enabled": "true",
-            "push_api_username": "user",
-            "push_api_password": "hashed",
-        })
-
-        with patch("echogtfs.routers.push.get_system_repository", return_value=repository):
-            with self.assertRaises(HTTPException) as ctx:
-                await push.check_push_api_auth(SimpleNamespace(headers={}))
-
-        self.assertEqual(ctx.exception.status_code, 401)
-
-    async def test_raises_422_on_wrong_username(self):
-        repository = _settings_repository({
-            "push_api_enabled": "true",
-            "push_api_username": "user",
-            "push_api_password": "hashed",
-        })
-        request = SimpleNamespace(headers={"Authorization": "Basic d3Jvbmc6cGFzcw=="})  # wrong:pass
-
-        with patch("echogtfs.routers.push.get_system_repository", return_value=repository):
-            with self.assertRaises(HTTPException) as ctx:
-                await push.check_push_api_auth(request)
-
-        self.assertEqual(ctx.exception.status_code, 422)
-        self.assertEqual(ctx.exception.detail, "error.invalid_credentials")
-
-    async def test_raises_422_on_wrong_password(self):
-        repository = _settings_repository({
-            "push_api_enabled": "true",
-            "push_api_username": "user",
-            "push_api_password": "hashed",
-        })
-        request = SimpleNamespace(headers={"Authorization": "Basic dXNlcjp3cm9uZw=="})  # user:wrong
-        security_service = SimpleNamespace(verify_password=lambda password, hashed: False)
-
-        with patch("echogtfs.routers.push.get_system_repository", return_value=repository), patch(
-            "echogtfs.routers.push.get_security_service", return_value=security_service
-        ):
-            with self.assertRaises(HTTPException) as ctx:
-                await push.check_push_api_auth(request)
-
-        self.assertEqual(ctx.exception.status_code, 422)
-
-    async def test_allows_access_with_correct_credentials(self):
-        repository = _settings_repository({
-            "push_api_enabled": "true",
-            "push_api_username": "user",
-            "push_api_password": "hashed",
-        })
-        request = SimpleNamespace(headers={"Authorization": "Basic dXNlcjpwYXNz"})  # user:pass
-        security_service = SimpleNamespace(verify_password=lambda password, hashed: True)
-
-        with patch("echogtfs.routers.push.get_system_repository", return_value=repository), patch(
-            "echogtfs.routers.push.get_security_service", return_value=security_service
-        ):
-            await push.check_push_api_auth(request)
+            await push.check_push_api_enabled()
 
 
 class TestPushDatasourceEndpoint(unittest.IsolatedAsyncioTestCase):
@@ -117,7 +54,7 @@ class TestPushDatasourceEndpoint(unittest.IsolatedAsyncioTestCase):
         )
 
         with patch("echogtfs.routers.push.get_datasource_scheduler_service", return_value=scheduler):
-            response = await push.push_datasource(source_id=5, request=request, _=None)
+            response = await push.push_datasource(source_id=5, request=request, _user=None, _=None)
 
         self.assertIsInstance(response, PushResultResponse)
         self.assertEqual(response, PushResultResponse(added=1, updated=2, deleted=0))
@@ -134,7 +71,7 @@ class TestPushDatasourceEndpoint(unittest.IsolatedAsyncioTestCase):
 
         with patch("echogtfs.routers.push.get_datasource_scheduler_service", return_value=scheduler):
             with self.assertRaises(HTTPException) as ctx:
-                await push.push_datasource(source_id=5, request=request, _=None)
+                await push.push_datasource(source_id=5, request=request, _user=None, _=None)
 
         self.assertEqual(ctx.exception.status_code, 403)
         self.assertEqual(ctx.exception.detail, "error.source_not_active")
