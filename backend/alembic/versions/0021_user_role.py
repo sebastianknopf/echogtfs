@@ -20,30 +20,30 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     op.add_column(
-        "users",
+        "sys_users",
         sa.Column("role", sa.String(32), server_default=sa.text("'USER'"), nullable=False),
     )
     op.execute(
-        "UPDATE users SET role = CASE "
+        "UPDATE sys_users SET role = CASE "
         "WHEN is_superuser THEN 'ADMIN' "
         "WHEN is_technical_contact THEN 'POWERUSER' "
         "ELSE 'USER' END"
     )
-    op.drop_column("users", "is_superuser")
-    op.drop_column("users", "is_technical_contact")
+    op.drop_column("sys_users", "is_superuser")
+    op.drop_column("sys_users", "is_technical_contact")
 
 
 def downgrade() -> None:
     op.add_column(
-        "users",
+        "sys_users",
         sa.Column("is_superuser", sa.Boolean(), server_default=sa.text("false"), nullable=False),
     )
     op.add_column(
-        "users",
+        "sys_users",
         sa.Column("is_technical_contact", sa.Boolean(), server_default=sa.text("false"), nullable=False),
     )
     op.execute(
-        "UPDATE users SET is_superuser = (role = 'ADMIN'), "
+        "UPDATE sys_users SET is_superuser = (role = 'ADMIN'), "
         "is_technical_contact = (role = 'POWERUSER')"
     )
-    op.drop_column("users", "role")
+    op.drop_column("sys_users", "role")
