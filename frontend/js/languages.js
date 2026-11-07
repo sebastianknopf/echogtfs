@@ -310,10 +310,6 @@ window.translations = {
     'conflicts.level.warning': 'Warnung',
     'conflicts.field.timestamp': 'Erkannt',
     'conflicts.field.code': 'Code',
-    'conflicts.csv.id': 'Konflikt-ID',
-    'conflicts.csv.type': 'Konflikttyp',
-    'conflicts.csv.level': 'Stufe',
-    'conflicts.csv.properties': 'Parameter',
 
     // === SOURCES PANEL ===
     'sources.title': 'Datenquellen',
@@ -1098,10 +1094,6 @@ window.translations = {
     'conflicts.level.warning': 'Warning',
     'conflicts.field.timestamp': 'Detected',
     'conflicts.field.code': 'Code',
-    'conflicts.csv.id': 'Conflict ID',
-    'conflicts.csv.type': 'Conflict type',
-    'conflicts.csv.level': 'Level',
-    'conflicts.csv.properties': 'Parameters',
 
     // === SOURCES PANEL ===
     'sources.title': 'Data Sources',

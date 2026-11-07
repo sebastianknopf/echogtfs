@@ -426,6 +426,10 @@ const api = (() => {
       return request(`/monitoring/conflicts?datasourceId=${encodeURIComponent(dataSourceId)}`);
     },
 
+    exportConflictsCsv(dataSourceId) {
+      return downloadRequest(`/conflicts/export?datasourceId=${encodeURIComponent(dataSourceId)}`);
+    },
+
     getAdapterTypes() {
       return request('/sources/adapter-types');
     },

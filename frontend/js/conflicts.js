@@ -191,41 +191,28 @@ const conflicts = (() => {
     window.i18n.initializeTranslations();
   }
 
-  function _csvCell(value) {
-    return `"${String(value).replace(/"/g, '""')}"`;
-  }
-
-  function _exportCsv() {
+  async function _exportCsv() {
     if (!_isPoweruser() || _dataSources.length === 0) return;
 
-    const headers = [
-      'conflicts.csv.id',
-      'conflicts.field.timestamp',
-      'conflicts.field.code',
-      'conflicts.csv.type',
-      'conflicts.csv.level',
-      'conflicts.csv.properties',
-    ].map(key => window.i18n(key));
-    const rows = _getFilteredConflicts().map(conflict => [
-      conflict.id,
-      conflict.timestamp,
-      conflict.code,
-      conflict.message,
-      window.i18n(`conflicts.level.${_getLevel(conflict)}`),
-      JSON.stringify(Object.fromEntries(
-        Object.entries(conflict.properties).filter(([key]) => key !== 'datasource_id')
-      )),
-    ]);
-    const csv = [headers, ...rows].map(row => row.map(_csvCell).join(',')).join('\r\n');
-    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'conflicts.csv';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    const sourceId = document.getElementById('conflicts-source-filter')?.value;
+    if (!sourceId) return;
+
+    try {
+      const result = await api.exportConflictsCsv(sourceId);
+      if (!result) return;
+
+      const url = URL.createObjectURL(result.blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = result.filename;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      ui.toast(err.message, 'error');
+    }
   }
 
   function _setFilterPopoutVisible(visible) {
