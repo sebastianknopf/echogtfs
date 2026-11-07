@@ -22,6 +22,7 @@ fake_config.settings = SimpleNamespace(
 fake_config.Settings = object
 sys.modules["echogtfs.common.config"] = fake_config
 
+from echogtfs.enum.system import UserRole
 from echogtfs.services.security.security_service import SecurityService
 
 
@@ -33,8 +34,7 @@ class TestSecurityService(unittest.IsolatedAsyncioTestCase):
         user = SimpleNamespace(
             username="admin",
             is_active=True,
-            is_superuser=True,
-            is_technical_contact=False,
+            role=UserRole.ADMIN,
         )
         repo = SimpleNamespace(get_user_by_username=AsyncMock(return_value=user))
         service = SecurityService(repo)
@@ -51,8 +51,7 @@ class TestSecurityService(unittest.IsolatedAsyncioTestCase):
         user = SimpleNamespace(
             username="u",
             is_active=False,
-            is_superuser=False,
-            is_technical_contact=False,
+            role=UserRole.USER,
         )
         repo = SimpleNamespace(get_user_by_username=AsyncMock(return_value=user))
         service = SecurityService(repo)

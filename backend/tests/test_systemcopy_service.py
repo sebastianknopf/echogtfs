@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from echogtfs.enum.system import UserRole
 from echogtfs.services.database.models import AppSetting, DataSource, DataSourceEnrichment, DataSourceMapping, User
 from echogtfs.services.systemcopy.systemcopy_service import SystemCopyService
 
@@ -122,8 +123,7 @@ class TestSystemCopyService(unittest.IsolatedAsyncioTestCase):
                     email="alice@example.com",
                     hashed_password="hash-a",
                     is_active=True,
-                    is_superuser=False,
-                    is_technical_contact=False,
+                    role=UserRole.USER,
                 )
             ]
         )
@@ -138,8 +138,7 @@ class TestSystemCopyService(unittest.IsolatedAsyncioTestCase):
                     "email": "bob@example.com",
                     "hashed_password": "hash-b",
                     "is_active": True,
-                    "is_superuser": True,
-                    "is_technical_contact": False,
+                    "role": "ADMIN",
                 }
             ],
         )
@@ -158,8 +157,7 @@ class TestSystemCopyService(unittest.IsolatedAsyncioTestCase):
             email="alice@example.com",
             hashed_password="old-hash",
             is_active=True,
-            is_superuser=False,
-            is_technical_contact=False,
+            role=UserRole.USER,
         )
         session = _FakeSession(users=[existing])
         service = SystemCopyService()
@@ -173,8 +171,7 @@ class TestSystemCopyService(unittest.IsolatedAsyncioTestCase):
                     "email": "alice-new@example.com",
                     "hashed_password": "new-hash",
                     "is_active": False,
-                    "is_superuser": True,
-                    "is_technical_contact": True,
+                    "role": "POWERUSER",
                 }
             ],
         )
@@ -186,8 +183,7 @@ class TestSystemCopyService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(existing.email, "alice-new@example.com")
         self.assertEqual(existing.hashed_password, "new-hash")
         self.assertFalse(existing.is_active)
-        self.assertTrue(existing.is_superuser)
-        self.assertTrue(existing.is_technical_contact)
+        self.assertEqual(existing.role, UserRole.POWERUSER)
 
     async def test_import_datasources_remaps_id_and_child_rows_follow_mapped_id(self):
         session = _FakeSession(
