@@ -14,6 +14,9 @@ router = APIRouter()
 _ERR_USER_NOT_FOUND = "error.user_not_found"
 _ERR_CURRENT_PASSWORD_INCORRECT = "error.current_password_incorrect"
 _ERR_USER_EXISTS = "error.user_exists"
+_ERR_CANNOT_DEACTIVATE_SELF = "error.cannot_deactivate_self"
+_ERR_CANNOT_REMOVE_OWN_ADMIN = "error.cannot_remove_own_admin"
+_ERR_CANNOT_DELETE_SELF = "error.cannot_delete_self"
 
 _Repo = Annotated[SystemRepositoryInterface, Depends(get_system_repository)]
 
@@ -112,7 +115,7 @@ async def update_user(
         if user_id == current_superuser.id and not payload.is_active:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot deactivate yourself",
+                detail=_ERR_CANNOT_DEACTIVATE_SELF,
             )
 
     if payload.role is not None:
@@ -123,7 +126,7 @@ async def update_user(
         ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot remove your own admin privileges",
+                detail=_ERR_CANNOT_REMOVE_OWN_ADMIN,
             )
 
     user = await repository.update_user(
@@ -150,7 +153,7 @@ async def delete_user(
 ) -> None:
     if user_id == current_superuser.id:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete yourself"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=_ERR_CANNOT_DELETE_SELF
         )
     
     deleted = await repository.delete_user(user_id)

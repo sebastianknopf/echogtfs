@@ -618,6 +618,8 @@ const theme = (() => {
 const ui = (() => {
   const _cache = {};
   const el = id => (_cache[id] ??= document.getElementById(id));
+  const _ROLE_KEYS = { ADMIN: 'admin', POWERUSER: 'poweruser', API: 'api' };
+  const roleKey = role => `accounts.role.${_ROLE_KEYS[role] ?? 'standard'}`;
 
   // -- Views ---------------------------------------------------------------
   function showView(name) {
@@ -692,13 +694,13 @@ const ui = (() => {
         c.textContent = window.i18n('account.chip.active');
         chipsEl.appendChild(c);
       }
-      if (user.is_superuser) {
+      if (user.role === 'ADMIN') {
         const c = document.createElement('span');
         c.className = 'md-chip md-chip--secondary';
         c.textContent = window.i18n('account.chip.admin');
         chipsEl.appendChild(c);
       }
-      if (user.is_technical_contact) {
+      if (user.role === 'POWERUSER') {
         const c = document.createElement('span');
         c.className = 'md-chip md-chip--secondary';
         c.textContent = window.i18n('account.chip.poweruser');
@@ -721,16 +723,16 @@ const ui = (() => {
     }
     
     const detailRole = el('detail-role');
-    if (detailRole) detailRole.textContent = user.is_superuser ? window.i18n('account.chip.admin') : (user.is_technical_contact ? window.i18n('account.chip.poweruser') : window.i18n('account.chip.standard'));
+    if (detailRole) detailRole.textContent = window.i18n(roleKey(user.role));
 
     // Show/hide poweruser-only sidebar items (for powerusers and admins)
     document.querySelectorAll('.nav-item[data-poweruser-only]').forEach(item => {
-      item.hidden = !(user.is_technical_contact || user.is_superuser);
+      item.hidden = !(user.role === 'POWERUSER' || user.role === 'ADMIN');
     });
     
     // Show/hide admin-only sidebar items
     document.querySelectorAll('.nav-item[data-admin-only]').forEach(item => {
-      item.hidden = !user.is_superuser;
+      item.hidden = user.role !== 'ADMIN';
     });
   }
 
@@ -1349,11 +1351,7 @@ const ui = (() => {
         tr.innerHTML = `
           <td>${esc(user.username)}</td>
           <td>${esc(user.email)}</td>
-          <td>${user.is_superuser
-            ? `<span class="badge badge--system" data-i18n="accounts.role.admin">${window.i18n('accounts.role.admin')}</span>`
-            : (user.is_technical_contact
-              ? `<span class="badge badge--system" data-i18n="accounts.role.poweruser">${window.i18n('accounts.role.poweruser')}</span>`
-              : `<span class="badge badge--system" data-i18n="accounts.role.standard">${window.i18n('accounts.role.standard')}</span>`)}</td>
+          <td><span class="badge badge--system" data-i18n="${roleKey(user.role)}">${window.i18n(roleKey(user.role))}</span></td>
           <td>${user.is_active
             ? `<span class="badge badge--system" data-i18n="accounts.status.active">${window.i18n('accounts.status.active')}</span>`
             : `<span class="badge badge--system" data-i18n="accounts.status.inactive">${window.i18n('accounts.status.inactive')}</span>`}</td>
@@ -1379,8 +1377,7 @@ const ui = (() => {
         username = '',
         email = '',
         isActive = true,
-        isSuperuser = false,
-        isTechnicalContact = false,
+        role = 'USER',
         editMode = false
       } = options;
       
@@ -1390,8 +1387,7 @@ const ui = (() => {
       el('modal-email').value = email;
       el('modal-password').value = '';
       el('modal-is-active').checked = isActive;
-      el('modal-is-superuser').checked = isSuperuser;
-      el('modal-is-technical-contact').checked = isTechnicalContact;
+      el('modal-role').value = role;
       el('modal-password-hint').textContent = editMode ? window.i18n('account.password.hint.edit') : window.i18n('account.password.hint.create');
       el('modal-error').textContent = '';
       el('modal-error').classList.remove('is-visible');

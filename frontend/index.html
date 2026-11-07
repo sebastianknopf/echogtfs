@@ -720,21 +720,20 @@
           <label class="md-field__label" for="modal-password" data-i18n="account.password">Passwort</label>
           <div class="md-field__helper" id="modal-password-hint"></div>
         </div>
+        <div class="md-field" id="modal-field-role">
+          <select class="md-field__input" id="modal-role" name="role">
+            <option value="ADMIN" data-i18n="accounts.role.admin">Admin</option>
+            <option value="POWERUSER" data-i18n="accounts.role.poweruser">Poweruser</option>
+            <option value="USER" data-i18n="accounts.role.standard">Standard</option>
+            <option value="API" data-i18n="accounts.role.api">API</option>
+          </select>
+          <label class="md-field__label" for="modal-role" data-i18n="account.role">Rolle</label>
+        </div>
         <div class="modal__switches">
           <label class="md-switch">
             <input type="checkbox" id="modal-is-active" name="is_active" />
             <span class="md-switch__track"></span>
             <span class="md-switch__label" data-i18n="account.active">Aktiv</span>
-          </label>
-          <label class="md-switch">
-            <input type="checkbox" id="modal-is-superuser" name="is_superuser" />
-            <span class="md-switch__track"></span>
-            <span class="md-switch__label" data-i18n="account.superuser">Admin</span>
-          </label>
-          <label class="md-switch">
-            <input type="checkbox" id="modal-is-technical-contact" name="is_technical_contact" />
-            <span class="md-switch__track"></span>
-            <span class="md-switch__label" data-i18n="account.poweruser">Poweruser</span>
           </label>
         </div>
         <p id="modal-error" class="login-card__error" role="alert"></p>
