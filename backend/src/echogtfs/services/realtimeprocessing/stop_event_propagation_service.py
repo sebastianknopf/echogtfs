@@ -603,4 +603,6 @@ class StopEventPropagationService:
                     event["departure_time"] = event["arrival_time"]
                     current_delay = event["arrival_time"] - scheduled_arrival
 
-                event["schedule_relationship"] = "SCHEDULED"
+                # ADDED/SKIPPED describe a deviation from the nominal trip; only the timing is projected.
+                if str(event.get("schedule_relationship") or "").upper() not in {"ADDED", "SKIPPED"}:
+                    event["schedule_relationship"] = "SCHEDULED"

@@ -425,6 +425,28 @@ class TestMergeIncrementalStopEvents(unittest.TestCase):
         self.assertEqual(merged[2]["arrival_time"], self._dt(25))
 
 
+    def test_incremental_delay_keeps_implied_added_stop_relationship(self):
+        existing = self._existing_events()
+        existing[1]["schedule_relationship"] = "ADDED"
+        existing[1]["is_implied_schedule_relationship"] = True
+        incoming = [
+            {
+                "stop_id": "s1",
+                "stop_sequence": "1",
+                "arrival_time": self._dt(0),
+                "departure_time": self._dt(5),
+                "scheduled_arrival_time": self._dt(0),
+                "scheduled_departure_time": self._dt(0),
+            }
+        ]
+
+        merged = self.datasource._merge_incremental_stop_events(existing, incoming)
+
+        self.assertEqual(merged[1]["schedule_relationship"], "ADDED")
+        self.assertTrue(merged[1]["is_implied_schedule_relationship"])
+        self.assertEqual(merged[1]["arrival_time"], self._dt(15))
+
+
 class TestPropagateIncrementalDelay(unittest.TestCase):
     """Smoke tests for the pure per-stop delay propagation helper only."""
 
