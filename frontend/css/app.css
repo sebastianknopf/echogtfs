@@ -1514,6 +1514,11 @@ body {
 .user-table tbody tr.user-table__row--inactive { opacity: 0.6; }
 .user-table__actions               { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
 
+.conflicts-toolbar .md-field--inline { width: 440px; }
+#conflicts-filter-popout {
+  max-height: 70vh;
+  overflow-y: auto;
+}
 /* Icon buttons (edit / delete) */
 .icon-btn {
   position: relative;
@@ -2013,6 +2018,46 @@ body {
   margin: 0;
   padding: 0;
   background: var(--md-surface);
+}
+
+.conflict-list-item__heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.conflict-list-item__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.conflict-list-item__field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--md-on-surface-variant);
+  font-size: .875rem;
+}
+
+.conflict-list-item__field-label {
+  color: var(--md-on-surface-medium);
+  font-size: .75rem;
+}
+
+.conflict-list-item__properties {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin: 0;
+}
+
+.conflict-list-item__property {
+  font-size: .875rem;
+  overflow-wrap: anywhere;
 }
 
 .alert-list-item {

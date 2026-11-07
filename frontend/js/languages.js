@@ -73,6 +73,7 @@ window.translations = {
     'nav.trips': 'Fahrten',
     'nav.vehicles': 'Fahrzeuge',
     'nav.sources': 'Datenquellen',
+    'nav.conflicts': 'Konflikte',
     'nav.accounts': 'Accounts',
     'nav.settings': 'Einstellungen',
     'nav.logout': 'Abmelden',
@@ -292,7 +293,27 @@ window.translations = {
     'alert.translation.url': 'URL (optional)',
     'alert.translation.translations': 'Übersetzungen',
     'alert.error.translation_required': 'Bitte mindestens eine Übersetzung mit Titel eingeben.',
-    
+
+    // === CONFLICTS PANEL ===
+    'conflicts.title': 'Konflikte',
+    'conflicts.source.label': 'Datenquelle',
+    'conflicts.source.all': 'Alle Datenquellen',
+    'conflicts.source.city': 'Stadtverkehr GTFS',
+    'conflicts.source.regional': 'Regionalverkehr GTFS',
+    'conflicts.type.label': 'Konflikttyp',
+    'conflicts.type.all': 'Alle Konflikttypen',
+    'conflicts.export': 'CSV exportieren',
+    'conflicts.loading': 'Konflikte werden geladen ...',
+    'conflicts.empty': 'Keine Konflikte für diese Filter vorhanden.',
+    'conflicts.level.error': 'Fehler',
+    'conflicts.level.warning': 'Warnung',
+    'conflicts.field.timestamp': 'Erkannt',
+    'conflicts.field.code': 'Code',
+    'conflicts.csv.id': 'Konflikt-ID',
+    'conflicts.csv.type': 'Konflikttyp',
+    'conflicts.csv.level': 'Stufe',
+    'conflicts.csv.properties': 'Parameter',
+
     // === SOURCES PANEL ===
     'sources.title': 'Datenquellen',
     'sources.add': '+ Hinzufügen',
@@ -839,6 +860,7 @@ window.translations = {
     'nav.trips': 'Trips',
     'nav.vehicles': 'Vehicles',
     'nav.sources': 'Data Sources',
+    'nav.conflicts': 'Conflicts',
     'nav.accounts': 'Accounts',
     'nav.settings': 'Settings',
     'nav.logout': 'Sign Out',
@@ -1058,7 +1080,27 @@ window.translations = {
     'alert.translation.url': 'URL (optional)',
     'alert.translation.translations': 'Translations',
     'alert.error.translation_required': 'Please enter at least one translation with a title.',
-    
+
+    // === CONFLICTS PANEL ===
+    'conflicts.title': 'Conflicts',
+    'conflicts.source.label': 'Data source',
+    'conflicts.source.all': 'All data sources',
+    'conflicts.source.city': 'City Transit GTFS',
+    'conflicts.source.regional': 'Regional Transit GTFS',
+    'conflicts.type.label': 'Conflict type',
+    'conflicts.type.all': 'All conflict types',
+    'conflicts.export': 'Export CSV',
+    'conflicts.loading': 'Loading conflicts ...',
+    'conflicts.empty': 'No conflicts match these filters.',
+    'conflicts.level.error': 'Error',
+    'conflicts.level.warning': 'Warning',
+    'conflicts.field.timestamp': 'Detected',
+    'conflicts.field.code': 'Code',
+    'conflicts.csv.id': 'Conflict ID',
+    'conflicts.csv.type': 'Conflict type',
+    'conflicts.csv.level': 'Level',
+    'conflicts.csv.properties': 'Parameters',
+
     // === SOURCES PANEL ===
     'sources.title': 'Data Sources',
     'sources.add': '+ Add',

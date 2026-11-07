@@ -88,6 +88,11 @@ const app = (() => {
           sources.load();
         }
         break;
+      case 'conflicts':
+        if (typeof conflicts !== 'undefined') {
+          conflicts.load();
+        }
+        break;
       case 'alerts':
         if (typeof alerts !== 'undefined') {
           alerts.load();
@@ -183,6 +188,7 @@ const app = (() => {
       if (typeof accounts !== 'undefined') accounts.init();
       if (typeof sources !== 'undefined') await sources.init(); // sources.init is async
       if (typeof alerts !== 'undefined') alerts.init();
+      if (typeof conflicts !== 'undefined') conflicts.init();
       if (typeof trips !== 'undefined') trips.init();
       if (typeof vehicles !== 'undefined') vehicles.init();
       if (typeof settings !== 'undefined') settings.init();
