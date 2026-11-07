@@ -76,7 +76,8 @@ Each router file under `routers/` maps to a URL prefix registered in `main.py`:
 | `gtfs.py` | `/api/gtfs` | GTFS Static feed management and entity lookup |
 | `systemcopy.py` | `/api/systemcopy` | Superuser system configuration export and import |
 | `realtime.py` | `/api` | Public GTFS-RT feed output in protobuf or JSON format |
-| `push.py` | `/api/push` | See [push-api.md](push-api.md) |
+| `monitoring.py` | `/api/monitoring` | See [echo-api.md](echo-api.md) |
+| `push.py` | `/api/push` | See [echo-api.md](echo-api.md) |
 | `internal_execute.py` | `/internal/execute` | See [internal-push-api.md](internal-push-api.md) |
 | `service.py` | `/api/service/siri` | Authenticated SIRI service liveness check |
 | `capabilities.py` | `/api/capabilities` | Authenticated capability discovery, including optional service readiness |

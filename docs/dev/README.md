@@ -13,7 +13,7 @@ This directory contains technical documentation for the EchoGTFS system, intende
 - [realtime.md](realtime.md): Relations and implications bewteen realtime models in exports and internal handling.
 - [realtime-storage.md](realtime-storage.md): MongoDB realtime collections, document structure, indices, write transactions, and snapshot reads for the exports.
 - [gtfs-id-cache.md](gtfs-id-cache.md): Redis cache of nominal GTFS IDs, rebuild triggers, and bulk validation in the processing runs.
-- [push-api.md](push-api.md): Push endpoint authentication, execution flow, scheduler integration, and error/status mapping.
+- [echo-api.md](echo-api.md): Echo API authentication (`API` role), endpoints, push execution flow, scheduler integration, and error/status mapping.
 - [internal-push-api.md](internal-push-api.md): Internal unauthenticated datasource execution endpoint and its network boundary.
 - [differential-incremental.md](differential-incremental.md): End-to-end implementation of differential source sync and incremental trip-update merge/export semantics.
 - [matching.md](matching.md): Matching-service behavior for resolving external realtime trip IDs to nominal GTFS trips, including cache flow and fallback stages.

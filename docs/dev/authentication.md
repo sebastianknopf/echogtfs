@@ -114,7 +114,7 @@ The GTFS-RT output endpoint (`/api/realtime/feed`) uses a separate optional Basi
 
 The push endpoint (`/api/push/datasource/{source_id}`) requires a bearer token of an account with the `API` role or higher (`CurrentApiUser`) and the feature flag `push_api_enabled`.
 
-Push API authentication and status behavior are documented in `docs/dev/push-api.md`.
+Echo API authentication and status behavior are documented in `docs/dev/echo-api.md`.
 
 ## First Superuser Bootstrap
 
