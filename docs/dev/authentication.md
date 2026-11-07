@@ -81,17 +81,20 @@ The `User` model has an `is_active` flag and a `role` column (`UserRole` enum in
 | Admin | `role = ADMIN` | Full administrative access. Can manage users, all settings, and all resources. |
 | Poweruser | `role = POWERUSER` | Intermediate role. Can manage data sources and settings alongside admins. |
 | User | `role = USER` | Regular account without administrative access. |
-| API | `role = API` | Reserved for API accounts; has no access through the dependency aliases below except `CurrentUser`. |
+| API | `role = API` | Lowest role. Can only access the monitoring API (`CurrentApiUser`); cannot use the web interface or manage anything. |
+
+Roles are hierarchical: `API` < `USER` < `POWERUSER` < `ADMIN`. A role may access everything a lower role may access.
 
 ## FastAPI Dependency Aliases
 
-`security.py` exports three type aliases that route handlers use as annotated dependencies:
+`security.py` exports four type aliases that route handlers use as annotated dependencies:
 
 | Alias | Resolved by | Minimum required role |
 |---|---|---|
-| `CurrentUser` | `get_current_active_user` | Any active authenticated user |
+| `CurrentUser` | `get_current_regular_user` | `role >= USER` (excludes `API`) |
 | `CurrentSuperuser` | `get_current_superuser` | `role = ADMIN` |
-| `CurrentPoweruser` | `get_current_poweruser_or_admin` | `role = POWERUSER` or `role = ADMIN` |
+| `CurrentPoweruser` | `get_current_poweruser_or_admin` | `role >= POWERUSER` |
+| `CurrentApiUser` | `get_current_api_user` | `role >= API`, i.e. any active user (used by the monitoring endpoints) |
 
 Example usage in a router:
 
