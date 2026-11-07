@@ -37,11 +37,21 @@ class SecurityServiceInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def get_current_regular_user(self, request: Request, token: str) -> User:
+        """Resolve user and require at least the USER role (excludes API accounts)."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def get_current_superuser(self, request: Request, token: str) -> User:
-        """Resolve user and require superuser permissions."""
+        """Resolve user and require the ADMIN role."""
         raise NotImplementedError
 
     @abstractmethod
     async def get_current_poweruser_or_admin(self, request: Request, token: str) -> User:
-        """Resolve user and require technical-contact or superuser permissions."""
+        """Resolve user and require at least the POWERUSER role."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_current_api_user(self, request: Request, token: str) -> User:
+        """Resolve user and require at least the API role (any active account)."""
         raise NotImplementedError

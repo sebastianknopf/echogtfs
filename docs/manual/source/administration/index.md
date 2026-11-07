@@ -6,6 +6,5 @@
 accounts
 system-settings
 system-copy
-monitoring-api
-push-api
+echo-api
 ```

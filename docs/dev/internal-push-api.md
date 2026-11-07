@@ -14,7 +14,7 @@ The endpoint has no authentication. It is intended for trusted internal callers,
 
 The handler reads the request body and awaits `DatasourceSchedulerService.run_internal_push_task(...)` before returning. The shared push execution path checks that the source exists and is active, that the scheduler is not closing, that a GTFS import is not in progress, and that the source is not already running. It deliberately does not require `event_based` execution. This is how a subscription-based source receives SIRI payloads; the public push endpoint remains restricted to event-based sources.
 
-Scheduler and adapter errors are mapped to their corresponding HTTP status and detail response. See [push-api.md](push-api.md) for shared payload processing and logging behavior.
+Scheduler and adapter errors are mapped to their corresponding HTTP status and detail response. See [echo-api.md](echo-api.md) for shared payload processing and logging behavior.
 
 ## Subscription Sink
 

@@ -42,8 +42,7 @@ const accounts = (() => {
       username: user.username,
       email: user.email,
       isActive: user.is_active,
-      isSuperuser: user.is_superuser,
-      isTechnicalContact: user.is_technical_contact,
+      role: user.role,
       editMode: true
     });
     const form = ui.el('account-form');
@@ -59,8 +58,7 @@ const accounts = (() => {
     const email = form.elements['email'].value.trim();
     const password = form.elements['password'].value;
     const isActive = form.elements['is_active'].checked;
-    const isSuperuser = form.elements['is_superuser'].checked;
-    const isTechnicalContact = form.elements['is_technical_contact'].checked;
+    const role = form.elements['role'].value;
 
     ui.setModalError(null);
     if (!email) {
@@ -79,21 +77,19 @@ const accounts = (() => {
     ui.setModalBusy(true);
     try {
       if (!userId) {
-        // Create: use register endpoint, then patch flags if non-default
+        // Create: use register endpoint, then patch active state and role if non-default
         const created = await api.createUser({ username, email, password });
-        if (!isActive || isSuperuser || isTechnicalContact) {
+        if (!isActive || role !== 'USER') {
           await api.updateUser(created.id, {
             is_active: isActive,
-            is_superuser: isSuperuser,
-            is_technical_contact: isTechnicalContact
+            role
           });
         }
       } else {
         const patch = {
           email,
           is_active: isActive,
-          is_superuser: isSuperuser,
-          is_technical_contact: isTechnicalContact
+          role
         };
         if (password) patch.password = password;
         await api.updateUser(userId, patch);

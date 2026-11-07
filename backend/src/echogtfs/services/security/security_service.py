@@ -7,9 +7,19 @@ import jwt
 from fastapi import HTTPException, Request, status
 
 from echogtfs.common.config import settings
+from echogtfs.enum.system import UserRole
 from echogtfs.services.database import SystemRepositoryInterface
 from echogtfs.services.database.models import User
 from echogtfs.services.security.intf_security import SecurityServiceInterface
+
+
+# Higher rank includes the permissions of all lower ranks.
+_ROLE_RANK = {
+    UserRole.API: 0,
+    UserRole.USER: 1,
+    UserRole.POWERUSER: 2,
+    UserRole.ADMIN: 3,
+}
 
 
 class SecurityService(SecurityServiceInterface):
@@ -79,23 +89,25 @@ class SecurityService(SecurityServiceInterface):
 
         return current_user
 
-    async def get_current_superuser(self, request: Request, token: str) -> User:
+    async def _get_current_user_with_role(self, request: Request, token: str, minimum_role: UserRole) -> User:
         current_user = await self.get_current_active_user(request, token)
-        
-        if not current_user.is_superuser:
+
+        if _ROLE_RANK.get(UserRole(current_user.role), -1) < _ROLE_RANK[minimum_role]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="error.403_permission",
             )
 
         return current_user
+
+    async def get_current_regular_user(self, request: Request, token: str) -> User:
+        return await self._get_current_user_with_role(request, token, UserRole.USER)
+
+    async def get_current_superuser(self, request: Request, token: str) -> User:
+        return await self._get_current_user_with_role(request, token, UserRole.ADMIN)
 
     async def get_current_poweruser_or_admin(self, request: Request, token: str) -> User:
-        current_user = await self.get_current_active_user(request, token)
-        if not (current_user.is_technical_contact or current_user.is_superuser):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="error.403_permission",
-            )
+        return await self._get_current_user_with_role(request, token, UserRole.POWERUSER)
 
-        return current_user
+    async def get_current_api_user(self, request: Request, token: str) -> User:
+        return await self._get_current_user_with_role(request, token, UserRole.API)

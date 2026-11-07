@@ -17,7 +17,7 @@ from echogtfs.services.database.models import AppSetting
 from echogtfs.services.conflict.conflict_export_service import ConflictExportService
 from echogtfs.enum.gtfs import GtfsImportStatus
 from echogtfs.validation.schemas import MonitoringConflictObject, MonitoringDatasourceGroupObject, MonitoringRouteGroupObject, MonitoringStatisticsObject, MonitoringStatisticsRealtimeObject, MonitoringStatisticsRealtimeAssignmentsObject, MonitoringStatisticsRealtimeAlertsObject, MonitoringStatisticsRealtimeTripsObject, MonitoringStatisticsRealtimeVehiclesObject, MonitoringStatisticsStaticObject, MonitoringConflictsResponse, MonitoringStatisticsResponse, MonitoringSystemFiltersObject, MonitoringSystemResponse
-from echogtfs.common.security import CurrentPoweruser
+from echogtfs.common.security import CurrentApiUser
 from echogtfs._version import __version__
 
 router = APIRouter()
@@ -57,7 +57,7 @@ def _gtfs_import_status_enum(value: str | None) -> GtfsImportStatus | None:
     }
 )
 async def system(
-    _: CurrentPoweruser,
+    _: CurrentApiUser,
     system_repository: _SystemRepo,
     gtfs_repository: _GtfsRepo
 ) -> MonitoringSystemResponse:
@@ -106,7 +106,7 @@ async def system(
     }
 )
 async def statistics(
-    _: CurrentPoweruser,
+    _: CurrentApiUser,
     system_repository: _SystemRepo,
     gtfs_repository: _GtfsRepo,
     realtime_repository: _RealtimeRepo,
@@ -204,7 +204,7 @@ async def statistics(
     }
 )
 async def conflicts(
-    _: CurrentPoweruser,
+    _: CurrentApiUser,
     system_repository: _SystemRepo,
     realtime_repository: _RealtimeRepo,
     data_source_id: int | None = Query(

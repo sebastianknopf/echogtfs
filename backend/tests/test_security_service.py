@@ -22,6 +22,7 @@ fake_config.settings = SimpleNamespace(
 fake_config.Settings = object
 sys.modules["echogtfs.common.config"] = fake_config
 
+from echogtfs.enum.system import UserRole
 from echogtfs.services.security.security_service import SecurityService
 
 
@@ -33,8 +34,7 @@ class TestSecurityService(unittest.IsolatedAsyncioTestCase):
         user = SimpleNamespace(
             username="admin",
             is_active=True,
-            is_superuser=True,
-            is_technical_contact=False,
+            role=UserRole.ADMIN,
         )
         repo = SimpleNamespace(get_user_by_username=AsyncMock(return_value=user))
         service = SecurityService(repo)
@@ -51,8 +51,7 @@ class TestSecurityService(unittest.IsolatedAsyncioTestCase):
         user = SimpleNamespace(
             username="u",
             is_active=False,
-            is_superuser=False,
-            is_technical_contact=False,
+            role=UserRole.USER,
         )
         repo = SimpleNamespace(get_user_by_username=AsyncMock(return_value=user))
         service = SecurityService(repo)
@@ -60,6 +59,37 @@ class TestSecurityService(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaises(HTTPException):
             await service.get_current_active_user(SimpleNamespace(state=SimpleNamespace()), token)
+
+    async def test_role_hierarchy(self):
+        expectations = {
+            UserRole.API: {"api": True, "regular": False, "poweruser": False, "superuser": False},
+            UserRole.USER: {"api": True, "regular": True, "poweruser": False, "superuser": False},
+            UserRole.POWERUSER: {"api": True, "regular": True, "poweruser": True, "superuser": False},
+            UserRole.ADMIN: {"api": True, "regular": True, "poweruser": True, "superuser": True},
+        }
+
+        for role, expected in expectations.items():
+            user = SimpleNamespace(username="u", is_active=True, role=role)
+            service = SecurityService(SimpleNamespace(get_user_by_username=AsyncMock(return_value=user)))
+            token = service.create_access_token("u")
+            checks = {
+                "api": service.get_current_api_user,
+                "regular": service.get_current_regular_user,
+                "poweruser": service.get_current_poweruser_or_admin,
+                "superuser": service.get_current_superuser,
+            }
+
+            for name, check in checks.items():
+                with self.subTest(role=role, check=name):
+                    request = SimpleNamespace(state=SimpleNamespace())
+                    if expected[name]:
+                        await check(request, token)
+                    else:
+                        with self.assertRaises(HTTPException) as ctx:
+                            await check(request, token)
+                        self.assertEqual(ctx.exception.status_code, 403)
+
+            SecurityService._instance = None
 
     async def test_invalid_token_rejected(self):
         repo = SimpleNamespace(get_user_by_username=AsyncMock(return_value=None))

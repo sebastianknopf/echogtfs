@@ -42,6 +42,15 @@ class DataSourceExecutionType(str, Enum):
     SUBSCRIPTION_BASED = "subscription_based"  # Runs only when a managed subscription delivers data
 
 
+class UserRole(str, Enum):
+    """Role of a user."""
+
+    ADMIN = "ADMIN"
+    POWERUSER = "POWERUSER"
+    USER = "USER"
+    API = "API"
+
+
 class IncorrectStopIdHandling(str, Enum):
     """How stop IDs that differ from the nominal stop ID are handled."""
 

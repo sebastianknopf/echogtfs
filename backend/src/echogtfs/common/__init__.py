@@ -6,6 +6,7 @@ from echogtfs.common.intf_progress_report import ReportProgressInterface
 from echogtfs.common.report_progress_queue import ReportProgressQueue
 from echogtfs.common.extensions import limiter
 from echogtfs.common.security import (
+	CurrentApiUser,
 	CurrentPoweruser,
 	CurrentSuperuser,
 	CurrentUser,
@@ -22,5 +23,6 @@ __all__ = [
 	"CurrentUser",
 	"CurrentSuperuser",
 	"CurrentPoweruser",
+	"CurrentApiUser",
 	"SlidingTokenMiddleware",
 ]

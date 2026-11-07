@@ -65,7 +65,7 @@ const sources = (() => {
   // Helper to check poweruser/admin rights
   function _isPoweruser() {
     const user = window.appState?.currentUser;
-    return user && (user.is_technical_contact || user.is_superuser);
+    return user && (user.role === 'POWERUSER' || user.role === 'ADMIN');
   }
   
   function _initializeMappings(mappings) {

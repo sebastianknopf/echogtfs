@@ -73,23 +73,28 @@ Passwords are hashed with bcrypt via the `hash_password(password)` function. Ver
 
 ## Role Model
 
-The `User` model has three boolean flag columns that control access:
+The `User` model has an `is_active` flag and a `role` column (`UserRole` enum in `enum/system.py`) that control access:
 
-| Flag | Column | Description |
+| Field | Column | Description |
 |---|---|---|
 | Active | `is_active` | Account must be active to authenticate. Inactive accounts receive `HTTP 400`. |
-| Superuser | `is_superuser` | Full administrative access. Can manage users, all settings, and all resources. |
-| Technical contact | `is_technical_contact` | Intermediate role. Can manage data sources and settings alongside superusers. |
+| Admin | `role = ADMIN` | Full administrative access. Can manage users, all settings, and all resources. |
+| Poweruser | `role = POWERUSER` | Intermediate role. Can manage data sources and settings alongside admins. |
+| User | `role = USER` | Regular account without administrative access. |
+| API | `role = API` | Lowest role. Can only access the monitoring API (`CurrentApiUser`); cannot use the web interface or manage anything. |
+
+Roles are hierarchical: `API` < `USER` < `POWERUSER` < `ADMIN`. A role may access everything a lower role may access.
 
 ## FastAPI Dependency Aliases
 
-`security.py` exports three type aliases that route handlers use as annotated dependencies:
+`security.py` exports four type aliases that route handlers use as annotated dependencies:
 
 | Alias | Resolved by | Minimum required role |
 |---|---|---|
-| `CurrentUser` | `get_current_active_user` | Any active authenticated user |
-| `CurrentSuperuser` | `get_current_superuser` | `is_superuser = True` |
-| `CurrentPoweruser` | `get_current_poweruser_or_admin` | `is_technical_contact = True` or `is_superuser = True` |
+| `CurrentUser` | `get_current_regular_user` | `role >= USER` (excludes `API`) |
+| `CurrentSuperuser` | `get_current_superuser` | `role = ADMIN` |
+| `CurrentPoweruser` | `get_current_poweruser_or_admin` | `role >= POWERUSER` |
+| `CurrentApiUser` | `get_current_api_user` | `role >= API`, i.e. any active user (used by the monitoring endpoints) |
 
 Example usage in a router:
 
@@ -105,12 +110,12 @@ async def delete_user(user_id: int, current_user: CurrentSuperuser, db: _DB):
 
 The GTFS-RT output endpoint (`/api/realtime/feed`) uses a separate optional Basic Auth mechanism, not the JWT system. If both `gtfs_rt_username` and `gtfs_rt_password` are present in the `app_settings` table, the endpoint requires an `Authorization: Basic` header. This allows consumer applications (e.g., journey planners) to access the feed without needing a user account.
 
-## Push API Authentication
+## Echo API Authentication
 
-The push endpoint (`/api/push/datasource/{source_id}`) also uses optional Basic Auth from app settings (`push_api_username`, `push_api_password`) and an additional feature flag (`push_api_enabled`).
+The push endpoint (`/api/push/datasource/{source_id}`) requires a bearer token of an account with the `API` role or higher (`CurrentApiUser`) and the feature flag `push_api_enabled`.
 
-Push API authentication and status behavior are documented in `docs/dev/push-api.md`.
+Echo API authentication and status behavior are documented in `docs/dev/echo-api.md`.
 
 ## First Superuser Bootstrap
 
-If the `users` table is empty at startup, `main.py` creates one user from the environment variables `FIRST_SUPERUSER`, `FIRST_SUPERUSER_EMAIL`, and `FIRST_SUPERUSER_PASSWORD`. This user is created with `is_superuser=True` and `is_active=True`. The password is bcrypt-hashed before storage.
+If the `users` table is empty at startup, `main.py` creates one user from the environment variables `FIRST_SUPERUSER`, `FIRST_SUPERUSER_EMAIL`, and `FIRST_SUPERUSER_PASSWORD`. This user is created with `role=ADMIN` and `is_active=True`. The password is bcrypt-hashed before storage.

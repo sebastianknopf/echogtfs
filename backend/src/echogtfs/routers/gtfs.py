@@ -115,7 +115,7 @@ async def trigger_import(
     if await service.is_import_running():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="An import is already running.",
+            detail="error.gtfs_import_running",
         )
 
     queue = ReportProgressQueue()

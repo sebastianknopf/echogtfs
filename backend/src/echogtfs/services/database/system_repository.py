@@ -7,6 +7,7 @@ import uuid
 from sqlalchemy import case, delete, select, func, update
 from sqlalchemy.orm import contains_eager, selectinload
 
+from echogtfs.enum.system import UserRole
 from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
 from echogtfs.services.database.models import (
     AppSetting,
@@ -92,8 +93,7 @@ class SystemRepository(PostgresRepositoryBase, SystemRepositoryInterface):
         hashed_password: str,
         *,
         is_active: bool = True,
-        is_superuser: bool = False,
-        is_technical_contact: bool = False,
+        role: UserRole = UserRole.USER,
     ) -> User:
         """Create and persist one user."""
         async with self.get_session() as db:
@@ -102,8 +102,7 @@ class SystemRepository(PostgresRepositoryBase, SystemRepositoryInterface):
                 email=email,
                 hashed_password=hashed_password,
                 is_active=is_active,
-                is_superuser=is_superuser,
-                is_technical_contact=is_technical_contact,
+                role=role,
             )
 
             db.add(user)
@@ -119,8 +118,7 @@ class SystemRepository(PostgresRepositoryBase, SystemRepositoryInterface):
         email: str | None = None,
         hashed_password: str | None = None,
         is_active: bool | None = None,
-        is_superuser: bool | None = None,
-        is_technical_contact: bool | None = None,
+        role: UserRole | None = None,
     ) -> User | None:
         """Update mutable user fields and return updated user, or None when not found."""
         async with self.get_session() as db:
@@ -135,10 +133,8 @@ class SystemRepository(PostgresRepositoryBase, SystemRepositoryInterface):
                 user.hashed_password = hashed_password
             if is_active is not None:
                 user.is_active = is_active
-            if is_superuser is not None:
-                user.is_superuser = is_superuser
-            if is_technical_contact is not None:
-                user.is_technical_contact = is_technical_contact
+            if role is not None:
+                user.role = role
 
             await db.commit()
             await db.refresh(user)

@@ -20,7 +20,7 @@ async def _get_current_active_user(
     request: Request,
     token: Annotated[str, Depends(oauth2_scheme)],
 ) -> User:
-    return await get_security_service().get_current_active_user(request, token)
+    return await get_security_service().get_current_regular_user(request, token)
 
 
 async def _get_current_superuser(
@@ -37,9 +37,17 @@ async def _get_current_poweruser_or_admin(
     return await get_security_service().get_current_poweruser_or_admin(request, token)
 
 
+async def _get_current_api_user(
+    request: Request,
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> User:
+    return await get_security_service().get_current_api_user(request, token)
+
+
 CurrentUser = Annotated[User, Depends(_get_current_active_user)]
 CurrentSuperuser = Annotated[User, Depends(_get_current_superuser)]
 CurrentPoweruser = Annotated[User, Depends(_get_current_poweruser_or_admin)]
+CurrentApiUser = Annotated[User, Depends(_get_current_api_user)]
 
 
 class SlidingTokenMiddleware(BaseHTTPMiddleware):

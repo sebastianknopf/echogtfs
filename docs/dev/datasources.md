@@ -8,7 +8,7 @@ The registry in `echogtfs.datasources` maps each stored source type to its concr
 
 ## Integration With the Application
 
-Source records are stored in the `data_sources` table, including each source's cron expression; cron configuration is not stored in `app_settings`. `sources.py` manages source configuration and execution through `/api/sources`. Public event-based execution is provided by `push.py` at `/api/push`, and `internal_execute.py` handles the internal callback at `/internal/execute`. Their endpoint contracts are documented in [push-api.md](push-api.md) and [internal-push-api.md](internal-push-api.md). The SIRI consumer, subscription lifecycle, and network boundaries are described in [siricomservice.md](siricomservice.md).
+Source records are stored in the `data_sources` table, including each source's cron expression; cron configuration is not stored in `app_settings`. `sources.py` manages source configuration and execution through `/api/sources`. Public event-based execution is provided by `push.py` at `/api/push`. The endpoint contracts are documented in [echo-api.md](echo-api.md).
 
 At application startup, `main.py` initializes the single-instance `DatasourceSchedulerService` and asks it to register scheduled jobs for active sources with cron expressions. `CleanupService` removes datasource logs older than 24 hours.
 
@@ -59,7 +59,7 @@ The base type alone does not select execution mode. A persisted `subscription_ba
 | `event_based` | Public push API | No cron polling. The public push endpoint accepts this mode; manual run is unavailable. Polling-only adapter fields can be optional. |
 | `subscription_based` | Managed SIRI subscription | No cron polling. The source receives payloads through the internal push endpoint; public push and manual run reject it. |
 
-The public and internal push endpoint contracts are documented in [push-api.md](push-api.md) and [internal-push-api.md](internal-push-api.md). Subscription setup and callback delivery are documented in [siricomservice.md](siricomservice.md).
+The public and internal push endpoint contracts are documented in [echo-api.md](echo-api.md) and [internal-push-api.md](internal-push-api.md). Subscription setup and callback delivery are documented in [siricomservice.md](siricomservice.md).
 
 The frontend clears cron values for event-based and subscription-based sources. It also sets differential updates to true and disables that switch for subscription-based sources. Differential synchronization behavior is documented in [differential-incremental.md](differential-incremental.md).
 

@@ -519,18 +519,6 @@
                   <label class="md-field__checkbox-label" for="settings-push-api-enabled" data-i18n="settings.push_api_enabled">Push-API aktivieren</label>
                 </div>
 
-                <div class="md-field">
-                  <input type="text" id="settings-push-api-username" class="md-field__input" placeholder=" " maxlength="64" autocomplete="off" />
-                  <label class="md-field__label" for="settings-push-api-username" data-i18n="settings.push_api_username">Basic Auth Benutzername (optional)</label>
-                  <div class="md-field__helper" data-i18n="settings.push_api_username.helper">Beide Felder löschen, um Basic Auth zu deaktivieren</div>
-                </div>
-
-                <div class="md-field">
-                  <input type="password" id="settings-push-api-password" class="md-field__input" placeholder=" " maxlength="128" autocomplete="new-password" />
-                  <label class="md-field__label" for="settings-push-api-password" data-i18n="settings.push_api_password">Basic Auth Passwort (optional)</label>
-                  <div class="md-field__helper" id="settings-push-api-password-helper" data-i18n="settings.push_api_password.helper">Leer lassen für neues Passwort oder altes Passwort behalten</div>
-                </div>
-
                 <p class="settings-section-label" data-i18n="settings.section.cleanup">Datenbereinigung</p>
 
                 <div class="md-field__helper" style="margin-top: 0; margin-bottom: 16px;" data-i18n="settings.cleanup_info">Abgelaufene Meldungen, Fahrten und Fahrzeugpositionen werden unabhängig von ihrer Datenquelle bereinigt. Meldungen werden anhand ihrer Gültigkeitszeiträume erkannt und je nach Verfahrensweise deaktiviert oder gelöscht (inkl. Bezüge, Übersetzungen und Gültigkeitszeiträume); endgültig gelöscht werden sie frühestens nach der gewählten Anzahl an Tagen. Fahrten und Fahrzeugpositionen werden anhand ihres letzten Aktualisierungszeitpunkts bereinigt: Bei abgelaufenen Fahrten werden die Fahrzeiten entfernt, die Fahrt selbst bleibt jedoch bestehen, solange noch eine Fahrzeugposition vorhanden ist. Bei abgelaufenen Fahrzeugpositionen wird die Position gelöscht; die zugehörige Fahrt bleibt bestehen, solange noch Fahrzeiten vorhanden sind.</div>
@@ -720,21 +708,20 @@
           <label class="md-field__label" for="modal-password" data-i18n="account.password">Passwort</label>
           <div class="md-field__helper" id="modal-password-hint"></div>
         </div>
+        <div class="md-field" id="modal-field-role">
+          <select class="md-field__input" id="modal-role" name="role">
+            <option value="ADMIN" data-i18n="accounts.role.admin">Admin</option>
+            <option value="POWERUSER" data-i18n="accounts.role.poweruser">Poweruser</option>
+            <option value="USER" data-i18n="accounts.role.standard">Standard</option>
+            <option value="API" data-i18n="accounts.role.api">API</option>
+          </select>
+          <label class="md-field__label" for="modal-role" data-i18n="account.role">Rolle</label>
+        </div>
         <div class="modal__switches">
           <label class="md-switch">
             <input type="checkbox" id="modal-is-active" name="is_active" />
             <span class="md-switch__track"></span>
             <span class="md-switch__label" data-i18n="account.active">Aktiv</span>
-          </label>
-          <label class="md-switch">
-            <input type="checkbox" id="modal-is-superuser" name="is_superuser" />
-            <span class="md-switch__track"></span>
-            <span class="md-switch__label" data-i18n="account.superuser">Admin</span>
-          </label>
-          <label class="md-switch">
-            <input type="checkbox" id="modal-is-technical-contact" name="is_technical_contact" />
-            <span class="md-switch__track"></span>
-            <span class="md-switch__label" data-i18n="account.poweruser">Poweruser</span>
           </label>
         </div>
         <p id="modal-error" class="login-card__error" role="alert"></p>
