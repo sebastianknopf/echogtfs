@@ -418,6 +418,14 @@ const api = (() => {
       return request('/sources/');
     },
 
+    getConflictFilterOptions() {
+      return request('/conflicts/filters');
+    },
+
+    getMonitoringConflicts(dataSourceId) {
+      return request(`/monitoring/conflicts?datasourceId=${encodeURIComponent(dataSourceId)}`);
+    },
+
     getAdapterTypes() {
       return request('/sources/adapter-types');
     },

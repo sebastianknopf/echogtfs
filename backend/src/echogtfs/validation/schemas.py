@@ -398,6 +398,16 @@ class MonitoringDatasourceGroupObject(BaseModel):
     )
 
 
+class ConflictTypeFilterObject(BaseModel):
+    code: ConflictType = Field(description="Numeric conflict type code.")
+    name: str = Field(description="Conflict type name.")
+
+
+class ConflictFilterOptionsResponse(BaseModel):
+    data_sources: list[MonitoringDatasourceGroupObject]
+    conflict_types: list[ConflictTypeFilterObject]
+
+
 class MonitoringSystemResponse(BaseModel):
     version: str = Field(
         examples=["1.0.0", "v1.2.1.dev6+geddca0dfb.d20260829"],

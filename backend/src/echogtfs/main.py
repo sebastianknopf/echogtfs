@@ -26,6 +26,7 @@ from echogtfs.services.subscription import SiriSubscriptionService, set_siri_sub
 from echogtfs.services.caching import CachingService, set_caching_service
 from echogtfs.routers.alerts import router as alerts_router
 from echogtfs.routers.auth import router as auth_router
+from echogtfs.routers.conflicts import router as conflicts_router
 from echogtfs.routers.gtfs import router as gtfs_router
 from echogtfs.routers.realtime import router as realtime_router
 from echogtfs.routers.dashboard import router as dashboard_router
@@ -147,6 +148,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router,         prefix="/api/auth",         tags=["auth"])
+app.include_router(conflicts_router,    prefix="/api/conflicts",    tags=["conflicts"])
 app.include_router(dashboard_router,    prefix="/api/dashboard",    tags=["dashboard"])
 app.include_router(alerts_router,       prefix="/api/alerts",       tags=["alerts"])
 app.include_router(trips_router,        prefix="/api/trips",        tags=["trips"])

@@ -1,67 +1,31 @@
 /* ==========================================================================
-   CONFLICTS MODULE - Mock conflict review
+   CONFLICTS MODULE - Conflict review
 ========================================================================== */
 
 const conflicts = (() => {
+  const POLL_INTERVAL_MS = 60_000;
   const WARNING_ICON_PATH = 'M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z';
 
-  const MOCK_RESPONSE = {
-    conflicts: [
-    {
-      id: 'b6dd0f6e-2d18-4f4c-9f35-0dcf78d6a021',
-      timestamp: '2026-11-06T09:15:00Z',
-      code: 1001,
-      message: 'ERROR_DATASOURCE_FAILURE',
-      datasource: { id: 12, name: 'City Transit GTFS' },
-      properties: { datasource_id: 12, last_status: 503, last_failure: '2026-11-06T09:15:00Z' },
-    },
-    {
-      id: '5b97522a-4cb0-4b2a-9c0c-9af0d29cdb1a',
-      timestamp: '2026-11-05T14:30:00Z',
-      code: 1003,
-      message: 'ERROR_NO_STOP_FOUND',
-      datasource: { id: 12, name: 'City Transit GTFS' },
-      properties: { datasource_id: 12, last_failure: '2026-11-05T14:30:00Z', stop_id: '804' },
-    },
-    {
-      id: '61895838-6ce1-49b6-9b41-4f22bcd6bb19',
-      timestamp: '2026-11-04T08:00:00Z',
-      code: 2003,
-      message: 'WARNING_WRONG_QUAY',
-      datasource: { id: 18, name: 'Regional Transit GTFS' },
-      properties: {
-        datasource_id: 18,
-        last_failure: '2026-11-04T08:00:00Z',
-        trip_id: 'R3-2026-11-04',
-        stop_id: '2201',
-        stop_sequence: 4,
-        original_stop_id: '2200',
-      },
-    },
-    {
-      id: 'db2207f9-1f91-44e1-a17c-7447e59c6ead',
-      timestamp: '2026-11-03T11:45:00Z',
-      code: 2002,
-      message: 'WARNING_IMPLIED_CANCELED_STOP',
-      datasource: { id: 18, name: 'Regional Transit GTFS' },
-      properties: {
-        datasource_id: 18,
-        last_failure: '2026-11-03T11:45:00Z',
-        trip_id: 'R3-2026-11-03',
-        stop_id: '2202',
-        stop_sequence: 7,
-      },
-    },
-    {
-      id: '6cc5cc8d-4c7f-4f21-a6b8-ad027b109dc0',
-      timestamp: '2026-11-02T16:20:00Z',
-      code: 2004,
-      message: 'WARNING_ROUTE_NO_GLOBAL_ID',
-      datasource: { id: 12, name: 'City Transit GTFS' },
-      properties: { datasource_id: 12, last_failure: '2026-11-02T16:20:00Z', route_id: '12' },
-    },
-    ],
-  };
+  let _dataSources = [];
+  let _loadSequence = 0;
+  let _conflictLoadSequence = 0;
+  let _pollTimer = null;
+  let _conflicts = [];
+  let _isLoadingConflicts = false;
+
+  function _isPanelActive() {
+    const panel = document.querySelector('.panel[data-panel="conflicts"]');
+    return Boolean(panel?.classList.contains('is-active'));
+  }
+
+  function _startPolling() {
+    if (_pollTimer) return;
+    _pollTimer = window.setInterval(() => {
+      if (!_isPanelActive()) return;
+      const sourceId = document.getElementById('conflicts-source-filter')?.value;
+      if (sourceId) _loadConflicts(sourceId);
+    }, POLL_INTERVAL_MS);
+  }
 
   function _isPoweruser() {
     const role = window.appState?.currentUser?.role;
@@ -69,14 +33,72 @@ const conflicts = (() => {
   }
 
   function _getFilteredConflicts() {
-    const sourceId = document.getElementById('conflicts-source-filter')?.value || 'all';
+    const sourceId = document.getElementById('conflicts-source-filter')?.value;
     const selectedCodes = Array.from(
       document.querySelectorAll('#conflicts-filter-popout input[type="checkbox"]:checked')
     ).map(checkbox => checkbox.value);
-    return MOCK_RESPONSE.conflicts.filter(conflict =>
-      (sourceId === 'all' || String(conflict.datasource.id) === sourceId) &&
+    return _conflicts.filter(conflict =>
+      String(conflict.datasource.id) === sourceId &&
       selectedCodes.includes(String(conflict.code))
+    ).sort((left, right) => new Date(right.timestamp) - new Date(left.timestamp));
+  }
+
+  function _renderError(messageKey) {
+    const container = document.getElementById('conflicts-content');
+    if (!container) return;
+    container.innerHTML = `<div class="panel__placeholder" data-i18n="${messageKey}">${window.i18n(messageKey)}</div>`;
+    window.i18n.initializeTranslations();
+  }
+
+  function _setControlsEnabled(enabled) {
+    const sourceFilter = document.getElementById('conflicts-source-filter');
+    const exportButton = document.getElementById('conflicts-export-btn');
+    const filterButton = document.getElementById('conflicts-filter-btn');
+    if (sourceFilter) sourceFilter.disabled = !enabled;
+    if (exportButton) exportButton.disabled = !enabled;
+    if (filterButton) filterButton.disabled = !enabled;
+  }
+
+  function _setSourcePlaceholder(messageKey) {
+    const sourceFilter = document.getElementById('conflicts-source-filter');
+    if (sourceFilter) {
+      sourceFilter.innerHTML = `<option value="">${window.i18n(messageKey)}</option>`;
+    }
+  }
+
+  function _populateFilterOptions(options) {
+    const sourceFilter = document.getElementById('conflicts-source-filter');
+    const typeOptions = document.getElementById('conflicts-type-options');
+    if (!sourceFilter || !typeOptions) return;
+
+    const previousSource = sourceFilter.value;
+    const previousCheckboxes = Array.from(
+      document.querySelectorAll('#conflicts-filter-popout input[type="checkbox"]')
     );
+    const previousSelected = new Set(
+      previousCheckboxes.filter(checkbox => checkbox.checked).map(checkbox => checkbox.value)
+    );
+    const hadPreviousOptions = previousCheckboxes.length > 0;
+
+    _dataSources = options.data_sources;
+    sourceFilter.innerHTML = _dataSources.map(source =>
+      `<option value="${ui.esc(source.id)}">${ui.esc(source.name)}</option>`
+    ).join('');
+    sourceFilter.value = _dataSources.some(source => String(source.id) === previousSource)
+      ? previousSource
+      : String(_dataSources[0].id);
+
+    typeOptions.innerHTML = options.conflict_types.map(conflictType => {
+      const code = String(conflictType.code);
+      const checked = !hadPreviousOptions || previousSelected.has(code);
+      return `
+        <label class="filter-checkbox">
+          <input type="checkbox" value="${ui.esc(code)}"${checked ? ' checked' : ''}>
+          <span>${ui.esc(conflictType.name)}</span>
+        </label>
+      `;
+    }).join('');
+    _setControlsEnabled(true);
   }
 
   function _getLevel(conflict) {
@@ -107,12 +129,26 @@ const conflicts = (() => {
     const container = document.getElementById('conflicts-content');
     if (!container) return;
 
-    const filteredConflicts = _getFilteredConflicts();
-    if (filteredConflicts.length === 0) {
-      container.innerHTML = `<div class="panel__placeholder" data-i18n="conflicts.empty">${window.i18n('conflicts.empty')}</div>`;
+    if (_dataSources.length === 0) {
+      _renderError('conflicts.error.no_sources');
+      return;
+    }
+    if (_isLoadingConflicts) {
+      container.innerHTML = `<div class="panel__loading" data-i18n="conflicts.loading">${window.i18n('conflicts.loading')}</div>`;
       window.i18n.initializeTranslations();
       return;
     }
+
+    const filteredConflicts = _getFilteredConflicts();
+    if (filteredConflicts.length === 0) {
+      _renderError('conflicts.error.no_conflicts');
+      const exportButton = document.getElementById('conflicts-export-btn');
+      if (exportButton) exportButton.disabled = true;
+      return;
+    }
+
+    const exportButton = document.getElementById('conflicts-export-btn');
+    if (exportButton) exportButton.disabled = false;
 
     container.innerHTML = `
       <ul class="alert-list conflicts-list">
@@ -160,7 +196,7 @@ const conflicts = (() => {
   }
 
   function _exportCsv() {
-    if (!_isPoweruser()) return;
+    if (!_isPoweruser() || _dataSources.length === 0) return;
 
     const headers = [
       'conflicts.csv.id',
@@ -215,22 +251,87 @@ const conflicts = (() => {
   function init() {
     if (!_isPoweruser()) return;
 
-    document.getElementById('conflicts-source-filter')?.addEventListener('change', _render);
+    document.getElementById('conflicts-source-filter')?.addEventListener('change', event => {
+      _loadConflicts(event.target.value);
+    });
     document.getElementById('conflicts-filter-btn')?.addEventListener('click', _toggleFilterPopout);
-    document.querySelectorAll('#conflicts-filter-popout input[type="checkbox"]')
-      .forEach(checkbox => checkbox.addEventListener('change', _render));
+    document.getElementById('conflicts-filter-popout')?.addEventListener('change', _render);
     document.getElementById('conflicts-export-btn')?.addEventListener('click', _exportCsv);
     document.addEventListener('click', _handleOutsideClick);
+    _startPolling();
   }
 
-  function load() {
+  async function load() {
     const container = document.getElementById('conflicts-content');
+    const loadSequence = ++_loadSequence;
+    ++_conflictLoadSequence;
+    _isLoadingConflicts = false;
     if (!_isPoweruser()) {
+      _conflicts = [];
       if (container) container.replaceChildren();
       return;
     }
 
+    _setControlsEnabled(false);
+    if (container) {
+      container.innerHTML = `<div class="panel__loading" data-i18n="conflicts.loading">${window.i18n('conflicts.loading')}</div>`;
+      window.i18n.initializeTranslations();
+    }
+
+    try {
+      const options = await api.getConflictFilterOptions();
+      if (loadSequence !== _loadSequence) return;
+      if (!Array.isArray(options?.data_sources) || !Array.isArray(options?.conflict_types)) {
+        throw new Error('Invalid conflict filter options response.');
+      }
+      if (options.data_sources.length === 0) {
+        _dataSources = [];
+        _setSourcePlaceholder('conflicts.error.no_sources');
+        _setControlsEnabled(false);
+        _renderError('conflicts.error.no_sources');
+        return;
+      }
+
+      _populateFilterOptions(options);
+      await _loadConflicts(document.getElementById('conflicts-source-filter').value);
+    } catch (error) {
+      if (loadSequence !== _loadSequence) return;
+      _dataSources = [];
+      _conflicts = [];
+      _setSourcePlaceholder('conflicts.source.unavailable');
+      _setControlsEnabled(false);
+      _renderError('conflicts.error.load_options');
+      console.error('Failed to load conflict filter options:', error);
+    }
+  }
+
+  async function _loadConflicts(sourceId) {
+    if (!_isPoweruser() || !sourceId) return;
+
+    const requestSequence = ++_conflictLoadSequence;
+    _conflicts = [];
+    _isLoadingConflicts = true;
     _render();
+
+    try {
+      const response = await api.getMonitoringConflicts(sourceId);
+      if (requestSequence !== _conflictLoadSequence) return;
+      if (!Array.isArray(response?.conflicts)) {
+        throw new Error('Invalid monitoring conflicts response.');
+      }
+
+      _conflicts = response.conflicts;
+      _isLoadingConflicts = false;
+      _render();
+    } catch (error) {
+      if (requestSequence !== _conflictLoadSequence) return;
+      _conflicts = [];
+      _isLoadingConflicts = false;
+      _renderError('conflicts.error.load_conflicts');
+      const exportButton = document.getElementById('conflicts-export-btn');
+      if (exportButton) exportButton.disabled = true;
+      console.error(`Failed to load conflicts for data source ${sourceId}:`, error);
+    }
   }
 
   return { init, load };
