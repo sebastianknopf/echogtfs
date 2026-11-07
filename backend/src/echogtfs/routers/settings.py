@@ -58,8 +58,6 @@ DEFAULTS = AppSettings(
     cleanup_expired_trips_max_age=120,
     cleanup_expired_vehicles_max_age=5,
     push_api_enabled=False,
-    push_api_username="",
-    push_api_password="",
 )
 
 
@@ -128,12 +126,6 @@ async def _load() -> AppSettings:
     if AppSetting.KEY_PUSH_API_ENABLED not in rows:
         await repository.set_app_setting(AppSetting.KEY_PUSH_API_ENABLED, str(DEFAULTS.push_api_enabled).lower())
         rows[AppSetting.KEY_PUSH_API_ENABLED] = str(DEFAULTS.push_api_enabled).lower()
-    if AppSetting.KEY_PUSH_API_USERNAME not in rows:
-        await repository.set_app_setting(AppSetting.KEY_PUSH_API_USERNAME, DEFAULTS.push_api_username)
-        rows[AppSetting.KEY_PUSH_API_USERNAME] = DEFAULTS.push_api_username
-    if AppSetting.KEY_PUSH_API_PASSWORD not in rows:
-        await repository.set_app_setting(AppSetting.KEY_PUSH_API_PASSWORD, DEFAULTS.push_api_password)
-        rows[AppSetting.KEY_PUSH_API_PASSWORD] = DEFAULTS.push_api_password
     
     return AppSettings(
         color_primary    = rows.get(AppSetting.KEY_COLOR_PRIMARY, DEFAULTS.color_primary),
@@ -175,8 +167,6 @@ async def _load() -> AppSettings:
             AppSetting.KEY_PUSH_API_ENABLED,
             str(DEFAULTS.push_api_enabled).lower(),
         ).lower() == "true",
-        push_api_username = rows.get(AppSetting.KEY_PUSH_API_USERNAME, DEFAULTS.push_api_username),
-        push_api_password = rows.get(AppSetting.KEY_PUSH_API_PASSWORD, DEFAULTS.push_api_password),
     )
 
 @router.get("/app", response_model=PublicAppSettings, include_in_schema=False)
@@ -274,25 +264,6 @@ async def update_settings(
                 # Empty string with username present → keep existing password unchanged
                 pass
         # else: None means keep existing password
-    
-    # Push API Basic Auth handling: same pattern as GTFS-RT above
-    push_username_is_empty = not payload.push_api_username
-    push_password_is_empty = payload.push_api_password == "" or payload.push_api_password is None
-    
-    if push_username_is_empty and push_password_is_empty:
-        await repository.set_app_setting(AppSetting.KEY_PUSH_API_USERNAME, "")
-        await repository.set_app_setting(AppSetting.KEY_PUSH_API_PASSWORD, "")
-    else:
-        await repository.set_app_setting(AppSetting.KEY_PUSH_API_USERNAME, payload.push_api_username)
-        
-        if payload.push_api_password is not None:
-            if payload.push_api_password:
-                await repository.set_app_setting(
-                    AppSetting.KEY_PUSH_API_PASSWORD,
-                    get_security_service().hash_password(payload.push_api_password),
-                )
-            else:
-                pass
     
     # Re-schedule cleanup job with new settings
     await CleanupService(repository, get_realtime_repository()).schedule_from_settings()

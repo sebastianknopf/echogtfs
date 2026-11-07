@@ -70,8 +70,6 @@ class AppSettings(BaseModel):
 
     # Push API configuration (event-based data sources)
     push_api_enabled:  bool = False
-    push_api_username: str = ''
-    push_api_password: str | None = ''
 
     @field_validator('color_primary', 'color_secondary')
     @classmethod

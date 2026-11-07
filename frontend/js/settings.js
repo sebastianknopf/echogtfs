@@ -176,11 +176,6 @@ const settings = (() => {
     if (pushApiEnabled) {
       pushApiEnabled.checked = Boolean(settings.push_api_enabled);
     }
-
-    const pushApiUsername = ui.el('settings-push-api-username');
-    if (pushApiUsername) {
-      pushApiUsername.value = settings.push_api_username || '';
-    }
     
     // Cleanup settings
     const cleanupCron = ui.el('settings-cleanup-cron');
@@ -301,8 +296,6 @@ const settings = (() => {
         gtfs_rt_password: ui.el('settings-gtfs-rt-password')?.value || '',
         gtfs_rt_trip_updates_exclude_trips_without_realtime_data: ui.el('settings-gtfs-rt-trip-updates-exclude-trips-without-realtime-data')?.checked || false,
         push_api_enabled: ui.el('settings-push-api-enabled')?.checked || false,
-        push_api_username: ui.el('settings-push-api-username')?.value || '',
-        push_api_password: ui.el('settings-push-api-password')?.value || '',
         cleanup_cron: ui.el('settings-cleanup-cron')?.value || '*/10 * * * *',
         cleanup_expired_alerts_policy: ui.el('settings-cleanup-policy')?.value || 'deactivate',
         cleanup_delete_alerts_after_days: parseInt(ui.el('settings-cleanup-delete-days')?.value || '7', 10),
@@ -325,8 +318,6 @@ const settings = (() => {
       // Clear password fields after successful save
       const pwInput = ui.el('settings-gtfs-rt-password');
       if (pwInput) pwInput.value = '';
-      const pushPwInput = ui.el('settings-push-api-password');
-      if (pushPwInput) pushPwInput.value = '';
       
     } catch (err) {
       if (errorEl) {
@@ -364,8 +355,6 @@ const settings = (() => {
         gtfs_rt_password: '',
         gtfs_rt_trip_updates_exclude_trips_without_realtime_data: false,
         push_api_enabled: false,
-        push_api_username: '',
-        push_api_password: '',
         cleanup_cron: '*/10 * * * *',
         cleanup_expired_alerts_policy: 'deactivate',
         cleanup_delete_alerts_after_days: 7,

@@ -49,8 +49,6 @@ class AppSetting(Base):
     KEY_CLEANUP_EXPIRED_VEHICLES_MAX_AGE: ClassVar[str] = "cleanup_expired_vehicles_max_age"
 
     KEY_PUSH_API_ENABLED: ClassVar[str] = "push_api_enabled"
-    KEY_PUSH_API_USERNAME: ClassVar[str] = "push_api_username"
-    KEY_PUSH_API_PASSWORD: ClassVar[str] = "push_api_password"
 
     KEY_GTFS_FEED_URL: ClassVar[str] = "gtfs_feed_url"
     KEY_GTFS_IMPORT_STATUS: ClassVar[str] = "gtfs_import_status"
@@ -75,8 +73,6 @@ class AppSetting(Base):
         KEY_CLEANUP_EXPIRED_TRIPS_MAX_AGE,
         KEY_CLEANUP_EXPIRED_VEHICLES_MAX_AGE,
         KEY_PUSH_API_ENABLED,
-        KEY_PUSH_API_USERNAME,
-        KEY_PUSH_API_PASSWORD,
         KEY_GTFS_FEED_URL,
         KEY_GTFS_IMPORT_STATUS,
         KEY_GTFS_IMPORT_TIME,
