@@ -78,6 +78,7 @@ class TestConflictExportService(unittest.IsolatedAsyncioTestCase):
             "list_informed_entities_with_non_global_ids": AsyncMock(return_value=[]),
             "list_stop_events_with_invalid_references": AsyncMock(return_value=[]),
             "list_trips_with_invalid_references": AsyncMock(return_value=[]),
+            "list_vehicles_with_invalid_references": AsyncMock(return_value=[]),
             "list_stop_events_with_implied_deviation_schedule_relationships": AsyncMock(return_value=[]),
             "list_stop_events_with_changed_stop_id": AsyncMock(return_value=[]),
             "list_stop_events_with_non_global_ids": AsyncMock(return_value=[]),
@@ -240,12 +241,97 @@ class TestConflictExportService(unittest.IsolatedAsyncioTestCase):
         realtime_repository.list_informed_entities_with_invalid_references.assert_awaited_once()
         realtime_repository.list_stop_events_with_invalid_references.assert_awaited_once()
         realtime_repository.list_trips_with_invalid_references.assert_awaited_once()
+        realtime_repository.list_vehicles_with_invalid_references.assert_awaited_once()
         realtime_repository.list_stop_events_with_implied_deviation_schedule_relationships.assert_awaited_once()
         realtime_repository.list_stop_events_with_changed_stop_id.assert_awaited_once()
         realtime_repository.list_informed_entities_with_non_global_ids.assert_awaited_once_with("^de:[a-z]+:[^\\s:]+$")
         realtime_repository.list_stop_events_with_non_global_ids.assert_awaited_once_with("^de:[a-z]+:[^\\s:]+$")
         realtime_repository.list_trips_with_non_global_ids.assert_awaited_once_with("^de:[a-z]+:[^\\s:]+$")
         realtime_repository.list_stop_events_with_departure_before_arrival.assert_awaited_once()
+
+    async def test_export_vehicle_invalid_references_include_vehicle_display_title(self):
+        timestamp = datetime(2026, 8, 1, 10, 7, 0, tzinfo=timezone.utc)
+        vehicles = [
+            SimpleNamespace(
+                id="vehicle-record-1",
+                data_source_id=10,
+                data_source_name="ds-a",
+                created_at=timestamp,
+                vehicle_license_plate="PLATE-1",
+                vehicle_label="Label 1",
+                vehicle_id="vehicle-1",
+                stop_id="invalid-stop",
+                is_stop_valid=False,
+                trip=SimpleNamespace(
+                    is_route_valid=True,
+                    is_trip_valid=True,
+                    route_id="route-1",
+                    trip_id="trip-1",
+                ),
+            ),
+            SimpleNamespace(
+                id="vehicle-record-2",
+                data_source_id=10,
+                data_source_name="ds-a",
+                created_at=timestamp,
+                vehicle_license_plate=None,
+                vehicle_label="Label 2",
+                vehicle_id="vehicle-2",
+                stop_id=None,
+                is_stop_valid=True,
+                trip=SimpleNamespace(
+                    is_route_valid=False,
+                    is_trip_valid=True,
+                    route_id="invalid-route",
+                    trip_id="trip-2",
+                ),
+            ),
+            SimpleNamespace(
+                id="vehicle-record-3",
+                data_source_id=10,
+                data_source_name="ds-a",
+                created_at=timestamp,
+                vehicle_license_plate=None,
+                vehicle_label=None,
+                vehicle_id="vehicle-3",
+                stop_id=None,
+                is_stop_valid=True,
+                trip=SimpleNamespace(
+                    is_route_valid=True,
+                    is_trip_valid=False,
+                    route_id="route-3",
+                    trip_id="invalid-trip",
+                ),
+            ),
+        ]
+        service, _, realtime_repository = self._make_service(
+            realtime_overrides={
+                "list_vehicles_with_invalid_references": AsyncMock(return_value=vehicles),
+            }
+        )
+
+        with patch(
+            "echogtfs.services.conflict.conflict_export_service.settings.global_id_pattern",
+            "^de:[a-z]+:[^\\s:]+$",
+        ):
+            conflicts = await service.export()
+
+        self.assertEqual(
+            {conflict.code for conflict in conflicts},
+            {
+                ConflictType.ERROR_NO_STOP_FOUND,
+                ConflictType.ERROR_NO_ROUTE_FOUND,
+                ConflictType.ERROR_NO_TRIP_FOUND,
+            },
+        )
+        conflicts_by_code = {conflict.code: conflict for conflict in conflicts}
+        self.assertEqual(conflicts_by_code[ConflictType.ERROR_NO_STOP_FOUND].properties["vehicle_id"], "PLATE-1 - Label 1")
+        self.assertEqual(conflicts_by_code[ConflictType.ERROR_NO_STOP_FOUND].properties["stop_id"], "invalid-stop")
+        self.assertEqual(conflicts_by_code[ConflictType.ERROR_NO_ROUTE_FOUND].properties["vehicle_id"], "Label 2")
+        self.assertEqual(conflicts_by_code[ConflictType.ERROR_NO_ROUTE_FOUND].properties["route_id"], "invalid-route")
+        self.assertEqual(conflicts_by_code[ConflictType.ERROR_NO_TRIP_FOUND].properties["vehicle_id"], "vehicle-3")
+        self.assertEqual(conflicts_by_code[ConflictType.ERROR_NO_TRIP_FOUND].properties["trip_id"], "invalid-trip")
+        realtime_repository.list_vehicles_with_invalid_references.assert_awaited_once()
 
     async def test_export_with_filter_datasource_id_includes_only_matching_conflicts(self):
         t1 = datetime(2026, 8, 1, 11, 0, 0, tzinfo=timezone.utc)
