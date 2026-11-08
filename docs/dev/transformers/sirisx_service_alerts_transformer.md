@@ -127,11 +127,11 @@ Each resolved `Affects` block is parsed independently.
 ### Entity Shapes
 
 - Affected network/line:
-	- `agency_id` from nested `OperatorRef` when present
+	- `agency_id` is not extracted from `AffectedLine` and remains `None`
 	- `route_id` from `LineRef` when present
 - Affected stop place / stop point:
 	- `stop_id` from `StopPlaceRef` or `StopPointRef`
-	- optional route/operator from nested affected lines
+	- optional route from nested affected lines
 - Affected vehicle journey:
 	- `trip_id` from `VehicleJourneyRef` or fallback `DatedVehicleJourneyRef`
 	- optional `agency_id` from `Operator/OperatorRef`
