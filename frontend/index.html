@@ -433,23 +433,25 @@
                 </select>
                 <label class="md-field__label" for="conflicts-source-filter" data-i18n="conflicts.source.label">Datenquelle</label>
               </div>
-              <button id="conflicts-export-btn" class="md-btn md-btn--text" data-ripple data-i18n-title="conflicts.export" data-i18n-aria-label="conflicts.export" title="CSV exportieren" disabled>
-                <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <path d="M5 20h14v-2H5v2zM11 3h2v8h3l-4 4-4-4h3V3z"/>
-                </svg>
-                <span data-i18n="conflicts.export">CSV exportieren</span>
-              </button>
-              <div id="conflicts-filter-container" class="filter-dropdown-container">
-                <button id="conflicts-filter-btn" class="md-btn md-btn--text" data-ripple data-i18n-title="alerts.filter" data-i18n-aria-label="alerts.filter" aria-controls="conflicts-filter-popout" aria-expanded="false" title="Filter" disabled>
+              <div class="conflicts-toolbar__actions">
+                <button id="conflicts-export-btn" class="md-btn md-btn--text" data-ripple data-i18n-title="conflicts.export" data-i18n-aria-label="conflicts.export" title="CSV exportieren" disabled>
                   <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                    <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/>
+                    <path d="M5 20h14v-2H5v2zM11 3h2v8h3l-4 4-4-4h3V3z"/>
                   </svg>
-                  <span data-i18n="alerts.filter">Filter</span>
+                  <span data-i18n="conflicts.export">CSV exportieren</span>
                 </button>
-                <div id="conflicts-filter-popout" class="filter-popout" hidden>
-                  <div class="filter-popout__section">
-                    <div class="filter-popout__label" data-i18n="conflicts.type.label">Konflikttyp</div>
-                    <div id="conflicts-type-options"></div>
+                <div id="conflicts-filter-container" class="filter-dropdown-container">
+                  <button id="conflicts-filter-btn" class="md-btn md-btn--text" data-ripple data-i18n-title="alerts.filter" data-i18n-aria-label="alerts.filter" aria-controls="conflicts-filter-popout" aria-expanded="false" title="Filter" disabled>
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/>
+                    </svg>
+                    <span data-i18n="alerts.filter">Filter</span>
+                  </button>
+                  <div id="conflicts-filter-popout" class="filter-popout" hidden>
+                    <div class="filter-popout__section">
+                      <div class="filter-popout__label" data-i18n="conflicts.type.label">Konflikttyp</div>
+                      <div id="conflicts-type-options"></div>
+                    </div>
                   </div>
                 </div>
               </div>
