@@ -387,6 +387,11 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def list_vehicles_with_invalid_references(self) -> list[VehiclePosition]:
+        """Return vehicle positions with invalid trip, route or stop references."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def list_stop_events_with_implied_deviation_schedule_relationships(self) -> list[StopEvent]:
         """Return implied deviation stop events with required trip relations loaded."""
         raise NotImplementedError

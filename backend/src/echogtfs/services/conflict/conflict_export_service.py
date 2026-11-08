@@ -7,6 +7,7 @@ from echogtfs.common.config import settings
 from echogtfs.common.global_id import GlobalId
 from echogtfs.enum.conflicts import ConflictType
 from echogtfs.services.conflict.intf_conflict_export_service import ConflictExportServiceInterface
+from echogtfs.services.database.realtime_models import VehiclePosition
 from echogtfs.services.database.realtime_repository import RealtimeRepositoryInterface
 from echogtfs.services.database.system_repository import SystemRepositoryInterface
 from echogtfs.validation.schemas import MonitoringConflictObject, MonitoringDatasourceGroupObject
@@ -183,6 +184,77 @@ class ConflictExportService(ConflictExportServiceInterface):
                             "assignment_type": trip.assignment_type
                         }
                     ), results)  
+
+        # find invalid references for vehicle positions
+        for vehicle in await self._realtime_repository.list_vehicles_with_invalid_references():
+            if filter_datasource_id is None or vehicle.data_source_id == filter_datasource_id:
+                datasource_id = vehicle.data_source_id
+                timestamp = vehicle.created_at
+                vehicle_display_title = self._vehicle_display_title(vehicle)
+                datasource = MonitoringDatasourceGroupObject(
+                    id=datasource_id,
+                    name=vehicle.data_source_name,
+                )
+
+                if not vehicle.is_stop_valid:
+                    self._add_conflict(MonitoringConflictObject(
+                        id=self._unique_conflict_id(
+                            datasource_id=datasource_id,
+                            vehicle_position_id=vehicle.id,
+                            stop_id=vehicle.stop_id,
+                            conflict_type=ConflictType.ERROR_NO_STOP_FOUND,
+                        ),
+                        timestamp=timestamp,
+                        code=ConflictType.ERROR_NO_STOP_FOUND,
+                        message=ConflictType.ERROR_NO_STOP_FOUND.name,
+                        datasource=datasource,
+                        properties={
+                            "datasource_id": datasource_id,
+                            "last_failure": timestamp,
+                            "stop_id": vehicle.stop_id,
+                            "vehicle_id": vehicle_display_title,
+                        }
+                    ), results)
+
+                if not vehicle.trip.is_route_valid:
+                    self._add_conflict(MonitoringConflictObject(
+                        id=self._unique_conflict_id(
+                            datasource_id=datasource_id,
+                            vehicle_position_id=vehicle.id,
+                            route_id=vehicle.trip.route_id,
+                            conflict_type=ConflictType.ERROR_NO_ROUTE_FOUND,
+                        ),
+                        timestamp=timestamp,
+                        code=ConflictType.ERROR_NO_ROUTE_FOUND,
+                        message=ConflictType.ERROR_NO_ROUTE_FOUND.name,
+                        datasource=datasource,
+                        properties={
+                            "datasource_id": datasource_id,
+                            "last_failure": timestamp,
+                            "route_id": vehicle.trip.route_id,
+                            "vehicle_id": vehicle_display_title,
+                        }
+                    ), results)
+
+                if not vehicle.trip.is_trip_valid:
+                    self._add_conflict(MonitoringConflictObject(
+                        id=self._unique_conflict_id(
+                            datasource_id=datasource_id,
+                            vehicle_position_id=vehicle.id,
+                            trip_id=vehicle.trip.trip_id,
+                            conflict_type=ConflictType.ERROR_NO_TRIP_FOUND,
+                        ),
+                        timestamp=timestamp,
+                        code=ConflictType.ERROR_NO_TRIP_FOUND,
+                        message=ConflictType.ERROR_NO_TRIP_FOUND.name,
+                        datasource=datasource,
+                        properties={
+                            "datasource_id": datasource_id,
+                            "last_failure": timestamp,
+                            "trip_id": vehicle.trip.trip_id,
+                            "vehicle_id": vehicle_display_title,
+                        }
+                    ), results)
 
         # find stop events with implied schedule relationships ADDED and SKIPPED
         for ste in await self._realtime_repository.list_stop_events_with_implied_deviation_schedule_relationships():
@@ -420,6 +492,18 @@ class ConflictExportService(ConflictExportServiceInterface):
         """Generate a unique conflict identifier based on provided keyword arguments."""
 
         return sha256("_".join(f"{key}={value}" for key, value in sorted(kwargs.items())).encode()).hexdigest()
+
+    @staticmethod
+    def _vehicle_display_title(vehicle: VehiclePosition) -> str:
+        def clean(value: str | None) -> str:
+            return "" if value is None else str(value).strip()
+
+        parts = [
+            clean(vehicle.vehicle_license_plate),
+            clean(vehicle.vehicle_label),
+        ]
+        title = " - ".join(part for part in parts if part)
+        return title or clean(vehicle.vehicle_id) or "Vehicle"
 
     def _conflict_exists(self, conflict_id: str, existing_conflicts: list[MonitoringConflictObject]) -> bool:
         """Check if a conflict with the given ID already exists in the list of existing conflicts."""

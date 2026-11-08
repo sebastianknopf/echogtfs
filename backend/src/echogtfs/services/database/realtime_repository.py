@@ -1412,6 +1412,24 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
 
         return trips
 
+    async def list_vehicles_with_invalid_references(self) -> list[VehiclePosition]:
+        docs = await self._find(
+            VEHICLE_POSITIONS_COLLECTION,
+            {
+                "$or": [
+                    {"is_stop_valid": False},
+                    {"trip.is_trip_valid": False},
+                    {"trip.is_route_valid": False},
+                ]
+            },
+            sort=[("vehicle_id", ASCENDING)],
+        )
+
+        vehicles = [self._vehicle_from_doc(doc) for doc in docs]
+        await self._fill_data_source_names(vehicles)
+
+        return vehicles
+
     async def list_stop_events_with_implied_deviation_schedule_relationships(self) -> list[StopEvent]:
         return await self._list_stop_events(
             {
