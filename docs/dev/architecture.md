@@ -13,7 +13,7 @@ The application is composed of five core Docker services and one optional servic
 - `database`: PostgreSQL 16. Holds system and nominal GTFS data. Accessible only to the backend container.
 - `mongo`: MongoDB 7 single-node replica set. Holds the realtime objects, see [realtime-storage.md](realtime-storage.md). Accessible only to the backend container.
 - `redis`: Redis service used for caching and event streaming inside the application, including the nominal GTFS ID cache described in [gtfs-id-cache.md](gtfs-id-cache.md).
-- `siricomservice`: Optional SIRI consumer communication service for managed SIRI subscriptions. Compose starts it only when the `siripubsub` profile is enabled.
+- `siricomservice`: Optional SIRI consumer communication service for managed SIRI subscriptions. Compose starts it only when the `siricomservice` profile is enabled.
 
 All runtime configuration is injected via environment variables. The canonical source of variable names is `.env.example`.
 
