@@ -3,7 +3,7 @@ import types
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -19,10 +19,36 @@ fake_config.Settings = object
 sys.modules.setdefault("echogtfs.common.config", fake_config)
 
 from echogtfs.enum.conflicts import ConflictType
-from echogtfs.routers.conflicts import get_conflict_filter_options
+from echogtfs.routers.conflicts import export_conflicts_csv, get_conflict_filter_options
 
 
 class TestConflictsRouter(unittest.IsolatedAsyncioTestCase):
+    async def test_export_conflicts_csv_passes_selected_types_to_service(self):
+        repository = object()
+        realtime_repository = object()
+
+        with patch("echogtfs.routers.conflicts.ConflictCsvExportService") as service_class:
+            service = service_class.return_value
+            service.export_csv = AsyncMock(return_value="ID;Code;Message;DataSourceID;Properties\r\n")
+
+            response = await export_conflicts_csv(
+                None,
+                repository,
+                realtime_repository,
+                12,
+                ["1003", "WARNING_WRONG_QUAY"],
+            )
+
+        service_class.assert_called_once_with(
+            system_repository=repository,
+            realtime_repository=realtime_repository,
+        )
+        service.export_csv.assert_awaited_once_with(
+            filter_datasource_id=12,
+            filter_messages_or_codes=["1003", "WARNING_WRONG_QUAY"],
+        )
+        self.assertEqual(response.body, b"ID;Code;Message;DataSourceID;Properties\r\n")
+
     async def test_get_conflict_filter_options_returns_sources_and_types(self):
         repository = SimpleNamespace(
             list_data_sources=AsyncMock(
