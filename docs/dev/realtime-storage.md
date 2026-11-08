@@ -38,6 +38,8 @@ The repository maintains these fields on write so that list, statistics, and con
 
 The embedded `trip` carries `trip_id` (matched ID), `original_trip_id`, `route_id`, `start_date`, `start_time`, `schedule_relationship`, `assignment_type`, the `scheduled_*` anchors, `is_trip_valid`, and `is_route_valid`. A vehicle has no assignment type of its own. Its position fields are `vehicle_id`, `vehicle_label`, `vehicle_license_plate`, `vehicle_wheelchair_accessible`, `timestamp`, `latitude`, `longitude`, `current_status`, `congestion_level`, the nullable current stop `stop_id` and `is_stop_valid` (default `true`). `VehiclePosition.is_valid` is `is_trip_valid and is_route_valid` of its trip descriptor and `is_stop_valid`. Matching works as for trip updates, see [matching.md](matching.md).
 
+Conflict queries use these vehicle validity fields and the current stop, route, and trip IDs directly. The vehicle collection has no derived conflict flag; see [conflicts.md](conflicts.md) for the checks and their output.
+
 ### Activation Flag
 
 `is_active` is set once when a document is created by a data source sync (`$setOnInsert`, together with `created_at`). Afterwards only a user action changes it. All other synchronized fields are written with `$set`.
