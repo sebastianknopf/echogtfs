@@ -121,8 +121,12 @@ const dashboard = (() => {
     const runningTrips = realtimeUnavailable ? null : _sum(trips, 'num_running_trips');
     const realtimeTrips = realtimeUnavailable ? null : _sum(trips, 'num_realtime_trips');
     const activeVehicles = realtimeUnavailable ? null : _sum(vehicles, 'num_vehicles');
-    const realtimePercent = runningTrips ? Math.min(100, Math.round((realtimeTrips / runningTrips) * 100)) : 0;
-    const vehiclePercent = runningTrips ? Math.min(100, Math.round((activeVehicles / runningTrips) * 100)) : 0;
+    const realtimePercent = runningTrips
+      ? Math.max(0, Math.min(100, Math.ceil((realtimeTrips / runningTrips) * 100)))
+      : 0;
+    const vehiclePercent = runningTrips
+      ? Math.max(0, Math.min(100, Math.ceil((activeVehicles / runningTrips) * 100)))
+      : 0;
     const errorCount = conflictsUnavailable ? null : conflicts.filter(conflict => Number(conflict.code) < 2000).length;
     const warningCount = conflictsUnavailable ? null : conflicts.length - errorCount;
     const conflictCount = conflictsUnavailable ? null : conflicts.length;
