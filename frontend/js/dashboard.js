@@ -97,9 +97,15 @@ const dashboard = (() => {
   function _formatTimestamp(value) {
     if (!value) return window.i18n('dashboard.value.unavailable');
     const timestamp = new Date(value);
-    return Number.isNaN(timestamp.getTime())
-      ? window.i18n('dashboard.value.unavailable')
-      : timestamp.toLocaleString();
+    if (Number.isNaN(timestamp.getTime())) return window.i18n('dashboard.value.unavailable');
+
+    const day = String(timestamp.getDate()).padStart(2, '0');
+    const month = String(timestamp.getMonth() + 1).padStart(2, '0');
+    const year = timestamp.getFullYear();
+    const hours = String(timestamp.getHours()).padStart(2, '0');
+    const minutes = String(timestamp.getMinutes()).padStart(2, '0');
+    const seconds = String(timestamp.getSeconds()).padStart(2, '0');
+    return `${day}.${month}.${year} ${hours}:${minutes}:${seconds}`;
   }
 
   function _formatImportStatus(value) {
