@@ -19,7 +19,7 @@ Um Datenquellen zu verwalten, wechseln Sie in den Bereich "Datenquellen" im Seit
 - Über den "Deactivate"-Button können **bestehende Datenquellen deaktiviert / aktiviert** werden
 
 ```{note}
-Eine deaktivierte Datenquelle bleibt im System enthalten, wird allerdings vom Scheduler nicht ausgeführt. Bei der Deaktivierung einer Datenquelle werden alle Objekte (Meldungen, Fahrten, Fahrzeuge), die in Zusammenhang mit dieser Datenquelle stehen, gelöscht. Nach der Aktivierung wird die Datenquelle zum nächsten regulären Zeitpunkt oder eventbasiert über die {ref}`h-push-api-push-api` vom Scheduler ausgeführt.
+Eine deaktivierte Datenquelle bleibt im System enthalten, wird allerdings vom Scheduler nicht ausgeführt. Bei der Deaktivierung einer Datenquelle werden alle Objekte (Meldungen, Fahrten, Fahrzeuge), die in Zusammenhang mit dieser Datenquelle stehen, gelöscht. Nach der Aktivierung wird die Datenquelle zum nächsten regulären Zeitpunkt oder eventbasiert über die {ref}`h-echo-api-echo-api` vom Scheduler ausgeführt.
 ```
 
 (h-datasources-general-edit)=
@@ -36,7 +36,7 @@ Für jede Datenquelle können folgende Informationen gepflegt werden:
 - **Name**: _eindeutige Bezeichnung_ innerhalb des Systems für die Datenquelle
 - **Adapter**: Typ der Datenquelle (GTFS-RT, SIRI-Lite, SIRI-...)
 - **Endpunkt-URL**: URL, von der die Daten bei der Ausführung der Datenquelle abgerufen werden. Optional bei eventbasierten Datenquellen, je nach verwendetem Adapter-Typ
-- **Ausführungsart**: Ausführungsart der Datenquelle. Zeitbasiert = über Cron-Ausdruck, Eventbasiert = über {ref}`h-push-api-push-api`, Abobasiert = über ein vom Dienst verwaltetes Abonnement
+- **Ausführungsart**: Ausführungsart der Datenquelle. Zeitbasiert = über Cron-Ausdruck, Eventbasiert = über {ref}`h-echo-api-echo-api`, Abobasiert = über ein vom Dienst verwaltetes Abonnement
 - **Cron-Ausdruck**: Cron-Ausdruck zur Angabe der gewünschten Ausführungsintervalle. Nur relevant bei zeitbasierter Ausführung
 - **Verfahrensweise bei ungültigen Bezügen**: Angabe zum Umgang mit Objekten mit ungültigen Bezügen
 - **Aktiv**: Aktivierung oder Deaktivierung der Datenquelle
@@ -72,7 +72,7 @@ _Die genauen Regeln zur Unterstützung von Filtern sind in der Beschreibung der 
 
 Standardmäßig werden Datenquellen zeitbasiert ausgeführt. Dabei werden sie vom internen Scheduler zu regelmäßgen, über den Cron-Ausdruck definierten Zeitpunkten ausgeführt. Die Daten werden dabei von EchoGTFS vom Quellsystem abgefragt.
 
-Bei besonders zeitkritischen Datenquellen (z.B. Fahrzeugpositionen) besteht alternativ die Möglichkeit, die Datenquelle eventbasiert auszuführen. Dabei werden die Daten aktiv vom Quellsystem an den Endpunkt der {ref}`h-push-api-push-api` für die jeweilige Datenquelle übermittelt und die Datenquelle unmittelbar ausgeführt.
+Bei besonders zeitkritischen Datenquellen (z.B. Fahrzeugpositionen) besteht alternativ die Möglichkeit, die Datenquelle eventbasiert auszuführen. Dabei werden die Daten aktiv vom Quellsystem an den Endpunkt der {ref}`h-echo-api-echo-api` für die jeweilige Datenquelle übermittelt und die Datenquelle unmittelbar ausgeführt.
 
 Alternativ bietet EchoGTFS auch die Nutzung sogenannter abobasierten Datenquellen an. Dabei wird ein Abo an einer SIRI-Datenquelle (oder einer anderen Datenquelle) eingerichtet und die Nutzdaten an die jeweilige Datenquelle zur Verarbeitung übergeben. Damit abobasierte Datenquellen genutzt werden können, müssen je nach Datenquelle zusätzliche Kommunikationsdienste gestartet werden. Weitere Informationen dazu finden Sie {ref}`in der Installationsanleitung <h-installation-additional-services>`. Beachten Sie bitte außerdem, dass bei der Verwendung von abobasierten Datenquellen je Datenquelle {ref}`mindestens zwei Worker-Prozesse <h-installation-setup-envs>` vorgehalten werden sollten.
 
@@ -101,7 +101,11 @@ Wenn ein Objekt nach dem Mapping keinem Objekt aus dem GTFS-Feed zugeordnet werd
 - **ungültige Bezugselemente verwerfen**:
 	- Bei **Meldungen** werden ungültige Bezugselemente innerhalb eines Bezugs entfernt.
 	- Bei **Fahrten** und **Fahrzeugpositionen** entspricht das Verhalten derzeit der Option **ungültige Bezüge verwerfen**.
-- **gesamtes Objekt deaktivieren**: Das Objekt wird gespeichert, aber bei ungültigen Bezügen deaktiviert und dadurch in der GTFS-RT-Ausgabe unterdrückt. _Empfohlene Verfahrensweise für Fahrten und Fahrzeugpositionen._
+- **gesamtes Objekt deaktivieren**: Das Objekt wird gespeichert, aber bei ungültigen Bezügen deaktiviert und dadurch in der GTFS-RT-Ausgabe unterdrückt. _Empfohlene Verfahrensweise für Fahrten und Fahrzeugpositionen oder bei aktiver Verwendung des Konfliktmonitorings._
+
+```{note}
+Wenn Sie EchoGTFS aktiv zur Überwachung der Datenqualität über das {ref}`h-conflicts-conflicts` oder die {ref}`h-echo-api-echo-api` nutzen wollen, empfiehlt es sich, grundsätzlich die Verfahrensweise **gesamtes Objekt deaktivieren** an den Datenquellen einzustellen. Hierbei werden die Objekte und ihre Bezüge unverändert übernommen und im Fehlerfall entsprechend als Konflikt markiert.
+```
 
 (h-datasources-general-performance)=
 

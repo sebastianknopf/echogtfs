@@ -388,14 +388,24 @@ class MonitoringRouteGroupObject(BaseModel):
 
 
 class MonitoringDatasourceGroupObject(BaseModel):
-    id: int = Field(
+    id: int | None = Field(
         examples=[10, 11, 12],
-        description="Internal ID of the data source."
+        description="Internal ID of the data source, or null for conflicts from internal service alerts."
     )
-    name: str = Field(
+    name: str | None = Field(
         examples=["ENTUR-SIRI-SX", "DELFI-SIRI-ET-TEST"],
-        description="Name of the data source."
+        description="Name of the data source, or null for conflicts from internal service alerts."
     )
+
+
+class ConflictTypeFilterObject(BaseModel):
+    code: ConflictType = Field(description="Numeric conflict type code.")
+    name: str = Field(description="Conflict type name.")
+
+
+class ConflictFilterOptionsResponse(BaseModel):
+    data_sources: list[MonitoringDatasourceGroupObject]
+    conflict_types: list[ConflictTypeFilterObject]
 
 
 class MonitoringSystemResponse(BaseModel):

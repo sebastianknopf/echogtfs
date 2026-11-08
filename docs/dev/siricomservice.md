@@ -45,10 +45,10 @@ Transport errors and non-`200` responses produce `false`. These checks distingui
 
 ## Deployment and External Routing
 
-Compose assigns `siricomservice` to the `siripubsub` profile. Start the optional component with:
+Compose assigns `siricomservice` to the `siricomservice` profile. Start the optional component with:
 
 ```text
-docker compose --profile siripubsub up -d
+docker compose --profile siricomservice up -d
 ```
 
 Without that profile, Compose does not start the service. The backend can still start; capability discovery then omits `siricomservice`.

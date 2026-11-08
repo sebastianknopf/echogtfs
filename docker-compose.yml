@@ -48,7 +48,7 @@ services:
   siricomservice:
     image: sebastianknopf/siriconsumer:0.3.0
     profiles:
-      - siripubsub
+      - siricomservice
     restart: unless-stopped
     volumes:
       - siricomservicedata:/data

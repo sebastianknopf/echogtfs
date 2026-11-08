@@ -6,6 +6,7 @@ This directory contains technical documentation for the EchoGTFS system, intende
 
 - [architecture.md](architecture.md): Overall system architecture, component responsibilities, data flow, and technology stack.
 - [datasources.md](datasources.md): Data source purpose, transformer and processing architecture, base classes, execution modes, scheduling, and run coordination.
+- [conflicts.md](conflicts.md): Conflicts view behavior, monitoring and export endpoints, and conflict generation across realtime objects.
 - [vdv453.md](vdv453.md): VDV453-VIS data source configuration, execution, and best-effort subscription parameters.
 - [vdv454.md](vdv454.md): VDV454-AUS data source configuration, execution, and best-effort subscription parameters.
 - [siricomservice.md](siricomservice.md): SIRI consumer integration, subscription lifecycle, health discovery, and network routing.

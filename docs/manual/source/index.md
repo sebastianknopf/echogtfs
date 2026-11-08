@@ -18,6 +18,7 @@ Technische Dokumentation auf GitHub: [https://github.com/sebastianknopf/echogtfs
 quickstart/index
 views/index
 datasources/index
+conflicts/index
 administration/index
 troubleshooting/index
 ```

@@ -23,33 +23,15 @@ const dashboard = (() => {
     },
   ];
 
-  const ENDPOINTS = [
-    {
-      key: 'service_alerts',
-      labelKey: 'dashboard.endpoints.service_alerts',
-    },
-    {
-      key: 'trip_updates',
-      labelKey: 'dashboard.endpoints.trip_updates',
-    },
-    {
-      key: 'vehicle_positions',
-      labelKey: 'dashboard.endpoints.vehicle_positions',
-    },
-  ];
-
   let _dashboardData = {
     counts: {
       service_alerts: { active: 0, inactive: 0 },
       trip_updates: { active: 0, monitored: 0, inactive: 0 },
       vehicle_positions: { active: 0, inactive: 0 },
     },
-    endpoints: {
-      service_alerts: { path: 'realtime/service-alerts.pbf', url: `${window.location.origin}/api/realtime/service-alerts.pbf` },
-      trip_updates: { path: 'realtime/trip-updates.pbf', url: `${window.location.origin}/api/realtime/trip-updates.pbf` },
-      vehicle_positions: { path: 'realtime/vehicle-positions.pbf', url: `${window.location.origin}/api/realtime/vehicle-positions.pbf` },
-    },
     siriHealth: false,
+    monitoringStatistics: null,
+    conflicts: null,
   };
   let _pollTimer = null;
   let _siriServiceAvailable = false;
@@ -72,19 +54,6 @@ const dashboard = (() => {
     return document.getElementById('dashboard-content');
   }
 
-  function _buildJsonUrl(url) {
-    return url.includes('?') ? `${url}&json` : `${url}?json`;
-  }
-
-  function _getEndpointUrl(key, format) {
-    const endpoint = _dashboardData.endpoints[key];
-    if (!endpoint || !endpoint.url) {
-      return window.location.origin;
-    }
-
-    return format === 'json' ? _buildJsonUrl(endpoint.url) : endpoint.url;
-  }
-
   function _setDashboardData(payload) {
     if (!payload || typeof payload !== 'object') {
       return;
@@ -97,12 +66,6 @@ const dashboard = (() => {
       };
     }
 
-    if (payload.endpoints && typeof payload.endpoints === 'object') {
-      _dashboardData.endpoints = {
-        ..._dashboardData.endpoints,
-        ...payload.endpoints,
-      };
-    }
   }
 
   function _renderStats() {
@@ -127,50 +90,134 @@ const dashboard = (() => {
     `).join('');
   }
 
-  function _renderEndpoints() {
-    return ENDPOINTS.map((item, index) => {
-      const protobufUrl = _getEndpointUrl(item.key, 'protobuf');
-      return `
-        <div class="dashboard-endpoint-row">
-          <div class="dashboard-endpoint-row__label" data-i18n="${item.labelKey}">${window.i18n(item.labelKey)}</div>
-          <div class="dashboard-endpoint-row__url-line">
-            <a class="dashboard-endpoint-row__link" href="${protobufUrl}" target="_blank" rel="noopener noreferrer">${protobufUrl}</a>
-            <div class="dashboard-endpoint-row__actions">
-              <button
-                type="button"
-                class="dashboard-copy-btn"
-                data-ripple
-                data-copy-index="${index}"
-                data-copy-key="${item.key}"
-                data-copy-format="protobuf"
-                data-i18n-title="dashboard.copy.protobuf"
-                data-i18n-aria-label="dashboard.copy.protobuf"
-                title="${window.i18n('dashboard.copy.protobuf')}"
-                aria-label="${window.i18n('dashboard.copy.protobuf')}"
-              >
-                <svg viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="M360-240q-33 0-56.5-23.5T280-320v-440q0-33 23.5-56.5T360-840h360q33 0 56.5 23.5T800-760v440q0 33-23.5 56.5T720-240H360Zm0-80h360v-440H360v440ZM200-120q-33 0-56.5-23.5T120-200v-480h80v480h400v80H200Zm160-200v-440 440Z"/></svg>
-                <span data-i18n="dashboard.copy.protobuf.short">${window.i18n('dashboard.copy.protobuf.short')}</span>
-              </button>
-              <button
-                type="button"
-                class="dashboard-copy-btn"
-                data-ripple
-                data-copy-index="${index}"
-                data-copy-key="${item.key}"
-                data-copy-format="json"
-                data-i18n-title="dashboard.copy.json"
-                data-i18n-aria-label="dashboard.copy.json"
-                title="${window.i18n('dashboard.copy.json')}"
-                aria-label="${window.i18n('dashboard.copy.json')}"
-              >
-                <svg viewBox="0 -960 960 960" fill="currentColor" aria-hidden="true"><path d="M360-240q-33 0-56.5-23.5T280-320v-440q0-33 23.5-56.5T360-840h360q33 0 56.5 23.5T800-760v440q0 33-23.5 56.5T720-240H360Zm0-80h360v-440H360v440ZM200-120q-33 0-56.5-23.5T120-200v-480h80v480h400v80H200Zm160-200v-440 440Z"/></svg>
-                <span data-i18n="dashboard.copy.json.short">${window.i18n('dashboard.copy.json.short')}</span>
-              </button>
+  function _sum(items, key) {
+    return items.reduce((total, item) => total + (Number(item[key]) || 0), 0);
+  }
+
+  function _formatTimestamp(value) {
+    if (!value) return window.i18n('dashboard.value.unavailable');
+    const timestamp = new Date(value);
+    if (Number.isNaN(timestamp.getTime())) return window.i18n('dashboard.value.unavailable');
+
+    const day = String(timestamp.getDate()).padStart(2, '0');
+    const month = String(timestamp.getMonth() + 1).padStart(2, '0');
+    const year = timestamp.getFullYear();
+    const hours = String(timestamp.getHours()).padStart(2, '0');
+    const minutes = String(timestamp.getMinutes()).padStart(2, '0');
+    const seconds = String(timestamp.getSeconds()).padStart(2, '0');
+    return `${day}.${month}.${year} ${hours}:${minutes}:${seconds}`;
+  }
+
+  function _formatImportStatus(value) {
+    const status = ['idle', 'running', 'success', 'error'].includes(value) ? value : 'unknown';
+    return window.i18n(`dashboard.nominal.status.${status}`);
+  }
+
+  function _renderSummaryStats() {
+    const statistics = _dashboardData.monitoringStatistics?.statistics;
+    const staticData = statistics?.static;
+    const realtimeData = statistics?.realtime;
+    const trips = realtimeData?.trips;
+    const vehicles = realtimeData?.vehicles;
+    const conflicts = _dashboardData.conflicts;
+    const nominalUnavailable = !staticData;
+    const realtimeUnavailable = !Array.isArray(trips) || !Array.isArray(vehicles);
+    const conflictsUnavailable = !Array.isArray(conflicts);
+
+    const runningTrips = realtimeUnavailable ? null : _sum(trips, 'num_running_trips');
+    const realtimeTrips = realtimeUnavailable ? null : _sum(trips, 'num_realtime_trips');
+    const activeVehicles = realtimeUnavailable ? null : _sum(vehicles, 'num_vehicles');
+    const realtimePercent = runningTrips
+      ? Math.max(0, Math.min(100, Math.ceil((realtimeTrips / runningTrips) * 100)))
+      : 0;
+    const vehiclePercent = runningTrips
+      ? Math.max(0, Math.min(100, Math.ceil((activeVehicles / runningTrips) * 100)))
+      : 0;
+    const errorCount = conflictsUnavailable ? null : conflicts.filter(conflict => Number(conflict.code) < 2000).length;
+    const warningCount = conflictsUnavailable ? null : conflicts.length - errorCount;
+    const conflictCount = conflictsUnavailable ? null : conflicts.length;
+    const unavailable = window.i18n('dashboard.value.unavailable');
+
+    return `
+      <div class="dashboard-stat-grid dashboard-stat-grid--summary">
+        <article class="dashboard-stat dashboard-stat--summary dashboard-stat--nominal">
+          <div class="dashboard-stat__header">
+            <span class="dashboard-stat__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 3h16v2H4zm0 4h16v14H4zm2 2v10h12V9zm2 2h8v2H8zm0 4h8v2H8z"/></svg>
+            </span>
+            <h3 class="dashboard-stat__headline">
+              <span class="dashboard-stat__headline-label" data-i18n="dashboard.summary.nominal">${window.i18n('dashboard.summary.nominal')}</span>
+            </h3>
+          </div>
+          <div class="dashboard-stat__value-wrap dashboard-stat__nominal-values">
+            <div class="dashboard-stat__detail">
+              <span data-i18n="dashboard.summary.last_import">${window.i18n('dashboard.summary.last_import')}</span>
+              <strong>${nominalUnavailable ? unavailable : `${_formatTimestamp(staticData.last_import_timestamp)} / ${_formatImportStatus(staticData.last_import_status)}`}</strong>
+            </div>
+            <div class="dashboard-stat__detail">
+              <span data-i18n="dashboard.summary.nominal_trips">${window.i18n('dashboard.summary.nominal_trips')}</span>
+              <strong>${nominalUnavailable ? unavailable : Number(staticData.num_trips).toLocaleString()}</strong>
             </div>
           </div>
-        </div>
-      `;
-    }).join('');
+        </article>
+
+        <article class="dashboard-stat dashboard-stat--summary">
+          <div class="dashboard-stat__header">
+            <span class="dashboard-stat__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10.01 10.01 0 0 0 12 2zm1 17.93V18h-2v1.93A8.01 8.01 0 0 1 4.07 13H6v-2H4.07A8.01 8.01 0 0 1 11 4.07V6h2V4.07A8.01 8.01 0 0 1 19.93 11H18v2h1.93A8.01 8.01 0 0 1 13 19.93zM12 7v5l4 2 .9-1.8-2.9-1.45V7z"/></svg>
+            </span>
+          </div>
+          <div class="dashboard-stat__value-wrap">
+            <h3 class="dashboard-stat__headline">
+              <span class="dashboard-stat__headline-number">${realtimeUnavailable ? unavailable : `${realtimePercent}%`}</span>
+              <span class="dashboard-stat__headline-label" data-i18n="dashboard.summary.realtime_percent">${window.i18n('dashboard.summary.realtime_percent')}</span>
+            </h3>
+          </div>
+          <div class="dashboard-stat__subvalue">
+            ${realtimeUnavailable ? unavailable : window.i18n('dashboard.summary.running_trips_count', { count: runningTrips.toLocaleString() })}
+          </div>
+        </article>
+
+        <article class="dashboard-stat dashboard-stat--summary">
+          <div class="dashboard-stat__header">
+            <span class="dashboard-stat__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 6c0-1.66 3.58-3 8-3s8 1.34 8 3v11a2 2 0 0 1-2 2h-1v2h-2v-2H9v2H7v-2H6a2 2 0 0 1-2-2zm2 0v5h12V6c0-.55-2.69-1-6-1s-6 .45-6 1m2 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3m8 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"/></svg>
+            </span>
+          </div>
+          <div class="dashboard-stat__value-wrap">
+            <h3 class="dashboard-stat__headline">
+              <span class="dashboard-stat__headline-number">${realtimeUnavailable ? unavailable : `${vehiclePercent}%`}</span>
+              <span class="dashboard-stat__headline-label" data-i18n="dashboard.summary.vehicle_percent">${window.i18n('dashboard.summary.vehicle_percent')}</span>
+            </h3>
+          </div>
+          <div class="dashboard-stat__subvalue">
+            ${realtimeUnavailable ? unavailable : window.i18n('dashboard.summary.running_trips_count', { count: runningTrips.toLocaleString() })}
+          </div>
+        </article>
+
+        <article class="dashboard-stat dashboard-stat--summary">
+          <div class="dashboard-stat__header">
+            <span class="dashboard-stat__icon dashboard-stat__icon--conflicts" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 1 21h22L12 2zm1 15h-2v-2h2zm0-4h-2V9h2z"/></svg>
+            </span>
+          </div>
+          <div class="dashboard-stat__value-wrap">
+            <h3 class="dashboard-stat__headline">
+              <span class="dashboard-stat__headline-number">${conflictsUnavailable ? unavailable : conflictCount.toLocaleString()}</span>
+              <span class="dashboard-stat__headline-label" data-i18n="dashboard.summary.conflicts">${window.i18n('dashboard.summary.conflicts')}</span>
+            </h3>
+          </div>
+          <div class="dashboard-stat__subvalues">
+            <div class="dashboard-stat__subvalue">
+              ${conflictsUnavailable ? unavailable : `${errorCount.toLocaleString()} ${window.i18n('dashboard.summary.errors')}`}
+            </div>
+            <div class="dashboard-stat__subvalue">
+              ${conflictsUnavailable ? unavailable : `${warningCount.toLocaleString()} ${window.i18n('dashboard.summary.warnings')}`}
+            </div>
+          </div>
+        </article>
+      </div>
+    `;
   }
 
   function _renderServiceStatus() {
@@ -195,8 +242,8 @@ const dashboard = (() => {
         <div class="dashboard-section__header">
           <h3 class="dashboard-section__title" data-i18n="dashboard.section.services">${window.i18n('dashboard.section.services')}</h3>
         </div>
-        <div class="dashboard-stat-grid">
-          <article class="dashboard-stat dashboard-service-status ${statusClass}">
+        <div class="dashboard-stat-grid dashboard-stat-grid--summary">
+          <article class="dashboard-stat dashboard-stat--summary dashboard-service-status ${statusClass}">
             <div class="dashboard-stat__header">
               <span class="dashboard-stat__icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="currentColor">
@@ -205,49 +252,16 @@ const dashboard = (() => {
                 </svg>
               </span>
               <h3 class="dashboard-stat__headline">
-                <span class="dashboard-stat__headline-label dashboard-service-status__title" data-i18n="dashboard.card.siri">${window.i18n('dashboard.card.siri')}</span>
+                <span class="dashboard-stat__headline-label" data-i18n="dashboard.card.siri">${window.i18n('dashboard.card.siri')}</span>
               </h3>
             </div>
             <div class="dashboard-stat__value-wrap">
-              <div class="dashboard-service-status__value" data-i18n="${statusKey}">${window.i18n(statusKey)}</div>
+              <div class="dashboard-stat__headline-number dashboard-service-status__value" data-i18n="${statusKey}">${window.i18n(statusKey)}</div>
             </div>
           </article>
         </div>
       </section>
     `;
-  }
-
-  async function _copyText(text) {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text);
-      return;
-    }
-
-    const helper = document.createElement('textarea');
-    helper.value = text;
-    helper.setAttribute('readonly', '');
-    helper.style.position = 'absolute';
-    helper.style.left = '-9999px';
-    document.body.appendChild(helper);
-    helper.select();
-    document.execCommand('copy');
-    document.body.removeChild(helper);
-  }
-
-  async function _handleContentClick(e) {
-    const copyButton = e.target.closest('.dashboard-copy-btn');
-    if (!copyButton) return;
-
-    const endpointKey = copyButton.dataset.copyKey || '';
-    const format = copyButton.dataset.copyFormat;
-    if (!endpointKey) return;
-
-    try {
-      await _copyText(_getEndpointUrl(endpointKey, format));
-      ui.toast(window.i18n('dashboard.copy.success'), 'success');
-    } catch (error) {
-      ui.toast(window.i18n('dashboard.copy.error'), 'error');
-    }
   }
 
   async function _loadCapabilities() {
@@ -260,12 +274,20 @@ const dashboard = (() => {
   }
 
   async function _loadDashboardData(render = true) {
-    const [dashboardResult, siriHealthResult] = await Promise.allSettled([
+    const [dashboardResult, siriHealthResult, monitoringStatisticsResult, conflictsResult] = await Promise.allSettled([
       api.getDashboard(),
       _siriServiceAvailable ? api.getSiriHealth() : Promise.reject(new Error('siricomservice unavailable')),
+      api.getMonitoringStatistics(),
+      api.getMonitoringConflicts(),
     ]);
 
     _dashboardData.siriHealth = siriHealthResult.status === 'fulfilled' && siriHealthResult.value === true;
+    _dashboardData.monitoringStatistics = monitoringStatisticsResult.status === 'fulfilled'
+      ? monitoringStatisticsResult.value
+      : null;
+    _dashboardData.conflicts = conflictsResult.status === 'fulfilled' && Array.isArray(conflictsResult.value?.conflicts)
+      ? conflictsResult.value.conflicts
+      : null;
 
     if (dashboardResult.status === 'fulfilled') {
       _setDashboardData(dashboardResult.value);
@@ -296,15 +318,7 @@ const dashboard = (() => {
           <div class="dashboard-stat-grid">
             ${_renderStats()}
           </div>
-        </section>
-
-        <section class="dashboard-section dashboard-section--full">
-          <div class="dashboard-section__header">
-            <h3 class="dashboard-section__title" data-i18n="dashboard.section.endpoints">${window.i18n('dashboard.section.endpoints')}</h3>
-          </div>
-          <div class="dashboard-endpoints-list">
-            ${_renderEndpoints()}
-          </div>
+          ${_renderSummaryStats()}
         </section>
 
         ${_renderServiceStatus()}
@@ -316,7 +330,6 @@ const dashboard = (() => {
   }
 
   function init() {
-    _getContent()?.addEventListener('click', _handleContentClick);
     _startPolling();
   }
 

@@ -409,6 +409,10 @@ const api = (() => {
       return request('/service/siri/health');
     },
 
+    getMonitoringStatistics() {
+      return request('/monitoring/statistics');
+    },
+
     getCapabilities() {
       return request('/capabilities');
     },
@@ -416,6 +420,23 @@ const api = (() => {
     // Data sources
     getSources() {
       return request('/sources/');
+    },
+
+    getConflictFilterOptions() {
+      return request('/conflicts/filters');
+    },
+
+    getMonitoringConflicts(dataSourceId) {
+      const query = dataSourceId === undefined || dataSourceId === null
+        ? ''
+        : `?datasourceId=${encodeURIComponent(dataSourceId)}`;
+      return request(`/monitoring/conflicts${query}`);
+    },
+
+    exportConflictsCsv(dataSourceId, conflictTypes = []) {
+      const params = new URLSearchParams({ datasourceId: String(dataSourceId) });
+      conflictTypes.forEach(conflictType => params.append('conflictTypes', String(conflictType)));
+      return downloadRequest(`/conflicts/export?${params}`);
     },
 
     getAdapterTypes() {

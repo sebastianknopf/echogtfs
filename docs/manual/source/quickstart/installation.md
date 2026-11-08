@@ -58,11 +58,11 @@ Neben den eingangs erklärten Umgebungsvariablen gibt es noch weitere Umgebungsv
 
 EchoGTFS bietet zusätzliche Dienste, um Datenquellen bspw. über SIRI Publish/Subscribe anbinden zu können. Diese zusätzlichen Dienste werden **nicht automatisch mit gestartet**, sondern müssen beim Start über ein Profil aktiviert werden. Aktuell stehen folgende Profile zur Verfügung:
 
-- `siripubsub`: SIRI-Kommunikationsdienst zum Betrieb mit SIRI Publish/Subscribe
+- `siricomservice`: SIRI-Kommunikationsdienst zum Betrieb mit SIRI Publish/Subscribe
 
-### SIRI-Kommunikationsdienst
+### SIRI-Dienste
 
-Der SIRI-Kommunikationsdienst ermöglich die Anbindung von Datenquellen mittels SIRI Publish/Subscribe Pattern. Der SIRI-Kommunikationsdienst bietet einen Endpunkt, über den Anfragen von SIRI-Producern entgegengenommen werden können. Er wird über das Profil `siripubsub` aktiviert und bietet folgende  zusätzlichen Umbebungsvariablen:
+Der SIRI-Kommunikationsdienst ermöglich die Anbindung von Datenquellen mittels SIRI Publish/Subscribe Pattern. Der SIRI-Kommunikationsdienst bietet einen Endpunkt, über den Anfragen von SIRI-Producern entgegengenommen werden können. Er wird über das Profil `siricomservice` aktiviert und bietet folgende  zusätzlichen Umbebungsvariablen:
 
 - `SIRI_PORT`: Port für die eingehenden Anfragen vom SIRI-Producer an den SIRI-Kommunikationsdienst. Default ist `8080`.
 - `SIRI_STATUS_ENABLED`: Wenn auf `true` gesetzt, wird über den SIRI-Port unter der Adresse `/status` der aktuelle Status des SIRI-Kommunikationsdienstes angezeigt. Default ist `false`.
