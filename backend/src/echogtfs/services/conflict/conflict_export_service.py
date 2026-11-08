@@ -45,7 +45,7 @@ class ConflictExportService(ConflictExportServiceInterface):
         # find invalid references for service alerts
         for ie in await self._realtime_repository.list_informed_entities_with_invalid_references():
             if filter_datasource_id is None or ie.alert.data_source_id == filter_datasource_id:
-                datasource_id: int = ie.alert.data_source_id
+                datasource_id: int | None = ie.alert.data_source_id
                 timestamp: datetime = ie.alert.created_at
 
                 if not ie.is_agency_valid:
@@ -256,7 +256,7 @@ class ConflictExportService(ConflictExportServiceInterface):
         # find references with non-global IDs for service alerts
         for ie in await self._realtime_repository.list_informed_entities_with_non_global_ids(settings.global_id_pattern):
             if filter_datasource_id is None or ie.alert.data_source_id == filter_datasource_id:
-                datasource_id: int = ie.alert.data_source_id
+                datasource_id: int | None = ie.alert.data_source_id
                 timestamp: datetime = ie.alert.created_at
 
                 if ie.agency_id is not None and not GlobalId.is_global_id(ie.agency_id):

@@ -336,6 +336,47 @@ class TestConflictExportService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(conflicts[0].code, ConflictType.WARNING_STOP_NO_GLOBAL_ID)
         self.assertEqual(conflicts[0].message, ConflictType.WARNING_STOP_NO_GLOBAL_ID.name)
 
+    async def test_export_internal_service_alert_conflicts_with_null_datasource(self):
+        timestamp = datetime(2026, 8, 1, 12, 15, 0, tzinfo=timezone.utc)
+        informed_entity = SimpleNamespace(
+            alert=SimpleNamespace(
+                data_source_id=None,
+                data_source_name=None,
+                created_at=timestamp,
+            ),
+            agency_id=None,
+            stop_id=None,
+            route_id="local-route",
+            trip_id=None,
+            is_agency_valid=True,
+            is_stop_valid=True,
+            is_route_valid=False,
+            is_trip_valid=True,
+        )
+        service, _, _ = self._make_service(
+            realtime_overrides={
+                "list_informed_entities_with_invalid_references": AsyncMock(return_value=[informed_entity]),
+                "list_informed_entities_with_non_global_ids": AsyncMock(return_value=[informed_entity]),
+            }
+        )
+
+        with patch(
+            "echogtfs.services.conflict.conflict_export_service.settings.global_id_pattern",
+            "^de:[a-z]+:[^\\s:]+$",
+        ), patch(
+            "echogtfs.services.conflict.conflict_export_service.GlobalId.is_global_id",
+            return_value=False,
+        ):
+            conflicts = await service.export()
+
+        self.assertEqual(
+            {conflict.code for conflict in conflicts},
+            {ConflictType.ERROR_NO_ROUTE_FOUND, ConflictType.WARNING_ROUTE_NO_GLOBAL_ID},
+        )
+        for conflict in conflicts:
+            self.assertIsNone(conflict.datasource.id)
+            self.assertIsNone(conflict.datasource.name)
+
     async def test_export_non_global_trip_skips_route_conflict_when_route_is_global(self):
         t1 = datetime(2026, 8, 1, 12, 30, 0, tzinfo=timezone.utc)
         trip = self._make_trip(
