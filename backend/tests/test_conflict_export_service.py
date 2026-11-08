@@ -79,6 +79,7 @@ class TestConflictExportService(unittest.IsolatedAsyncioTestCase):
             "list_stop_events_with_invalid_references": AsyncMock(return_value=[]),
             "list_trips_with_invalid_references": AsyncMock(return_value=[]),
             "list_vehicles_with_invalid_references": AsyncMock(return_value=[]),
+            "list_vehicles_with_non_global_ids": AsyncMock(return_value=[]),
             "list_stop_events_with_implied_deviation_schedule_relationships": AsyncMock(return_value=[]),
             "list_stop_events_with_changed_stop_id": AsyncMock(return_value=[]),
             "list_stop_events_with_non_global_ids": AsyncMock(return_value=[]),
@@ -247,6 +248,7 @@ class TestConflictExportService(unittest.IsolatedAsyncioTestCase):
         realtime_repository.list_informed_entities_with_non_global_ids.assert_awaited_once_with("^de:[a-z]+:[^\\s:]+$")
         realtime_repository.list_stop_events_with_non_global_ids.assert_awaited_once_with("^de:[a-z]+:[^\\s:]+$")
         realtime_repository.list_trips_with_non_global_ids.assert_awaited_once_with("^de:[a-z]+:[^\\s:]+$")
+        realtime_repository.list_vehicles_with_non_global_ids.assert_awaited_once_with("^de:[a-z]+:[^\\s:]+$")
         realtime_repository.list_stop_events_with_departure_before_arrival.assert_awaited_once()
 
     async def test_export_vehicle_invalid_references_include_vehicle_display_title(self):
@@ -332,6 +334,52 @@ class TestConflictExportService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(conflicts_by_code[ConflictType.ERROR_NO_TRIP_FOUND].properties["vehicle_id"], "vehicle-3")
         self.assertEqual(conflicts_by_code[ConflictType.ERROR_NO_TRIP_FOUND].properties["trip_id"], "invalid-trip")
         realtime_repository.list_vehicles_with_invalid_references.assert_awaited_once()
+
+    async def test_export_vehicle_non_global_ids_includes_stop_route_and_trip_conflicts(self):
+        timestamp = datetime(2026, 8, 1, 10, 8, 0, tzinfo=timezone.utc)
+        vehicle = SimpleNamespace(
+            id="vehicle-record",
+            data_source_id=10,
+            data_source_name="ds-a",
+            created_at=timestamp,
+            vehicle_license_plate="PLATE-1",
+            vehicle_label="Label 1",
+            vehicle_id="vehicle-1",
+            stop_id="local-stop",
+            trip=SimpleNamespace(
+                route_id="local-route",
+                trip_id="local-trip",
+            ),
+        )
+        service, _, realtime_repository = self._make_service(
+            realtime_overrides={
+                "list_vehicles_with_non_global_ids": AsyncMock(return_value=[vehicle]),
+            }
+        )
+
+        with patch(
+            "echogtfs.services.conflict.conflict_export_service.settings.global_id_pattern",
+            "^de:[a-z]+:[^\\s:]+$",
+        ), patch(
+            "echogtfs.services.conflict.conflict_export_service.GlobalId.is_global_id",
+            return_value=False,
+        ):
+            conflicts = await service.export()
+
+        self.assertEqual(
+            {conflict.code for conflict in conflicts},
+            {
+                ConflictType.WARNING_STOP_NO_GLOBAL_ID,
+                ConflictType.WARNING_ROUTE_NO_GLOBAL_ID,
+                ConflictType.WARNING_TRIP_NO_GLOBAL_ID,
+            },
+        )
+        conflicts_by_code = {conflict.code: conflict for conflict in conflicts}
+        self.assertEqual(conflicts_by_code[ConflictType.WARNING_STOP_NO_GLOBAL_ID].properties["stop_id"], "local-stop")
+        self.assertEqual(conflicts_by_code[ConflictType.WARNING_ROUTE_NO_GLOBAL_ID].properties["route_id"], "local-route")
+        self.assertEqual(conflicts_by_code[ConflictType.WARNING_TRIP_NO_GLOBAL_ID].properties["trip_id"], "local-trip")
+        self.assertTrue(all(conflict.properties["vehicle_id"] == "PLATE-1 - Label 1" for conflict in conflicts))
+        realtime_repository.list_vehicles_with_non_global_ids.assert_awaited_once()
 
     async def test_export_with_filter_datasource_id_includes_only_matching_conflicts(self):
         t1 = datetime(2026, 8, 1, 11, 0, 0, tzinfo=timezone.utc)

@@ -816,6 +816,31 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
             },
         )
 
+    async def test_list_vehicles_with_non_global_ids_matches_stop_route_and_trip_ids(self):
+        pattern = r"^[A-Z0-9]{3}:[A-Z0-9]{3}:\d+$"
+        self.vehicles.docs = [
+            _vehicle_doc(
+                stop_id="local-stop",
+                trip={
+                    **_vehicle_doc()["trip"],
+                    "route_id": "local-route",
+                    "trip_id": "local-trip",
+                },
+            )
+        ]
+
+        vehicles = await self.repository.list_vehicles_with_non_global_ids(pattern)
+
+        self.assertEqual([vehicle.vehicle_id for vehicle in vehicles], ["veh-1"])
+        self.assertEqual(vehicles[0].data_source_name, "Current name")
+        conditions = self.vehicles.find_calls[0][0]["$or"]
+        self.assertEqual(
+            {next(iter(condition)) for condition in conditions},
+            {"stop_id", "trip.route_id", "trip.trip_id"},
+        )
+        for condition in conditions:
+            self.assertEqual(next(iter(condition.values()))["$not"], re.compile(pattern))
+
     async def test_list_informed_entities_with_non_global_ids_uses_pattern_for_all_reference_fields(self):
         pattern = r"^[A-Z0-9]{3}:[A-Z0-9]{3}:\d+$"
 

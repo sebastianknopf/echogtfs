@@ -461,6 +461,77 @@ class ConflictExportService(ConflictExportServiceInterface):
                         }
                     ), results)
 
+        # find stop, route and trip IDs with non-global IDs for vehicle positions
+        for vehicle in await self._realtime_repository.list_vehicles_with_non_global_ids(settings.global_id_pattern):
+            if filter_datasource_id is None or vehicle.data_source_id == filter_datasource_id:
+                datasource_id = vehicle.data_source_id
+                timestamp = vehicle.created_at
+                vehicle_display_title = self._vehicle_display_title(vehicle)
+                datasource = MonitoringDatasourceGroupObject(
+                    id=datasource_id,
+                    name=vehicle.data_source_name,
+                )
+
+                if vehicle.stop_id is not None and not GlobalId.is_global_id(vehicle.stop_id):
+                    self._add_conflict(MonitoringConflictObject(
+                        id=self._unique_conflict_id(
+                            datasource_id=datasource_id,
+                            vehicle_position_id=vehicle.id,
+                            stop_id=vehicle.stop_id,
+                            conflict_type=ConflictType.WARNING_STOP_NO_GLOBAL_ID,
+                        ),
+                        timestamp=timestamp,
+                        code=ConflictType.WARNING_STOP_NO_GLOBAL_ID,
+                        message=ConflictType.WARNING_STOP_NO_GLOBAL_ID.name,
+                        datasource=datasource,
+                        properties={
+                            "datasource_id": datasource_id,
+                            "last_failure": timestamp,
+                            "stop_id": vehicle.stop_id,
+                            "vehicle_id": vehicle_display_title,
+                        }
+                    ), results)
+
+                if not GlobalId.is_global_id(vehicle.trip.route_id):
+                    self._add_conflict(MonitoringConflictObject(
+                        id=self._unique_conflict_id(
+                            datasource_id=datasource_id,
+                            vehicle_position_id=vehicle.id,
+                            route_id=vehicle.trip.route_id,
+                            conflict_type=ConflictType.WARNING_ROUTE_NO_GLOBAL_ID,
+                        ),
+                        timestamp=timestamp,
+                        code=ConflictType.WARNING_ROUTE_NO_GLOBAL_ID,
+                        message=ConflictType.WARNING_ROUTE_NO_GLOBAL_ID.name,
+                        datasource=datasource,
+                        properties={
+                            "datasource_id": datasource_id,
+                            "last_failure": timestamp,
+                            "route_id": vehicle.trip.route_id,
+                            "vehicle_id": vehicle_display_title,
+                        }
+                    ), results)
+
+                if not GlobalId.is_global_id(vehicle.trip.trip_id):
+                    self._add_conflict(MonitoringConflictObject(
+                        id=self._unique_conflict_id(
+                            datasource_id=datasource_id,
+                            vehicle_position_id=vehicle.id,
+                            trip_id=vehicle.trip.trip_id,
+                            conflict_type=ConflictType.WARNING_TRIP_NO_GLOBAL_ID,
+                        ),
+                        timestamp=timestamp,
+                        code=ConflictType.WARNING_TRIP_NO_GLOBAL_ID,
+                        message=ConflictType.WARNING_TRIP_NO_GLOBAL_ID.name,
+                        datasource=datasource,
+                        properties={
+                            "datasource_id": datasource_id,
+                            "last_failure": timestamp,
+                            "trip_id": vehicle.trip.trip_id,
+                            "vehicle_id": vehicle_display_title,
+                        }
+                    ), results)
+
         # find stop events with departure before arrival errors
         for ste in await self._realtime_repository.list_stop_events_with_departure_before_arrival():
             if filter_datasource_id is None or ste.trip.data_source_id == filter_datasource_id:
