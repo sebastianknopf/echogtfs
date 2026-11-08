@@ -433,8 +433,10 @@ const api = (() => {
       return request(`/monitoring/conflicts${query}`);
     },
 
-    exportConflictsCsv(dataSourceId) {
-      return downloadRequest(`/conflicts/export?datasourceId=${encodeURIComponent(dataSourceId)}`);
+    exportConflictsCsv(dataSourceId, conflictTypes = []) {
+      const params = new URLSearchParams({ datasourceId: String(dataSourceId) });
+      conflictTypes.forEach(conflictType => params.append('conflictTypes', String(conflictType)));
+      return downloadRequest(`/conflicts/export?${params}`);
     },
 
     getAdapterTypes() {

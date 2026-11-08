@@ -13,10 +13,20 @@ class ConflictCsvExportService(ConflictExportService):
 
     HEADER = ["ID", "Code", "Message", "DataSourceID", "Properties"]
 
-    async def export_csv(self, filter_datasource_id: int | None = None) -> str:
-        """Exports the current conflicts as CSV text. Properties are appended as a flat chain of key, value cells."""
+    async def export_csv(
+        self,
+        filter_datasource_id: int | None = None,
+        filter_messages_or_codes: list[str | int] | None = None,
+    ) -> str:
+        """Export conflicts as CSV, optionally restricted to matching messages or codes."""
         conflicts = await self.export(filter_datasource_id=filter_datasource_id)
-        
+        if filter_messages_or_codes:
+            filters = {self._format_value(value) for value in filter_messages_or_codes}
+            conflicts = [
+                conflict for conflict in conflicts
+                if conflict.message in filters or self._format_value(conflict.code) in filters
+            ]
+
         return self.to_csv(conflicts)
 
     def to_csv(self, conflicts: list[MonitoringConflictObject]) -> str:

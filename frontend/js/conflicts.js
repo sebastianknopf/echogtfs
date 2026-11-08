@@ -4,9 +4,13 @@
 
 const conflicts = (() => {
   const POLL_INTERVAL_MS = 60_000;
+  const SOURCE_STORAGE_KEY = 'echogtfs_conflicts_source';
+  const FILTERS_STORAGE_KEY = 'echogtfs_conflicts_filters';
   const WARNING_ICON_PATH = 'M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z';
 
   let _dataSources = [];
+  let _selectedSourceId = null;
+  let _selectedConflictTypes = {};
   let _loadSequence = 0;
   let _conflictLoadSequence = 0;
   let _pollTimer = null;
@@ -22,8 +26,7 @@ const conflicts = (() => {
     if (_pollTimer) return;
     _pollTimer = window.setInterval(() => {
       if (!_isPanelActive()) return;
-      const sourceId = document.getElementById('conflicts-source-filter')?.value;
-      if (sourceId) _loadConflicts(sourceId);
+      if (_selectedSourceId) _loadConflicts(_selectedSourceId);
     }, POLL_INTERVAL_MS);
   }
 
@@ -33,13 +36,9 @@ const conflicts = (() => {
   }
 
   function _getFilteredConflicts() {
-    const sourceId = document.getElementById('conflicts-source-filter')?.value;
-    const selectedCodes = Array.from(
-      document.querySelectorAll('#conflicts-filter-popout input[type="checkbox"]:checked')
-    ).map(checkbox => checkbox.value);
     return _conflicts.filter(conflict =>
-      String(conflict.datasource.id) === sourceId &&
-      selectedCodes.includes(String(conflict.code))
+      String(conflict.datasource.id) === _selectedSourceId &&
+      _selectedConflictTypes[String(conflict.code)] === true
     ).sort((left, right) => new Date(right.timestamp) - new Date(left.timestamp));
   }
 
@@ -66,31 +65,62 @@ const conflicts = (() => {
     }
   }
 
+  function _getStoredSourceId() {
+    try {
+      return localStorage.getItem(SOURCE_STORAGE_KEY);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function _saveSourceId(sourceId) {
+    _selectedSourceId = String(sourceId);
+    try {
+      localStorage.setItem(SOURCE_STORAGE_KEY, _selectedSourceId);
+    } catch (error) {
+    }
+  }
+
+  function _getStoredConflictTypes() {
+    try {
+      const saved = localStorage.getItem(FILTERS_STORAGE_KEY);
+      if (!saved) return {};
+      const filters = JSON.parse(saved);
+      return filters && typeof filters === 'object' && !Array.isArray(filters) ? filters : {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function _saveConflictTypes() {
+    try {
+      localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(_selectedConflictTypes));
+    } catch (error) {
+    }
+  }
+
   function _populateFilterOptions(options) {
     const sourceFilter = document.getElementById('conflicts-source-filter');
     const typeOptions = document.getElementById('conflicts-type-options');
     if (!sourceFilter || !typeOptions) return;
 
-    const previousSource = sourceFilter.value;
-    const previousCheckboxes = Array.from(
-      document.querySelectorAll('#conflicts-filter-popout input[type="checkbox"]')
-    );
-    const previousSelected = new Set(
-      previousCheckboxes.filter(checkbox => checkbox.checked).map(checkbox => checkbox.value)
-    );
-    const hadPreviousOptions = previousCheckboxes.length > 0;
-
     _dataSources = options.data_sources;
     sourceFilter.innerHTML = _dataSources.map(source =>
       `<option value="${ui.esc(source.id)}">${ui.esc(source.name)}</option>`
     ).join('');
-    sourceFilter.value = _dataSources.some(source => String(source.id) === previousSource)
-      ? previousSource
+    const storedSourceId = _getStoredSourceId();
+    const selectedSourceId = _dataSources.some(source => String(source.id) === storedSourceId)
+      ? storedSourceId
       : String(_dataSources[0].id);
+    sourceFilter.value = selectedSourceId;
+    _saveSourceId(selectedSourceId);
 
+    const storedTypes = _getStoredConflictTypes();
+    _selectedConflictTypes = {};
     typeOptions.innerHTML = options.conflict_types.map(conflictType => {
       const code = String(conflictType.code);
-      const checked = !hadPreviousOptions || previousSelected.has(code);
+      const checked = typeof storedTypes[code] === 'boolean' ? storedTypes[code] : true;
+      _selectedConflictTypes[code] = checked;
       return `
         <label class="filter-checkbox">
           <input type="checkbox" value="${ui.esc(code)}"${checked ? ' checked' : ''}>
@@ -98,7 +128,24 @@ const conflicts = (() => {
         </label>
       `;
     }).join('');
+    _saveConflictTypes();
     _setControlsEnabled(true);
+  }
+
+  function _handleSourceChange(event) {
+    const sourceId = String(event.target.value);
+    if (!_dataSources.some(source => String(source.id) === sourceId)) return;
+    _saveSourceId(sourceId);
+    _loadConflicts(sourceId);
+  }
+
+  function _handleFilterChange() {
+    _selectedConflictTypes = {};
+    document.querySelectorAll('#conflicts-filter-popout input[type="checkbox"]').forEach(checkbox => {
+      _selectedConflictTypes[checkbox.value] = checkbox.checked;
+    });
+    _saveConflictTypes();
+    _render();
   }
 
   function _getLevel(conflict) {
@@ -194,11 +241,15 @@ const conflicts = (() => {
   async function _exportCsv() {
     if (!_isPoweruser() || _dataSources.length === 0) return;
 
-    const sourceId = document.getElementById('conflicts-source-filter')?.value;
+    const sourceId = _selectedSourceId;
     if (!sourceId) return;
 
+    const selectedConflictTypes = Object.entries(_selectedConflictTypes)
+      .filter(([, selected]) => selected)
+      .map(([code]) => code);
+
     try {
-      const result = await api.exportConflictsCsv(sourceId);
+      const result = await api.exportConflictsCsv(sourceId, selectedConflictTypes);
       if (!result) return;
 
       const url = URL.createObjectURL(result.blob);
@@ -238,11 +289,9 @@ const conflicts = (() => {
   function init() {
     if (!_isPoweruser()) return;
 
-    document.getElementById('conflicts-source-filter')?.addEventListener('change', event => {
-      _loadConflicts(event.target.value);
-    });
+    document.getElementById('conflicts-source-filter')?.addEventListener('change', _handleSourceChange);
     document.getElementById('conflicts-filter-btn')?.addEventListener('click', _toggleFilterPopout);
-    document.getElementById('conflicts-filter-popout')?.addEventListener('change', _render);
+    document.getElementById('conflicts-filter-popout')?.addEventListener('change', _handleFilterChange);
     document.getElementById('conflicts-export-btn')?.addEventListener('click', _exportCsv);
     document.addEventListener('click', _handleOutsideClick);
     _startPolling();
@@ -280,7 +329,7 @@ const conflicts = (() => {
       }
 
       _populateFilterOptions(options);
-      await _loadConflicts(document.getElementById('conflicts-source-filter').value);
+      await _loadConflicts(_selectedSourceId);
     } catch (error) {
       if (loadSequence !== _loadSequence) return;
       _dataSources = [];
@@ -295,13 +344,14 @@ const conflicts = (() => {
   async function _loadConflicts(sourceId) {
     if (!_isPoweruser() || !sourceId) return;
 
+    _selectedSourceId = String(sourceId);
     const requestSequence = ++_conflictLoadSequence;
     _conflicts = [];
     _isLoadingConflicts = true;
     _render();
 
     try {
-      const response = await api.getMonitoringConflicts(sourceId);
+      const response = await api.getMonitoringConflicts(_selectedSourceId);
       if (requestSequence !== _conflictLoadSequence) return;
       if (!Array.isArray(response?.conflicts)) {
         throw new Error('Invalid monitoring conflicts response.');

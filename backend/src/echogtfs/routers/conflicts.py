@@ -1,8 +1,7 @@
 """Conflict filter options router."""
 
-from typing import Annotated
-
 from datetime import datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response
 
@@ -33,6 +32,7 @@ async def export_conflicts_csv(
     repository: _Repo,
     realtime_repository: _RealtimeRepo,
     data_source_id: Annotated[int | None, Query(alias="datasourceId")] = None,
+    conflict_types: Annotated[list[str] | None, Query(alias="conflictTypes")] = None,
 ) -> Response:
     """Export the current conflicts as CSV file."""
     service = ConflictCsvExportService(
@@ -40,7 +40,10 @@ async def export_conflicts_csv(
         realtime_repository=realtime_repository,
     )
     
-    content = await service.export_csv(filter_datasource_id=data_source_id)
+    content = await service.export_csv(
+        filter_datasource_id=data_source_id,
+        filter_messages_or_codes=conflict_types,
+    )
     filename = f"conflicts-{datetime.now().strftime('%Y%m%d-%H%M%S')}.csv"
     
     return Response(
@@ -65,6 +68,7 @@ async def get_conflict_filter_options(
         ConflictTypeFilterObject(code=conflict_type, name=conflict_type.name)
         for conflict_type in ConflictType
     ]
+    
     return ConflictFilterOptionsResponse(
         data_sources=data_sources,
         conflict_types=conflict_types,

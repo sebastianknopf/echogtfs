@@ -236,8 +236,8 @@ const dashboard = (() => {
         <div class="dashboard-section__header">
           <h3 class="dashboard-section__title" data-i18n="dashboard.section.services">${window.i18n('dashboard.section.services')}</h3>
         </div>
-        <div class="dashboard-stat-grid">
-          <article class="dashboard-stat dashboard-service-status ${statusClass}">
+        <div class="dashboard-stat-grid dashboard-stat-grid--summary">
+          <article class="dashboard-stat dashboard-stat--summary dashboard-service-status ${statusClass}">
             <div class="dashboard-stat__header">
               <span class="dashboard-stat__icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="currentColor">
@@ -246,11 +246,11 @@ const dashboard = (() => {
                 </svg>
               </span>
               <h3 class="dashboard-stat__headline">
-                <span class="dashboard-stat__headline-label dashboard-service-status__title" data-i18n="dashboard.card.siri">${window.i18n('dashboard.card.siri')}</span>
+                <span class="dashboard-stat__headline-label" data-i18n="dashboard.card.siri">${window.i18n('dashboard.card.siri')}</span>
               </h3>
             </div>
             <div class="dashboard-stat__value-wrap">
-              <div class="dashboard-service-status__value" data-i18n="${statusKey}">${window.i18n(statusKey)}</div>
+              <div class="dashboard-stat__headline-number dashboard-service-status__value" data-i18n="${statusKey}">${window.i18n(statusKey)}</div>
             </div>
           </article>
         </div>
