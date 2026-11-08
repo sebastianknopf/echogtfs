@@ -23,3 +23,7 @@ Die abobasierte Ausführung einer Datenquelle ist nur bei bestimmten Datenquelle
 **Der Abostatus bei einer abonnementbasierten Datenquelle wird nicht angezeigt**
 
 Der Abostatus wird nur angezeigt, wenn der SIRI-Kommunikationsdienst gestartet wurde. Siehe hierzu {ref}`h-installation-additional-services`.
+
+**Eine Meldung, eine Fahrt oder ein Fahrzeug wird in EchoGTFS überhaupt nicht angezeigt, obwohl bekannt ist, dass die Daten gesendet wurden**
+
+Das kann mehrere Gründe haben. Prüfen Sie zunächst die Einstellungen der Datenquelle, insbesondere die _Verfahrensweise bei ungültigen Bezügen_. Wenn Sie hierdurch keine Abhilfe schaffen können, ist es möglich, dass die Daten von der Datenquelle aus einem anderen Grund (fehlendes Datenelement, fehlgeschlagene Gültigkeitsprüfung, ...) noch vor dem Import verfworfen werden. Aktivieren Sie das Log-Dumping der jeweiligen Datenquelle und prüfen Sie die eingehenden Daten auf ihren Inhalt hin.
