@@ -30,6 +30,8 @@ const dashboard = (() => {
       vehicle_positions: { active: 0, inactive: 0 },
     },
     siriHealth: false,
+    monitoringStatistics: null,
+    conflicts: null,
   };
   let _pollTimer = null;
   let _siriServiceAvailable = false;
@@ -88,6 +90,126 @@ const dashboard = (() => {
     `).join('');
   }
 
+  function _sum(items, key) {
+    return items.reduce((total, item) => total + (Number(item[key]) || 0), 0);
+  }
+
+  function _formatTimestamp(value) {
+    if (!value) return window.i18n('dashboard.value.unavailable');
+    const timestamp = new Date(value);
+    return Number.isNaN(timestamp.getTime())
+      ? window.i18n('dashboard.value.unavailable')
+      : timestamp.toLocaleString();
+  }
+
+  function _formatImportStatus(value) {
+    const status = ['idle', 'running', 'success', 'error'].includes(value) ? value : 'unknown';
+    return window.i18n(`dashboard.nominal.status.${status}`);
+  }
+
+  function _renderSummaryStats() {
+    const statistics = _dashboardData.monitoringStatistics?.statistics;
+    const staticData = statistics?.static;
+    const realtimeData = statistics?.realtime;
+    const trips = realtimeData?.trips;
+    const vehicles = realtimeData?.vehicles;
+    const conflicts = _dashboardData.conflicts;
+    const nominalUnavailable = !staticData;
+    const realtimeUnavailable = !Array.isArray(trips) || !Array.isArray(vehicles);
+    const conflictsUnavailable = !Array.isArray(conflicts);
+
+    const runningTrips = realtimeUnavailable ? null : _sum(trips, 'num_running_trips');
+    const realtimeTrips = realtimeUnavailable ? null : _sum(trips, 'num_realtime_trips');
+    const activeVehicles = realtimeUnavailable ? null : _sum(vehicles, 'num_vehicles');
+    const realtimePercent = runningTrips ? Math.min(100, Math.round((realtimeTrips / runningTrips) * 100)) : 0;
+    const vehiclePercent = runningTrips ? Math.min(100, Math.round((activeVehicles / runningTrips) * 100)) : 0;
+    const errorCount = conflictsUnavailable ? null : conflicts.filter(conflict => Number(conflict.code) < 2000).length;
+    const warningCount = conflictsUnavailable ? null : conflicts.length - errorCount;
+    const conflictCount = conflictsUnavailable ? null : conflicts.length;
+    const unavailable = window.i18n('dashboard.value.unavailable');
+
+    return `
+      <div class="dashboard-stat-grid dashboard-stat-grid--summary">
+        <article class="dashboard-stat dashboard-stat--summary dashboard-stat--nominal">
+          <div class="dashboard-stat__header">
+            <span class="dashboard-stat__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 3h16v2H4zm0 4h16v14H4zm2 2v10h12V9zm2 2h8v2H8zm0 4h8v2H8z"/></svg>
+            </span>
+            <h3 class="dashboard-stat__headline">
+              <span class="dashboard-stat__headline-label" data-i18n="dashboard.summary.nominal">${window.i18n('dashboard.summary.nominal')}</span>
+            </h3>
+          </div>
+          <div class="dashboard-stat__value-wrap dashboard-stat__nominal-values">
+            <div class="dashboard-stat__detail">
+              <span data-i18n="dashboard.summary.last_import">${window.i18n('dashboard.summary.last_import')}</span>
+              <strong>${nominalUnavailable ? unavailable : `${_formatTimestamp(staticData.last_import_timestamp)} / ${_formatImportStatus(staticData.last_import_status)}`}</strong>
+            </div>
+            <div class="dashboard-stat__detail">
+              <span data-i18n="dashboard.summary.nominal_trips">${window.i18n('dashboard.summary.nominal_trips')}</span>
+              <strong>${nominalUnavailable ? unavailable : Number(staticData.num_trips).toLocaleString()}</strong>
+            </div>
+          </div>
+        </article>
+
+        <article class="dashboard-stat dashboard-stat--summary">
+          <div class="dashboard-stat__header">
+            <span class="dashboard-stat__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10.01 10.01 0 0 0 12 2zm1 17.93V18h-2v1.93A8.01 8.01 0 0 1 4.07 13H6v-2H4.07A8.01 8.01 0 0 1 11 4.07V6h2V4.07A8.01 8.01 0 0 1 19.93 11H18v2h1.93A8.01 8.01 0 0 1 13 19.93zM12 7v5l4 2 .9-1.8-2.9-1.45V7z"/></svg>
+            </span>
+          </div>
+          <div class="dashboard-stat__value-wrap">
+            <h3 class="dashboard-stat__headline">
+              <span class="dashboard-stat__headline-number">${realtimeUnavailable ? unavailable : `${realtimePercent}%`}</span>
+              <span class="dashboard-stat__headline-label" data-i18n="dashboard.summary.realtime_percent">${window.i18n('dashboard.summary.realtime_percent')}</span>
+            </h3>
+          </div>
+          <div class="dashboard-stat__subvalue">
+            ${realtimeUnavailable ? unavailable : window.i18n('dashboard.summary.running_trips_count', { count: runningTrips.toLocaleString() })}
+          </div>
+        </article>
+
+        <article class="dashboard-stat dashboard-stat--summary">
+          <div class="dashboard-stat__header">
+            <span class="dashboard-stat__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 6c0-1.66 3.58-3 8-3s8 1.34 8 3v11a2 2 0 0 1-2 2h-1v2h-2v-2H9v2H7v-2H6a2 2 0 0 1-2-2zm2 0v5h12V6c0-.55-2.69-1-6-1s-6 .45-6 1m2 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3m8 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"/></svg>
+            </span>
+          </div>
+          <div class="dashboard-stat__value-wrap">
+            <h3 class="dashboard-stat__headline">
+              <span class="dashboard-stat__headline-number">${realtimeUnavailable ? unavailable : `${vehiclePercent}%`}</span>
+              <span class="dashboard-stat__headline-label" data-i18n="dashboard.summary.vehicle_percent">${window.i18n('dashboard.summary.vehicle_percent')}</span>
+            </h3>
+          </div>
+          <div class="dashboard-stat__subvalue">
+            ${realtimeUnavailable ? unavailable : window.i18n('dashboard.summary.running_trips_count', { count: runningTrips.toLocaleString() })}
+          </div>
+        </article>
+
+        <article class="dashboard-stat dashboard-stat--summary">
+          <div class="dashboard-stat__header">
+            <span class="dashboard-stat__icon dashboard-stat__icon--conflicts" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 1 21h22L12 2zm1 15h-2v-2h2zm0-4h-2V9h2z"/></svg>
+            </span>
+          </div>
+          <div class="dashboard-stat__value-wrap">
+            <h3 class="dashboard-stat__headline">
+              <span class="dashboard-stat__headline-number">${conflictsUnavailable ? unavailable : conflictCount.toLocaleString()}</span>
+              <span class="dashboard-stat__headline-label" data-i18n="dashboard.summary.conflicts">${window.i18n('dashboard.summary.conflicts')}</span>
+            </h3>
+          </div>
+          <div class="dashboard-stat__subvalues">
+            <div class="dashboard-stat__subvalue">
+              ${conflictsUnavailable ? unavailable : `${errorCount.toLocaleString()} ${window.i18n('dashboard.summary.errors')}`}
+            </div>
+            <div class="dashboard-stat__subvalue">
+              ${conflictsUnavailable ? unavailable : `${warningCount.toLocaleString()} ${window.i18n('dashboard.summary.warnings')}`}
+            </div>
+          </div>
+        </article>
+      </div>
+    `;
+  }
+
   function _renderServiceStatus() {
     if (!_siriServiceAvailable) {
       return `
@@ -142,12 +264,20 @@ const dashboard = (() => {
   }
 
   async function _loadDashboardData(render = true) {
-    const [dashboardResult, siriHealthResult] = await Promise.allSettled([
+    const [dashboardResult, siriHealthResult, monitoringStatisticsResult, conflictsResult] = await Promise.allSettled([
       api.getDashboard(),
       _siriServiceAvailable ? api.getSiriHealth() : Promise.reject(new Error('siricomservice unavailable')),
+      api.getMonitoringStatistics(),
+      api.getMonitoringConflicts(),
     ]);
 
     _dashboardData.siriHealth = siriHealthResult.status === 'fulfilled' && siriHealthResult.value === true;
+    _dashboardData.monitoringStatistics = monitoringStatisticsResult.status === 'fulfilled'
+      ? monitoringStatisticsResult.value
+      : null;
+    _dashboardData.conflicts = conflictsResult.status === 'fulfilled' && Array.isArray(conflictsResult.value?.conflicts)
+      ? conflictsResult.value.conflicts
+      : null;
 
     if (dashboardResult.status === 'fulfilled') {
       _setDashboardData(dashboardResult.value);
@@ -178,6 +308,7 @@ const dashboard = (() => {
           <div class="dashboard-stat-grid">
             ${_renderStats()}
           </div>
+          ${_renderSummaryStats()}
         </section>
 
         ${_renderServiceStatus()}

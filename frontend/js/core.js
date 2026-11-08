@@ -409,6 +409,10 @@ const api = (() => {
       return request('/service/siri/health');
     },
 
+    getMonitoringStatistics() {
+      return request('/monitoring/statistics');
+    },
+
     getCapabilities() {
       return request('/capabilities');
     },
@@ -423,7 +427,10 @@ const api = (() => {
     },
 
     getMonitoringConflicts(dataSourceId) {
-      return request(`/monitoring/conflicts?datasourceId=${encodeURIComponent(dataSourceId)}`);
+      const query = dataSourceId === undefined || dataSourceId === null
+        ? ''
+        : `?datasourceId=${encodeURIComponent(dataSourceId)}`;
+      return request(`/monitoring/conflicts${query}`);
     },
 
     exportConflictsCsv(dataSourceId) {
