@@ -319,3 +319,75 @@ class TestSiriSxServiceAlertsTransformer(unittest.TestCase):
         self.assertEqual(communication_period["period_type"], PeriodType.COMMUNICATION_PERIOD)
         self.assertEqual(communication_period["start_time"], 1767398400)
         self.assertIsNone(communication_period["end_time"])
+
+    def test_transform_ignores_operator_ref_in_affected_line(self):
+        xml_payload = """
+        <Siri xmlns="http://www.siri.org.uk/siri">
+          <PtSituationElement>
+            <SituationNumber>42</SituationNumber>
+            <ParticipantRef>P2</ParticipantRef>
+            <PublicationWindow>
+              <StartTime>2026-01-01T00:00:00Z</StartTime>
+              <EndTime>2099-01-01T00:00:00Z</EndTime>
+            </PublicationWindow>
+            <Summary xml:lang="en">Line disruption</Summary>
+            <Affects>
+              <AffectedNetwork>
+                <AffectedLine>
+                  <OperatorRef>OP-1</OperatorRef>
+                  <LineRef>LINE-1</LineRef>
+                </AffectedLine>
+              </AffectedNetwork>
+            </Affects>
+          </PtSituationElement>
+        </Siri>
+        """
+        root = ET.fromstring(xml_payload)
+        transformer = SiriSxServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filters={"operator": [], "line": [], "legacy": ["P2"]},
+        )
+
+        records = transformer.transform({"root": root, "source_name": "sx"})
+
+        self.assertEqual(len(records), 1)
+        self.assertEqual(len(records[0]["informed_entities"]), 1)
+        self.assertIsNone(records[0]["informed_entities"][0]["agency_id"])
+        self.assertEqual(records[0]["informed_entities"][0]["route_id"], "LINE-1")
+
+    def test_transform_keeps_operator_ref_for_vehicle_journey(self):
+        xml_payload = """
+        <Siri xmlns="http://www.siri.org.uk/siri">
+          <PtSituationElement>
+            <SituationNumber>42</SituationNumber>
+            <ParticipantRef>P2</ParticipantRef>
+            <PublicationWindow>
+              <StartTime>2026-01-01T00:00:00Z</StartTime>
+              <EndTime>2099-01-01T00:00:00Z</EndTime>
+            </PublicationWindow>
+            <Summary xml:lang="en">Line disruption</Summary>
+            <Affects>
+              <VehicleJourneys>
+                <AffectedVehicleJourney>
+                  <VehicleJourneyRef>TRIP-1</VehicleJourneyRef>
+                  <Operator>
+                    <OperatorRef>OP-1</OperatorRef>
+                  </Operator>
+                </AffectedVehicleJourney>
+              </VehicleJourneys>
+            </Affects>
+          </PtSituationElement>
+        </Siri>
+        """
+        root = ET.fromstring(xml_payload)
+        transformer = SiriSxServiceAlertsTransformer(
+            make_unique_id=lambda original, source: f"{source}-{original}",
+            filters={"operator": [], "line": [], "legacy": ["P2"]},
+        )
+
+        records = transformer.transform({"root": root, "source_name": "sx"})
+
+        self.assertEqual(len(records), 1)
+        self.assertEqual(len(records[0]["informed_entities"]), 1)
+        self.assertEqual(records[0]["informed_entities"][0]["agency_id"], "OP-1")
+        self.assertEqual(records[0]["informed_entities"][0]["trip_id"], "TRIP-1")

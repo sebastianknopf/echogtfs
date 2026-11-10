@@ -548,10 +548,6 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                     "is_trip_valid": True,
                 }
 
-                operator_ref = affected_line.find(".//siri:OperatorRef", self._siri_ns)
-                if operator_ref is not None and operator_ref.text:
-                    entity["agency_id"] = operator_ref.text
-
                 line_ref = affected_line.find("siri:LineRef", self._siri_ns)
                 if line_ref is not None and line_ref.text:
                     entity["route_id"] = line_ref.text
@@ -578,10 +574,6 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                             "is_stop_valid": True,
                             "is_trip_valid": True,
                         }
-
-                        operator_ref = affected_line.find(".//siri:OperatorRef", self._siri_ns)
-                        if operator_ref is not None and operator_ref.text:
-                            entity["agency_id"] = operator_ref.text
 
                         line_ref = affected_line.find("siri:LineRef", self._siri_ns)
                         if line_ref is not None and line_ref.text:
@@ -624,10 +616,6 @@ class SiriSxServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                             "is_stop_valid": True,
                             "is_trip_valid": True,
                         }
-
-                        operator_ref = affected_line.find(".//siri:OperatorRef", self._siri_ns)
-                        if operator_ref is not None and operator_ref.text:
-                            entity["agency_id"] = operator_ref.text
 
                         line_ref = affected_line.find("siri:LineRef", self._siri_ns)
                         if line_ref is not None and line_ref.text:
