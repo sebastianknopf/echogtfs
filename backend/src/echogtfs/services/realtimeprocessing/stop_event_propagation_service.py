@@ -335,12 +335,14 @@ class StopEventPropagationService:
             if transmitted_stop_id is None:
                 matched_event["stop_id"] = nominal_full_stop_id
                 matched_event.setdefault("original_stop_id", nominal_full_stop_id)
+                matched_event["is_valid"] = True
                 continue
 
             transmitted_stop_id_str = str(transmitted_stop_id)
             if transmitted_stop_id_str != nominal_full_stop_id:
                 matched_event.setdefault("original_stop_id", transmitted_stop_id_str)
                 matched_event["stop_id"] = nominal_full_stop_id
+                matched_event["is_valid"] = True
 
         return corrected_events
 
