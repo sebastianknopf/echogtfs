@@ -89,7 +89,10 @@ Stop matching does not always compare the full transmitted stop ID
 literally.
 
 `_normalize_stop_id_for_matching` converts Global IDs to level 3 before
-comparison. Non-Global-ID values are kept unchanged.
+comparison. This retains the first three colon-separated components.
+Under the project's hierarchical Global ID convention, those components
+identify the station; later components can distinguish quays or other
+lower-level stops. Non-Global-ID values are kept unchanged.
 
 Conceptually:
 
@@ -101,9 +104,12 @@ full stop ID
     +-- other ID  -> keep unchanged
 ```
 
-This allows stop occurrences that refer to different lower-level
-variants of the same logical stop to participate in the same matching
-process.
+Two Global IDs can match only when their first three components are
+identical. A difference in those components is a station-level mismatch
+and is not normalized away. Non-Global IDs match only when their full
+values are identical. Therefore, a different Global ID can match at
+station level when it differs only in a later component, such as a quay
+identifier.
 
 The original/full stop IDs are still relevant for persistence, stop-ID
 correction, and output ordering. The normalized value is primarily a
@@ -438,16 +444,25 @@ stop times are then traversed in nominal order. For each nominal
 occurrence, the first still-unconsumed realtime event with the same
 normalized stop ID is selected.
 
-If the transmitted full stop ID differs from the nominal full stop ID:
+As a result, a Global ID is corrected to a different full ID only when
+both IDs share the same first three components and differ in a later
+component. IDs with different station-level prefixes do not match and
+are not corrected. Non-Global IDs must match exactly, so differing
+non-Global IDs are not corrected.
+
+When the transmitted full stop ID differs from the nominal full stop ID:
 
 -   the transmitted value is retained as `original_stop_id` when not
     already present;
--   `stop_id` is replaced with the nominal full stop ID.
+-   `stop_id` is replaced with the nominal full stop ID;
+-   the event's `is_valid` flag is set to `True`.
 
 Each realtime event can be consumed only once by this correction pass.
 
-This correction changes identifiers only. It does not independently add
-or remove stop events.
+Events whose stop IDs are not corrected keep their existing validity.
+`TripUpdateProcessingService` uses the final `is_valid` values when
+applying the configured invalid-reference policy. Correction does not
+independently add or remove stop events.
 
 ## Complete Sequence Ordering
 

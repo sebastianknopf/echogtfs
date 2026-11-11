@@ -270,7 +270,7 @@ class TestStopEventPropagationService(unittest.TestCase):
                 "stop_sequence": "10",
                 "departure_time": same_time,
                 "schedule_relationship": "SCHEDULED",
-                "is_valid": True,
+                "is_valid": False,
             }
         ]
         nominal_stop_times = [
@@ -289,6 +289,7 @@ class TestStopEventPropagationService(unittest.TestCase):
         self.assertEqual(len(propagated), 1)
         self.assertEqual(propagated[0]["stop_id"], "de:1:2:4")
         self.assertEqual(propagated[0]["original_stop_id"], "de:1:2:3")
+        self.assertTrue(propagated[0]["is_valid"])
     def test_propagate_trip_update_stop_events_does_not_fix_stop_id_when_handling_ignore(self):
         same_time = datetime(2026, 8, 1, 8, 0, 0, tzinfo=timezone.utc)
         stop_events = [
@@ -648,4 +649,3 @@ class TestPropagateIncrementalDelay(unittest.TestCase):
         self.datasource._propagate_incremental_delay(stop_events, set())
 
         self.assertNotIn("arrival_time", stop_events[0])
-
