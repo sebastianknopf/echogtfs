@@ -8,7 +8,6 @@ import re
 import time
 from datetime import datetime
 from html.parser import HTMLParser
-from itertools import zip_longest
 from time import perf_counter
 from typing import Any, Callable
 from urllib.parse import urlsplit
@@ -70,12 +69,15 @@ class _PlainTextHTMLParser(HTMLParser):
 class EfaJsonServiceAlertsTransformer(ServiceAlertsTransformerInterface):
     """Transforms EFA-JSON ADDINFO entries into service-alert dictionaries."""
 
-    SUPPORTED_LANGUAGES = ("de-DE", "en-GB", "en-US")
+    SUPPORTED_LANGUAGES = ("DE", "EN")
+    
     _PRIORITY_TO_SEVERITY = {
-        "normal": "INFO",
+        "veryLow": "INFO",
+        "low": "INFO",
         "high": "WARNING",
         "veryHigh": "SEVERE",
     }
+    _ENTITYLESS_INFO_TYPES = {"generalInfo", "areaInfo"}
     _MAX_FUTURE_SECONDS = 30 * 24 * 60 * 60
 
     def __init__(
@@ -156,6 +158,12 @@ class EfaJsonServiceAlertsTransformer(ServiceAlertsTransformerInterface):
     def get_runtime_duration_ms(self) -> float:
         return float(self._runtime_duration_ms)
 
+    _INFO_TYPE_ALIASES = {
+        "lineBlocking": "lineInfo",
+        "routeBlocking": "routeInfo",
+        "stopBlocking": "stopInfo",
+    }
+
     def _transform_info(
         self,
         info: dict[str, Any],
@@ -163,15 +171,21 @@ class EfaJsonServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         current_timestamp: int,
     ) -> dict[str, Any] | None:
         info_type = info.get("type")
-        if info_type not in {"lineInfo", "routeInfo", "stopInfo"}:
+        info_type = self._INFO_TYPE_ALIASES.get(info_type, info_type)
+        if info_type not in {"lineInfo", "routeInfo", "stopInfo"} | self._ENTITYLESS_INFO_TYPES:
             return None
 
         if not self._matches_operator_filter(info):
             return None
 
-        informed_entities = self._extract_informed_entities(info_type, info.get("affected"))
-        if not informed_entities:
-            return None
+        if info_type in self._ENTITYLESS_INFO_TYPES:
+            informed_entities = []
+        else:
+            informed_entities = self._extract_informed_entities(
+                info_type, info.get("affected")
+            )
+            if not informed_entities:
+                return None
         if not self._matches_route_stop_filter(informed_entities):
             return None
 
@@ -281,22 +295,21 @@ class EfaJsonServiceAlertsTransformer(ServiceAlertsTransformerInterface):
                 if route_id is not None
             ]
 
-        if info_type == "stopInfo":
+        # stopInfo and routeInfo: one entity per stop and route combination
+        route_ids = [route_id for route_id in route_ids if route_id is not None]
+        stop_ids = [stop_id for stop_id in stop_ids if stop_id is not None]
+
+        if stop_ids and route_ids:
             return [
-                cls._make_informed_entity(stop_id=stop_id)
+                cls._make_informed_entity(route_id=route_id, stop_id=stop_id)
                 for stop_id in stop_ids
-                if stop_id is not None
+                for route_id in route_ids
             ]
 
-        informed_entities = []
-        for route_id, stop_id in zip_longest(route_ids, stop_ids):
-            if route_id is None and stop_id is None:
-                continue
-            informed_entities.append(
-                cls._make_informed_entity(route_id=route_id, stop_id=stop_id)
-            )
-        
-        return informed_entities
+        if stop_ids:
+            return [cls._make_informed_entity(stop_id=stop_id) for stop_id in stop_ids]
+
+        return [cls._make_informed_entity(route_id=route_id) for route_id in route_ids]
 
     @staticmethod
     def _extract_ids(entries: Any) -> list[str | None]:
@@ -432,6 +445,9 @@ class EfaJsonServiceAlertsTransformer(ServiceAlertsTransformerInterface):
             return False
 
         labels = ascii_hostname.split(".")
+        # A DNS name needs a domain part; single-label hosts such as "nohost" are rejected
+        if len(labels) < 2:
+            return False
         
         return all(
             label
