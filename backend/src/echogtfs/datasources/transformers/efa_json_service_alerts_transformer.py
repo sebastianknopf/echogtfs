@@ -171,6 +171,9 @@ class EfaJsonServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         current_timestamp: int,
     ) -> dict[str, Any] | None:
         info_type = info.get("type")
+        if not isinstance(info_type, str):
+            return None
+
         info_type = self._INFO_TYPE_ALIASES.get(info_type, info_type)
         if info_type not in {"lineInfo", "routeInfo", "stopInfo"} | self._ENTITYLESS_INFO_TYPES:
             return None
