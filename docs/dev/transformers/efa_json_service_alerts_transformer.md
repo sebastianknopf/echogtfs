@@ -1,10 +1,10 @@
 # EfaJsonServiceAlertsTransformer
 
-This document specifies the EFA-JSON service-alert transformation. The registered EFA-JSON datasource is currently a placeholder, so the transformer behavior below is not implemented yet.
+This document specifies the EFA-JSON service-alert transformation.
 
 ## Input and Entry Points
 
-1. The datasource passes the decoded EFA JSON response and `source_name` to the transformer.
+1. The datasource passes the decoded EFA JSON response as `raw_data["response"]` and `source_name` as `raw_data["source_name"]`.
 2. The datasource passes the configured `language` parameter to the transformer, following the existing pattern of passing transformer-specific parameters such as filters.
 3. The transformer reads the information objects from `infos.current`.
 4. Each supported information object is filtered and transformed into one service-alert record.
@@ -42,6 +42,12 @@ Objects with a missing or unsupported `type` are skipped. A supported object wit
 For `routeInfo`, route and stop IDs are paired by their positions in the source arrays. A pair populates both `route_id` and `stop_id` on one informed entity; no route-stop cross product is created. An unmatched route or stop ID is retained in its own informed entity, with the other reference set to `None`.
 
 The upstream identifier is read from `properties.messageRef`, falling back to the information object's top-level `id`. The identifier and `source_name` are passed to the shared datasource ID helper. Existing UUID values remain unchanged; other identifiers are converted to deterministic UUIDs. An object with neither identifier is skipped.
+
+## Source Filters
+
+The datasource divides the optional filter expression into `line`, `operator`, and legacy patterns. Operator and unprefixed patterns are matched against `providerCode` or `producerRef`, read from the information object's `properties` or top level. A configured operator filter requires at least one of those values to match.
+
+Line patterns are matched against route and stop identifiers extracted into informed entities. When line patterns are configured, an alert is retained only if at least one extracted route ID or stop ID matches. This also applies to the paired route and stop references from `routeInfo`.
 
 ## Publication Window Rules
 
