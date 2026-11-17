@@ -764,14 +764,8 @@ const sources = (() => {
     _renderConfigFields(type, configObj);
     
     ui.el('source-cron').value = cron || '';
-    // Keep the option for existing subscription-based sources so their type stays visible
-    const subscriptionOption = ui.el('source-execution-type').querySelector('option[value="subscription_based"]');
-    if (subscriptionOption) {
-      const unavailable = !_siriServiceAvailable && execution_type !== 'subscription_based';
-      subscriptionOption.disabled = unavailable;
-      subscriptionOption.hidden = unavailable;
-    }
     ui.el('source-execution-type').value = execution_type || 'time_based';
+    _applyExecutionTypeOptions(type);
     _toggleCronFieldVisibility();
     ui.el('source-is-active').checked = is_active;
     ui.el('source-log-dumps').checked = !!log_dumps;
@@ -825,16 +819,49 @@ const sources = (() => {
     ui.el('source-modal').hidden = true;
   }
   
-  // Subscription-based sources always use differential updates
+  function _getAdapterCapabilities(adapterType) {
+    return _adapterTypes?.find(a => a.type === adapterType)?.capabilities || null;
+  }
+
+  // Shows only the execution types allowed for the adapter type (all of them if no type is selected)
+  function _applyExecutionTypeOptions(adapterType) {
+    const select = ui.el('source-execution-type');
+    const allowed = _getAdapterCapabilities(adapterType)?.execution_types;
+    const currentValue = select.value;
+    let firstAvailable = null;
+
+    select.querySelectorAll('option').forEach(option => {
+      const available = !allowed || allowed.includes(option.value);
+      option.disabled = !available;
+      option.hidden = !available;
+      if (available && firstAvailable === null) {
+        firstAvailable = option.value;
+      }
+    });
+
+    const currentOption = select.querySelector(`option[value="${currentValue}"]`);
+    if (currentOption?.disabled && firstAvailable !== null) {
+      select.value = firstAvailable;
+    }
+  }
+
+  // Differential updates can be unsupported by the adapter type or always on for subscription-based sources
   function _syncDifferentialUpdatesLock() {
     const input = ui.el('source-is-differential-updates');
     if (!input) return;
-    const locked = ui.el('source-execution-type').value === 'subscription_based';
-    if (locked) {
+    const supported = _getAdapterCapabilities(ui.el('source-type').value)?.differential_updates !== false;
+    let forcedValue = null;
+    if (!supported) {
+      forcedValue = false;
+    } else if (ui.el('source-execution-type').value === 'subscription_based') {
+      forcedValue = true;
+    }
+
+    if (forcedValue !== null) {
       if (!input.disabled) {
         input.dataset.previousValue = input.checked ? '1' : '0';
       }
-      input.checked = true;
+      input.checked = forcedValue;
       input.disabled = true;
     } else if (input.disabled) {
       input.disabled = false;
@@ -1573,6 +1600,8 @@ const sources = (() => {
     ui.el('source-type')?.addEventListener('change', (e) => {
       const selectedType = e.target.value;
       _renderConfigFields(selectedType, {});
+      _applyExecutionTypeOptions(selectedType);
+      _toggleCronFieldVisibility();
     });
 
     // Execution type change handler

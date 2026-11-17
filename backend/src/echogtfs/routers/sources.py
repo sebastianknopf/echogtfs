@@ -202,6 +202,12 @@ async def list_adapter_types(_: CurrentPoweruser):
         adapter_types.append({
             "type": adapter_name,
             "config_schema": adapter_class.get_config_schema(),
+            "capabilities": {
+                "execution_types": [
+                    execution_type.value for execution_type in adapter_class.CAPABILITIES.execution_types
+                ],
+                "differential_updates": adapter_class.CAPABILITIES.differential_updates,
+            },
         })
     
     return {"adapter_types": adapter_types}
