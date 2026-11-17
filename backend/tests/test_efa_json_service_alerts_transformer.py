@@ -217,7 +217,7 @@ class TestEfaJsonTransformerSmoke(unittest.TestCase):
             {"response": {"infos": {"current": [_make_info()]}}, "source_name": "efa"}
         )
 
-        uuid.UUID(alerts[0]["id"])
+        self.assertIsInstance(alerts[0]["id"], uuid.UUID)
 
 
 class TestEfaJsonTransformerTypes(unittest.TestCase):

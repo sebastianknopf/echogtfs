@@ -195,7 +195,7 @@ class EfaJsonServiceAlertsTransformer(ServiceAlertsTransformerInterface):
         upstream_id = self._get_upstream_id(info)
         if upstream_id is None:
             return None
-        alert_id = str(self._make_unique_id(upstream_id, source_name))
+        alert_id = self._make_unique_id(upstream_id, source_name)
 
         translations = self._extract_translations(info.get("infoLinks"))
         if not translations:
