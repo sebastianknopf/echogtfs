@@ -11,7 +11,9 @@ from typing import Any
 
 import httpx
 
+from echogtfs.datasources.intf_datasource import DatasourceCapabilities
 from echogtfs.datasources.subscription_datasource_base import SubscriptionDatasourceBase
+from echogtfs.enum.system import DataSourceExecutionType
 from echogtfs.datasources.transformers import SiriVmVehiclePositionsTransformer
 
 logger = logging.getLogger("uvicorn")
@@ -23,6 +25,15 @@ class SiriVmDialect(str, Enum):
 
 class SiriVmDatasource(SubscriptionDatasourceBase):
     """Datasource implementation for SIRI-VM feeds."""
+
+    CAPABILITIES = DatasourceCapabilities(
+        execution_types=(
+            DataSourceExecutionType.TIME_BASED,
+            DataSourceExecutionType.EVENT_BASED,
+            DataSourceExecutionType.SUBSCRIPTION_BASED,
+        ),
+        differential_updates=True,
+    )
 
     CONFIG_SCHEMA: list[dict[str, Any]] = [
         {

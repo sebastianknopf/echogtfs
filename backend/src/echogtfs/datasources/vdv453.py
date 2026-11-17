@@ -7,7 +7,9 @@ import logging
 import xml.etree.ElementTree as ET
 from typing import Any
 
+from echogtfs.datasources.intf_datasource import DatasourceCapabilities
 from echogtfs.datasources.subscription_datasource_base import SubscriptionDatasourceBase
+from echogtfs.enum.system import DataSourceExecutionType
 from echogtfs.datasources.transformers import Vdv453V31VehiclePositionsTransformer
 
 logger = logging.getLogger("uvicorn")
@@ -19,6 +21,11 @@ class Vdv453Dialect(str, Enum):
 
 class Vdv453Datasource(SubscriptionDatasourceBase):
     """Datasource implementation for VDV453-VIS feeds."""
+
+    CAPABILITIES = DatasourceCapabilities(
+        execution_types=(DataSourceExecutionType.EVENT_BASED, DataSourceExecutionType.SUBSCRIPTION_BASED),
+        differential_updates=True,
+    )
 
     CONFIG_SCHEMA: list[dict[str, Any]] = [
         {

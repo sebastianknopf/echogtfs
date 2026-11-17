@@ -10,6 +10,8 @@ from typing import Any
 import httpx
 
 from echogtfs.datasources.base import DatasourceBase
+from echogtfs.datasources.intf_datasource import DatasourceCapabilities
+from echogtfs.enum.system import DataSourceExecutionType
 from echogtfs.datasources.transformers import EfaJsonServiceAlertsTransformer
 
 logger = logging.getLogger("uvicorn")
@@ -24,6 +26,11 @@ class EfaJsonDatasource(DatasourceBase):
 
     # UserAgent for HTTP requests to EFA-JSON endpoints
     USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
+
+    CAPABILITIES = DatasourceCapabilities(
+        execution_types=(DataSourceExecutionType.TIME_BASED, DataSourceExecutionType.EVENT_BASED),
+        differential_updates=False,
+    )
 
     CONFIG_SCHEMA: list[dict[str, Any]] = [
         {

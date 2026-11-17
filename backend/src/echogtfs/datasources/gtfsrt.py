@@ -12,6 +12,8 @@ from google.protobuf.json_format import MessageToDict
 
 from echogtfs import gtfs_realtime_pb2
 from echogtfs.datasources.base import DatasourceBase
+from echogtfs.datasources.intf_datasource import DatasourceCapabilities
+from echogtfs.enum.system import DataSourceExecutionType
 from echogtfs.datasources.transformers import GtfsRtServiceAlertsTransformer
 
 logger = logging.getLogger("uvicorn")
@@ -37,6 +39,11 @@ class GtfsRtDialect(str, Enum):
 
 class GtfsRealtimeDatasource(DatasourceBase):
     """Datasource implementation for GTFS-Realtime feeds."""
+
+    CAPABILITIES = DatasourceCapabilities(
+        execution_types=(DataSourceExecutionType.TIME_BASED, DataSourceExecutionType.EVENT_BASED),
+        differential_updates=False,
+    )
 
     CONFIG_SCHEMA: list[dict[str, Any]] = [
         {
