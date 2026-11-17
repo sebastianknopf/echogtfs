@@ -22,6 +22,9 @@ class EfaJsonDialect(str, Enum):
 class EfaJsonDatasource(DatasourceBase):
     """Datasource implementation for EFA-JSON service-alert feeds."""
 
+    # UserAgent for HTTP requests to EFA-JSON endpoints
+    USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
+
     CONFIG_SCHEMA: list[dict[str, Any]] = [
         {
             "name": "endpoint",
@@ -94,8 +97,10 @@ class EfaJsonDatasource(DatasourceBase):
     async def _fetch_records(self) -> dict[str, Any]:
         endpoint_url = self.config["endpoint"]
         response = None
-        request_headers = {"Accept": "application/json"}
-        
+        request_headers = {
+            "Accept": "application/json",
+            "User-Agent": self.USER_AGENT,
+        }
         try:
             logger.info("[EfaJsonDatasource] Fetching EFA-JSON feed from %s", endpoint_url)
             async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
