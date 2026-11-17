@@ -5,6 +5,7 @@
 
 general
 matching
+efa-json
 gtfsrt
 sirilite
 sirisx

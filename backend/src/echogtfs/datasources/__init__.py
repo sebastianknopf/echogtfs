@@ -6,6 +6,7 @@ from typing import Any
 
 from echogtfs.datasources.base import DatasourceBase
 from echogtfs.datasources.subscription_datasource_base import SubscriptionDatasourceBase
+from echogtfs.datasources.efa_json import EfaJsonDatasource
 from echogtfs.datasources.gtfsrt import GtfsRealtimeDatasource
 from echogtfs.datasources.siriet import SiriEtDatasource
 from echogtfs.datasources.sirilite import SiriLiteDatasource
@@ -17,6 +18,7 @@ from echogtfs.datasources.vdv454 import Vdv454Datasource
 __all__ = [
     "DatasourceBase",
     "SubscriptionDatasourceBase",
+    "EfaJsonDatasource",
     "GtfsRealtimeDatasource",
     "SiriEtDatasource",
     "SiriLiteDatasource",
@@ -37,6 +39,7 @@ DATASOURCE_REGISTRY: dict[str, type[DatasourceBase]] = {
     "sirivm": SiriVmDatasource,
     "vdv453": Vdv453Datasource,
     "vdv454": Vdv454Datasource,
+    "efa-json": EfaJsonDatasource,
 }
 
 
