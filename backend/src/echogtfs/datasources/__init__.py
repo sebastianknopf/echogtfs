@@ -31,7 +31,8 @@ __all__ = [
 ]
 
 
-DATASOURCE_REGISTRY: dict[str, type[DatasourceBase]] = {
+DATASOURCE_REGISTRY: dict[str, type[DatasourceBase]] = {   
+    "efa-json": EfaJsonDatasource,
     "gtfsrt": GtfsRealtimeDatasource,
     "sirilite": SiriLiteDatasource,
     "sirisx": SiriSxDatasource,
@@ -39,7 +40,6 @@ DATASOURCE_REGISTRY: dict[str, type[DatasourceBase]] = {
     "sirivm": SiriVmDatasource,
     "vdv453": Vdv453Datasource,
     "vdv454": Vdv454Datasource,
-    "efa-json": EfaJsonDatasource,
 }
 
 
