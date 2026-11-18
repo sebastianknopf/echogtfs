@@ -1,26 +1,41 @@
 # EFA-JSON
 
-This specification describes the EFA-JSON data source using the ADDINFO dialect. The registered EFA-JSON data source is currently a placeholder and cannot yet import data.
+Die EFA-JSON Datenquelle (EFA = Elektronische Fahrplanauskunft der Fa. Mentz) wird verwendet, um Echtzeitdaten von einem EFA-Server in EchoGTFS zu übernehmen. Sie eignet sich besonders zur Synchronisation von ServiceAlerts. Nach der Einrichtung kann die Datenquelle zeit- und eventgesteuert ausgeführt werden, sodass neue oder geänderte Echtzeitdaten automatisch im System verfügbar werden.
 
-## Purpose
+## Verwendung
 
-The EFA-JSON data source is intended to import service alerts from an EFA backend. It supports service alerts only; it does not import trip updates or vehicle positions.
+Für die Verwendung der Datenquelle wird ein EFA-Server mit aktivierter EFA-JSON API benötigt. In der Konfiguration können die anzufragende URL inklusive eventueller Query-Parameter festgelegt werden. Außerdem kann eine Sprache eingestellt werden, in der die Daten für die ServiceAlerts importiert werden.
 
-## Configuration
+## Parameter
 
-- **Endpoint URL**: The EFA endpoint that provides JSON results for the `XML_ADDINFO_REQUEST` request.
-- **Dialect**: `ADDINFO`, the dialect for retrieving service-alert information.
+Die folgenden Parameter können in der Konfiguration der Datenquelle gesetzt werden:
 
-## Imported information
+- **Endpunkt**: Die URL des EFA-Servers, von dem die Daten abgerufen werden.
+  - Ergebnis: Die Datenquelle fragt diesen Endpunkt beim Ausführen ab und verarbeitet die gelieferten Echtzeitdaten.
+- **Dialekt**: Die Art des Requests an den EFA-Server.
+  - Ergebnis: Je nach Auswahl werden Meldungen, Echtzeitdaten oder Fahrzeugpositionen verarbeitet.
+- **Sprache**: Sprache, in der die Daten vom EFA-Server geliefert werden.
+  - Ergebnis: Bei textbehafteten Daten werden diese mit der eingestellten Sprache importiert.
+- **Filter**: Optionaler Filter für Linien und Betreiber.
+  - Ergebnis: Wenn ein Filter gesetzt ist, werden nur Meldungen mit mindestens einem passenden Bezug zu einer Linie bzw. zu einem Betreiber berücksichtigt. 
+      - Die Filter der Filterklasse `line` greifen auf die Liniekennung.
+      - Die Filter der Filterklasse `operator` greifen auf den ProviderCode und OperatorRef.
 
-The data source reads the current information returned by the EFA endpoint. It uses each notice's affected routes and stops to determine which services the notice applies to:
+Generelle Hinweise zur Verwendung von Filtern sind in der {ref}`Datenquellenübersicht <h-datasources-filters>` beschrieben.
 
-- Line notices apply to their affected routes.
-- Route notices apply to their affected routes and stops.
-- Stop notices apply to their affected stops.
+## Differentielle Updates
 
-The notice priority determines its severity. Normal priority maps to informational, high priority maps to warning, and very high priority maps to severe. Other priorities use the unknown severity.
+Aktuell unterstützt die Datenquelle keine differenziellen Updates.
 
-The notice title, description, and URL are taken from its information links. HTML markup and formatting in titles and descriptions are normalized for use as alert text. Validity ranges determine when the alert applies; an open-ended range has no end time.
+## Verfügbare Ausführungsarten
 
-For the detailed source-field mapping, see the [EFA-JSON service-alert transformer specification](../../../dev/transformers/efa_json_service_alerts_transformer.md).
+Die EFA-JSON Datenquelle unterstützt folgende Ausführungsarten:
+
+- Zeitbasiert
+- Eventbasiert
+
+## Verfügbare Dialekte
+
+Die EFA-JSON Datenquelle verwendet die folgenden Dialekte:
+
+- **ADDINFO**: Import von ServiceAlerts über den `ADDINFO`-Request.
