@@ -21,6 +21,7 @@ The realtime processing layer expects dictionary records per `record_type`. Thes
 
 Implementation notes for the concrete transformers are collected in [transformers/README.md](transformers/README.md). The most relevant notes are:
 
+- [transformers/efa_json_service_alerts_transformer.md](transformers/efa_json_service_alerts_transformer.md)
 - [transformers/gtfsrt_service_alerts_transformer.md](transformers/gtfsrt_service_alerts_transformer.md)
 - [transformers/sirisx_service_alerts_transformer.md](transformers/sirisx_service_alerts_transformer.md)
 - [transformers/sirisx_swiss_service_alerts_transformer.md](transformers/sirisx_swiss_service_alerts_transformer.md)

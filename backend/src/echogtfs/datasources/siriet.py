@@ -11,7 +11,9 @@ from typing import Any
 
 import httpx
 
+from echogtfs.datasources.intf_datasource import DatasourceCapabilities
 from echogtfs.datasources.subscription_datasource_base import SubscriptionDatasourceBase
+from echogtfs.enum.system import DataSourceExecutionType
 from echogtfs.datasources.transformers import SiriEtTripUpdatesTransformer
 from echogtfs.enum.system import IncorrectStopIdHandling
 
@@ -24,6 +26,15 @@ class SiriEtDialect(str, Enum):
 
 class SiriEtDatasource(SubscriptionDatasourceBase):
     """Datasource implementation for SIRI-ET feeds."""
+
+    CAPABILITIES = DatasourceCapabilities(
+        execution_types=(
+            DataSourceExecutionType.TIME_BASED,
+            DataSourceExecutionType.EVENT_BASED,
+            DataSourceExecutionType.SUBSCRIPTION_BASED,
+        ),
+        differential_updates=True,
+    )
 
     CONFIG_SCHEMA: list[dict[str, Any]] = [
         {

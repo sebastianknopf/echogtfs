@@ -9,6 +9,9 @@ from echogtfs.datasources.transformers.intf_trip_updates_transformer import (
 from echogtfs.datasources.transformers.intf_vehicle_positions_transformer import (
     VehiclePositionsTransformerInterface,
 )
+from echogtfs.datasources.transformers.efa_json_service_alerts_transformer import (
+    EfaJsonServiceAlertsTransformer,
+)
 from echogtfs.datasources.transformers.gtfsrt_service_alerts_transformer import (
     GtfsRtServiceAlertsTransformer,
 )
@@ -35,11 +38,12 @@ __all__ = [
     "ServiceAlertsTransformerInterface",
     "TripUpdatesTransformerInterface",
     "VehiclePositionsTransformerInterface",
+    "EfaJsonServiceAlertsTransformer",
     "GtfsRtServiceAlertsTransformer",
     "SiriEtTripUpdatesTransformer",
     "Vdv454V31TripUpdatesTransformer",
     "Vdv453V31VehiclePositionsTransformer",
     "SiriVmVehiclePositionsTransformer",
-    "SwissServiceAlertsTransformer",
+    "SiriSxSwissServiceAlertsTransformer",
     "SiriSxServiceAlertsTransformer",
 ]

@@ -53,12 +53,14 @@ Bestätigen Sie den Dialog mit Klick auf "Speichern". Im Anschluss wird die Date
 
 ## Filter
 
-Die meisten Datenquellen unterstützen Filter, um die zu verarbeitenden Daten möglichst früh einzuschränken. Hierzu können im Feld **Filter** in der Datenquellenkonfiguration Filterausdrücke in sogenannten Filterklassen angegeben werden. Folgende Filterklassen sind aktuell verfügbar:
+Die meisten Datenquellen unterstützen Filter, um die zu verarbeitenden Daten möglichst früh einzuschränken. Die Filter greifen grundsätzlich **vor dem Mapping, welches an einer Datenquelle** eingestellt sein kann.
+
+Hierzu können im Feld **Filter** in der Datenquellenkonfiguration Filterausdrücke in sogenannten Filterklassen angegeben werden. Folgende Filterklassen sind aktuell verfügbar:
 
 - `operator`: Schränkt Daten basierend auf Betreiber- und Teilnehmerkennungen ein
 - `line`: Schränkt Daten basierend auf der verwendeten Linienkennung ein
 
-Bei der Eingabe wird folgende Syntax verwendet: `[Filterklasse]/[Filterausdruck]`
+Bei der Eingabe wird folgende Syntax verwendet: `[Filterklasse]/[Filterausdruck]` (Beispiel: `line/de:vpe:04*`).
 
 Die Filterausdrücke **innerhalb einer Filterklasse** mit logisch ODER behandelt, Filterausrücke **aus verschiedenen Filterklassen** werden mit logisch UND behandelt.
 

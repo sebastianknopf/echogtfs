@@ -3,15 +3,27 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Any
 
+from echogtfs.enum.system import DataSourceExecutionType
 from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
 from echogtfs.services.database.intf_realtime_repository import RealtimeRepositoryInterface
 from echogtfs.services.database.intf_system_repository import SystemRepositoryInterface
 
 
+@dataclass(frozen=True)
+class DatasourceCapabilities:
+    """Describes which execution modes and update styles a datasource supports."""
+
+    execution_types: tuple[DataSourceExecutionType, ...]
+    differential_updates: bool
+
+
 class DatasourceInterface(ABC):
     """Common contract for all datasource implementations."""
+
+    CAPABILITIES: DatasourceCapabilities
 
     CONFIG_SCHEMA: list[dict[str, Any]] = []
 

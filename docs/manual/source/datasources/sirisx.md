@@ -23,6 +23,10 @@ Die folgenden Parameter können in der Konfiguration der Datenquelle gesetzt wer
 
 Generelle Hinweise zur Verwendung von Filtern sind in der {ref}`Datenquellenübersicht <h-datasources-filters>` beschrieben.
 
+## Differentielle Updates
+
+Aktuell unterstützt die Datenquelle keine differenziellen Updates.
+
 ## Verfügbare Ausführungsarten
 
 Die SIRI-SX-Datenquelle unterstützt folgende Ausführungsarten:

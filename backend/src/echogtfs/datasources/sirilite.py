@@ -10,6 +10,8 @@ from typing import Any
 import httpx
 
 from echogtfs.datasources.base import DatasourceBase
+from echogtfs.datasources.intf_datasource import DatasourceCapabilities
+from echogtfs.enum.system import DataSourceExecutionType
 from echogtfs.datasources.transformers import (
     SiriEtTripUpdatesTransformer,
     SiriSxServiceAlertsTransformer,
@@ -30,6 +32,11 @@ class SiriLiteDialect(str, Enum):
 
 class SiriLiteDatasource(DatasourceBase):
     """Datasource implementation for SIRI-Lite feeds (SIRI-SX and SIRI-SX Swiss dialects)."""
+
+    CAPABILITIES = DatasourceCapabilities(
+        execution_types=(DataSourceExecutionType.TIME_BASED, DataSourceExecutionType.EVENT_BASED),
+        differential_updates=True,
+    )
 
     CONFIG_SCHEMA: list[dict[str, Any]] = [
         {

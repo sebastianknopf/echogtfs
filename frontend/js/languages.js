@@ -660,6 +660,21 @@ window.translations = {
     'adapter.gtfsrt.filter.label': 'Filter',
     'adapter.gtfsrt.filter.placeholder': 'Optionaler Filter-Ausdruck',
     'adapter.gtfsrt.filter.help_text': 'Filter zur Einschränkung der GTFS-RT ServiceAlerts',
+
+    // EFA-JSON Adapter
+    'adapter.efa-json.endpoint.label': 'Endpoint URL',
+    'adapter.efa-json.endpoint.placeholder': 'https://api.example.com/efa-json',
+    'adapter.efa-json.endpoint.help_text': 'URL zum EFA-JSON Feed mit ADDINFO-Meldungen',
+    'adapter.efa-json.dialect.label': 'Dialekt',
+    'adapter.efa-json.dialect.help_text': 'EFA-JSON Implementierungsvariante',
+    'adapter.efa-json.dialect.option.ADDINFO': 'ADDINFO',
+    'adapter.efa-json.language.label': 'Sprache',
+    'adapter.efa-json.language.help_text': 'Sprache, die den importierten Meldungstexten zugeordnet wird.',
+    'adapter.efa-json.language.option.DE': 'Deutsch',
+    'adapter.efa-json.language.option.EN': 'Englisch',
+    'adapter.efa-json.filter.label': 'Filter',
+    'adapter.efa-json.filter.placeholder': 'Optionaler Filter-Ausdruck',
+    'adapter.efa-json.filter.help_text': 'operator/ filtert nach providerCode oder producerRef; line/ filtert nach Routen- oder Halte-ID. Ungekennzeichnete Filter gelten als operator.',
     
     // SIRI-Lite Adapter
     'adapter.sirilite.endpoint.label': 'Endpoint URL',
@@ -1444,6 +1459,21 @@ window.translations = {
     'adapter.gtfsrt.filter.label': 'Filter',
     'adapter.gtfsrt.filter.placeholder': 'Optional filter expression',
     'adapter.gtfsrt.filter.help_text': 'Filter to restrict GTFS-RT service alerts',
+
+    // EFA-JSON Adapter
+    'adapter.efa-json.endpoint.label': 'Endpoint URL',
+    'adapter.efa-json.endpoint.placeholder': 'https://api.example.com/efa-json',
+    'adapter.efa-json.endpoint.help_text': 'URL to the EFA-JSON feed with ADDINFO notices',
+    'adapter.efa-json.dialect.label': 'Dialect',
+    'adapter.efa-json.dialect.help_text': 'EFA-JSON implementation variant',
+    'adapter.efa-json.dialect.option.ADDINFO': 'ADDINFO',
+    'adapter.efa-json.language.label': 'Language',
+    'adapter.efa-json.language.help_text': 'Language assigned to imported alert text.',
+    'adapter.efa-json.language.option.DE': 'German',
+    'adapter.efa-json.language.option.EN': 'English',
+    'adapter.efa-json.filter.label': 'Filter',
+    'adapter.efa-json.filter.placeholder': 'Optional filter expression',
+    'adapter.efa-json.filter.help_text': 'operator/ matches providerCode or producerRef; line/ matches route or stop IDs. Unprefixed filters are treated as operator filters.',
     
     // SIRI-Lite Adapter
     'adapter.sirilite.endpoint.label': 'Endpoint URL',

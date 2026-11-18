@@ -14,7 +14,7 @@ Die folgenden Parameter können in der Konfiguration der Datenquelle gesetzt wer
 
 - **Endpunkt**: Die URL des GTFS-Realtime-Endpoints, von dem die Daten abgerufen werden.
   - Ergebnis: Die Datenquelle fragt diesen Endpunkt beim Ausführen ab und verarbeitet die gelieferten Echtzeitdaten.
-- **Feed-Typ**: Die Art der zu importierenden Daten.
+- **Dialekt**: Die Art der zu importierenden Daten.
   - Ergebnis: Je nach Auswahl werden Service Alerts, Trip Updates oder Fahrzeugpositionen verarbeitet.
 - **Token**: Optionales Zugriffstoken für geschützte Endpunkte.
   - Ergebnis: Wenn ein Token hinterlegt ist, wird er bei der Anfrage mitgesendet.
@@ -22,6 +22,17 @@ Die folgenden Parameter können in der Konfiguration der Datenquelle gesetzt wer
   - Ergebnis: Wenn ein Filter gesetzt ist, werden nur Meldungen mit mindestens einem passenden Bezug zu einer Linie berücksichtigt.
 
 Generelle Hinweise zur Verwendung von Filtern sind in der {ref}`Datenquellenübersicht <h-datasources-filters>` beschrieben.
+
+## Differentielle Updates
+
+Aktuell unterstützt die Datenquelle keine differenziellen Updates.
+
+## Verfügbare Ausführungsarten
+
+Die GTFS-RT Datenquelle unterstützt folgende Ausführungsarten:
+
+- Zeitbasiert
+- Eventbasiert
 
 ## Verfügbare Dialekte
 
