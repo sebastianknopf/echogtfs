@@ -32,7 +32,7 @@ class SiriSxDatasource(SubscriptionDatasourceBase):
             DataSourceExecutionType.EVENT_BASED,
             DataSourceExecutionType.SUBSCRIPTION_BASED,
         ),
-        differential_updates=False,
+        differential_updates=True,
     )
 
     CONFIG_SCHEMA: list[dict[str, Any]] = [

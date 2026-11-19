@@ -29,7 +29,7 @@ class EfaJsonDatasource(DatasourceBase):
 
     CAPABILITIES = DatasourceCapabilities(
         execution_types=(DataSourceExecutionType.TIME_BASED, DataSourceExecutionType.EVENT_BASED),
-        differential_updates=False,
+        differential_updates=True,
     )
 
     CONFIG_SCHEMA: list[dict[str, Any]] = [
