@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 import uuid
 
+from echogtfs.common.thread import create_named_thread
 from echogtfs.services.database import SystemRepositoryInterface
 from echogtfs.services.database.models import DataSourceLog
 
@@ -75,7 +76,8 @@ class DatalogService:
             log_file_path = log_dir / str(log_uuid)
 
             try:
-                actual_size = await asyncio.to_thread(
+                actual_size = await create_named_thread(
+                    "datalog-dump-writer",
                     self._write_dump_file,
                     log_file_path,
                     content_bytes,

@@ -481,7 +481,7 @@ async def run_source_import(
         finally:
             await queue.report_progress(progress=100.0, message="intf.sources.completed")
 
-    asyncio.create_task(run_import_with_boundaries())
+    asyncio.create_task(run_import_with_boundaries(), name=f"source-import-{source_id}")
     
     async def stream():
         async for event in queue:
@@ -587,7 +587,7 @@ async def toggle_source_active(
             logger.error("[Sources] Toggle active stream failed for source %s", source_id, exc_info=True)
             await queue.report_progress(progress=100.0, message="error.server_500")
 
-    asyncio.create_task(run_toggle_with_progress())
+    asyncio.create_task(run_toggle_with_progress(), name=f"source-toggle-{source_id}")
 
     async def stream():
         async for event in queue:
