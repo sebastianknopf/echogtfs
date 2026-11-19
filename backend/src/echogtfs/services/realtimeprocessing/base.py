@@ -6,6 +6,7 @@ import logging
 import uuid
 from typing import Any, Awaitable, Callable, Iterable
 
+from echogtfs.common.thread import create_named_thread
 from echogtfs.services.caching import get_caching_service
 from echogtfs.services.caching.intf_caching_service import CachingServiceInterface
 from echogtfs.services.database.intf_gtfs_repository import GtfsRepositoryInterface
@@ -360,4 +361,4 @@ class RealtimeProcessingServiceBase:
         execute on the async caller, while the bulk sync pipeline itself runs in a
         dedicated process and uses direct synchronous calls.
         """
-        return await asyncio.to_thread(func, *args, **kwargs)
+        return await create_named_thread("realtime-processing", func, *args, **kwargs)

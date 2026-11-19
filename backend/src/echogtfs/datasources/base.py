@@ -10,6 +10,7 @@ import xml.etree.ElementTree as ET
 from time import perf_counter
 from typing import Any
 
+from echogtfs.common.thread import create_named_thread
 from echogtfs.datasources.intf_datasource import DatasourceInterface
 from echogtfs.services.mapping.intf_identifier_mapping import IdentifierMappingInterface
 from echogtfs.services.caching.intf_caching_service import CachingServiceInterface
@@ -211,7 +212,7 @@ class DatasourceBase(DatasourceInterface):
 
     async def _run_cpu_bound(self, func: Any, *args: Any, **kwargs: Any) -> Any:
         """Run CPU-bound synchronous datasource work in a worker thread."""
-        return await asyncio.to_thread(func, *args, **kwargs)
+        return await create_named_thread("datasource-cpu-bound", func, *args, **kwargs)
 
     async def _parse_and_log_xml_payload(self, payload: bytes, content_type: str | None) -> ET.Element:
         """Decode, log, and parse an XML payload provided directly by the push API."""

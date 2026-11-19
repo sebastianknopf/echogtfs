@@ -14,6 +14,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from echogtfs.common.config import settings
+from echogtfs.common.thread import create_named_worker_process, create_named_thread, name_process_pool_threads
 from echogtfs.enum.system import DataSourceExecutionType
 from echogtfs.services.database.models import AppSetting, DataSource
 from echogtfs.services.scheduler.intf_datasource_scheduler import DatasourceSchedulerInterface
@@ -224,6 +225,8 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
             self._process_pool = ProcessPoolExecutor(
                 max_workers=self._process_pool_size(),
                 mp_context=multiprocessing.get_context("spawn"),
+                initializer=create_named_worker_process,
+                initargs=("datasource-worker",),
             )
 
         return self._process_pool
@@ -231,14 +234,18 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
     async def _run_datasource_in_process(self, source_id: int) -> dict[str, int]:
         loop = asyncio.get_running_loop()
 
-        return await loop.run_in_executor(
-            self._get_process_pool(),
+        pool = self._get_process_pool()
+        future = loop.run_in_executor(
+            pool,
             _run_datasource_process,
             source_id,
             settings.database_url,
             settings.redis_url,
             settings.debug,
         )
+        name_process_pool_threads(pool, "datasource-pool")
+
+        return await future
 
     async def _run_datasource_push_in_process(
         self,
@@ -250,8 +257,9 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
     ) -> dict[str, int]:
         loop = asyncio.get_running_loop()
 
-        return await loop.run_in_executor(
-            self._get_process_pool(),
+        pool = self._get_process_pool()
+        future = loop.run_in_executor(
+            pool,
             _run_datasource_push_process,
             source_id,
             payload,
@@ -261,6 +269,9 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
             settings.debug,
             require_event_based,
         )
+        name_process_pool_threads(pool, "datasource-pool")
+
+        return await future
 
     async def _try_mark_source_running(self, source_id: int) -> bool:
         async with self._run_state_condition:
@@ -607,4 +618,4 @@ class DatasourceSchedulerService(DatasourceSchedulerInterface):
             pool = self._process_pool
             self._process_pool = None
             
-            await asyncio.to_thread(pool.shutdown, wait=True, cancel_futures=False)
+            await create_named_thread("datasource-pool-shutdown", pool.shutdown, wait=True, cancel_futures=False)

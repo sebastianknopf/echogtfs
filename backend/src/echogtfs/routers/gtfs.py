@@ -121,7 +121,7 @@ async def trigger_import(
     queue = ReportProgressQueue()
 
     operation_day = service.get_current_operation_day()
-    asyncio.create_task(service.run_import_task(queue, operation_day))
+    asyncio.create_task(service.run_import_task(queue, operation_day), name="gtfs-import")
 
     async def stream():
         async for event in queue:

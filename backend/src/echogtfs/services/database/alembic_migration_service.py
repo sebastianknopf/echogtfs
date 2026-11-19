@@ -6,6 +6,7 @@ from alembic import command
 from alembic.config import Config
 
 from echogtfs.common.config import settings
+from echogtfs.common.thread import create_named_thread
 
 logger = logging.getLogger(__name__)
 
@@ -37,4 +38,4 @@ class AlembicMigrationService:
         logger.info("Alembic migrations complete")
 
     async def upgrade_head(self) -> None:
-        await asyncio.to_thread(self._upgrade_head_sync)
+        await create_named_thread("alembic-migration", self._upgrade_head_sync)

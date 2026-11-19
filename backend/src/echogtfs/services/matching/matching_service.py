@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from echogtfs.common.global_id import GlobalId
+from echogtfs.common.thread import create_named_thread
 from echogtfs.enum.gtfsrt import AssignmentType
 from echogtfs.services.matching.intf_matching_service import MatchingServiceInterface
 from echogtfs.services.caching import CachingServiceInterface
@@ -160,7 +161,8 @@ class MatchingService(MatchingServiceInterface):
             if gtfs_trip is None:
                 continue
 
-            matches = await asyncio.to_thread(
+            matches = await create_named_thread(
+                "trip-matching",
                 self._trip_matches_intermediate_stops,
                 gtfs_trip,
                 scheduled_intermediate_stops,
