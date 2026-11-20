@@ -14,14 +14,14 @@ import httpx
 from echogtfs.datasources.intf_datasource import DatasourceCapabilities
 from echogtfs.datasources.subscription_datasource_base import SubscriptionDatasourceBase
 from echogtfs.enum.system import DataSourceExecutionType
-from echogtfs.datasources.transformers import SiriSxServiceAlertsTransformer
+from echogtfs.datasources.transformers import SiriSxServiceAlertsTransformer, SiriSxSwissServiceAlertsTransformer
 
 logger = logging.getLogger("uvicorn")
 
 
 class SiriSxDialect(str, Enum):
     SIRISX = "sirisx"
-
+    SIRISX_SWISS = "sirisx-swiss"
 
 class SiriSxDatasource(SubscriptionDatasourceBase):
     """Datasource implementation for SIRI-SX feeds."""
@@ -65,7 +65,7 @@ class SiriSxDatasource(SubscriptionDatasourceBase):
             "type": "enum",
             "label": "adapter.sirisx.dialect.label",
             "required": True,
-            "options": ["sirisx"],
+            "options": ["sirisx", "sirisx-swiss"],
             "help_text": "adapter.sirisx.dialect.help_text",
         },
         {
@@ -168,6 +168,11 @@ class SiriSxDatasource(SubscriptionDatasourceBase):
         dialect = SiriSxDialect(self.config["dialect"])
         if dialect == SiriSxDialect.SIRISX:
             transformer = SiriSxServiceAlertsTransformer(
+                make_unique_id=self._make_unique_id,
+                filters=self.get_filters(),
+            )
+        elif dialect == SiriSxDialect.SIRISX_SWISS:
+            transformer = SiriSxSwissServiceAlertsTransformer(
                 make_unique_id=self._make_unique_id,
                 filters=self.get_filters(),
             )

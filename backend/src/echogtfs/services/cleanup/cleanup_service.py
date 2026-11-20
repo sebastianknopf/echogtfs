@@ -80,7 +80,7 @@ class CleanupService:
             logger.info("[Cleanup] No cron expression set, cleanup job not scheduled")
 
     async def run_cleanup_task(self) -> None:
-        """Execute cleanup of expired internal service alerts, outdated trips/vehicles, and old data source logs."""
+        """Clean up expired service alerts, outdated trips and vehicles, and old data source logs."""
         logger.info("[Cleanup] Starting cleanup task")
 
         try:
