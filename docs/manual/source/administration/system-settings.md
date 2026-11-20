@@ -47,14 +47,14 @@ Die Push-API wird benötigt, um eventbasierte Schnittstellen aus externen System
 
 ## Konfiguration Datenbereinigung
 
-Im Abschnitt "Datenbereinigung" können Sie das Verhalten des Berenigungs-Dienstes beeinflussen. Folgende Einstellungen stehen zur Verfügung:
+Im Abschnitt "Datenbereinigung" können Sie das Verhalten des Bereinigungs-Dienstes beeinflussen. Folgende Einstellungen stehen zur Verfügung:
 
-- **Cron-Ausdruck**: Cron-Ausdruck mit dem der Berenigungs-Dienst im Hintergrund ausgeführt wird
-- **Verfahrensweise bei abgelaufenen Meldungen**: Legt fest, ob abgelaufene Meldungen **gelöscht** oder **deaktiviert** werden sollen
-- **Endgültiges Löschen abgelaufender Meldungen**: Legt fest, ab welchem Alter Meldugnen endgültig gelöscht werden
-- **Maximales Alter für Fahrten**: Legt fest, wie wie lange eine Fahrt gespeichert wird, bevor sie gelöscht wird. Die Ermittlung entsprechender Fahrten basiert auf den Fahrzeiten an der letzten übermittelten Haltestelle oder der planmäßigen Ankuntfszeit an der letzten Haltestelle der Fahrt
-- **Maximales Alter für Fahrzeuge**: Legt fest, wie lange das letzte Update eines Fahrzeuges her sein darf, bevor es gelöscht wird
+- **Cron-Ausdruck**: Legt fest, wann der Bereinigungs-Dienst ausgeführt wird.
+- **Verfahrensweise bei abgelaufenen Meldungen**: Legt fest, ob abgelaufene Meldungen deaktiviert oder gelöscht werden.
+- **Endgültiges Löschen abgelaufener Meldungen**: Legt fest, nach wie vielen Tagen interne oder aus differentiellen Datenquellen stammende abgelaufene Meldungen endgültig gelöscht werden. **Niemals** deaktiviert diese altersbasierte Löschung; die Verfahrensweise **Löschen** entfernt solche Meldungen bereits bei Ablauf.
+- **Maximales Alter für Fahrten**: Fahrten werden gelöscht, wenn das Ende ihrer letzten Haltestelle länger als das eingestellte Alter zurückliegt. Echtzeitzeiten haben Vorrang vor Fahrplanzeiten; fehlen diese, gelten das geplante Fahrtende oder die letzte Aktualisierung.
+- **Maximales Alter für Fahrzeuge**: Fahrzeugpositionen werden gelöscht, wenn ihre letzte Aktualisierung länger als das eingestellte Alter zurückliegt.
 
 ```{note}
-Der Berenigungs-Dienst bezieht sich aktuell ausschließlich auf Datenquellen-Logs und Daten, welche nicht von einer  {ref}`differentiellen Datenquelle <h-datasources-differential-incremental-updates>` stammen. Interne Meldungen werden grundsätzlich von der Datenbereinigung behandelt. Datenquellen-Logs werden grundsätzlich **nach 24 Stunden** gelöscht. Objekte, welche über nicht-differenzielle Datenquellen synchronisiert werden, werden vom Berenigungs-Dienst nicht verändert.
+Bei **Deaktivieren** werden aktive abgelaufene Meldungen deaktiviert. Sofortige und altersbasierte Löschungen betreffen nur interne Meldungen und Meldungen aus differentiellen Datenquellen. Fahrten und Fahrzeugpositionen werden nach den jeweiligen Altersgrenzen gelöscht. Datenquellen-Logs werden **nach 24 Stunden** gelöscht.
 ```

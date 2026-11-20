@@ -89,14 +89,15 @@ class CleanupService:
 
             delete_days_value = await self._repository.get_app_setting(AppSetting.KEY_CLEANUP_DELETE_ALERTS_AFTER_DAYS)
             delete_after_days = int(delete_days_value) if delete_days_value is not None else 7
+            differential_source_ids = await self._repository.list_differential_data_source_ids()
 
             logger.info("[Cleanup] Policy: %s, Delete after days: %s", policy.value, delete_after_days)
 
-            expired_count = await self._handle_expired_alerts(policy)
+            expired_count = await self._handle_expired_alerts(policy, differential_source_ids)
 
             deleted_count = 0
             if delete_after_days >= 0:
-                deleted_count = await self._delete_old_expired_alerts(delete_after_days)
+                deleted_count = await self._delete_old_expired_alerts(delete_after_days, differential_source_ids)
             else:
                 logger.info("[Cleanup] Delete after days is -1 (never), skipping deletion")
 
@@ -117,11 +118,17 @@ class CleanupService:
         except Exception as exc:  # noqa: BLE001
             logger.error("[Cleanup] Error during cleanup task: %s", exc, exc_info=True)
 
-    async def _handle_expired_alerts(self, policy: ExpiredRealtimeObjectPolicy) -> int:
+    async def _handle_expired_alerts(
+        self,
+        policy: ExpiredRealtimeObjectPolicy,
+        differential_source_ids: list[int],
+    ) -> int:
         current_timestamp = int(datetime.now(UTC).timestamp())
+        delete_only_eligible_sources = policy == ExpiredRealtimeObjectPolicy.DELETE
         alert_ids = await self._realtime_repository.list_expired_alert_ids(
             current_timestamp,
             only_active=policy == ExpiredRealtimeObjectPolicy.DEACTIVATE,
+            differential_source_ids=differential_source_ids if delete_only_eligible_sources else None,
         )
 
         if not alert_ids:
@@ -138,7 +145,7 @@ class CleanupService:
 
         return count
 
-    async def _delete_old_expired_alerts(self, days: int) -> int:
+    async def _delete_old_expired_alerts(self, days: int, differential_source_ids: list[int]) -> int:
         if days < 0:
             return 0
 
@@ -146,7 +153,10 @@ class CleanupService:
         cutoff_datetime = datetime.combine(cutoff_date + timedelta(days=1), datetime.min.time()).replace(tzinfo=UTC)
         cutoff_timestamp = int(cutoff_datetime.timestamp())
 
-        alert_ids = await self._realtime_repository.list_alert_ids_expired_before(cutoff_timestamp)
+        alert_ids = await self._realtime_repository.list_alert_ids_expired_before(
+            cutoff_timestamp,
+            differential_source_ids=differential_source_ids,
+        )
         if not alert_ids:
             logger.info("[Cleanup] No alerts older than %s days found", days)
             return 0
