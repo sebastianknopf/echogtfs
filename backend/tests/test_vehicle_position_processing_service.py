@@ -91,6 +91,8 @@ class TestVehiclePositionProcessingService(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(kwargs["trip_original_trip_id"], "trip-1")
         self.assertEqual(kwargs["trip_mapped_trip_id"], "trip-1")
+        self.assertEqual(kwargs["trip_original_route_id"], "r1")
+        self.assertEqual(kwargs["trip_mapped_route_id"], "mapped-route")
     async def test_sync_vehicle_position_records_sets_no_match_assignment_when_matching_fails(self):
         repository = _SystemRepositoryStub()
         realtime_repository = _RealtimeRepositoryStub()
@@ -588,6 +590,8 @@ class TestVehiclePositionTripDescriptorAndMatching(unittest.IsolatedAsyncioTestC
         self.assertTrue(kwargs["trip_is_trip_valid"])
         self.assertTrue(kwargs["trip_is_route_valid"])
         self.assertNotIn("is_valid", kwargs)
+        self.assertEqual(kwargs["original_stop_id"], "unknown-stop")
+        self.assertEqual(kwargs["mapped_stop_id"], "mapped-unknown-stop")
 
     async def test_keep_object_disabled_deactivates_vehicle_with_invalid_route(self):
         record = self._record({"trip_id": "nominal-trip", "route_id": "unknown-route"})

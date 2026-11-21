@@ -169,6 +169,8 @@ def _sync_trip_kwargs(**overrides):
         start_time="10:00:00",
         start_date="20260101",
         route_id="R1",
+        original_route_id="R1",
+        mapped_route_id="R1",
         schedule_relationship="SCHEDULED",
         assignment_type="DIRECT_BY_ID",
         is_active_on_create=True,
@@ -190,6 +192,8 @@ def _sync_vehicle_kwargs(**overrides):
         trip_start_time="10:00:00",
         trip_start_date="20260101",
         trip_route_id="R1",
+        trip_original_route_id="R1",
+        trip_mapped_route_id="R1",
         trip_schedule_relationship="SCHEDULED",
         trip_assignment_type="DIRECT_BY_ID",
         trip_is_trip_valid=True,
@@ -206,6 +210,8 @@ def _sync_vehicle_kwargs(**overrides):
         latitude=47.0,
         longitude=8.0,
         stop_id=None,
+        original_stop_id=None,
+        mapped_stop_id=None,
         is_stop_valid=True,
         current_status="IN_TRANSIT_TO",
         congestion_level="UNKNOWN_CONGESTION_LEVEL",
@@ -676,6 +682,8 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([event["stop_sequence"] for event in fields["stop_events"]], ["2", "10"])
         self.assertEqual(fields["stop_event_count"], 2)
         self.assertEqual(fields["original_trip_id"], "orig-1")
+        self.assertEqual(fields["original_route_id"], "R1")
+        self.assertEqual(fields["mapped_route_id"], "R1")
         self.assertFalse(fields["is_complete_stop_sequence"])
         self.assertTrue(
             {"invalid_stop", "changed_stop_id", "departure_before_arrival", "realtime"} <= set(fields["flags"])
@@ -688,6 +696,14 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
 
         flags = self._written_operation(self.trips)._doc["$set"]["flags"]
         self.assertEqual(flags, ["invalid_reference"])
+
+    async def test_update_trip_update_from_sync_mapped_route_id_falls_back_to_original_route_id(self):
+        await self.repository.update_trip_update_from_sync(
+            **_sync_trip_kwargs(original_route_id="orig-route", mapped_route_id="")
+        )
+
+        fields = self._written_operation(self.trips)._doc["$set"]
+        self.assertEqual(fields["mapped_route_id"], "orig-route")
 
     async def test_update_trip_update_from_sync_never_overwrites_assignment_with_cached_id(self):
         await self.repository.update_trip_update_from_sync(
@@ -761,6 +777,10 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(operation._doc["$setOnInsert"]["is_active"])
         self.assertEqual(fields["trip.trip_id"], "trip-1")
         self.assertEqual(fields["trip.original_trip_id"], "orig-1")
+        self.assertEqual(fields["trip.original_route_id"], "R1")
+        self.assertEqual(fields["trip.mapped_route_id"], "R1")
+        self.assertIsNone(fields["original_stop_id"])
+        self.assertIsNone(fields["mapped_stop_id"])
         self.assertEqual(fields["trip.scheduled_start_stop_id"], "S1")
         self.assertEqual(fields["trip.scheduled_end_stop_id"], "S9")
         self.assertNotIn("assignment_type", fields)
@@ -768,6 +788,21 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fields["trip.assignment_type"], "DIRECT_BY_ID")
         self.assertTrue(fields["trip.is_trip_valid"])
         self.assertFalse(fields["trip.is_route_valid"])
+
+    async def test_update_vehicle_position_from_sync_mapped_ids_fall_back_to_original_ids(self):
+        await self.repository.update_vehicle_position_from_sync(
+            **_sync_vehicle_kwargs(
+                stop_id="orig-stop",
+                original_stop_id="orig-stop",
+                mapped_stop_id="",
+                trip_original_route_id="orig-route",
+                trip_mapped_route_id="",
+            )
+        )
+
+        fields = self._written_operation(self.vehicles)._doc["$set"]
+        self.assertEqual(fields["mapped_stop_id"], "orig-stop")
+        self.assertEqual(fields["trip.mapped_route_id"], "orig-route")
 
     async def test_update_vehicle_position_from_sync_never_overwrites_assignment_with_cached_id(self):
         await self.repository.update_vehicle_position_from_sync(
@@ -915,12 +950,23 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([vehicle.vehicle_id for vehicle in vehicles], ["veh-1"])
         self.assertEqual(vehicles[0].data_source_name, "Current name")
         conditions = self.vehicles.find_calls[0][0]["$or"]
-        self.assertEqual(
-            {next(iter(condition)) for condition in conditions},
-            {"stop_id", "trip.route_id", "trip.original_trip_id"},
-        )
+
+        simple_keys = {next(iter(condition)) for condition in conditions if "$or" not in condition}
+        self.assertEqual(simple_keys, {"trip.original_route_id", "trip.original_trip_id"})
         for condition in conditions:
+            if "$or" in condition:
+                continue
             self.assertEqual(next(iter(condition.values()))["$not"], re.compile(pattern))
+
+        nested_or_conditions = [condition for condition in conditions if "$or" in condition]
+        self.assertEqual(len(nested_or_conditions), 1)
+        stop_fields = {
+            key
+            for sub_condition in nested_or_conditions[0]["$or"]
+            for and_condition in sub_condition["$and"]
+            for key in and_condition
+        }
+        self.assertEqual(stop_fields, {"original_stop_id", "stop_id"})
 
     async def test_list_informed_entities_with_non_global_ids_uses_pattern_for_all_reference_fields(self):
         pattern = r"^[A-Z0-9]{3}:[A-Z0-9]{3}:\d+$"
@@ -982,7 +1028,9 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([trip.trip_id for trip in result], ["invalid-trip"])
         self.assertEqual(result[0].stop_events, [])
         filter_, projection, _options = self.trips.find_calls[0]
-        self.assertEqual({key for condition in filter_["$or"] for key in condition}, {"original_trip_id", "route_id"})
+        self.assertEqual(
+            {key for condition in filter_["$or"] for key in condition}, {"original_trip_id", "original_route_id"}
+        )
         self.assertEqual(projection, {"stop_events": 0})
 
 

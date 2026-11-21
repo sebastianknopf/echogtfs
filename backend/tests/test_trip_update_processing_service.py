@@ -97,6 +97,8 @@ class TestTripUpdateProcessingService(unittest.IsolatedAsyncioTestCase):
         datasource._matching_service.match.assert_not_awaited()
 
         self.assertEqual(kwargs["mapped_trip_id"], "trip-1")
+        self.assertEqual(kwargs["original_route_id"], "r1")
+        self.assertEqual(kwargs["mapped_route_id"], "mapped-route")
         self.assertEqual(kwargs["stop_events"][0]["original_stop_id"], "stop-1")
         self.assertEqual(kwargs["stop_events"][0]["mapped_stop_id"], "mapped-stop")
     async def test_sync_trip_update_records_calls_matching_for_non_nominal_trip(self):
