@@ -463,18 +463,34 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
 
         return [self._alert_from_doc(doc) for doc in docs]
 
-    async def list_expired_alert_ids(self, current_timestamp: int, *, only_active: bool) -> list[uuid.UUID]:
+    async def list_expired_alert_ids(
+        self,
+        current_timestamp: int,
+        *,
+        only_active: bool,
+        differential_source_ids: list[int] | None = None,
+    ) -> list[uuid.UUID]:
         filter_: dict[str, Any] = {"max_end_time": {"$lt": current_timestamp}}
         if only_active:
             filter_["is_active"] = True
+        if differential_source_ids is not None:
+            filter_["data_source_id"] = {"$in": [None, *differential_source_ids]}
 
         docs = await self._find(SERVICE_ALERTS_COLLECTION, filter_, projection={"_id": 1})
         return [uuid.UUID(doc["_id"]) for doc in docs]
 
-    async def list_alert_ids_expired_before(self, cutoff_timestamp: int) -> list[uuid.UUID]:
+    async def list_alert_ids_expired_before(
+        self,
+        cutoff_timestamp: int,
+        *,
+        differential_source_ids: list[int],
+    ) -> list[uuid.UUID]:
         docs = await self._find(
             SERVICE_ALERTS_COLLECTION,
-            {"max_end_time": {"$lt": cutoff_timestamp}},
+            {
+                "max_end_time": {"$lt": cutoff_timestamp},
+                "data_source_id": {"$in": [None, *differential_source_ids]},
+            },
             projection={"_id": 1},
         )
         return [uuid.UUID(doc["_id"]) for doc in docs]

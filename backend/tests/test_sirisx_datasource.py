@@ -46,6 +46,24 @@ class TestSirisxDatasource(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["record_type"], "service_alerts")
         self.assertEqual(payload["records"], [{"id": "c"}])
 
+    async def test_fetch_records_uses_swiss_transformer_for_swiss_dialect(self):
+        datasource = SiriSxDatasource(
+            {
+                "endpoint": "https://x/{participantRef}",
+                "participantref": "P1",
+                "dialect": "sirisx-swiss",
+            }
+        )
+        root = ET.fromstring("<root />")
+
+        with patch.object(datasource, "_fetch_and_parse_xml", AsyncMock(return_value=root)), patch(
+            "echogtfs.datasources.sirisx.SiriSxSwissServiceAlertsTransformer"
+        ) as transformer_cls:
+            transformer_cls.return_value.transform.return_value = [{"id": "s"}]
+            payload = await datasource._fetch_records()
+
+        self.assertEqual(payload["records"], [{"id": "s"}])
+
     async def test_fetch_records_raises_when_transform_fails(self):
         datasource = SiriSxDatasource(
             {

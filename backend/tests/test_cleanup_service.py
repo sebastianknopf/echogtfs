@@ -5,7 +5,7 @@ import sys
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import ANY, AsyncMock, patch
 from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -24,11 +24,34 @@ class TestCleanupService(unittest.IsolatedAsyncioTestCase):
         )
         service = CleanupService(system_repo, realtime_repo)
 
-        count = await service._handle_expired_alerts(ExpiredRealtimeObjectPolicy.DEACTIVATE)
+        count = await service._handle_expired_alerts(ExpiredRealtimeObjectPolicy.DEACTIVATE, [10])
 
         self.assertEqual(count, 2)
+        realtime_repo.list_expired_alert_ids.assert_awaited_once_with(
+            ANY,
+            only_active=True,
+            differential_source_ids=None,
+        )
         realtime_repo.deactivate_service_alerts.assert_awaited_once_with(["a", "b"])
         realtime_repo.delete_service_alerts_by_ids.assert_not_awaited()
+
+    async def test_handle_expired_alerts_delete_scopes_to_internal_and_differential_sources(self):
+        realtime_repo = SimpleNamespace(
+            list_expired_alert_ids=AsyncMock(return_value=["a"]),
+            deactivate_service_alerts=AsyncMock(),
+            delete_service_alerts_by_ids=AsyncMock(),
+        )
+        service = CleanupService(SimpleNamespace(), realtime_repo)
+
+        count = await service._handle_expired_alerts(ExpiredRealtimeObjectPolicy.DELETE, [10, 12])
+
+        self.assertEqual(count, 1)
+        realtime_repo.list_expired_alert_ids.assert_awaited_once_with(
+            ANY,
+            only_active=False,
+            differential_source_ids=[10, 12],
+        )
+        realtime_repo.delete_service_alerts_by_ids.assert_awaited_once_with(["a"])
 
     async def test_delete_old_expired_alerts(self):
         system_repo = SimpleNamespace()
@@ -38,9 +61,13 @@ class TestCleanupService(unittest.IsolatedAsyncioTestCase):
         )
         service = CleanupService(system_repo, realtime_repo)
 
-        count = await service._delete_old_expired_alerts(3)
+        count = await service._delete_old_expired_alerts(3, [10, 12])
 
         self.assertEqual(count, 1)
+        realtime_repo.list_alert_ids_expired_before.assert_awaited_once_with(
+            ANY,
+            differential_source_ids=[10, 12],
+        )
         realtime_repo.delete_service_alerts_by_ids.assert_awaited_once_with(["x"])
 
     async def test_delete_old_expired_alerts_negative_days_returns_zero(self):
@@ -51,7 +78,7 @@ class TestCleanupService(unittest.IsolatedAsyncioTestCase):
         )
         service = CleanupService(system_repo, realtime_repo)
 
-        count = await service._delete_old_expired_alerts(-1)
+        count = await service._delete_old_expired_alerts(-1, [])
 
         self.assertEqual(count, 0)
         realtime_repo.list_alert_ids_expired_before.assert_not_awaited()

@@ -59,13 +59,24 @@ class RealtimeRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def list_expired_alert_ids(self, current_timestamp: int, *, only_active: bool) -> list[uuid.UUID]:
-        """Return alert ids, regardless of data source, where all active periods ended before current timestamp."""
+    async def list_expired_alert_ids(
+        self,
+        current_timestamp: int,
+        *,
+        only_active: bool,
+        differential_source_ids: list[int] | None = None,
+    ) -> list[uuid.UUID]:
+        """Return expired alert IDs, optionally limited to internal and differential-source alerts."""
         raise NotImplementedError
 
     @abstractmethod
-    async def list_alert_ids_expired_before(self, cutoff_timestamp: int) -> list[uuid.UUID]:
-        """Return alert ids, regardless of data source, where all active periods ended before cutoff timestamp."""
+    async def list_alert_ids_expired_before(
+        self,
+        cutoff_timestamp: int,
+        *,
+        differential_source_ids: list[int],
+    ) -> list[uuid.UUID]:
+        """Return internal and differential-source alert IDs expired before the cutoff."""
         raise NotImplementedError
 
     @abstractmethod

@@ -114,6 +114,11 @@ class SystemRepositoryInterface(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def list_differential_data_source_ids(self) -> list[int]:
+        """Return IDs of data sources configured for differential updates."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def list_active_data_sources_with_cron(self) -> list[DataSource]:
         """Return active data sources with a cron expression ordered by name."""
         raise NotImplementedError

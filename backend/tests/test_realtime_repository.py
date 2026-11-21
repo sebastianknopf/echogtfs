@@ -316,14 +316,36 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         await self.repository.list_expired_alert_ids(100, only_active=False)
         self.assertEqual(self.alerts.find_calls[1][0], {"max_end_time": {"$lt": 100}})
 
+        await self.repository.list_expired_alert_ids(
+            100,
+            only_active=False,
+            differential_source_ids=[12],
+        )
+        self.assertEqual(
+            self.alerts.find_calls[2][0],
+            {
+                "max_end_time": {"$lt": 100},
+                "data_source_id": {"$in": [None, 12]},
+            },
+        )
+
     async def test_list_alert_ids_expired_before_returns_ids(self):
         alert_id = uuid.uuid4()
         self.alerts.docs = [{"_id": str(alert_id)}]
 
-        result = await self.repository.list_alert_ids_expired_before(50)
+        result = await self.repository.list_alert_ids_expired_before(
+            50,
+            differential_source_ids=[12],
+        )
 
         self.assertEqual(result, [alert_id])
-        self.assertEqual(self.alerts.find_calls[0][0], {"max_end_time": {"$lt": 50}})
+        self.assertEqual(
+            self.alerts.find_calls[0][0],
+            {
+                "max_end_time": {"$lt": 50},
+                "data_source_id": {"$in": [None, 12]},
+            },
+        )
 
     async def test_deactivate_service_alerts_returns_zero_for_empty_ids(self):
         self.assertEqual(await self.repository.deactivate_service_alerts([]), 0)

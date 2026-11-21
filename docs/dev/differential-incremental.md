@@ -108,8 +108,9 @@ If a document with the matched `trip_id` already exists in addition to the unmat
 
 Absence-based deletion of previously synced rows is disabled when a source is configured for differential updates.
 
-Applied during trip-update processing:
+Applied during realtime processing:
 
+- Service alerts: `alerts_to_delete` is empty when `is_differential_updates` is true.
 - Trip updates: `trips_to_delete` is empty when `is_differential_updates` is true.
 - Vehicle positions: `vehicles_to_delete` is empty when `is_differential_updates` is true.
 

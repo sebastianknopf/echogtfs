@@ -15,6 +15,19 @@ from .base import RealtimeProcessingServiceBase
 
 class ServiceAlertProcessingService(RealtimeProcessingServiceBase):
 
+    async def _delete_flagged_alerts(
+        self,
+        realtime_repository: RealtimeRepositoryInterface,
+        source_id: int,
+        deleted_records: list[dict[str, Any]],
+    ) -> set[str]:
+        """Delete alerts of records flagged with is_deleted; missing alerts are ignored."""
+        return await self._delete_flagged_records(
+            deleted_records,
+            resolve_ids=lambda record: [record["id"]] if record.get("id") else [],
+            delete_by_ids=lambda ids: realtime_repository.delete_service_alerts_for_data_source_by_ids(source_id, ids),
+        )
+
     async def sync_records(
         self,
         repository: SystemRepositoryInterface,
@@ -31,6 +44,8 @@ class ServiceAlertProcessingService(RealtimeProcessingServiceBase):
         if isinstance(policy, str):
             policy = InvalidReferencePolicy(policy)
 
+        is_differential_updates = await repository.get_data_source_is_differential_updates(source_id)
+
         logger.info(
             f"[{self.get_adapter_type()}] Synchronizing service-alert records from '{source_name}' "
             f"(policy: {policy.value})"
@@ -39,10 +54,10 @@ class ServiceAlertProcessingService(RealtimeProcessingServiceBase):
         total_fetched = len(records)
         alert_dicts, deleted_records = self._split_deleted_records(records)
 
-        await self._delete_flagged_records(
+        explicitly_deleted_alert_ids = await self._delete_flagged_alerts(
+            realtime_repository,
+            source_id,
             deleted_records,
-            resolve_ids=lambda record: [record["id"]] if record.get("id") else [],
-            delete_by_ids=lambda ids: realtime_repository.delete_service_alerts_for_data_source_by_ids(source_id, ids),
         )
 
         # Load mappings and enrichments once per pipeline run.
@@ -115,34 +130,24 @@ class ServiceAlertProcessingService(RealtimeProcessingServiceBase):
                     existing_alerts[alert_id] = alert
                     existing_alert_ids.add(alert_id)
         
-        # Determine which alerts to add, update, or delete
+        # Determine which alerts to update
         alerts_to_update = incoming_alert_ids & existing_alert_ids
-        # Only delete alerts that belong to this data source
-        alerts_to_delete = {
-            aid for aid, alert in existing_alerts.items() 
-            if alert.data_source_id == source_id and aid not in incoming_alert_ids
-        }
         
         # Track alerts that should be deleted due to policy (will be added during processing)
         policy_based_deletes = set()
+        processed_alert_ids = set()
         
         # Statistics tracking
         stats_created = 0
         stats_created_inactive = 0
         stats_updated = 0
-        stats_deleted = len(alerts_to_delete)
+        stats_deleted = 0
         stats_policy_discarded = 0
-        
-        # Delete alerts that are no longer in the feed
-        if alerts_to_delete:
-            await realtime_repository.delete_service_alerts_for_data_source_by_ids(
-                source_id,
-                list(alerts_to_delete),
-            )
         
         # Process incoming alerts
         for alert_data in alert_dicts:
             alert_id = alert_data["id"]
+            processed_alert_ids.add(alert_id)
             
             alert_data["data_source_id"] = source_id
             
@@ -337,6 +342,23 @@ class ServiceAlertProcessingService(RealtimeProcessingServiceBase):
                     informed_entities=entities_to_create,
                 )
         
+        # Delete alerts that are no longer in the feed; differential feeds never imply deletion by absence
+        alerts_to_delete = {
+            aid for aid, alert in existing_alerts.items()
+            if alert.data_source_id == source_id
+            and aid not in processed_alert_ids
+            and aid not in policy_based_deletes
+            and aid not in explicitly_deleted_alert_ids
+        } if not is_differential_updates else set()
+
+        if alerts_to_delete:
+            await realtime_repository.delete_service_alerts_for_data_source_by_ids(
+                source_id,
+                list(alerts_to_delete),
+            )
+
+            stats_deleted += len(alerts_to_delete)
+
         # Delete alerts that were discarded due to policy
         if policy_based_deletes:
             logger.debug(

@@ -201,6 +201,48 @@ class TestServiceAlertProcessingService(unittest.IsolatedAsyncioTestCase):
 
         realtime_repository.delete_service_alerts_for_data_source_by_ids.assert_awaited_once_with(2, ["alert-1"])
 
+    async def test_sync_service_alert_records_differential_keeps_untouched_alerts(self):
+        for is_differential, expected_deletes in ((True, 0), (False, 1)):
+            with self.subTest(is_differential=is_differential):
+                realtime_repository = _RealtimeRepositoryStub()
+                realtime_repository.list_service_alerts_for_data_source = AsyncMock(
+                    return_value=[SimpleNamespace(id="old", data_source_id=2)]
+                )
+                datasource = self._alert_processor()
+                repository = _SystemRepositoryStub()
+                repository.get_data_source_is_differential_updates = AsyncMock(return_value=is_differential)
+
+                result = await datasource.sync_records(
+                    repository=repository,
+                    realtime_repository=realtime_repository,
+                    gtfs_repository=_GtfsRepositoryStub(),
+                    source_id=2,
+                    source_name="Demo",
+                    records=[self._alert_record("new")],
+                )
+
+                self.assertEqual(result["deleted"], expected_deletes)
+
+    async def test_sync_service_alert_records_flagged_alert_does_not_delete_others_in_differential_mode(self):
+        realtime_repository = _RealtimeRepositoryStub()
+        realtime_repository.list_service_alerts_for_data_source = AsyncMock(
+            return_value=[SimpleNamespace(id="old", data_source_id=2)]
+        )
+        datasource = self._alert_processor()
+        repository = _SystemRepositoryStub()
+        repository.get_data_source_is_differential_updates = AsyncMock(return_value=True)
+
+        await datasource.sync_records(
+            repository=repository,
+            realtime_repository=realtime_repository,
+            gtfs_repository=_GtfsRepositoryStub(),
+            source_id=2,
+            source_name="Demo",
+            records=[{"id": "gone", "is_deleted": True}],
+        )
+
+        realtime_repository.delete_service_alerts_for_data_source_by_ids.assert_awaited_once_with(2, ["gone"])
+
     async def test_sync_service_alert_records_flagged_alert_without_id_is_ignored(self):
         realtime_repository = _RealtimeRepositoryStub()
         datasource = self._alert_processor()

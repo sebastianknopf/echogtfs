@@ -168,6 +168,14 @@ class SystemRepository(PostgresRepositoryBase, SystemRepositoryInterface):
             result = await db.execute(stmt)
             return list(result.scalars().all())
 
+    async def list_differential_data_source_ids(self) -> list[int]:
+        """Return IDs of data sources configured for differential updates."""
+        stmt = select(DataSource.id).where(DataSource.is_differential_updates.is_(True))
+
+        async with self.get_session() as db:
+            result = await db.execute(stmt)
+            return list(result.scalars().all())
+
     async def list_active_data_sources_with_cron(self) -> list[DataSource]:
         """Return active data sources that have a cron expression configured."""
         stmt = (
