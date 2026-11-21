@@ -207,26 +207,29 @@ class TripUpdateProcessingService(RealtimeProcessingServiceBase):
             has_invalid_stop_reference = False
             for event in record.get("stop_events", []):
                 mapped_event = dict(event)
+                raw_stop_id = mapped_event.get("stop_id")
                 mapped_stop = self._identifier_mapping_service.apply_mapping(
                     {
-                        "stop_id": mapped_event.get("stop_id"),
+                        "stop_id": raw_stop_id,
                     }
                 )
-                
+
                 mapped_event["stop_id"] = mapped_stop.get("stop_id")
+                mapped_event["original_stop_id"] = raw_stop_id
+                mapped_event["mapped_stop_id"] = mapped_event.get("stop_id")
                 mapped_stop_id = str(mapped_event.get("stop_id") or "")
                 stop_is_valid = bool(mapped_stop_id) and mapped_stop_id in gtfs_entities.get("stop", set())
                 if not stop_is_valid:
                     has_invalid_stop_reference = True
 
                 mapped_event["is_valid"] = bool(mapped_event.get("is_valid", True)) and stop_is_valid
-                mapped_event["original_stop_id"] = mapped_event.get("stop_id")
                 mapped_event["is_implied_schedule_relationship"] = False
 
                 stop_events.append(mapped_event)
 
             derived_trip_id = str(record["trip_id"])
             original_trip_id = derived_trip_id
+            mapped_trip_id = derived_trip_id
             resolved_trip_id = derived_trip_id
             assignment_type = AssignmentType.DIRECT_BY_ID.value
             trip_reference_is_valid = True if is_new_trip else derived_trip_id in gtfs_entities["trip"]
@@ -423,6 +426,7 @@ class TripUpdateProcessingService(RealtimeProcessingServiceBase):
                 is_route_valid=trip_is_route_valid,
                 stop_events=stop_events_to_persist,
                 original_trip_id=original_trip_id,
+                mapped_trip_id=mapped_trip_id,
                 scheduled_start_stop_id=(
                     str(persist_scheduled_start_stop_id)
                     if persist_scheduled_start_stop_id is not None

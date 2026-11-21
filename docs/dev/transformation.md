@@ -80,18 +80,10 @@ Allowed data model:
     "informed_entities": [
         {
             "agency_id": str | None,
-            "mapped_agency_id": str | None,
-            "original_agency_id": str | None,
             "route_id": str | None,
-            "mapped_route_id": str | None,
-            "original_route_id": str | None,
             "route_type": int | None,
             "stop_id": str | None,
-            "mapped_stop_id": str | None,
-            "original_stop_id": str | None,
             "trip_id": str | None,
-            "mapped_trip_id": str | None,
-            "original_trip_id": str | None,
             "direction_id": int | None,
             "is_agency_valid": bool,
             "is_route_valid": bool,
@@ -106,6 +98,7 @@ The corresponding realtime processing service also writes these internal fields 
 
 - source: overwritten with the current data source name.
 - data_source_id: overwritten with the current data source id.
+- informed_entities[*].original_agency_id / mapped_agency_id, original_route_id / mapped_route_id, original_stop_id / mapped_stop_id, original_trip_id / mapped_trip_id: not supplied by the transformer; derived by `ServiceAlertProcessingService` (see below).
 
 Processed top-level fields:
 
@@ -136,31 +129,29 @@ Processed active_periods[*] fields:
 Processed informed_entities[*] fields:
 
 - agency_id: optional.
-- mapped_agency_id: optional.
-- original_agency_id: optional.
 - route_id: optional.
-- mapped_route_id: optional.
-- original_route_id: optional.
 - route_type: optional.
 - stop_id: optional.
-- mapped_stop_id: optional.
-- original_stop_id: optional.
 - trip_id: optional.
-- mapped_trip_id: optional.
-- original_trip_id: optional.
 - direction_id: optional.
 - is_agency_valid: optional input; combined with computed agency-reference validity.
 - is_route_valid: optional input; combined with computed route-reference validity.
 - is_stop_valid: optional input; combined with computed stop-reference validity.
 - is_trip_valid: optional input; combined with computed trip-reference validity.
 
-Aggregate service-alert entity validity is computed internally from all four per-reference flags.
+`ServiceAlertProcessingService` derives and persists three identifier fields per reference type (agency, route, stop, trip), all nullable:
+
+- original_{type}_id: set once, before mapping, to the raw/transmitted `{type}_id`.
+- mapped_{type}_id: initialized to the same raw value, then updated to the applied mapping result when a mapping rule matches `{type}_id`. `trip_id` is never mapped, so `mapped_trip_id` always equals `original_trip_id`.
+- `{type}_id`: continues to hold the working/mapped value used for validity checks, policy cleanup and persistence, as before this derivation was introduced.
+
+Aggregate service-alert entity validity is computed internally from all four per-reference flags, using `mapped_{type}_id` (falling back to `{type}_id`) to look up nominal GTFS validity.
 
 Invalid-reference policy effects for service_alerts:
 
 - `discard_entire_object`: skip the full alert and delete an existing synced alert with the same ID.
 - `discard_invalid`: keep only informed entities where all four validity flags evaluate to true.
-- `discard_invalid_elements`: clear invalid `agency_id`, `route_id`, and `stop_id` fields inside an entity, then keep only entities that still have at least one valid reference.
+- `discard_invalid_elements`: clear invalid `agency_id`, `route_id`, and `stop_id` fields (and their corresponding `mapped_{type}_id`) inside an entity, then keep only entities that still have at least one valid reference.
 - `keep_object_disabled`: keep the alert but force `is_active` to false for new alerts.
 - Any alert with no remaining informed entities is deactivated.
 
@@ -185,8 +176,6 @@ Allowed data model:
     "id": str,
     "is_deleted": bool,
     "trip_id": str,
-    "mapped_trip_id": str,
-    "original_trip_id": str,
     "start_time": str,
     "start_date": str,
     "route_id": str,
@@ -205,8 +194,6 @@ Allowed data model:
         {
             "trip_id": str,
             "stop_id": str,
-            "mapped_stop_id": str,
-            "original_stop_id": str,
             "stop_sequence": str,
             "arrival_time": str | datetime,
             "departure_time": str | datetime,
@@ -225,8 +212,6 @@ Processed top-level fields:
 - id: optional. If missing, deterministic UUID is built from trip_id.
 - is_deleted: optional, default False.
 - trip_id: required.
-- mapped_trip_id: persisted as the mapped trip reference.
-- original_trip_id: required; persisted as the external/non-nominal trip reference.
 - start_time: required.
 - start_date: required.
 - route_id: required, mapped before persistence and matching.
@@ -242,11 +227,15 @@ Processed top-level fields:
 - scheduled_intermediate_stops: optional list of `(stop_id, datetime)` tuples for additional scheduled anchors.
 - stop_events: optional list, default [].
 
+`TripUpdateProcessingService` derives and persists `original_trip_id` and `mapped_trip_id` (both non-nullable), not supplied by the transformer:
+
+- original_trip_id: set once, before matching, to the raw/transmitted `trip_id`.
+- mapped_trip_id: initialized to the same raw value. `trip_id` is never mapped by `IdentifierMappingService`, so `mapped_trip_id` always equals `original_trip_id`.
+- trip_id: continues to hold the working value used for validity checks and persistence; it may later be replaced with a matched trip ID (see "Assignment behavior for trip_updates" below), which does not affect `mapped_trip_id`/`original_trip_id`.
+
 Processed stop_events[*] fields:
 
 - stop_id: consumed and mapped before persistence.
-- mapped_stop_id: persisted as the mapped stop reference.
-- original_stop_id: optional; defaults to stop_id and is persisted as the original stop reference.
 - stop_sequence: passed to persistence model.
 - arrival_time: passed to persistence model.
 - departure_time: passed to persistence model.
@@ -259,8 +248,9 @@ Processed stop_events[*] fields:
 
 `TripUpdateProcessingService` and `StopEventPropagationService` mutate each stop event during processing:
 
+- `original_stop_id` is derived first, before mapping, as the raw/transmitted `stop_id`.
 - `stop_id` is replaced with the mapped stop ID.
-- `original_stop_id` is set to the same value as `stop_id` during sync payload preparation.
+- `mapped_stop_id` is derived from the (already mapped) `stop_id`, so it stays in sync with `stop_id` through any later policy-based cleanup.
 - `is_implied_schedule_relationship` is set to true only for stop events implied by datasource flags (`ADDED` via `treat_unexpected_stop_as_added_stop`, `SKIPPED` via `treat_missing_stop_as_canceled_stop`).
 - `is_valid` is forced to `input_is_valid and stop_id_in_nominal_gtfs`.
 
@@ -309,8 +299,6 @@ Allowed data model:
     "is_deleted": bool,
     "trip": {
         "trip_id": str,
-        "mapped_trip_id": str,
-        "original_trip_id": str,
         "start_time": str,
         "start_date": str,
         "route_id": str,
@@ -356,16 +344,16 @@ Processed top-level fields:
 - is_active: optional create-only value for vehicle, default True.
 - stop_id: optional. Current stop of the vehicle; validated against nominal GTFS stop IDs and persisted as nullable `stop_id`.
 
+`VehiclePositionProcessingService` derives and persists `trip.original_trip_id` and `trip.mapped_trip_id` (both non-nullable), not supplied by the transformer, following the same rule as for trip_updates: `trip.original_trip_id` is set once to the raw/transmitted `trip.trip_id`, and `trip.mapped_trip_id` is initialized to the same value since `trip_id` is never mapped by `IdentifierMappingService`.
+
 Trip payload sources for vehicle_positions:
 
-- Required nested trip object only: trip.trip_id, trip.mapped_trip_id, trip.original_trip_id, trip.start_time, trip.start_date, trip.route_id, trip.schedule_relationship, trip.is_active, trip.is_trip_valid, trip.is_route_valid, trip.scheduled_start_stop_id, trip.scheduled_start_time, trip.scheduled_end_stop_id, trip.scheduled_end_time.
+- Required nested trip object only: trip.trip_id, trip.start_time, trip.start_date, trip.route_id, trip.schedule_relationship, trip.is_active, trip.is_trip_valid, trip.is_route_valid, trip.scheduled_start_stop_id, trip.scheduled_start_time, trip.scheduled_end_stop_id, trip.scheduled_end_time.
 
 Trip payload processing rules:
 
 - trip object is required; records without a valid trip object are discarded.
 - trip_id is required inside trip object.
-- mapped_trip_id is persisted as the mapped trip reference.
-- original_trip_id is required; persisted as the external/non-nominal trip reference.
 - start_time defaults to empty string when missing.
 - start_date defaults to empty string when missing.
 - route_id defaults to empty string when missing, then mapped.

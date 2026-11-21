@@ -162,10 +162,19 @@ class ServiceAlertProcessingService(RealtimeProcessingServiceBase):
             has_invalid_entity = False
             
             for entity_data in entities_data:
+                # Capture the raw, as-received identifiers before any mapping is applied.
+                for id_key in ("agency_id", "route_id", "stop_id", "trip_id"):
+                    entity_data.setdefault(f"original_{id_key}", entity_data.get(id_key))
+
                 # Apply mappings to entity data
                 mapped_entity_data = self._identifier_mapping_service.apply_mapping(
                     entity_data,
                 )
+
+                # mapped_{type}_id reflects the identifier after mapping (trip_id is never
+                # mapped, so mapped_trip_id always equals original_trip_id).
+                for id_key in ("agency_id", "route_id", "stop_id", "trip_id"):
+                    mapped_entity_data[f"mapped_{id_key}"] = mapped_entity_data.get(id_key)
 
                 # For DISCARD_INVALID_ELEMENTS policy, validate and clean individual fields
                 if policy == InvalidReferencePolicy.DISCARD_INVALID_ELEMENTS:

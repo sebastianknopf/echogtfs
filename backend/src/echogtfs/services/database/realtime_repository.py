@@ -215,10 +215,18 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         return ServiceAlertInformedEntity(
             id=entity_id,
             agency_id=item.get("agency_id"),
+            mapped_agency_id=item.get("mapped_agency_id"),
+            original_agency_id=item.get("original_agency_id"),
             route_id=item.get("route_id"),
+            mapped_route_id=item.get("mapped_route_id"),
+            original_route_id=item.get("original_route_id"),
             route_type=item.get("route_type"),
             stop_id=item.get("stop_id"),
+            mapped_stop_id=item.get("mapped_stop_id"),
+            original_stop_id=item.get("original_stop_id"),
             trip_id=item.get("trip_id"),
+            mapped_trip_id=item.get("mapped_trip_id"),
+            original_trip_id=item.get("original_trip_id"),
             direction_id=item.get("direction_id"),
             is_agency_valid=bool(item.get("is_agency_valid", True)),
             is_route_valid=bool(item.get("is_route_valid", True)),
@@ -232,6 +240,7 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         return StopEvent(
             trip_id=trip_id,
             stop_id=item.get("stop_id"),
+            mapped_stop_id=item.get("mapped_stop_id"),
             original_stop_id=item.get("original_stop_id"),
             stop_sequence=item.get("stop_sequence", ""),
             arrival_time=item.get("arrival_time"),
@@ -250,6 +259,7 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
             id=uuid.UUID(doc["_id"]),
             data_source_id=doc.get("data_source_id"),
             trip_id=doc["trip_id"],
+            mapped_trip_id=doc.get("mapped_trip_id"),
             original_trip_id=doc.get("original_trip_id"),
             scheduled_start_stop_id=doc.get("scheduled_start_stop_id"),
             scheduled_end_stop_id=doc.get("scheduled_end_stop_id"),
@@ -299,6 +309,7 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
             updated_at=doc.get("updated_at"),
             trip=VehicleTripDescriptor(
                 trip_id=trip_doc.get("trip_id"),
+                mapped_trip_id=trip_doc.get("mapped_trip_id"),
                 original_trip_id=trip_doc.get("original_trip_id"),
                 route_id=trip_doc.get("route_id", ""),
                 start_date=trip_doc.get("start_date", ""),
@@ -319,10 +330,18 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         """Normalize service-alert informed-entity payload for persistence."""
         return {
             "agency_id": entity_data.get("agency_id"),
+            "mapped_agency_id": entity_data.get("mapped_agency_id"),
+            "original_agency_id": entity_data.get("original_agency_id"),
             "route_id": entity_data.get("route_id"),
+            "mapped_route_id": entity_data.get("mapped_route_id"),
+            "original_route_id": entity_data.get("original_route_id"),
             "route_type": entity_data.get("route_type"),
             "stop_id": entity_data.get("stop_id"),
+            "mapped_stop_id": entity_data.get("mapped_stop_id"),
+            "original_stop_id": entity_data.get("original_stop_id"),
             "trip_id": entity_data.get("trip_id"),
+            "mapped_trip_id": entity_data.get("mapped_trip_id"),
+            "original_trip_id": entity_data.get("original_trip_id"),
             "direction_id": entity_data.get("direction_id"),
             "is_agency_valid": bool(entity_data.get("is_agency_valid", True)),
             "is_route_valid": bool(entity_data.get("is_route_valid", True)),
@@ -385,10 +404,15 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         if original_stop_id in (None, ""):
             original_stop_id = payload.get("stop_id")
 
+        mapped_stop_id = payload.get("mapped_stop_id")
+        if mapped_stop_id in (None, ""):
+            mapped_stop_id = payload.get("stop_id")
+
         stop_sequence = payload.get("stop_sequence")
 
         return {
             "stop_id": payload.get("stop_id"),
+            "mapped_stop_id": mapped_stop_id,
             "original_stop_id": original_stop_id,
             "stop_sequence": "" if stop_sequence is None else str(stop_sequence),
             "arrival_time": payload.get("arrival_time"),
@@ -933,6 +957,7 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         is_route_valid: bool,
         stop_events: list[dict[str, Any]],
         original_trip_id: str | None = None,
+        mapped_trip_id: str | None = None,
         scheduled_start_stop_id: str | None = None,
         scheduled_end_stop_id: str | None = None,
         scheduled_start_time: datetime | None = None,
@@ -952,6 +977,7 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
             "data_source_id": source_id,
             "trip_id": trip_id,
             "original_trip_id": original_trip_id,
+            "mapped_trip_id": mapped_trip_id if mapped_trip_id not in (None, "") else original_trip_id,
             "scheduled_start_stop_id": scheduled_start_stop_id,
             "scheduled_end_stop_id": scheduled_end_stop_id,
             "scheduled_start_time": scheduled_start_time,
@@ -1099,6 +1125,7 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         source_id: int,
         trip_id: str,
         trip_original_trip_id: str | None,
+        trip_mapped_trip_id: str | None,
         trip_start_time: str,
         trip_start_date: str,
         trip_route_id: str,
@@ -1148,6 +1175,9 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
             "trip.scheduled_start_time": trip_scheduled_start_time,
             "trip.scheduled_end_time": trip_scheduled_end_time,
             "trip.original_trip_id": trip_original_trip_id,
+            "trip.mapped_trip_id": (
+                trip_mapped_trip_id if trip_mapped_trip_id not in (None, "") else trip_original_trip_id
+            ),
             "trip.route_id": trip_route_id,
             "trip.start_date": trip_start_date,
             "trip.start_time": trip_start_time,

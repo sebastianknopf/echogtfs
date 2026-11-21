@@ -298,6 +298,7 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
                 source_id=source_id,
                 trip_id=trip_payload["trip_id"],
                 trip_original_trip_id=derived_trip_id,
+                trip_mapped_trip_id=derived_trip_id,
                 trip_start_time=trip_payload["start_time"],
                 trip_start_date=trip_payload["start_date"],
                 trip_route_id=trip_payload["route_id"],
