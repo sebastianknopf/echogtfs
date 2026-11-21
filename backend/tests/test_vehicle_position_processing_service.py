@@ -88,6 +88,9 @@ class TestVehiclePositionProcessingService(unittest.IsolatedAsyncioTestCase):
         self.assertIn("trip_scheduled_start_stop_id", kwargs)
         self.assertNotIn("assignment_type", kwargs)
         datasource._matching_service.match.assert_not_awaited()
+
+        self.assertEqual(kwargs["trip_original_trip_id"], "trip-1")
+        self.assertEqual(kwargs["trip_mapped_trip_id"], "trip-1")
     async def test_sync_vehicle_position_records_sets_no_match_assignment_when_matching_fails(self):
         repository = _SystemRepositoryStub()
         realtime_repository = _RealtimeRepositoryStub()

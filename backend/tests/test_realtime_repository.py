@@ -186,6 +186,7 @@ def _sync_vehicle_kwargs(**overrides):
         source_id=7,
         trip_id="trip-1",
         trip_original_trip_id="orig-1",
+        trip_mapped_trip_id="orig-1",
         trip_start_time="10:00:00",
         trip_start_date="20260101",
         trip_route_id="R1",
@@ -277,6 +278,64 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(payload["is_route_valid"])
         self.assertTrue(payload["is_stop_valid"])
         self.assertTrue(payload["is_trip_valid"])
+
+    def test_normalize_informed_entity_payload_keeps_mapped_and_original_ids(self):
+        payload = RealtimeRepository._normalize_informed_entity_payload(
+            {
+                "agency_id": "a1",
+                "mapped_agency_id": "a1",
+                "original_agency_id": "a0",
+                "route_id": "r1",
+                "mapped_route_id": "r1",
+                "original_route_id": "r0",
+                "stop_id": "s1",
+                "mapped_stop_id": "s1",
+                "original_stop_id": "s0",
+                "trip_id": "t1",
+                "mapped_trip_id": "t1",
+                "original_trip_id": "t1",
+            }
+        )
+
+        self.assertEqual(payload["mapped_agency_id"], "a1")
+        self.assertEqual(payload["original_agency_id"], "a0")
+        self.assertEqual(payload["mapped_route_id"], "r1")
+        self.assertEqual(payload["original_route_id"], "r0")
+        self.assertEqual(payload["mapped_stop_id"], "s1")
+        self.assertEqual(payload["original_stop_id"], "s0")
+        self.assertEqual(payload["mapped_trip_id"], "t1")
+        self.assertEqual(payload["original_trip_id"], "t1")
+
+    def test_informed_entity_from_doc_reads_mapped_and_original_ids(self):
+        entity = RealtimeRepository._informed_entity_from_doc(
+            {
+                "agency_id": "a1",
+                "mapped_agency_id": "a1",
+                "original_agency_id": "a0",
+                "trip_id": "t1",
+                "mapped_trip_id": "t1",
+                "original_trip_id": "t1",
+            },
+            1,
+            SimpleNamespace(),
+        )
+
+        self.assertEqual(entity.agency_id, "a1")
+        self.assertEqual(entity.mapped_agency_id, "a1")
+        self.assertEqual(entity.original_agency_id, "a0")
+        self.assertEqual(entity.mapped_trip_id, "t1")
+        self.assertEqual(entity.original_trip_id, "t1")
+
+    def test_stop_event_from_doc_reads_mapped_stop_id(self):
+        event = RealtimeRepository._stop_event_from_doc(
+            {"stop_id": "s1", "mapped_stop_id": "s1", "original_stop_id": "s0"},
+            "t1",
+            None,
+        )
+
+        self.assertEqual(event.stop_id, "s1")
+        self.assertEqual(event.mapped_stop_id, "s1")
+        self.assertEqual(event.original_stop_id, "s0")
 
     # ------------------------------------------------------------------ alerts
 
