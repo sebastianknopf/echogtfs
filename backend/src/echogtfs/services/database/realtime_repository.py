@@ -953,17 +953,19 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         trip_uuid: uuid.UUID,
         source_id: int,
         trip_id: str,
+        mapped_trip_id: str | None = None,
+        original_trip_id: str | None = None,
         start_time: str | None,
         start_date: str,
         route_id: str,
+        mapped_route_id: str | None = None,
+        original_route_id: str | None = None,
         schedule_relationship: str,
         assignment_type: str,
         is_active_on_create: bool,
         is_trip_valid: bool,
         is_route_valid: bool,
         stop_events: list[dict[str, Any]],
-        original_trip_id: str | None = None,
-        mapped_trip_id: str | None = None,
         scheduled_start_stop_id: str | None = None,
         scheduled_end_stop_id: str | None = None,
         scheduled_start_time: datetime | None = None,
@@ -991,6 +993,8 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
             "start_time": start_time,
             "start_date": start_date,
             "route_id": route_id,
+            "original_route_id": original_route_id,
+            "mapped_route_id": mapped_route_id if mapped_route_id not in (None, "") else original_route_id,
             "schedule_relationship": self._text(schedule_relationship),
             "is_trip_valid": is_trip_valid,
             "is_route_valid": is_route_valid,
@@ -1130,11 +1134,13 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         vehicle_uuid: uuid.UUID,
         source_id: int,
         trip_id: str,
-        trip_original_trip_id: str | None,
         trip_mapped_trip_id: str | None,
+        trip_original_trip_id: str | None,
         trip_start_time: str,
         trip_start_date: str,
         trip_route_id: str,
+        trip_mapped_route_id: str | None,
+        trip_original_route_id: str | None,
         trip_schedule_relationship: str,
         trip_assignment_type: str,
         trip_is_trip_valid: bool,
@@ -1151,6 +1157,8 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
         latitude: float,
         longitude: float,
         stop_id: str | None,
+        mapped_stop_id: str | None,
+        original_stop_id: str | None,
         is_stop_valid: bool,
         current_status: str,
         congestion_level: str,
@@ -1172,6 +1180,8 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
             "latitude": latitude,
             "longitude": longitude,
             "stop_id": stop_id,
+            "original_stop_id": original_stop_id,
+            "mapped_stop_id": mapped_stop_id if mapped_stop_id not in (None, "") else original_stop_id,
             "is_stop_valid": is_stop_valid,
             "current_status": self._text(current_status),
             "congestion_level": self._text(congestion_level),
@@ -1185,6 +1195,10 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
                 trip_mapped_trip_id if trip_mapped_trip_id not in (None, "") else trip_original_trip_id
             ),
             "trip.route_id": trip_route_id,
+            "trip.original_route_id": trip_original_route_id,
+            "trip.mapped_route_id": (
+                trip_mapped_route_id if trip_mapped_route_id not in (None, "") else trip_original_route_id
+            ),
             "trip.start_date": trip_start_date,
             "trip.start_time": trip_start_time,
             "trip.schedule_relationship": self._text(trip_schedule_relationship),
@@ -1487,8 +1501,8 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
             VEHICLE_POSITIONS_COLLECTION,
             {
                 "$or": [
-                    {"stop_id": self._not_matching(pattern)},
-                    {"trip.route_id": self._not_matching(pattern)},
+                    self._original_or_current_not_matching("", "stop_id", pattern),
+                    {"trip.original_route_id": self._not_matching(pattern)},
                     {"trip.original_trip_id": self._not_matching(pattern)},
                 ]
             },
@@ -1555,7 +1569,12 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
     async def list_trips_with_non_global_ids(self, pattern: str) -> list[TripUpdate]:
         docs = await self._find(
             TRIP_UPDATES_COLLECTION,
-            {"$or": [{"original_trip_id": self._not_matching(pattern)}, {"route_id": self._not_matching(pattern)}]},
+            {
+                "$or": [
+                    {"original_trip_id": self._not_matching(pattern)},
+                    {"original_route_id": self._not_matching(pattern)},
+                ]
+            },
             projection=_NO_STOP_EVENTS,
             sort=[("trip_id", ASCENDING)],
         )

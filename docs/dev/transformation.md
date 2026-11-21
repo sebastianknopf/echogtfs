@@ -227,11 +227,14 @@ Processed top-level fields:
 - scheduled_intermediate_stops: optional list of `(stop_id, datetime)` tuples for additional scheduled anchors.
 - stop_events: optional list, default [].
 
-`TripUpdateProcessingService` derives and persists `original_trip_id` and `mapped_trip_id` (both non-nullable), not supplied by the transformer:
+`TripUpdateProcessingService` derives and persists `original_trip_id`/`mapped_trip_id` and `original_route_id`/`mapped_route_id` (all non-nullable), not supplied by the transformer:
 
 - original_trip_id: set once, before matching, to the raw/transmitted `trip_id`.
 - mapped_trip_id: initialized to the same raw value. `trip_id` is never mapped by `IdentifierMappingService`, so `mapped_trip_id` always equals `original_trip_id`.
 - trip_id: continues to hold the working value used for validity checks and persistence; it may later be replaced with a matched trip ID (see "Assignment behavior for trip_updates" below), which does not affect `mapped_trip_id`/`original_trip_id`.
+- original_route_id: set once, before mapping, to the raw/transmitted `route_id`.
+- mapped_route_id: set to the result of `IdentifierMappingService.apply_mapping({"route_id": ...})`, i.e. the same value used for the working `route_id`. It is not cleared when the invalid-reference policy later clears `route_id`.
+- route_id: continues to hold the working value used for validity checks and persistence; it may later be cleared to an empty string by the invalid-reference policy (see below), which does not affect `mapped_route_id`/`original_route_id`.
 
 Processed stop_events[*] fields:
 
@@ -344,7 +347,11 @@ Processed top-level fields:
 - is_active: optional create-only value for vehicle, default True.
 - stop_id: optional. Current stop of the vehicle; validated against nominal GTFS stop IDs and persisted as nullable `stop_id`.
 
-`VehiclePositionProcessingService` derives and persists `trip.original_trip_id` and `trip.mapped_trip_id` (both non-nullable), not supplied by the transformer, following the same rule as for trip_updates: `trip.original_trip_id` is set once to the raw/transmitted `trip.trip_id`, and `trip.mapped_trip_id` is initialized to the same value since `trip_id` is never mapped by `IdentifierMappingService`.
+`VehiclePositionProcessingService` derives and persists `trip.original_trip_id`/`trip.mapped_trip_id` (non-nullable), `trip.original_route_id`/`trip.mapped_route_id` (non-nullable) and `original_stop_id`/`mapped_stop_id` (nullable), not supplied by the transformer:
+
+- `trip.original_trip_id` is set once to the raw/transmitted `trip.trip_id`, and `trip.mapped_trip_id` is initialized to the same value since `trip_id` is never mapped by `IdentifierMappingService`, following the same rule as for trip_updates.
+- `trip.original_route_id` is set once, before mapping, to the raw/transmitted `trip.route_id`. `trip.mapped_route_id` is set to the result of `IdentifierMappingService.apply_mapping({"route_id": ...})`, i.e. the same value used for the working `trip.route_id`; it is not cleared when the invalid-reference policy later clears `trip.route_id`.
+- `original_stop_id` and `mapped_stop_id` track the vehicle's own `stop_id` (not the trip's stop references). Since this field is never mapped by `IdentifierMappingService`, both are always set to the same raw/transmitted `stop_id` value (or `None` when absent).
 
 Trip payload sources for vehicle_positions:
 

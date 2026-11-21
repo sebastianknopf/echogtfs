@@ -193,6 +193,7 @@ class TripUpdateProcessingService(RealtimeProcessingServiceBase):
             is_complete_stop_sequence = bool(record.get("is_complete_stop_sequence", True))
             schedule_relationship = str(record.get("schedule_relationship", "SCHEDULED") or "SCHEDULED").upper()
 
+            original_route_id = str(record.get("route_id") or "")
             mapped_trip = self._identifier_mapping_service.apply_mapping(
                 {
                     "route_id": record.get("route_id"),
@@ -416,17 +417,19 @@ class TripUpdateProcessingService(RealtimeProcessingServiceBase):
                 trip_uuid=persisted_trip_uuid,
                 source_id=source_id,
                 trip_id=resolved_trip_id,
+                mapped_trip_id=mapped_trip_id,
+                original_trip_id=original_trip_id,
                 start_time=persist_start_time,
                 start_date=str(record["start_date"]),
                 route_id=route_id_to_persist,
+                mapped_route_id=mapped_route_id,
+                original_route_id=original_route_id,
                 schedule_relationship=str(record.get("schedule_relationship", "SCHEDULED")),
                 assignment_type=assignment_type,
                 is_active_on_create=is_active_on_create,
                 is_trip_valid=trip_is_trip_valid,
                 is_route_valid=trip_is_route_valid,
                 stop_events=stop_events_to_persist,
-                original_trip_id=original_trip_id,
-                mapped_trip_id=mapped_trip_id,
                 scheduled_start_stop_id=(
                     str(persist_scheduled_start_stop_id)
                     if persist_scheduled_start_stop_id is not None
