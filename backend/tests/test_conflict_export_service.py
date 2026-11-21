@@ -12,6 +12,7 @@ from echogtfs.enum.gtfsrt import AssignmentType
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from echogtfs.enum.conflicts import ConflictType
+from echogtfs.enum.system import DataSourceExecutionType
 from echogtfs.services.conflict.conflict_export_service import ConflictExportService
 from echogtfs.validation.schemas import MonitoringConflictObject, MonitoringDatasourceGroupObject
 
@@ -68,9 +69,10 @@ class TestConflictExportService(unittest.IsolatedAsyncioTestCase):
         )
 
     @staticmethod
-    def _make_service(*, system_failures=None, realtime_overrides=None):
+    def _make_service(*, system_failures=None, overdue_datasources=None, realtime_overrides=None):
         system_repository = SimpleNamespace(
-            list_data_sources_with_failures=AsyncMock(return_value=system_failures or [])
+            list_data_sources_with_failures=AsyncMock(return_value=system_failures or []),
+            list_active_data_sources_with_cron=AsyncMock(return_value=overdue_datasources or [])
         )
 
         realtime_defaults = {
@@ -437,6 +439,82 @@ class TestConflictExportService(unittest.IsolatedAsyncioTestCase):
             "^de:[a-z]+:[^\\s:]+$",
         ):
             conflicts = await service.export()
+
+        self.assertEqual(conflicts, [])
+
+    async def test_export_includes_conflict_for_overdue_time_based_datasource(self):
+        overdue_ds = SimpleNamespace(
+            id=20,
+            name="ds-overdue",
+            cron="*/10 * * * *",
+            execution_type=DataSourceExecutionType.TIME_BASED,
+            is_active=True,
+            last_run_at=datetime(2000, 1, 1, tzinfo=timezone.utc),
+            created_at=datetime(2000, 1, 1, tzinfo=timezone.utc),
+        )
+
+        service, system_repository, _ = self._make_service(
+            overdue_datasources=[overdue_ds], realtime_overrides={}
+        )
+
+        conflicts = await service.export()
+
+        self.assertEqual(len(conflicts), 1)
+        self.assertEqual(conflicts[0].code, ConflictType.ERROR_DATASOURCE_FAILURE)
+        self.assertEqual(conflicts[0].datasource.id, 20)
+        self.assertEqual(conflicts[0].datasource.name, "ds-overdue")
+        self.assertEqual(conflicts[0].properties["datasource_id"], 20)
+        self.assertEqual(conflicts[0].properties["datasource_name"], "ds-overdue")
+        system_repository.list_active_data_sources_with_cron.assert_awaited_once()
+
+    async def test_export_excludes_subscription_based_datasource_even_if_overdue(self):
+        overdue_ds = SimpleNamespace(
+            id=21,
+            name="ds-subscription",
+            cron="*/10 * * * *",
+            execution_type=DataSourceExecutionType.SUBSCRIPTION_BASED,
+            is_active=True,
+            last_run_at=datetime(2000, 1, 1, tzinfo=timezone.utc),
+            created_at=datetime(2000, 1, 1, tzinfo=timezone.utc),
+        )
+
+        service, _, _ = self._make_service(overdue_datasources=[overdue_ds], realtime_overrides={})
+
+        conflicts = await service.export()
+
+        self.assertEqual(conflicts, [])
+
+    async def test_export_excludes_time_based_datasource_within_grace_period(self):
+        recent_ds = SimpleNamespace(
+            id=22,
+            name="ds-recent",
+            cron="*/10 * * * *",
+            execution_type=DataSourceExecutionType.TIME_BASED,
+            is_active=True,
+            last_run_at=datetime.now(timezone.utc),
+            created_at=datetime.now(timezone.utc),
+        )
+
+        service, _, _ = self._make_service(overdue_datasources=[recent_ds], realtime_overrides={})
+
+        conflicts = await service.export()
+
+        self.assertEqual(conflicts, [])
+
+    async def test_export_excludes_inactive_time_based_datasource_even_if_overdue(self):
+        inactive_ds = SimpleNamespace(
+            id=23,
+            name="ds-inactive",
+            cron="*/10 * * * *",
+            execution_type=DataSourceExecutionType.TIME_BASED,
+            is_active=False,
+            last_run_at=datetime(2000, 1, 1, tzinfo=timezone.utc),
+            created_at=datetime(2000, 1, 1, tzinfo=timezone.utc),
+        )
+
+        service, _, _ = self._make_service(overdue_datasources=[inactive_ds], realtime_overrides={})
+
+        conflicts = await service.export()
 
         self.assertEqual(conflicts, [])
 
