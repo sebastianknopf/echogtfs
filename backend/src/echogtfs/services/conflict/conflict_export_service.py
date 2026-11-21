@@ -1,23 +1,35 @@
 from __future__ import annotations
 
+import logging
+import os
 from hashlib import sha256
-from datetime import datetime
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from apscheduler.triggers.cron import CronTrigger
 
 from echogtfs.common.config import settings
 from echogtfs.common.global_id import GlobalId
 from echogtfs.enum.conflicts import ConflictType
+from echogtfs.enum.system import DataSourceExecutionType
 from echogtfs.services.conflict.intf_conflict_export_service import ConflictExportServiceInterface
 from echogtfs.services.database.realtime_models import VehiclePosition
 from echogtfs.services.database.realtime_repository import RealtimeRepositoryInterface
 from echogtfs.services.database.system_repository import SystemRepositoryInterface
 from echogtfs.validation.schemas import MonitoringConflictObject, MonitoringDatasourceGroupObject
 
+logger = logging.getLogger("uvicorn")
+
 
 class ConflictExportService(ConflictExportServiceInterface):
+
+    # Grace period after the cron-scheduled time before an overdue time-based datasource is reported as a failure
+    OVERDUE_GRACE_PERIOD = timedelta(minutes=5)
 
     def __init__(self, system_repository: SystemRepositoryInterface, realtime_repository: RealtimeRepositoryInterface):
         self._system_repository = system_repository
         self._realtime_repository = realtime_repository
+        self._scheduler_timezone = self._resolve_scheduler_timezone()
 
     async def export(self, filter_datasource_id: int | None = None) -> list[MonitoringConflictObject]:
         results: list[MonitoringConflictObject] = []
@@ -42,6 +54,39 @@ class ConflictExportService(ConflictExportServiceInterface):
                         "last_failure": last_failure
                     }
                 ), results)
+
+        # select time-based datasources which are overdue based on their cron schedule
+        now: datetime = datetime.now(self._scheduler_timezone)
+        for ds in await self._system_repository.list_active_data_sources_with_cron():
+            if not ds.is_active:
+                continue
+
+            if ds.execution_type != DataSourceExecutionType.TIME_BASED:
+                continue
+
+            if filter_datasource_id is not None and ds.id != filter_datasource_id:
+                continue
+
+            expected_run_at = self._expected_datasource_run_at(ds)
+            if expected_run_at is None or now < expected_run_at + self.OVERDUE_GRACE_PERIOD:
+                continue
+
+            self._add_conflict(MonitoringConflictObject(
+                id=self._unique_conflict_id(datasource_id=ds.id, conflict_type=ConflictType.ERROR_DATASOURCE_FAILURE),
+                timestamp=expected_run_at,
+                code=ConflictType.ERROR_DATASOURCE_FAILURE,
+                message=ConflictType.ERROR_DATASOURCE_FAILURE.name,
+                datasource=MonitoringDatasourceGroupObject(
+                    id=ds.id,
+                    name=ds.name,
+                ),
+                properties={
+                    "datasource_id": ds.id,
+                    "datasource_name": ds.name,
+                    "last_run_at": ds.last_run_at,
+                    "expected_run_at": expected_run_at
+                }
+            ), results)
 
         # find invalid references for service alerts
         for ie in await self._realtime_repository.list_informed_entities_with_invalid_references():
@@ -558,6 +603,53 @@ class ConflictExportService(ConflictExportServiceInterface):
 
         # finally return the sorted conflict objects
         return sorted(results, key=lambda x: x.timestamp, reverse=True)
+
+    @staticmethod
+    def _resolve_scheduler_timezone() -> ZoneInfo:
+        timezone_name = os.getenv("TIMEZONE", "UTC").strip() or "UTC"
+
+        try:
+            return ZoneInfo(timezone_name)
+        except ZoneInfoNotFoundError:
+            logger.warning("[ConflictExportService] Unknown TIMEZONE '%s'. Falling back to UTC", timezone_name)
+            return ZoneInfo("UTC")
+
+    def _build_cron_trigger(self, cron_expr: str) -> CronTrigger:
+        fields = cron_expr.split()
+        if len(fields) == 5:
+            return CronTrigger.from_crontab(cron_expr, timezone=self._scheduler_timezone)
+
+        if len(fields) == 6:
+            second, minute, hour, day, month, day_of_week = fields
+            return CronTrigger(
+                second=second,
+                minute=minute,
+                hour=hour,
+                day=day,
+                month=month,
+                day_of_week=day_of_week,
+                timezone=self._scheduler_timezone,
+            )
+
+        raise ValueError("Cron expression must have 5 fields (minute-level) or 6 fields (second-level)")
+
+    def _expected_datasource_run_at(self, ds) -> datetime | None:
+        """Return the cron-scheduled time a time-based data source should have run at next, or None if undetermined."""
+        if not ds.cron:
+            return None
+
+        try:
+            trigger = self._build_cron_trigger(ds.cron)
+        except ValueError:
+            logger.warning(
+                "[ConflictExportService] Invalid cron expression for data source '%s': %s",
+                ds.name,
+                ds.cron,
+            )
+            return None
+
+        reference = ds.last_run_at or ds.created_at
+        return trigger.get_next_fire_time(reference, reference)
 
     def _unique_conflict_id(self, **kwargs) -> str:
         """Generate a unique conflict identifier based on provided keyword arguments."""
