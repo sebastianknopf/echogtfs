@@ -917,7 +917,7 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         conditions = self.vehicles.find_calls[0][0]["$or"]
         self.assertEqual(
             {next(iter(condition)) for condition in conditions},
-            {"stop_id", "trip.route_id", "trip.trip_id"},
+            {"stop_id", "trip.route_id", "trip.original_trip_id"},
         )
         for condition in conditions:
             self.assertEqual(next(iter(condition.values()))["$not"], re.compile(pattern))
@@ -928,17 +928,35 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         await self.repository.list_informed_entities_with_non_global_ids(pattern)
 
         conditions = self.alerts.pipelines[0][-1]["$match"]["$or"]
+        original_fields = {
+            key
+            for condition in conditions
+            for sub_condition in condition["$or"]
+            for and_condition in sub_condition["$and"]
+            for key in and_condition
+        }
         self.assertEqual(
-            {key for condition in conditions for key in condition},
+            original_fields,
             {
+                "informed_entities.original_agency_id",
                 "informed_entities.agency_id",
+                "informed_entities.original_route_id",
                 "informed_entities.route_id",
+                "informed_entities.original_stop_id",
                 "informed_entities.stop_id",
+                "informed_entities.original_trip_id",
                 "informed_entities.trip_id",
             },
         )
         for condition in conditions:
-            self.assertEqual(next(iter(condition.values()))["$not"], re.compile(pattern))
+            not_matching_values = [
+                value["$not"]
+                for sub_condition in condition["$or"]
+                for and_condition in sub_condition["$and"]
+                for value in and_condition.values()
+                if isinstance(value, dict) and "$not" in value
+            ]
+            self.assertTrue(all(value == re.compile(pattern) for value in not_matching_values))
 
     async def test_list_stop_events_with_non_global_ids_returns_events_with_parent_trip(self):
         pattern = r"^[A-Z0-9]{3}:[A-Z0-9]{3}:\d+$"
@@ -953,7 +971,7 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result[0].stop_id, "bad")
         self.assertEqual(result[0].trip.id, trip_uuid)
         self.assertEqual(result[0].trip.data_source_name, "Current name")
-        self.assertEqual(self.trips.pipelines[0][-1]["$match"]["stop_events.stop_id"]["$not"], re.compile(pattern))
+        self.assertEqual(self.trips.pipelines[0][-1]["$match"]["stop_events.original_stop_id"]["$not"], re.compile(pattern))
 
     async def test_list_trips_with_non_global_ids_returns_trips_without_stop_events(self):
         pattern = r"^[A-Z0-9]{3}:[A-Z0-9]{3}:\d+$"
@@ -964,7 +982,7 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([trip.trip_id for trip in result], ["invalid-trip"])
         self.assertEqual(result[0].stop_events, [])
         filter_, projection, _options = self.trips.find_calls[0]
-        self.assertEqual({key for condition in filter_["$or"] for key in condition}, {"trip_id", "route_id"})
+        self.assertEqual({key for condition in filter_["$or"] for key in condition}, {"original_trip_id", "route_id"})
         self.assertEqual(projection, {"stop_events": 0})
 
 

@@ -268,6 +268,8 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
             start_time=doc.get("start_time"),
             start_date=doc.get("start_date", ""),
             route_id=doc.get("route_id", ""),
+            mapped_route_id=doc.get("mapped_route_id", doc.get("route_id", "")),
+            original_route_id=doc.get("original_route_id", doc.get("route_id", "")),
             schedule_relationship=doc.get("schedule_relationship", "SCHEDULED"),
             assignment_type=doc.get("assignment_type"),
             is_active=bool(doc.get("is_active", True)),
@@ -301,6 +303,8 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
             latitude=doc.get("latitude"),
             longitude=doc.get("longitude"),
             stop_id=doc.get("stop_id"),
+            mapped_stop_id=doc.get("mapped_stop_id", doc.get("stop_id")),
+            original_stop_id=doc.get("original_stop_id", doc.get("stop_id")),
             is_stop_valid=bool(doc.get("is_stop_valid", True)),
             current_status=doc.get("current_status"),
             congestion_level=doc.get("congestion_level"),
@@ -312,6 +316,8 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
                 mapped_trip_id=trip_doc.get("mapped_trip_id"),
                 original_trip_id=trip_doc.get("original_trip_id"),
                 route_id=trip_doc.get("route_id", ""),
+                mapped_route_id=trip_doc.get("mapped_route_id", trip_doc.get("route_id", "")),
+                original_route_id=trip_doc.get("original_route_id", trip_doc.get("route_id", "")),
                 start_date=trip_doc.get("start_date", ""),
                 start_time=trip_doc.get("start_time"),
                 schedule_relationship=trip_doc.get("schedule_relationship", "SCHEDULED"),
@@ -1483,7 +1489,7 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
                 "$or": [
                     {"stop_id": self._not_matching(pattern)},
                     {"trip.route_id": self._not_matching(pattern)},
-                    {"trip.trip_id": self._not_matching(pattern)},
+                    {"trip.original_trip_id": self._not_matching(pattern)},
                 ]
             },
             sort=[("vehicle_id", ASCENDING)],
@@ -1509,23 +1515,47 @@ class RealtimeRepository(MongoRepositoryBase, RealtimeRepositoryInterface):
             {"flags": FLAG_CHANGED_STOP_ID},
         )
 
+    @staticmethod
+    def _original_or_current_not_matching(prefix: str, field: str, pattern: str) -> dict[str, Any]:
+        # flags a non-global ID based on the original ID if it was captured, falling back to the current ID
+        # for legacy/manually-created entities which do not carry an original_{type}_id value
+        original_path = f"{prefix}.original_{field}" if prefix else f"original_{field}"
+        current_path = f"{prefix}.{field}" if prefix else field
+
+        return {
+            "$or": [
+                {
+                    "$and": [
+                        {original_path: {"$ne": None}},
+                        {original_path: RealtimeRepository._not_matching(pattern)},
+                    ]
+                },
+                {
+                    "$and": [
+                        {original_path: None},
+                        {current_path: RealtimeRepository._not_matching(pattern)},
+                    ]
+                },
+            ]
+        }
+
     async def list_informed_entities_with_non_global_ids(self, pattern: str) -> list[ServiceAlertInformedEntity]:
         return await self._list_informed_entities(
             {
                 "$or": [
-                    {f"informed_entities.{field}": self._not_matching(pattern)}
+                    self._original_or_current_not_matching("informed_entities", field, pattern)
                     for field in ("agency_id", "route_id", "stop_id", "trip_id")
                 ]
             }
         )
 
     async def list_stop_events_with_non_global_ids(self, pattern: str) -> list[StopEvent]:
-        return await self._list_stop_events({"stop_events.stop_id": self._not_matching(pattern)})
+        return await self._list_stop_events({"stop_events.original_stop_id": self._not_matching(pattern)})
 
     async def list_trips_with_non_global_ids(self, pattern: str) -> list[TripUpdate]:
         docs = await self._find(
             TRIP_UPDATES_COLLECTION,
-            {"$or": [{"trip_id": self._not_matching(pattern)}, {"route_id": self._not_matching(pattern)}]},
+            {"$or": [{"original_trip_id": self._not_matching(pattern)}, {"route_id": self._not_matching(pattern)}]},
             projection=_NO_STOP_EVENTS,
             sort=[("trip_id", ASCENDING)],
         )

@@ -98,6 +98,8 @@ class TripUpdate:
     start_time: str | None
     start_date: str
     route_id: str
+    mapped_route_id: str
+    original_route_id: str
     schedule_relationship: str
     assignment_type: str
     is_active: bool
@@ -123,6 +125,8 @@ class VehicleTripDescriptor:
     mapped_trip_id: str
     original_trip_id: str
     route_id: str
+    mapped_route_id: str
+    original_route_id: str
     start_date: str
     start_time: str | None
     schedule_relationship: str
@@ -151,6 +155,8 @@ class VehiclePosition:
     latitude: float
     longitude: float
     stop_id: str | None
+    mapped_stop_id: str | None
+    original_stop_id: str | None
     current_status: str
     congestion_level: str
     is_active: bool
