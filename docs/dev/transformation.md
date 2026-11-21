@@ -80,10 +80,18 @@ Allowed data model:
     "informed_entities": [
         {
             "agency_id": str | None,
+            "mapped_agency_id": str | None,
+            "original_agency_id": str | None,
             "route_id": str | None,
+            "mapped_route_id": str | None,
+            "original_route_id": str | None,
             "route_type": int | None,
             "stop_id": str | None,
+            "mapped_stop_id": str | None,
+            "original_stop_id": str | None,
             "trip_id": str | None,
+            "mapped_trip_id": str | None,
+            "original_trip_id": str | None,
             "direction_id": int | None,
             "is_agency_valid": bool,
             "is_route_valid": bool,
@@ -128,10 +136,18 @@ Processed active_periods[*] fields:
 Processed informed_entities[*] fields:
 
 - agency_id: optional.
+- mapped_agency_id: optional.
+- original_agency_id: optional.
 - route_id: optional.
+- mapped_route_id: optional.
+- original_route_id: optional.
 - route_type: optional.
 - stop_id: optional.
+- mapped_stop_id: optional.
+- original_stop_id: optional.
 - trip_id: optional.
+- mapped_trip_id: optional.
+- original_trip_id: optional.
 - direction_id: optional.
 - is_agency_valid: optional input; combined with computed agency-reference validity.
 - is_route_valid: optional input; combined with computed route-reference validity.
@@ -169,7 +185,8 @@ Allowed data model:
     "id": str,
     "is_deleted": bool,
     "trip_id": str,
-    "original_trip_id": str | None,
+    "mapped_trip_id": str,
+    "original_trip_id": str,
     "start_time": str,
     "start_date": str,
     "route_id": str,
@@ -188,6 +205,7 @@ Allowed data model:
         {
             "trip_id": str,
             "stop_id": str,
+            "mapped_stop_id": str,
             "original_stop_id": str,
             "stop_sequence": str,
             "arrival_time": str | datetime,
@@ -207,7 +225,8 @@ Processed top-level fields:
 - id: optional. If missing, deterministic UUID is built from trip_id.
 - is_deleted: optional, default False.
 - trip_id: required.
-- original_trip_id: optional; persisted as the external/non-nominal trip reference when provided.
+- mapped_trip_id: persisted as the mapped trip reference.
+- original_trip_id: required; persisted as the external/non-nominal trip reference.
 - start_time: required.
 - start_date: required.
 - route_id: required, mapped before persistence and matching.
@@ -226,6 +245,7 @@ Processed top-level fields:
 Processed stop_events[*] fields:
 
 - stop_id: consumed and mapped before persistence.
+- mapped_stop_id: persisted as the mapped stop reference.
 - original_stop_id: optional; defaults to stop_id and is persisted as the original stop reference.
 - stop_sequence: passed to persistence model.
 - arrival_time: passed to persistence model.
@@ -289,6 +309,8 @@ Allowed data model:
     "is_deleted": bool,
     "trip": {
         "trip_id": str,
+        "mapped_trip_id": str,
+        "original_trip_id": str,
         "start_time": str,
         "start_date": str,
         "route_id": str,
@@ -336,12 +358,14 @@ Processed top-level fields:
 
 Trip payload sources for vehicle_positions:
 
-- Required nested trip object only: trip.trip_id, trip.start_time, trip.start_date, trip.route_id, trip.schedule_relationship, trip.is_active, trip.is_trip_valid, trip.is_route_valid, trip.scheduled_start_stop_id, trip.scheduled_start_time, trip.scheduled_end_stop_id, trip.scheduled_end_time.
+- Required nested trip object only: trip.trip_id, trip.mapped_trip_id, trip.original_trip_id, trip.start_time, trip.start_date, trip.route_id, trip.schedule_relationship, trip.is_active, trip.is_trip_valid, trip.is_route_valid, trip.scheduled_start_stop_id, trip.scheduled_start_time, trip.scheduled_end_stop_id, trip.scheduled_end_time.
 
 Trip payload processing rules:
 
 - trip object is required; records without a valid trip object are discarded.
 - trip_id is required inside trip object.
+- mapped_trip_id is persisted as the mapped trip reference.
+- original_trip_id is required; persisted as the external/non-nominal trip reference.
 - start_time defaults to empty string when missing.
 - start_date defaults to empty string when missing.
 - route_id defaults to empty string when missing, then mapped.

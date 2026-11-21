@@ -31,10 +31,18 @@ class ServiceAlertActivePeriod:
 class ServiceAlertInformedEntity:
     id: int
     agency_id: str | None = None
+    mapped_agency_id: str | None = None
+    original_agency_id: str | None = None
     route_id: str | None = None
+    mapped_route_id: str | None = None
+    original_route_id: str | None = None
     route_type: int | None = None
     stop_id: str | None = None
+    mapped_stop_id: str | None = None
+    original_stop_id: str | None = None
     trip_id: str | None = None
+    mapped_trip_id: str | None = None
+    original_trip_id: str | None = None
     direction_id: int | None = None
     is_agency_valid: bool = True
     is_route_valid: bool = True
@@ -63,6 +71,7 @@ class ServiceAlert:
 class StopEvent:
     trip_id: str
     stop_id: str
+    mapped_stop_id: str
     original_stop_id: str
     stop_sequence: str
     arrival_time: datetime | None
@@ -80,7 +89,8 @@ class TripUpdate:
     id: uuid.UUID
     data_source_id: int | None
     trip_id: str
-    original_trip_id: str | None
+    mapped_trip_id: str
+    original_trip_id: str
     scheduled_start_stop_id: str | None
     scheduled_end_stop_id: str | None
     scheduled_start_time: datetime | None
@@ -110,7 +120,8 @@ class VehicleTripDescriptor:
     """Trip reference embedded in a vehicle position, with the same validity flags as a trip update."""
 
     trip_id: str
-    original_trip_id: str | None
+    mapped_trip_id: str
+    original_trip_id: str
     route_id: str
     start_date: str
     start_time: str | None
