@@ -134,21 +134,31 @@ class RealtimeProcessingServiceBase:
 
         return merged_flags
 
+    @staticmethod
+    def _mapped_id(entity_data: dict[str, Any], kind: str) -> Any:
+        """Return the mapped identifier for a reference kind, falling back to the plain id."""
+        return entity_data.get(f"mapped_{kind}_id", entity_data.get(f"{kind}_id"))
+
     def _entity_validation_flags(
         self,
         entity_data: dict[str, Any],
         gtfs_entities: dict[str, set[str]],
     ) -> dict[str, bool]:
         """Validate per informed-entity reference type and provide aggregate validity."""
-        has_agency_id = bool(entity_data.get("agency_id"))
-        has_route_id = bool(entity_data.get("route_id"))
-        has_stop_id = bool(entity_data.get("stop_id"))
-        has_trip_id = bool(entity_data.get("trip_id"))
+        mapped_agency_id = self._mapped_id(entity_data, "agency")
+        mapped_route_id = self._mapped_id(entity_data, "route")
+        mapped_stop_id = self._mapped_id(entity_data, "stop")
+        mapped_trip_id = self._mapped_id(entity_data, "trip")
+
+        has_agency_id = bool(mapped_agency_id)
+        has_route_id = bool(mapped_route_id)
+        has_stop_id = bool(mapped_stop_id)
+        has_trip_id = bool(mapped_trip_id)
         has_primary_reference = has_agency_id or has_route_id or has_stop_id
 
-        is_agency_valid = (not has_agency_id) or (entity_data["agency_id"] in gtfs_entities["agency"])
-        is_route_valid = (not has_route_id) or (entity_data["route_id"] in gtfs_entities["route"])
-        is_stop_valid = (not has_stop_id) or (entity_data["stop_id"] in gtfs_entities["stop"])
+        is_agency_valid = (not has_agency_id) or (mapped_agency_id in gtfs_entities["agency"])
+        is_route_valid = (not has_route_id) or (mapped_route_id in gtfs_entities["route"])
+        is_stop_valid = (not has_stop_id) or (mapped_stop_id in gtfs_entities["stop"])
 
         # Trip references are currently not validated against GTFS and therefore
         # are treated as invalid when they are the only reference.
@@ -157,7 +167,7 @@ class RealtimeProcessingServiceBase:
         if has_trip_id and not has_primary_reference:
             logger.debug(
                 f"[{self.get_adapter_type()}] Entity has only trip_id without other references - "
-                f"marking as invalid (trip references not managed): trip_id={entity_data.get('trip_id')}"
+                f"marking as invalid (trip references not managed): trip_id={mapped_trip_id}"
             )
 
         return {
@@ -201,6 +211,7 @@ class RealtimeProcessingServiceBase:
             if not validation_flags["is_agency_valid"]:
                 removed_fields.append(f"agency_id={cleaned_entity['agency_id']}")
                 cleaned_entity["agency_id"] = None
+                cleaned_entity["mapped_agency_id"] = None
             else:
                 has_any_valid_reference = True
         
@@ -209,6 +220,7 @@ class RealtimeProcessingServiceBase:
             if not validation_flags["is_route_valid"]:
                 removed_fields.append(f"route_id={cleaned_entity['route_id']}")
                 cleaned_entity["route_id"] = None
+                cleaned_entity["mapped_route_id"] = None
             else:
                 has_any_valid_reference = True
         
@@ -217,6 +229,7 @@ class RealtimeProcessingServiceBase:
             if not validation_flags["is_stop_valid"]:
                 removed_fields.append(f"stop_id={cleaned_entity['stop_id']}")
                 cleaned_entity["stop_id"] = None
+                cleaned_entity["mapped_stop_id"] = None
             else:
                 has_any_valid_reference = True
         
@@ -225,6 +238,7 @@ class RealtimeProcessingServiceBase:
         if cleaned_entity.get("trip_id") and not has_any_valid_reference:
             removed_fields.append(f"trip_id={cleaned_entity['trip_id']} (not managed)")
             cleaned_entity["trip_id"] = None
+            cleaned_entity["mapped_trip_id"] = None
         
         # Log removed fields
         if removed_fields:

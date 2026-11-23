@@ -26,6 +26,8 @@ class TestConflictExportService(unittest.IsolatedAsyncioTestCase):
         created_at: datetime,
         trip_id: str = "trip-1",
         route_id: str = "route-1",
+        original_trip_id: str | None = None,
+        original_route_id: str | None = None,
         is_route_valid: bool = True,
         is_trip_valid: bool = True,
         scheduled_start_stop_id: str | None = None,
@@ -40,6 +42,8 @@ class TestConflictExportService(unittest.IsolatedAsyncioTestCase):
             created_at=created_at,
             trip_id=trip_id,
             route_id=route_id,
+            original_trip_id=original_trip_id if original_trip_id is not None else trip_id,
+            original_route_id=original_route_id if original_route_id is not None else route_id,
             is_route_valid=is_route_valid,
             is_trip_valid=is_trip_valid,
             scheduled_start_stop_id=scheduled_start_stop_id,
@@ -65,7 +69,7 @@ class TestConflictExportService(unittest.IsolatedAsyncioTestCase):
             stop_id=stop_id,
             stop_sequence=stop_sequence,
             schedule_relationship=schedule_relationship,
-            original_stop_id=original_stop_id,
+            original_stop_id=original_stop_id if original_stop_id is not None else stop_id,
         )
 
     @staticmethod
@@ -348,9 +352,12 @@ class TestConflictExportService(unittest.IsolatedAsyncioTestCase):
             vehicle_label="Label 1",
             vehicle_id="vehicle-1",
             stop_id="local-stop",
+            original_stop_id="local-stop",
             trip=SimpleNamespace(
                 route_id="local-route",
+                original_route_id="local-route",
                 trip_id="local-trip",
+                original_trip_id="local-trip",
             ),
         )
         service, _, realtime_repository = self._make_service(
@@ -377,9 +384,9 @@ class TestConflictExportService(unittest.IsolatedAsyncioTestCase):
             },
         )
         conflicts_by_code = {conflict.code: conflict for conflict in conflicts}
-        self.assertEqual(conflicts_by_code[ConflictType.WARNING_STOP_NO_GLOBAL_ID].properties["stop_id"], "local-stop")
-        self.assertEqual(conflicts_by_code[ConflictType.WARNING_ROUTE_NO_GLOBAL_ID].properties["route_id"], "local-route")
-        self.assertEqual(conflicts_by_code[ConflictType.WARNING_TRIP_NO_GLOBAL_ID].properties["trip_id"], "local-trip")
+        self.assertEqual(conflicts_by_code[ConflictType.WARNING_STOP_NO_GLOBAL_ID].properties["original_stop_id"], "local-stop")
+        self.assertEqual(conflicts_by_code[ConflictType.WARNING_ROUTE_NO_GLOBAL_ID].properties["original_route_id"], "local-route")
+        self.assertEqual(conflicts_by_code[ConflictType.WARNING_TRIP_NO_GLOBAL_ID].properties["original_trip_id"], "local-trip")
         self.assertTrue(all(conflict.properties["vehicle_id"] == "PLATE-1 - Label 1" for conflict in conflicts))
         realtime_repository.list_vehicles_with_non_global_ids.assert_awaited_once()
 
@@ -560,6 +567,10 @@ class TestConflictExportService(unittest.IsolatedAsyncioTestCase):
             stop_id=None,
             route_id="local-route",
             trip_id=None,
+            original_agency_id=None,
+            original_stop_id=None,
+            original_route_id="local-route",
+            original_trip_id=None,
             is_agency_valid=True,
             is_stop_valid=True,
             is_route_valid=False,
@@ -616,7 +627,138 @@ class TestConflictExportService(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(len(conflicts), 1)
         self.assertEqual(conflicts[0].code, ConflictType.WARNING_TRIP_NO_GLOBAL_ID)
-        self.assertEqual(conflicts[0].properties.get("trip_id"), "LOCAL-TRIP")
+        self.assertEqual(conflicts[0].properties.get("original_trip_id"), "LOCAL-TRIP")
+
+    async def test_export_trip_non_global_id_uses_original_trip_id_even_when_mapped_id_is_global(self):
+        t1 = datetime(2026, 8, 1, 12, 35, 0, tzinfo=timezone.utc)
+        trip = self._make_trip(
+            data_source_id=12,
+            data_source_name="ds-12",
+            created_at=t1,
+            trip_id="de:mapped:1",
+            route_id="route-12",
+            original_trip_id="local-trip",
+        )
+
+        service, _, _ = self._make_service(
+            realtime_overrides={
+                "list_trips_with_non_global_ids": AsyncMock(return_value=[trip])
+            }
+        )
+
+        with patch(
+            "echogtfs.services.conflict.conflict_export_service.settings.global_id_pattern",
+            "^de:[a-z]+:[^\\s:]+$",
+        ):
+            conflicts = await service.export()
+
+        trip_conflicts = [conflict for conflict in conflicts if conflict.code == ConflictType.WARNING_TRIP_NO_GLOBAL_ID]
+        self.assertEqual(len(trip_conflicts), 1)
+        self.assertEqual(trip_conflicts[0].properties.get("original_trip_id"), "local-trip")
+
+    async def test_export_trip_non_global_id_uses_original_route_id_even_when_mapped_id_is_global(self):
+        t1 = datetime(2026, 8, 1, 12, 36, 0, tzinfo=timezone.utc)
+        trip = self._make_trip(
+            data_source_id=12,
+            data_source_name="ds-12",
+            created_at=t1,
+            trip_id="de:trip:1",
+            route_id="de:mapped:2",
+            original_trip_id="de:trip:1",
+            original_route_id="local-route",
+        )
+
+        service, _, _ = self._make_service(
+            realtime_overrides={
+                "list_trips_with_non_global_ids": AsyncMock(return_value=[trip])
+            }
+        )
+
+        with patch(
+            "echogtfs.services.conflict.conflict_export_service.settings.global_id_pattern",
+            "^de:[a-z]+:[^\\s:]+$",
+        ):
+            conflicts = await service.export()
+
+        route_conflicts = [conflict for conflict in conflicts if conflict.code == ConflictType.WARNING_ROUTE_NO_GLOBAL_ID]
+        self.assertEqual(len(route_conflicts), 1)
+        self.assertEqual(route_conflicts[0].properties.get("original_route_id"), "local-route")
+
+    async def test_export_vehicle_non_global_id_uses_original_stop_and_route_id_even_when_mapped_ids_are_global(self):
+        timestamp = datetime(2026, 8, 1, 12, 37, 0, tzinfo=timezone.utc)
+        vehicle = SimpleNamespace(
+            id="vehicle-record-mapped",
+            data_source_id=10,
+            data_source_name="ds-a",
+            created_at=timestamp,
+            vehicle_license_plate="PLATE-9",
+            vehicle_label="Label 9",
+            vehicle_id="vehicle-9",
+            stop_id="de:mapped:3",
+            original_stop_id="local-stop",
+            trip=SimpleNamespace(
+                route_id="de:mapped:4",
+                original_route_id="local-route",
+                trip_id="de:trip:1",
+                original_trip_id="de:trip:1",
+            ),
+        )
+        service, _, realtime_repository = self._make_service(
+            realtime_overrides={
+                "list_vehicles_with_non_global_ids": AsyncMock(return_value=[vehicle]),
+            }
+        )
+
+        with patch(
+            "echogtfs.services.conflict.conflict_export_service.settings.global_id_pattern",
+            "^de:[a-z]+:[^\\s:]+$",
+        ):
+            conflicts = await service.export()
+
+        self.assertEqual(
+            {conflict.code for conflict in conflicts},
+            {ConflictType.WARNING_STOP_NO_GLOBAL_ID, ConflictType.WARNING_ROUTE_NO_GLOBAL_ID},
+        )
+        conflicts_by_code = {conflict.code: conflict for conflict in conflicts}
+        self.assertEqual(conflicts_by_code[ConflictType.WARNING_STOP_NO_GLOBAL_ID].properties["original_stop_id"], "local-stop")
+        self.assertEqual(conflicts_by_code[ConflictType.WARNING_ROUTE_NO_GLOBAL_ID].properties["original_route_id"], "local-route")
+        realtime_repository.list_vehicles_with_non_global_ids.assert_awaited_once()
+
+
+        informed_entity = SimpleNamespace(
+            alert=SimpleNamespace(
+                data_source_id=14,
+                data_source_name="ds-14",
+                created_at=timestamp,
+            ),
+            agency_id=None,
+            stop_id=None,
+            route_id="de:mapped:1",
+            trip_id=None,
+            original_agency_id=None,
+            original_stop_id=None,
+            original_route_id="local-route",
+            original_trip_id=None,
+            is_agency_valid=True,
+            is_stop_valid=True,
+            is_route_valid=True,
+            is_trip_valid=True,
+        )
+        service, _, _ = self._make_service(
+            realtime_overrides={
+                "list_informed_entities_with_non_global_ids": AsyncMock(return_value=[informed_entity]),
+            }
+        )
+
+        with patch(
+            "echogtfs.services.conflict.conflict_export_service.settings.global_id_pattern",
+            "^de:[a-z]+:[^\\s:]+$",
+        ):
+            conflicts = await service.export()
+
+        self.assertEqual(len(conflicts), 1)
+        self.assertEqual(conflicts[0].code, ConflictType.WARNING_ROUTE_NO_GLOBAL_ID)
+        self.assertEqual(conflicts[0].properties.get("original_route_id"), "local-route")
 
     async def test_export_implied_deviation_ignores_unsupported_relationships(self):
         t1 = datetime(2026, 8, 1, 13, 0, 0, tzinfo=timezone.utc)

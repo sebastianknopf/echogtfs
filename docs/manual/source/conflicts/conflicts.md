@@ -10,7 +10,7 @@ In EchoGTFS können Konflikte in den eingehenden Daten anhand verschiedener Krit
 
 - Im oberen Bereich muss immer eine **Datenquelle** ausgewählt werden, für die die Konflikte angezeigt werden. Standardmäßig ist die erste Datenquelle gewählt.
 - Weiter lassen sich über **CSV exportieren** die Konflikte als CSV-Datei zur Weiterverarbeitung beispielsweise an Datenprovider exportieren.
-- Über den Filter können verschiedene Konflikttypen ein- oder ausgeblendet werden.
+- Über den Filter können verschiedene Konflikttypen ein- oder ausgeblendet werden. Eine Übersicht aller Konflikttypen und der Umstände ihres Auftretens finden Sie unter {ref}`h-conflicts-types`.
 
 Zu jedem Konflikt wird der **Typ** (Warnung oder Fehler) über ein entspr. Icon und den Text, der **Zeitpunkt**, zu dem der Konflikt erstmalig aufgetreten ist und ein **Fehlercode** angezeigt. Weiter werden zu jedem Konflikt abhängig vom Konflikttyp und der Herkunft verschiedene, zusätzliche **Eigenschaften** mit übermittelt, die unterhalb als Liste angezeigt werden. Über diese Eigenschaften ist es beispielsweise möglich zu erkennen, wieso eine Fahrt nicht zugeordnet werden konnte und welche Eingangsdaten von der Datenquelle übergeben wurden.
 

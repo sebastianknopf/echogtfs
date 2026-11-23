@@ -92,7 +92,16 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
         gtfs_id_validator = self._create_gtfs_id_validator(gtfs_repository)
         vehicle_route_ids: set[object] = set()
         vehicle_trip_ids: set[object] = set()
+        vehicle_stop_ids: set[object] = set()
         for record in records:
+            stop_reference_value = record.get("stop_id")
+            if stop_reference_value:
+                vehicle_stop_ids.add(
+                    self._identifier_mapping_service.apply_mapping(
+                        {"stop_id": stop_reference_value}
+                    ).get("stop_id")
+                )
+
             try:
                 record_trip_payload = self._extract_vehicle_trip_payload(record)
             except ValueError:
@@ -108,7 +117,7 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
 
         await gtfs_id_validator.prefetch("route", vehicle_route_ids)
         await gtfs_id_validator.prefetch("trip", vehicle_trip_ids)
-        await gtfs_id_validator.prefetch("stop", (record.get("stop_id") for record in records))
+        await gtfs_id_validator.prefetch("stop", vehicle_stop_ids)
         gtfs_entities = gtfs_id_validator.valid_ids()
         if self._matching_service is None:
             self._matching_service = MatchingService(gtfs_repository, self._caching_service)
@@ -200,13 +209,20 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
                     "route_id": trip_payload.get("route_id"),
                 }
             )
+
+            original_route_id = str(trip_payload.get("route_id") or "")
             trip_payload["route_id"] = str(mapped_trip.get("route_id") or "")
-            route_is_valid = bool(trip_payload["route_id"]) and trip_payload["route_id"] in gtfs_entities.get("route", set())
+            mapped_route_id = trip_payload["route_id"]
+            route_is_valid = bool(mapped_route_id) and mapped_route_id in gtfs_entities.get("route", set())
 
             stop_reference_value = record.get("stop_id")
+            original_stop_id = str(stop_reference_value) if stop_reference_value else None
+            mapped_stop = self._identifier_mapping_service.apply_mapping({"stop_id": stop_reference_value})
+            mapped_stop_id = str(mapped_stop.get("stop_id")) if mapped_stop.get("stop_id") else None
+
             stop_reference_is_valid = True
-            if stop_reference_value:
-                stop_reference_is_valid = str(stop_reference_value) in gtfs_entities.get("stop", set())
+            if mapped_stop_id:
+                stop_reference_is_valid = mapped_stop_id in gtfs_entities.get("stop", set())
 
             derived_trip_id = trip_payload["trip_id"]
             resolved_trip_id = derived_trip_id
@@ -297,10 +313,13 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
                 vehicle_uuid=vehicle_uuid,
                 source_id=source_id,
                 trip_id=trip_payload["trip_id"],
+                trip_mapped_trip_id=derived_trip_id,
                 trip_original_trip_id=derived_trip_id,
                 trip_start_time=trip_payload["start_time"],
                 trip_start_date=trip_payload["start_date"],
                 trip_route_id=trip_payload["route_id"],
+                trip_mapped_route_id=mapped_route_id,
+                trip_original_route_id=original_route_id,
                 trip_schedule_relationship=trip_payload["schedule_relationship"],
                 trip_assignment_type=trip_assignment_type,
                 trip_is_trip_valid=trip_is_trip_valid,
@@ -316,7 +335,9 @@ class VehiclePositionProcessingService(RealtimeProcessingServiceBase):
                 timestamp=record["timestamp"],
                 latitude=float(record["latitude"]),
                 longitude=float(record["longitude"]),
-                stop_id=str(stop_reference_value) if stop_reference_value else None,
+                stop_id=mapped_stop_id,
+                mapped_stop_id=mapped_stop_id,
+                original_stop_id=original_stop_id,
                 is_stop_valid=stop_reference_is_valid,
                 current_status=str(record.get("current_status", "IN_TRANSIT_TO")),
                 congestion_level=str(record.get("congestion_level", "UNKNOWN_CONGESTION_LEVEL")),

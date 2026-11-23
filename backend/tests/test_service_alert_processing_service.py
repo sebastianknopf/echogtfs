@@ -111,6 +111,59 @@ class TestServiceAlertProcessingService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(kwargs["cause"], "ACCIDENT")
         self.assertEqual(kwargs["effect"], "UNKNOWN_EFFECT")
 
+    async def test_sync_service_alert_records_populates_original_and_mapped_ids(self):
+        repository = _SystemRepositoryStub()
+        realtime_repository = _RealtimeRepositoryStub()
+        gtfs_repository = _GtfsRepositoryStub()
+        datasource = make_processor(ServiceAlertProcessingService, {})
+
+        def _apply_mapping(entity):
+            mapped = dict(entity)
+            if mapped.get("agency_id") == "x":
+                mapped["agency_id"] = "a1"
+            return mapped
+
+        datasource._identifier_mapping_service = SimpleNamespace(
+            initialize=AsyncMock(),
+            get_loaded_mapping_count=lambda: 1,
+            apply_mapping=_apply_mapping,
+        )
+        datasource._entity_enrichment_service = SimpleNamespace(
+            initialize=AsyncMock(),
+            get_loaded_enrichment_count=lambda: 0,
+            apply_enrichment=lambda _a, _b: None,
+        )
+
+        records = [
+            {
+                "id": "alert-1",
+                "cause": "UNKNOWN_CAUSE",
+                "effect": "UNKNOWN_EFFECT",
+                "severity_level": "UNKNOWN_SEVERITY",
+                "is_active": True,
+                "translations": [],
+                "active_periods": [],
+                "informed_entities": [
+                    {"agency_id": "x", "route_id": None, "stop_id": None, "trip_id": None}
+                ],
+            }
+        ]
+
+        await datasource.sync_records(
+            repository=repository,
+            realtime_repository=realtime_repository,
+            gtfs_repository=gtfs_repository,
+            source_id=2,
+            source_name="Demo",
+            records=records,
+        )
+
+        kwargs = realtime_repository.upsert_service_alert_from_sync.await_args.kwargs
+        entity = kwargs["informed_entities"][0]
+        self.assertEqual(entity["agency_id"], "a1")
+        self.assertEqual(entity["mapped_agency_id"], "a1")
+        self.assertEqual(entity["original_agency_id"], "x")
+
     @staticmethod
     def _alert_processor():
         datasource = make_processor(ServiceAlertProcessingService, {})

@@ -376,9 +376,10 @@ class ConflictExportService(ConflictExportServiceInterface):
                 datasource_id: int | None = ie.alert.data_source_id
                 timestamp: datetime = ie.alert.created_at
 
-                if ie.agency_id is not None and not GlobalId.is_global_id(ie.agency_id):
+                agency_id = ie.original_agency_id if ie.original_agency_id is not None else ie.agency_id
+                if agency_id is not None and not GlobalId.is_global_id(agency_id):
                     self._add_conflict(MonitoringConflictObject(
-                        id=self._unique_conflict_id(datasource_id=datasource_id, agency_id=ie.agency_id, conflict_type=ConflictType.WARNING_AGENCY_NO_GLOBAL_ID, last_failure=timestamp),
+                        id=self._unique_conflict_id(datasource_id=datasource_id, original_agency_id=agency_id, conflict_type=ConflictType.WARNING_AGENCY_NO_GLOBAL_ID, last_failure=timestamp),
                         timestamp=timestamp,
                         code=ConflictType.WARNING_AGENCY_NO_GLOBAL_ID,
                         message=ConflictType.WARNING_AGENCY_NO_GLOBAL_ID.name,
@@ -389,13 +390,14 @@ class ConflictExportService(ConflictExportServiceInterface):
                         properties={
                             "datasource_id": datasource_id,
                             "last_failure": timestamp,
-                            "agency_id": ie.agency_id
+                            "original_agency_id": agency_id
                         }
                     ), results)
 
-                if ie.stop_id is not None and not GlobalId.is_global_id(ie.stop_id):
+                stop_id = ie.original_stop_id if ie.original_stop_id is not None else ie.stop_id
+                if stop_id is not None and not GlobalId.is_global_id(stop_id):
                     self._add_conflict(MonitoringConflictObject(
-                        id=self._unique_conflict_id(datasource_id=datasource_id, stop_id=ie.stop_id, conflict_type=ConflictType.WARNING_STOP_NO_GLOBAL_ID, last_failure=timestamp),
+                        id=self._unique_conflict_id(datasource_id=datasource_id, original_stop_id=stop_id, conflict_type=ConflictType.WARNING_STOP_NO_GLOBAL_ID, last_failure=timestamp),
                         timestamp=timestamp,
                         code=ConflictType.WARNING_STOP_NO_GLOBAL_ID,
                         message=ConflictType.WARNING_STOP_NO_GLOBAL_ID.name,
@@ -406,13 +408,14 @@ class ConflictExportService(ConflictExportServiceInterface):
                         properties={
                             "datasource_id": datasource_id,
                             "last_failure": timestamp,
-                            "stop_id": ie.stop_id
+                            "original_stop_id": stop_id
                         }
                     ), results)
 
-                if not GlobalId.is_global_id(ie.route_id):
+                route_id = ie.original_route_id if ie.original_route_id is not None else ie.route_id
+                if route_id is not None and not GlobalId.is_global_id(route_id):
                     self._add_conflict(MonitoringConflictObject(
-                        id=self._unique_conflict_id(datasource_id=datasource_id, route_id=ie.route_id, conflict_type=ConflictType.WARNING_ROUTE_NO_GLOBAL_ID, last_failure=timestamp),
+                        id=self._unique_conflict_id(datasource_id=datasource_id, original_route_id=route_id, conflict_type=ConflictType.WARNING_ROUTE_NO_GLOBAL_ID, last_failure=timestamp),
                         timestamp=timestamp,
                         code=ConflictType.WARNING_ROUTE_NO_GLOBAL_ID,
                         message=ConflictType.WARNING_ROUTE_NO_GLOBAL_ID.name,
@@ -423,13 +426,14 @@ class ConflictExportService(ConflictExportServiceInterface):
                         properties={
                             "datasource_id": datasource_id,
                             "last_failure": timestamp,
-                            "route_id": ie.route_id
+                            "original_route_id": route_id
                         }
                     ), results)
 
-                if ie.trip_id is not None and not GlobalId.is_global_id(ie.trip_id):
+                trip_id = ie.original_trip_id if ie.original_trip_id is not None else ie.trip_id
+                if trip_id is not None and not GlobalId.is_global_id(trip_id):
                     self._add_conflict(MonitoringConflictObject(
-                        id=self._unique_conflict_id(datasource_id=datasource_id, trip_id=ie.trip_id, conflict_type=ConflictType.WARNING_TRIP_NO_GLOBAL_ID, last_failure=timestamp),
+                        id=self._unique_conflict_id(datasource_id=datasource_id, original_trip_id=trip_id, conflict_type=ConflictType.WARNING_TRIP_NO_GLOBAL_ID, last_failure=timestamp),
                         timestamp=timestamp,
                         code=ConflictType.WARNING_TRIP_NO_GLOBAL_ID,
                         message=ConflictType.WARNING_TRIP_NO_GLOBAL_ID.name,
@@ -440,7 +444,7 @@ class ConflictExportService(ConflictExportServiceInterface):
                         properties={
                             "datasource_id": datasource_id,
                             "last_failure": timestamp,
-                            "trip_id": ie.trip_id
+                            "original_trip_id": trip_id
                         }
                     ), results)
 
@@ -451,7 +455,7 @@ class ConflictExportService(ConflictExportServiceInterface):
                 timestamp: datetime = ste.trip.created_at
 
                 self._add_conflict(MonitoringConflictObject(
-                    id=self._unique_conflict_id(datasource_id=datasource_id, stop_id=ste.stop_id, conflict_type=ConflictType.WARNING_STOP_NO_GLOBAL_ID, last_failure=timestamp),
+                    id=self._unique_conflict_id(datasource_id=datasource_id, original_stop_id=ste.original_stop_id, conflict_type=ConflictType.WARNING_STOP_NO_GLOBAL_ID, last_failure=timestamp),
                     timestamp=timestamp,
                     code=ConflictType.WARNING_STOP_NO_GLOBAL_ID,
                     message=ConflictType.WARNING_STOP_NO_GLOBAL_ID.name,
@@ -462,7 +466,7 @@ class ConflictExportService(ConflictExportServiceInterface):
                     properties={
                         "datasource_id": datasource_id,
                         "last_failure": timestamp,
-                        "stop_id": ste.stop_id
+                        "original_stop_id": ste.original_stop_id
                     }
                 ), results)
 
@@ -472,9 +476,9 @@ class ConflictExportService(ConflictExportServiceInterface):
                 datasource_id: int = trip.data_source_id
                 timestamp: datetime = trip.created_at
 
-                if not GlobalId.is_global_id(trip.route_id):
+                if not GlobalId.is_global_id(trip.original_route_id):
                     self._add_conflict(MonitoringConflictObject(
-                        id=self._unique_conflict_id(datasource_id=datasource_id, route_id=trip.route_id, conflict_type=ConflictType.WARNING_ROUTE_NO_GLOBAL_ID, last_failure=timestamp),
+                        id=self._unique_conflict_id(datasource_id=datasource_id, original_route_id=trip.original_route_id, conflict_type=ConflictType.WARNING_ROUTE_NO_GLOBAL_ID, last_failure=timestamp),
                         timestamp=timestamp,
                         code=ConflictType.WARNING_ROUTE_NO_GLOBAL_ID,
                         message=ConflictType.WARNING_ROUTE_NO_GLOBAL_ID.name,
@@ -485,13 +489,13 @@ class ConflictExportService(ConflictExportServiceInterface):
                         properties={
                             "datasource_id": datasource_id,
                             "last_failure": timestamp,
-                            "route_id": trip.route_id
+                            "original_route_id": trip.original_route_id
                         }
                     ), results)
 
-                if not GlobalId.is_global_id(trip.trip_id):
+                if not GlobalId.is_global_id(trip.original_trip_id):
                     self._add_conflict(MonitoringConflictObject(
-                        id=self._unique_conflict_id(datasource_id=datasource_id, trip_id=trip.trip_id, conflict_type=ConflictType.WARNING_TRIP_NO_GLOBAL_ID, last_failure=timestamp),
+                        id=self._unique_conflict_id(datasource_id=datasource_id, original_trip_id=trip.original_trip_id, conflict_type=ConflictType.WARNING_TRIP_NO_GLOBAL_ID, last_failure=timestamp),
                         timestamp=timestamp,
                         code=ConflictType.WARNING_TRIP_NO_GLOBAL_ID,
                         message=ConflictType.WARNING_TRIP_NO_GLOBAL_ID.name,
@@ -502,7 +506,7 @@ class ConflictExportService(ConflictExportServiceInterface):
                         properties={
                             "datasource_id": datasource_id,
                             "last_failure": timestamp,
-                            "trip_id": trip.trip_id
+                            "original_trip_id": trip.original_trip_id
                         }
                     ), results)
 
@@ -517,12 +521,13 @@ class ConflictExportService(ConflictExportServiceInterface):
                     name=vehicle.data_source_name,
                 )
 
-                if vehicle.stop_id is not None and not GlobalId.is_global_id(vehicle.stop_id):
+                vehicle_stop_id = vehicle.original_stop_id if vehicle.original_stop_id is not None else vehicle.stop_id
+                if vehicle_stop_id is not None and not GlobalId.is_global_id(vehicle_stop_id):
                     self._add_conflict(MonitoringConflictObject(
                         id=self._unique_conflict_id(
                             datasource_id=datasource_id,
                             vehicle_position_id=vehicle.id,
-                            stop_id=vehicle.stop_id,
+                            original_stop_id=vehicle_stop_id,
                             conflict_type=ConflictType.WARNING_STOP_NO_GLOBAL_ID,
                         ),
                         timestamp=timestamp,
@@ -532,17 +537,17 @@ class ConflictExportService(ConflictExportServiceInterface):
                         properties={
                             "datasource_id": datasource_id,
                             "last_failure": timestamp,
-                            "stop_id": vehicle.stop_id,
+                            "original_stop_id": vehicle_stop_id,
                             "vehicle_id": vehicle_display_title,
                         }
                     ), results)
 
-                if not GlobalId.is_global_id(vehicle.trip.route_id):
+                if not GlobalId.is_global_id(vehicle.trip.original_route_id):
                     self._add_conflict(MonitoringConflictObject(
                         id=self._unique_conflict_id(
                             datasource_id=datasource_id,
                             vehicle_position_id=vehicle.id,
-                            route_id=vehicle.trip.route_id,
+                            original_route_id=vehicle.trip.original_route_id,
                             conflict_type=ConflictType.WARNING_ROUTE_NO_GLOBAL_ID,
                         ),
                         timestamp=timestamp,
@@ -552,17 +557,17 @@ class ConflictExportService(ConflictExportServiceInterface):
                         properties={
                             "datasource_id": datasource_id,
                             "last_failure": timestamp,
-                            "route_id": vehicle.trip.route_id,
+                            "original_route_id": vehicle.trip.original_route_id,
                             "vehicle_id": vehicle_display_title,
                         }
                     ), results)
 
-                if not GlobalId.is_global_id(vehicle.trip.trip_id):
+                if not GlobalId.is_global_id(vehicle.trip.original_trip_id):
                     self._add_conflict(MonitoringConflictObject(
                         id=self._unique_conflict_id(
                             datasource_id=datasource_id,
                             vehicle_position_id=vehicle.id,
-                            trip_id=vehicle.trip.trip_id,
+                            original_trip_id=vehicle.trip.original_trip_id,
                             conflict_type=ConflictType.WARNING_TRIP_NO_GLOBAL_ID,
                         ),
                         timestamp=timestamp,
@@ -572,7 +577,7 @@ class ConflictExportService(ConflictExportServiceInterface):
                         properties={
                             "datasource_id": datasource_id,
                             "last_failure": timestamp,
-                            "trip_id": vehicle.trip.trip_id,
+                            "original_trip_id": vehicle.trip.original_trip_id,
                             "vehicle_id": vehicle_display_title,
                         }
                     ), results)

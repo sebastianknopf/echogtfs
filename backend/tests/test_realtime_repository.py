@@ -169,6 +169,8 @@ def _sync_trip_kwargs(**overrides):
         start_time="10:00:00",
         start_date="20260101",
         route_id="R1",
+        original_route_id="R1",
+        mapped_route_id="R1",
         schedule_relationship="SCHEDULED",
         assignment_type="DIRECT_BY_ID",
         is_active_on_create=True,
@@ -186,9 +188,12 @@ def _sync_vehicle_kwargs(**overrides):
         source_id=7,
         trip_id="trip-1",
         trip_original_trip_id="orig-1",
+        trip_mapped_trip_id="orig-1",
         trip_start_time="10:00:00",
         trip_start_date="20260101",
         trip_route_id="R1",
+        trip_original_route_id="R1",
+        trip_mapped_route_id="R1",
         trip_schedule_relationship="SCHEDULED",
         trip_assignment_type="DIRECT_BY_ID",
         trip_is_trip_valid=True,
@@ -205,6 +210,8 @@ def _sync_vehicle_kwargs(**overrides):
         latitude=47.0,
         longitude=8.0,
         stop_id=None,
+        original_stop_id=None,
+        mapped_stop_id=None,
         is_stop_valid=True,
         current_status="IN_TRANSIT_TO",
         congestion_level="UNKNOWN_CONGESTION_LEVEL",
@@ -277,6 +284,64 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(payload["is_route_valid"])
         self.assertTrue(payload["is_stop_valid"])
         self.assertTrue(payload["is_trip_valid"])
+
+    def test_normalize_informed_entity_payload_keeps_mapped_and_original_ids(self):
+        payload = RealtimeRepository._normalize_informed_entity_payload(
+            {
+                "agency_id": "a1",
+                "mapped_agency_id": "a1",
+                "original_agency_id": "a0",
+                "route_id": "r1",
+                "mapped_route_id": "r1",
+                "original_route_id": "r0",
+                "stop_id": "s1",
+                "mapped_stop_id": "s1",
+                "original_stop_id": "s0",
+                "trip_id": "t1",
+                "mapped_trip_id": "t1",
+                "original_trip_id": "t1",
+            }
+        )
+
+        self.assertEqual(payload["mapped_agency_id"], "a1")
+        self.assertEqual(payload["original_agency_id"], "a0")
+        self.assertEqual(payload["mapped_route_id"], "r1")
+        self.assertEqual(payload["original_route_id"], "r0")
+        self.assertEqual(payload["mapped_stop_id"], "s1")
+        self.assertEqual(payload["original_stop_id"], "s0")
+        self.assertEqual(payload["mapped_trip_id"], "t1")
+        self.assertEqual(payload["original_trip_id"], "t1")
+
+    def test_informed_entity_from_doc_reads_mapped_and_original_ids(self):
+        entity = RealtimeRepository._informed_entity_from_doc(
+            {
+                "agency_id": "a1",
+                "mapped_agency_id": "a1",
+                "original_agency_id": "a0",
+                "trip_id": "t1",
+                "mapped_trip_id": "t1",
+                "original_trip_id": "t1",
+            },
+            1,
+            SimpleNamespace(),
+        )
+
+        self.assertEqual(entity.agency_id, "a1")
+        self.assertEqual(entity.mapped_agency_id, "a1")
+        self.assertEqual(entity.original_agency_id, "a0")
+        self.assertEqual(entity.mapped_trip_id, "t1")
+        self.assertEqual(entity.original_trip_id, "t1")
+
+    def test_stop_event_from_doc_reads_mapped_stop_id(self):
+        event = RealtimeRepository._stop_event_from_doc(
+            {"stop_id": "s1", "mapped_stop_id": "s1", "original_stop_id": "s0"},
+            "t1",
+            None,
+        )
+
+        self.assertEqual(event.stop_id, "s1")
+        self.assertEqual(event.mapped_stop_id, "s1")
+        self.assertEqual(event.original_stop_id, "s0")
 
     # ------------------------------------------------------------------ alerts
 
@@ -617,6 +682,8 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([event["stop_sequence"] for event in fields["stop_events"]], ["2", "10"])
         self.assertEqual(fields["stop_event_count"], 2)
         self.assertEqual(fields["original_trip_id"], "orig-1")
+        self.assertEqual(fields["original_route_id"], "R1")
+        self.assertEqual(fields["mapped_route_id"], "R1")
         self.assertFalse(fields["is_complete_stop_sequence"])
         self.assertTrue(
             {"invalid_stop", "changed_stop_id", "departure_before_arrival", "realtime"} <= set(fields["flags"])
@@ -629,6 +696,14 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
 
         flags = self._written_operation(self.trips)._doc["$set"]["flags"]
         self.assertEqual(flags, ["invalid_reference"])
+
+    async def test_update_trip_update_from_sync_mapped_route_id_falls_back_to_original_route_id(self):
+        await self.repository.update_trip_update_from_sync(
+            **_sync_trip_kwargs(original_route_id="orig-route", mapped_route_id="")
+        )
+
+        fields = self._written_operation(self.trips)._doc["$set"]
+        self.assertEqual(fields["mapped_route_id"], "orig-route")
 
     async def test_update_trip_update_from_sync_never_overwrites_assignment_with_cached_id(self):
         await self.repository.update_trip_update_from_sync(
@@ -702,6 +777,10 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(operation._doc["$setOnInsert"]["is_active"])
         self.assertEqual(fields["trip.trip_id"], "trip-1")
         self.assertEqual(fields["trip.original_trip_id"], "orig-1")
+        self.assertEqual(fields["trip.original_route_id"], "R1")
+        self.assertEqual(fields["trip.mapped_route_id"], "R1")
+        self.assertIsNone(fields["original_stop_id"])
+        self.assertIsNone(fields["mapped_stop_id"])
         self.assertEqual(fields["trip.scheduled_start_stop_id"], "S1")
         self.assertEqual(fields["trip.scheduled_end_stop_id"], "S9")
         self.assertNotIn("assignment_type", fields)
@@ -709,6 +788,21 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fields["trip.assignment_type"], "DIRECT_BY_ID")
         self.assertTrue(fields["trip.is_trip_valid"])
         self.assertFalse(fields["trip.is_route_valid"])
+
+    async def test_update_vehicle_position_from_sync_mapped_ids_fall_back_to_original_ids(self):
+        await self.repository.update_vehicle_position_from_sync(
+            **_sync_vehicle_kwargs(
+                stop_id="orig-stop",
+                original_stop_id="orig-stop",
+                mapped_stop_id="",
+                trip_original_route_id="orig-route",
+                trip_mapped_route_id="",
+            )
+        )
+
+        fields = self._written_operation(self.vehicles)._doc["$set"]
+        self.assertEqual(fields["mapped_stop_id"], "orig-stop")
+        self.assertEqual(fields["trip.mapped_route_id"], "orig-route")
 
     async def test_update_vehicle_position_from_sync_never_overwrites_assignment_with_cached_id(self):
         await self.repository.update_vehicle_position_from_sync(
@@ -856,12 +950,23 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([vehicle.vehicle_id for vehicle in vehicles], ["veh-1"])
         self.assertEqual(vehicles[0].data_source_name, "Current name")
         conditions = self.vehicles.find_calls[0][0]["$or"]
-        self.assertEqual(
-            {next(iter(condition)) for condition in conditions},
-            {"stop_id", "trip.route_id", "trip.trip_id"},
-        )
+
+        simple_keys = {next(iter(condition)) for condition in conditions if "$or" not in condition}
+        self.assertEqual(simple_keys, {"trip.original_route_id", "trip.original_trip_id"})
         for condition in conditions:
+            if "$or" in condition:
+                continue
             self.assertEqual(next(iter(condition.values()))["$not"], re.compile(pattern))
+
+        nested_or_conditions = [condition for condition in conditions if "$or" in condition]
+        self.assertEqual(len(nested_or_conditions), 1)
+        stop_fields = {
+            key
+            for sub_condition in nested_or_conditions[0]["$or"]
+            for and_condition in sub_condition["$and"]
+            for key in and_condition
+        }
+        self.assertEqual(stop_fields, {"original_stop_id", "stop_id"})
 
     async def test_list_informed_entities_with_non_global_ids_uses_pattern_for_all_reference_fields(self):
         pattern = r"^[A-Z0-9]{3}:[A-Z0-9]{3}:\d+$"
@@ -869,17 +974,35 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         await self.repository.list_informed_entities_with_non_global_ids(pattern)
 
         conditions = self.alerts.pipelines[0][-1]["$match"]["$or"]
+        original_fields = {
+            key
+            for condition in conditions
+            for sub_condition in condition["$or"]
+            for and_condition in sub_condition["$and"]
+            for key in and_condition
+        }
         self.assertEqual(
-            {key for condition in conditions for key in condition},
+            original_fields,
             {
+                "informed_entities.original_agency_id",
                 "informed_entities.agency_id",
+                "informed_entities.original_route_id",
                 "informed_entities.route_id",
+                "informed_entities.original_stop_id",
                 "informed_entities.stop_id",
+                "informed_entities.original_trip_id",
                 "informed_entities.trip_id",
             },
         )
         for condition in conditions:
-            self.assertEqual(next(iter(condition.values()))["$not"], re.compile(pattern))
+            not_matching_values = [
+                value["$not"]
+                for sub_condition in condition["$or"]
+                for and_condition in sub_condition["$and"]
+                for value in and_condition.values()
+                if isinstance(value, dict) and "$not" in value
+            ]
+            self.assertTrue(all(value == re.compile(pattern) for value in not_matching_values))
 
     async def test_list_stop_events_with_non_global_ids_returns_events_with_parent_trip(self):
         pattern = r"^[A-Z0-9]{3}:[A-Z0-9]{3}:\d+$"
@@ -894,7 +1017,7 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result[0].stop_id, "bad")
         self.assertEqual(result[0].trip.id, trip_uuid)
         self.assertEqual(result[0].trip.data_source_name, "Current name")
-        self.assertEqual(self.trips.pipelines[0][-1]["$match"]["stop_events.stop_id"]["$not"], re.compile(pattern))
+        self.assertEqual(self.trips.pipelines[0][-1]["$match"]["stop_events.original_stop_id"]["$not"], re.compile(pattern))
 
     async def test_list_trips_with_non_global_ids_returns_trips_without_stop_events(self):
         pattern = r"^[A-Z0-9]{3}:[A-Z0-9]{3}:\d+$"
@@ -905,7 +1028,9 @@ class TestRealtimeRepository(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([trip.trip_id for trip in result], ["invalid-trip"])
         self.assertEqual(result[0].stop_events, [])
         filter_, projection, _options = self.trips.find_calls[0]
-        self.assertEqual({key for condition in filter_["$or"] for key in condition}, {"trip_id", "route_id"})
+        self.assertEqual(
+            {key for condition in filter_["$or"] for key in condition}, {"original_trip_id", "original_route_id"}
+        )
         self.assertEqual(projection, {"stop_events": 0})
 
 
