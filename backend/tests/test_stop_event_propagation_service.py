@@ -232,6 +232,69 @@ class TestStopEventPropagationService(unittest.TestCase):
         )
 
         self.assertEqual([event["stop_id"] for event in propagated], ["s1", "sx", "s2"])
+
+    def test_added_stops_merge_by_scheduled_times_instead_of_estimates(self):
+        base_time = datetime(2026, 8, 1, 8, 0, 0, tzinfo=timezone.utc)
+        stop_events = [
+            {
+                "stop_id": "s1",
+                "scheduled_departure_time": base_time,
+                "departure_time": base_time.replace(minute=30),
+            },
+            {
+                "stop_id": "sx",
+                "scheduled_arrival_time": base_time.replace(minute=10),
+                "departure_time": base_time.replace(minute=50),
+            },
+            {
+                "stop_id": "sy",
+                "scheduled_arrival_time": base_time.replace(minute=5),
+                "scheduled_departure_time": base_time.replace(minute=15),
+                "departure_time": base_time.replace(minute=40),
+            },
+            {
+                "stop_id": "s2",
+                "scheduled_departure_time": base_time.replace(minute=20),
+                "departure_time": base_time.replace(minute=25),
+            },
+        ]
+        nominal_stop_times = [
+            SimpleNamespace(stop_id="s1", stop_sequence=1, arrival_time=None, departure_time=base_time),
+            SimpleNamespace(stop_id="s2", stop_sequence=2, arrival_time=None, departure_time=base_time.replace(minute=20)),
+        ]
+
+        propagated = self.datasource._propagate_trip_update_stop_events(
+            stop_events,
+            nominal_stop_times,
+            treat_unexpected_stop_as_added_stop=True,
+            treat_missing_stop_as_canceled_stop=False,
+            is_complete_stop_sequence=True,
+        )
+
+        self.assertEqual([event["stop_id"] for event in propagated], ["s1", "sx", "sy", "s2"])
+        self.assertEqual([event["schedule_relationship"] for event in propagated[1:3]], ["ADDED", "ADDED"])
+
+    def test_added_stop_uses_estimated_time_when_scheduled_time_is_missing(self):
+        base_time = datetime(2026, 8, 1, 8, 0, 0, tzinfo=timezone.utc)
+        stop_events = [
+            {"stop_id": "s1", "scheduled_departure_time": base_time, "departure_time": base_time.replace(minute=30)},
+            {"stop_id": "sx", "arrival_time": base_time.replace(minute=10)},
+        ]
+        nominal_stop_times = [
+            SimpleNamespace(stop_id="s1", stop_sequence=1, arrival_time=None, departure_time=base_time),
+            SimpleNamespace(stop_id="s2", stop_sequence=2, arrival_time=None, departure_time=base_time.replace(minute=20)),
+        ]
+
+        propagated = self.datasource._propagate_trip_update_stop_events(
+            stop_events,
+            nominal_stop_times,
+            treat_unexpected_stop_as_added_stop=True,
+            treat_missing_stop_as_canceled_stop=False,
+            is_complete_stop_sequence=True,
+        )
+
+        self.assertEqual([event["stop_id"] for event in propagated], ["s1", "sx", "s2"])
+
     def test_propagate_trip_update_stop_events_orders_duplicate_stop_ids_by_time(self):
         base_time = datetime(2026, 8, 1, 8, 0, 0, tzinfo=timezone.utc)
         stop_events = [

@@ -480,7 +480,9 @@ event time, then by stop ID.
 The event time used for ordering is:
 
 ``` text
-departure_time, if available
+scheduled_departure_time, if available
+otherwise scheduled_arrival_time
+otherwise departure_time
 otherwise arrival_time
 ```
 
@@ -663,20 +665,20 @@ have different roles.
   Field                        Complete Sequence  Incremental Matching Incremental Delay
                                LCS                                     Propagation
   ---------------------------- ------------------ -------------------- -----------------
-  `scheduled_departure_time`   Tie-breaker        Preferred            Planned departure
-                               against nominal    planned-time         and delay
-                               `departure_time`   discriminator        reference
+  `scheduled_departure_time`   LCS tie-breaker    Preferred            Planned departure
+                               and ordering       planned-time         and delay
+                                                  discriminator        reference
 
-  `scheduled_arrival_time`     Not used by LCS    Fallback             Planned arrival
+  `scheduled_arrival_time`     Ordering fallback  Fallback             Planned arrival
                                                   planned-time         and delay
                                                   discriminator        reference
 
-  `departure_time`             Used for final     Actual               Actual departure
-                               event ordering     incoming/persisted   and propagated
+  `departure_time`             Ordering fallback  Actual               Actual departure
+                                                  incoming/persisted   and propagated
                                                   event value          result
 
-  `arrival_time`               Fallback for final Actual               Actual arrival
-                               event ordering     incoming/persisted   and propagated
+  `arrival_time`               Ordering fallback  Actual               Actual arrival
+                                                  incoming/persisted   and propagated
                                                   event value          result
 
   Nominal GTFS                 LCS time           Not directly used by Not directly used

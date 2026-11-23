@@ -369,7 +369,10 @@ class StopEventPropagationService:
 
         def event_time(event: dict[str, Any]) -> datetime:
             return self._coerce_stop_time_for_sort(
-                event.get("departure_time") or event.get("arrival_time")
+                event.get("scheduled_departure_time")
+                or event.get("scheduled_arrival_time")
+                or event.get("departure_time")
+                or event.get("arrival_time")
             )
 
         def scheduled_sort_key(event: dict[str, Any]) -> tuple[int, datetime, str]:
